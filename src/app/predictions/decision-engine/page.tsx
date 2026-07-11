@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { DecisionEngineClient } from "./DecisionEngineClient";
 
 export const metadata: Metadata = {
@@ -13,29 +12,10 @@ type PageProps = {
   searchParams?: Promise<DecisionEngineSearchParams>;
 };
 
-function one(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function isEnabled(value: string | string[] | undefined): boolean {
-  return ["1", "true", "yes", "on"].includes((one(value) ?? "").trim().toLowerCase());
-}
-
-function queryForOps(params: DecisionEngineSearchParams): string {
-  const preserve = ["date", "sport", "league", "country", "confidence", "q", "publicHistory", "historical"];
-  const query = new URLSearchParams();
-  for (const key of preserve) {
-    const value = one(params[key]);
-    if (value) query.set(key, value);
-  }
-  return query.size ? `?${query.toString()}` : "";
-}
-
+// The deep operator console (formerly /predictions/decision-engine/ops) has been
+// archived out of the build to src/_archived/decision-engine-ops. The public
+// "AI Engine" page renders the client summary directly.
 export default async function DecisionEnginePage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
-  if (isEnabled(params.full) || isEnabled(params.ops) || isEnabled(params.deep)) {
-    redirect(`/predictions/decision-engine/ops${queryForOps(params)}`);
-  }
-
   return <DecisionEngineClient params={params} />;
 }

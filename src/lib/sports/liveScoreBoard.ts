@@ -7,6 +7,8 @@
  * payload safe to poll from the browser.
  */
 
+import { isConfiguredSecretValue } from "@/lib/env";
+
 export type LiveFixturePhase = "live" | "upcoming" | "finished" | "other";
 
 export interface LiveBoardSide {
@@ -186,8 +188,15 @@ let cachedBoard: { expiresAt: number; board: LiveScoreBoard } | null = null;
 let inFlight: Promise<LiveScoreBoard> | null = null;
 
 function apiKey(): string | null {
-  return process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY || process.env.SPORTS_API_KEY || null;
+  // Filter placeholder / whitespace-only values so a stub key isn't sent
+  // upstream (which would just 401), matching the main provider's behaviour.
+  const candidate = [process.env.API_FOOTBALL_KEY, process.env.APISPORTS_KEY, process.env.SPORTS_API_KEY].find(
+    isConfiguredSecretValue
+  );
+  return candidate ? candidate.trim() : null;
 }
+
+const LIVE_BOARD_REQUEST_TIMEOUT_MS = 4_000;
 
 function analysisLeagueIds(): Set<number> {
   const raw = process.env.API_FOOTBALL_LEAGUE_IDS ?? "39";
@@ -206,16 +215,25 @@ function utcTodayIsoDate(): string {
 async function fetchApiFootball(path: string, params: Record<string, string>, key: string): Promise<ApiFootballLiveFixture[]> {
   const endpoint = new URL(`https://v3.football.api-sports.io/${path}`);
   for (const [name, value] of Object.entries(params)) endpoint.searchParams.set(name, value);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LIVE_BOARD_REQUEST_TIMEOUT_MS);
   try {
     const response = await fetch(endpoint, {
       headers: { "x-apisports-key": key },
-      cache: "no-store"
+      cache: "no-store",
+      signal: controller.signal
     });
-    if (!response.ok) return [];
+    if (!response.ok) {
+      console.warn(`[live-board] ${endpoint.host}/${path} — HTTP ${response.status}`);
+      return [];
+    }
     const payload = (await response.json()) as { response?: ApiFootballLiveFixture[] };
     return Array.isArray(payload.response) ? payload.response : [];
   } catch {
+    console.warn(`[live-board] ${endpoint.host}/${path} — ${controller.signal.aborted ? "timed out" : "request failed"}`);
     return [];
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

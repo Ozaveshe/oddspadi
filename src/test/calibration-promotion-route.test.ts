@@ -5,14 +5,14 @@ const readActiveCalibrationPromotion = vi.hoisted(() => vi.fn());
 const approveCalibrationCandidate = vi.hoisted(() => vi.fn());
 const revokeCalibrationPromotion = vi.hoisted(() => vi.fn());
 
-vi.mock("@/app/api/sports/decision/_admin", () => ({ isDecisionAdminAuthorized }));
+vi.mock("@/_archived/api-sports-decision/_admin", () => ({ isDecisionAdminAuthorized }));
 vi.mock("@/lib/sports/prediction/decisionCalibrationPromotion", () => ({
   readActiveCalibrationPromotion,
   approveCalibrationCandidate,
   revokeCalibrationPromotion
 }));
 
-import { GET, POST } from "@/app/api/sports/decision/training/calibration-promotion/route";
+import { GET, POST } from "@/_archived/api-sports-decision/training/calibration-promotion/route";
 
 describe("calibration promotion route", () => {
   beforeEach(() => {

@@ -1,11 +1,11 @@
-import { apiSuccess } from "@/app/api/sports/_utils";
+import { apiSuccess, withApiHandler } from "@/app/api/sports/_utils";
 import { getPredictionHistory } from "@/lib/sports/service";
 import { getHistorySummary } from "@/lib/sports/prediction/history";
 
-export async function GET() {
+export const GET = withApiHandler(async () => {
   const items = getPredictionHistory();
   return apiSuccess({
     items,
     summary: getHistorySummary(items)
   });
-}
+});

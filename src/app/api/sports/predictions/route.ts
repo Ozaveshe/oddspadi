@@ -1,7 +1,7 @@
-import { apiError, apiSuccess, parseSportsQuery } from "@/app/api/sports/_utils";
+import { apiError, apiSuccess, parseSportsQuery, withApiHandler } from "@/app/api/sports/_utils";
 import { getPredictions } from "@/lib/sports/service";
 
-export async function GET(request: Request) {
+export const GET = withApiHandler(async (request: Request) => {
   const query = parseSportsQuery(request);
   if ("error" in query) return apiError(query.error);
   const url = new URL(request.url);
@@ -24,4 +24,4 @@ export async function GET(request: Request) {
     providerMode: "live"
   });
   return apiSuccess(data);
-}
+});

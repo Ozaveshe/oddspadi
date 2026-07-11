@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GET as getMaterializer } from "@/app/api/sports/decision/training/football-provider-feature-materializer/route";
-import { GET as getStorageReceipt } from "@/app/api/sports/decision/training/football-provider-feature-storage-receipt/route";
+import { GET as getMaterializer } from "@/_archived/api-sports-decision/training/football-provider-feature-materializer/route";
+import { GET as getStorageReceipt } from "@/_archived/api-sports-decision/training/football-provider-feature-storage-receipt/route";
 import { materializeFootballProviderCorpus } from "@/lib/sports/training/footballProviderFeatureCorpusRequest";
 import {
   extractStoredFootballProviderFixtures,

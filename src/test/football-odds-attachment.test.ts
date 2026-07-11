@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { POST } from "@/app/api/sports/decision/training/football-odds-attach/route";
+import { POST } from "@/_archived/api-sports-decision/training/football-odds-attach/route";
 import {
   filterClosingEligibleFootballOddsMatches,
   footballOddsRowsForMatches,

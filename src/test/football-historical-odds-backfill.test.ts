@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { POST } from "@/app/api/sports/decision/training/football-historical-odds-backfill/route";
+import { POST } from "@/_archived/api-sports-decision/training/football-historical-odds-backfill/route";
 import {
   buildFootballHistoricalOddsBackfillPlan,
   footballHistoricalOddsCheckpointKey,

@@ -10,6 +10,27 @@ export function apiError(error: string, status = 400) {
   return NextResponse.json({ success: false, data: null, error }, { status });
 }
 
+/**
+ * Wrap a route handler so an unexpected throw returns a structured JSON 500
+ * (logged server-side) instead of a raw unhandled crash. Adopt on any route
+ * whose handler can throw — especially the public data routes.
+ */
+export function withApiHandler<A extends unknown[]>(handler: (request: Request, ...args: A) => Promise<Response> | Response) {
+  return async (request: Request, ...args: A): Promise<Response> => {
+    try {
+      return await handler(request, ...args);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "unexpected error";
+      try {
+        console.error(`[api] ${new URL(request.url).pathname} failed:`, error);
+      } catch {
+        console.error("[api] request failed:", error);
+      }
+      return apiError(`Something went wrong on our side: ${detail}`, 500);
+    }
+  };
+}
+
 export function parseSportsQuery(request: Request): { date: string; sport: Sport } | { error: string } {
   const url = new URL(request.url);
   const date = url.searchParams.get("date") ?? todayIsoDate();

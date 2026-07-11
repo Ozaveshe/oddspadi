@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { GET, POST } from "@/app/api/sports/decision/training/football-provider-live-feature-storage-receipt/route";
+import { GET, POST } from "@/_archived/api-sports-decision/training/football-provider-live-feature-storage-receipt/route";
 
 describe("football live feature storage route authorization", () => {
   afterEach(() => {

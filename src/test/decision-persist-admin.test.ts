@@ -28,8 +28,8 @@ vi.mock("@/lib/sports/prediction/decisionReadiness", () => ({
   runDecisionEngineSelfTest: runDecisionEngineSelfTestMock
 }));
 
-import { GET as getMatchDecision, POST as postMatchDecision } from "@/app/api/sports/decision/[matchId]/route";
-import { GET as getDecisionSelfTest } from "@/app/api/sports/decision/self-test/route";
+import { GET as getMatchDecision, POST as postMatchDecision } from "@/_archived/api-sports-decision/[matchId]/route";
+import { GET as getDecisionSelfTest } from "@/_archived/api-sports-decision/self-test/route";
 
 const decision = {
   verdict: "avoid",

@@ -6,7 +6,7 @@ vi.mock("@/lib/sports/prediction/decisionAutonomousSettlement", () => ({
   runDecisionAutonomousSettlement: runDecisionAutonomousSettlementMock
 }));
 
-import { GET, POST } from "@/app/api/sports/decision/autonomous-settlement/route";
+import { GET, POST } from "@/_archived/api-sports-decision/autonomous-settlement/route";
 
 describe("autonomous settlement route", () => {
   beforeEach(() => {

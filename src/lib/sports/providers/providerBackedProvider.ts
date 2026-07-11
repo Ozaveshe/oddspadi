@@ -1436,6 +1436,38 @@ function providerRequestConcurrency(env: EnvMap): number {
   return Number.isFinite(configured) && configured > 0 ? Math.round(clampRange(configured, 1, 8)) : 4;
 }
 
+/**
+ * Hard ceiling on TOTAL upstream requests in flight at once. Each of the
+ * per-operation `mapWithConcurrency` budgets (odds, per-fixture context,
+ * recent form, standings) runs concurrently, so without a shared cap a single
+ * fixture-cache miss can burst ~16-20 requests and trip provider rate limits.
+ */
+function providerMaxConcurrency(env: EnvMap): number {
+  const configured = Number(env.SPORTS_PROVIDER_MAX_CONCURRENCY);
+  if (Number.isFinite(configured) && configured > 0) return Math.round(clampRange(configured, 1, 12));
+  return Math.max(6, providerRequestConcurrency(env));
+}
+
+/** Minimal FIFO counting semaphore — bounds concurrent tasks to `max`. */
+class RequestSemaphore {
+  private available: number;
+  private readonly waiters: Array<() => void> = [];
+  constructor(max: number) {
+    this.available = Math.max(1, max);
+  }
+  async run<T>(task: () => Promise<T>): Promise<T> {
+    if (this.available > 0) this.available--;
+    else await new Promise<void>((resolve) => this.waiters.push(resolve));
+    try {
+      return await task();
+    } finally {
+      const next = this.waiters.shift();
+      if (next) next();
+      else this.available++;
+    }
+  }
+}
+
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length);
   let nextIndex = 0;
@@ -1476,6 +1508,19 @@ function footballContextFetchPolicy(fixture: ApiFootballFixture, env: EnvMap, no
   };
 }
 
+/**
+ * Log a provider request failure so misconfiguration (bad key, 401/403/404,
+ * rate-limit 429) is observable in logs instead of silently collapsing to an
+ * empty UI. Only the host + path are logged — never the query string, which
+ * carries The Odds API's `apiKey` param.
+ */
+function warnProviderIssue(url: URL, reason: string, response?: Response): void {
+  const remaining = response?.headers.get("x-requests-remaining");
+  const used = response?.headers.get("x-requests-used");
+  const quota = remaining != null ? ` [requests-remaining=${remaining}${used != null ? `, used=${used}` : ""}]` : "";
+  console.warn(`[sports-provider] ${url.host}${url.pathname} — ${reason}${quota}`);
+}
+
 async function fetchJson(fetchImpl: FetchLike, url: URL, init?: RequestInit): Promise<unknown | null> {
   const configuredTimeout = Number(process.env.SPORTS_PROVIDER_REQUEST_TIMEOUT_MS);
   const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0 ? Math.round(clampRange(configuredTimeout, 1_000, 15_000)) : 4_000;
@@ -1487,11 +1532,24 @@ async function fetchJson(fetchImpl: FetchLike, url: URL, init?: RequestInit): Pr
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetchImpl(url, { ...init, signal: controller.signal });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      warnProviderIssue(url, `HTTP ${response.status} ${response.statusText}`.trim(), response);
+      return null;
+    }
     const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("application/json")) return null;
+    if (!contentType.includes("application/json")) {
+      warnProviderIssue(url, `non-JSON response (${contentType || "no content-type"})`, response);
+      return null;
+    }
     return response.json().catch(() => null);
-  } catch {
+  } catch (error) {
+    if (controller.signal.aborted && parentSignal?.aborted) {
+      // Parent request was cancelled — not a provider fault, stay quiet.
+    } else if (controller.signal.aborted) {
+      warnProviderIssue(url, `timed out after ${timeoutMs}ms`);
+    } else {
+      warnProviderIssue(url, error instanceof Error ? error.message : "network error");
+    }
     return null;
   } finally {
     clearTimeout(timeout);
@@ -1519,6 +1577,10 @@ function configuredOddsSportKeys(
       : sport === "basketball"
         ? env.ODDS_API_BASKETBALL_SPORT_KEY
         : env.ODDS_API_TENNIS_SPORT_KEY;
+  // NOTE: The Odds API tennis sports are often tournament-scoped
+  // (e.g. tennis_atp_wimbledon). If "tennis_atp" 404s in the provider logs
+  // (see warnProviderIssue), set ODDS_API_TENNIS_SPORT_KEYS to the active
+  // tournament keys. Kept as the default so tennis odds are still attempted.
   const defaults = sport === "football" ? sportKeyForFootball(env) : sport === "basketball" ? "basketball_nba" : "tennis_atp";
   return Array.from(
     new Set(
@@ -1626,6 +1688,18 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     return this.options.fetchImpl ?? fetch;
   }
 
+  private requestLimiter: RequestSemaphore | null = null;
+
+  /**
+   * All upstream provider requests funnel through here so total in-flight
+   * requests stay under `providerMaxConcurrency`, protecting the API plan's
+   * rate limit during a fixture-cache miss's fan-out.
+   */
+  private limitedFetch(url: URL, init?: RequestInit): Promise<unknown | null> {
+    if (!this.requestLimiter) this.requestLimiter = new RequestSemaphore(providerMaxConcurrency(this.env));
+    return this.requestLimiter.run(() => fetchJson(this.fetchImpl, url, init));
+  }
+
   private now(): Date {
     const candidate = this.options.now?.();
     return candidate && Number.isFinite(candidate.getTime()) ? candidate : new Date();
@@ -1645,6 +1719,12 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       for (const match of rows) this.matchCache.set(match.id, { expiresAt, match });
       return rows;
     });
+    // Cache the in-flight promise to de-dupe concurrent callers, but never let a
+    // rejection poison the cache for the whole TTL — evict on failure so the
+    // next caller retries instead of re-throwing the cached error.
+    matches.catch(() => {
+      if (this.fixtureCache.get(cacheKey)?.matches === matches) this.fixtureCache.delete(cacheKey);
+    });
     this.fixtureCache.set(cacheKey, { expiresAt, matches });
     return matches;
   }
@@ -1662,7 +1742,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     const endpoint = new URL("https://v3.football.api-sports.io/fixtures");
     endpoint.searchParams.set("date", date);
     endpoint.searchParams.set("timezone", "UTC");
-    const data = (await fetchJson(this.fetchImpl, endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballResponse | null;
+    const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballResponse | null;
     const fixtures = filterFootballFixtures(Array.isArray(data?.response) ? data.response : [], this.env);
     if (!fixtures.length) {
       const oddsBackedMatches = await this.getOddsBackedFootballFixtures(date);
@@ -1797,7 +1877,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
 
     const endpoint = new URL("https://v1.basketball.api-sports.io/games");
     endpoint.searchParams.set("date", date);
-    const data = (await fetchJson(this.fetchImpl, endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiBasketballResponse | null;
+    const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiBasketballResponse | null;
     const games = Array.isArray(data?.response) ? data.response : [];
     const [oddsEvents, historicalStrengths] = await Promise.all([
       this.getCurrentOddsEvents(date, "basketball"),
@@ -1900,7 +1980,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     endpoint.searchParams.set("date_start", date);
     endpoint.searchParams.set("date_stop", date);
     endpoint.searchParams.set("APIkey", apiKey);
-    const data = (await fetchJson(this.fetchImpl, endpoint)) as ApiTennisResponse | null;
+    const data = (await this.limitedFetch(endpoint)) as ApiTennisResponse | null;
     const events = Array.isArray(data?.result) ? data.result : Array.isArray(data?.response) ? data.response : [];
     const [oddsEvents, historicalStrengths] = await Promise.all([
       this.getCurrentOddsEvents(date, "tennis"),
@@ -2009,7 +2089,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       const endpoint = new URL("https://v3.football.api-sports.io/fixtures");
       endpoint.searchParams.set("id", fixtureId);
       endpoint.searchParams.set("timezone", "UTC");
-      const data = (await fetchJson(this.fetchImpl, endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballResponse | null;
+      const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballResponse | null;
       const kickoffDate = data?.response?.[0]?.fixture?.date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
       const matches = await this.getFixtures(kickoffDate, "football");
       return matches.find((match) => match.id === matchId) ?? null;
@@ -2021,7 +2101,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       if (!apiKey || !gameId) return null;
       const endpoint = new URL("https://v1.basketball.api-sports.io/games");
       endpoint.searchParams.set("id", gameId);
-      const data = (await fetchJson(this.fetchImpl, endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiBasketballResponse | null;
+      const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiBasketballResponse | null;
       const game = data?.response?.[0];
       if (!game) return null;
       const matches = await this.getFixtures(basketballKickoff(game).slice(0, 10), "basketball");
@@ -2036,7 +2116,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       endpoint.searchParams.set("method", "get_events");
       endpoint.searchParams.set("event_key", eventId);
       endpoint.searchParams.set("APIkey", apiKey);
-      const data = (await fetchJson(this.fetchImpl, endpoint)) as ApiTennisResponse | null;
+      const data = (await this.limitedFetch(endpoint)) as ApiTennisResponse | null;
       const events = Array.isArray(data?.result) ? data.result : Array.isArray(data?.response) ? data.response : [];
       const event = events[0];
       if (!event) return null;
@@ -2117,7 +2197,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
         endpoint.searchParams.set("team", teamId.replace("api-football:", ""));
         endpoint.searchParams.set("last", "8");
         endpoint.searchParams.set("timezone", "UTC");
-        const data = (await fetchJson(this.fetchImpl, endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballResponse | null;
+        const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballResponse | null;
         const recentFixtures = Array.isArray(data?.response) ? data.response : [];
         const form = providerFormFromRecentFixtures(teamId, recentFixtures);
         return form ? ([teamId, form] as const) : null;
@@ -2150,7 +2230,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
         endpoint.searchParams.set("markets", sport === "football" ? "h2h,totals" : "h2h,spreads,totals");
         endpoint.searchParams.set("oddsFormat", "decimal");
         endpoint.searchParams.set("dateFormat", "iso");
-        const event = (await fetchJson(this.fetchImpl, endpoint)) as OddsApiEvent | null;
+        const event = (await this.limitedFetch(endpoint)) as OddsApiEvent | null;
         if (cleanText(event?.id) === eventId) return [{ ...event, sport_key: cleanText(event?.sport_key) || sportKey }];
       }
       return [];
@@ -2194,6 +2274,10 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
         cleanText(left.commence_time).localeCompare(cleanText(right.commence_time)) || cleanText(left.id).localeCompare(cleanText(right.id))
       );
     });
+    // Evict on failure so a transient error isn't cached for the whole TTL.
+    events.catch(() => {
+      if (this.oddsEventsCache.get(cacheKey)?.events === events) this.oddsEventsCache.delete(cacheKey);
+    });
     this.oddsEventsCache.set(cacheKey, { expiresAt: Date.now() + oddsCacheTtlMs(this.env), events });
     return events;
   }
@@ -2207,7 +2291,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     endpoint.searchParams.set("apiKey", apiKey);
     endpoint.searchParams.set("daysFrom", "3");
     endpoint.searchParams.set("dateFormat", "iso");
-    const scores = (await fetchJson(this.fetchImpl, endpoint)) as OddsApiEvent[] | null;
+    const scores = (await this.limitedFetch(endpoint)) as OddsApiEvent[] | null;
     return Array.isArray(scores)
       ? scores.filter((event) => cleanText(event.commence_time).startsWith(date) && cleanText(event.home_team) && cleanText(event.away_team))
       : [];
@@ -2234,7 +2318,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     endpoint.searchParams.set("markets", markets);
     endpoint.searchParams.set("oddsFormat", "decimal");
     endpoint.searchParams.set("dateFormat", "iso");
-    const events = (await fetchJson(this.fetchImpl, endpoint)) as OddsApiEvent[] | null;
+    const events = (await this.limitedFetch(endpoint)) as OddsApiEvent[] | null;
     const sameDateEvents = Array.isArray(events)
       ? events.filter((event) => cleanText(event.commence_time).startsWith(date) && cleanText(event.home_team) && cleanText(event.away_team))
       : [];
@@ -2249,7 +2333,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     historicalEndpoint.searchParams.set("oddsFormat", "decimal");
     historicalEndpoint.searchParams.set("dateFormat", "iso");
     historicalEndpoint.searchParams.set("date", `${date}T${snapshotTime}`);
-    const historical = (await fetchJson(this.fetchImpl, historicalEndpoint)) as OddsApiHistoricalResponse | null;
+    const historical = (await this.limitedFetch(historicalEndpoint)) as OddsApiHistoricalResponse | null;
     const snapshotEvents = Array.isArray(historical?.data) ? historical.data : [];
     return snapshotEvents.filter((event) => cleanText(event.commence_time).startsWith(date) && cleanText(event.home_team) && cleanText(event.away_team));
   }
@@ -2283,7 +2367,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       endpoint.searchParams.set("markets", markets);
       endpoint.searchParams.set("oddsFormat", "decimal");
       endpoint.searchParams.set("dateFormat", "iso");
-      const additional = (await fetchJson(this.fetchImpl, endpoint)) as OddsApiEvent | null;
+      const additional = (await this.limitedFetch(endpoint)) as OddsApiEvent | null;
       if (!additional?.bookmakers?.length) return event;
       return {
         ...event,
@@ -2325,21 +2409,21 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private async fetchFixtureLineups(fixtureId: string, apiKey: string): Promise<ApiFootballLineup[]> {
     const endpoint = new URL("https://v3.football.api-sports.io/fixtures/lineups");
     endpoint.searchParams.set("fixture", fixtureId);
-    const data = (await fetchJson(this.fetchImpl, endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballLineupResponse | null;
+    const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballLineupResponse | null;
     return Array.isArray(data?.response) ? data.response : [];
   }
 
   private async fetchFixtureInjuries(fixtureId: string, apiKey: string): Promise<ApiFootballInjury[]> {
     const endpoint = new URL("https://v3.football.api-sports.io/injuries");
     endpoint.searchParams.set("fixture", fixtureId);
-    const data = (await fetchJson(this.fetchImpl, endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballInjuryResponse | null;
+    const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballInjuryResponse | null;
     return Array.isArray(data?.response) ? data.response : [];
   }
 
   private async fetchFixtureEvents(fixtureId: string, apiKey: string): Promise<ApiFootballEvent[]> {
     const endpoint = new URL("https://v3.football.api-sports.io/fixtures/events");
     endpoint.searchParams.set("fixture", fixtureId);
-    const data = (await fetchJson(this.fetchImpl, endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballEventResponse | null;
+    const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballEventResponse | null;
     return Array.isArray(data?.response) ? data.response : [];
   }
 
@@ -2357,7 +2441,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
         const endpoint = new URL("https://v3.football.api-sports.io/standings");
         endpoint.searchParams.set("league", league);
         endpoint.searchParams.set("season", season);
-        const data = (await fetchJson(this.fetchImpl, endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballStandingsResponse | null;
+        const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballStandingsResponse | null;
         const standings = data?.response?.[0]?.league?.standings?.[0] ?? [];
         return [key, standings] as const;
       });
@@ -2396,7 +2480,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     endpoint.searchParams.set("q", city);
     endpoint.searchParams.set("appid", apiKey);
     endpoint.searchParams.set("units", "metric");
-    const data = (await fetchJson(this.fetchImpl, endpoint)) as OpenWeatherForecastResponse | null;
+    const data = (await this.limitedFetch(endpoint)) as OpenWeatherForecastResponse | null;
     const forecasts = Array.isArray(data?.list) ? data.list : [];
     if (!forecasts.length) return null;
 
@@ -2452,7 +2536,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       endpoint.searchParams.set("from", from.toISOString());
     }
 
-    const data = (await fetchJson(this.fetchImpl, endpoint, { headers: { "X-Api-Key": apiKey } })) as NewsApiResponse | null;
+    const data = (await this.limitedFetch(endpoint, { headers: { "X-Api-Key": apiKey } })) as NewsApiResponse | null;
     const articles = Array.isArray(data?.articles) ? data.articles.filter((article) => articleText(article)) : [];
     if (!articles.length) return null;
 

@@ -6,7 +6,7 @@ vi.mock("@/lib/sports/prediction/decisionAutonomousCycle", () => ({
   runDecisionAutonomousCycle: runDecisionAutonomousCycleMock
 }));
 
-import { GET, POST } from "@/app/api/sports/decision/autonomous-cycle/route";
+import { GET, POST } from "@/_archived/api-sports-decision/autonomous-cycle/route";
 
 describe("autonomous decision cycle route", () => {
   beforeEach(() => {

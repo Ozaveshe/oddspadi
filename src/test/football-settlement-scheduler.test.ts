@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { GET, POST } from "@/app/api/sports/decision/training/football-provider-live-settlement-label-receipt/route";
+import { GET, POST } from "@/_archived/api-sports-decision/training/football-provider-live-settlement-label-receipt/route";
 import { runFootballSettlementSweep } from "../../netlify/functions/football-settlement-sweep";
 import { runFootballSettlementWorker } from "../../netlify/functions/football-settlement-worker-background";
 

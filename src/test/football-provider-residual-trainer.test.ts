@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { GET as getResidualTrainer } from "@/app/api/sports/decision/training/football-provider-residual-trainer/route";
+import { GET as getResidualTrainer } from "@/_archived/api-sports-decision/training/football-provider-residual-trainer/route";
 import type { FootballDataProviderRetestFeatureRow } from "@/lib/sports/training/footballDataProviderRetestBridge";
 import { buildFootballProviderResidualTrainer } from "@/lib/sports/training/footballProviderResidualTrainer";
 

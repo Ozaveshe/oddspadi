@@ -473,7 +473,10 @@ export async function attachBasketballHistoricalOdds({
   endpoint.searchParams.set("dateFormat", "iso");
   endpoint.searchParams.set("regions", request.regions?.trim() || "us");
   if (request.bookmakers?.trim()) endpoint.searchParams.set("bookmakers", request.bookmakers.trim());
-  if (request.date) endpoint.searchParams.set("date", request.date);
+  // Normalise to the second-precision ISO the v4 historical endpoint expects
+  // (strip milliseconds), matching footballOddsAttachment's oddsApiTimestamp.
+  if (request.date && Number.isFinite(Date.parse(request.date)))
+    endpoint.searchParams.set("date", new Date(request.date).toISOString().replace(/\.\d{3}Z$/, "Z"));
   if (apiKey) endpoint.searchParams.set("apiKey", apiKey);
 
   const baseResult = {

@@ -29,11 +29,11 @@ vi.mock("@/lib/sports/training/footballProviderLiveAIReviewReceipt", () => ({
   runFootballProviderLiveAIReviewReceipt: runFootballProviderLiveAIReviewReceiptMock
 }));
 
-import { GET as getFinalAnswerReview } from "@/app/api/sports/decision/final-answer-ai-review/route";
-import { GET as getCouncil } from "@/app/api/sports/decision/ai-council/route";
-import { GET as getDeliberation } from "@/app/api/sports/decision/ai-deliberation/route";
-import { GET as getSelfTest } from "@/app/api/sports/decision/self-test/route";
-import { GET as getLiveProviderReview } from "@/app/api/sports/decision/training/football-provider-live-ai-review/route";
+import { GET as getFinalAnswerReview } from "@/_archived/api-sports-decision/final-answer-ai-review/route";
+import { GET as getCouncil } from "@/_archived/api-sports-decision/ai-council/route";
+import { GET as getDeliberation } from "@/_archived/api-sports-decision/ai-deliberation/route";
+import { GET as getSelfTest } from "@/_archived/api-sports-decision/self-test/route";
+import { GET as getLiveProviderReview } from "@/_archived/api-sports-decision/training/football-provider-live-ai-review/route";
 
 async function json(response: Response) {
   return response.json() as Promise<{ success: boolean; data?: unknown; error?: string }>;
