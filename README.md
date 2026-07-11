@@ -19,6 +19,18 @@ npm run build
 
 Production builds target Node 22, matching `netlify.toml`. If a local shell is on Node 24, `npm run build` reroutes the Next production build through `node@22` to avoid the Next.js startup hang seen on Node 24.
 
+## Deployment Channel
+
+OddsPadi deploys only through the channel locked in `deploy-channel.json`: Netlify project `oddspadi` (`3ba4bf38-60ec-4bc4-b49f-aca9495a9aa2`), `https://oddspadi.com`, release branch `main`, and Supabase project `wncwtzqipnoqwmqlznqn`.
+
+```bash
+npm run deploy:verify:local
+npm run deploy:preview
+npm run deploy:production
+```
+
+Both deploy commands verify the linked Netlify project. The online verification also checks that the production Supabase and site URL variables point to OddsPadi without printing any secret values. Production deployment additionally refuses to run outside `main`.
+
 ## MVP Routes
 
 - `/` - OddsPadi homepage with prediction preview, value picks preview, supported sports, and responsible-use notice.

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "product": "OddsPadi",
+  "releaseBranch": "main",
+  "netlify": {
+    "siteId": "3ba4bf38-60ec-4bc4-b49f-aca9495a9aa2",
+    "siteName": "oddspadi",
+    "productionUrl": "https://oddspadi.com"
+  },
+  "supabase": {
+    "projectRef": "wncwtzqipnoqwmqlznqn",
+    "projectUrl": "https://wncwtzqipnoqwmqlznqn.supabase.co"
+  }
+}

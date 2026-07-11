@@ -687,7 +687,8 @@ describe("prediction utilities", () => {
       "decision-memory",
       "training-backtest"
     ]);
-    expect(context.supabaseStorageProofLedger.accessPosture.publicBrowserWritesClosed).toBe(true);
+    expect(context.supabaseStorageProofLedger.accessPosture.publicClientGrants).toBe("unknown");
+    expect(context.supabaseStorageProofLedger.accessPosture.publicBrowserWritesClosed).toBe(false);
     expect(context.supabaseStorageProofLedger.controls.canWriteProviderRows).toBe(false);
     expect(context.supabaseStorageProofLedger.controls.canPersistDecisions).toBe(false);
     expect(context.supabaseStorageProofLedger.controls.canTrainModels).toBe(false);

@@ -5,6 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "node scripts/run-next-build.cjs",
+    "deploy:verify:local": "node scripts/verify-deploy-channel.cjs",
+    "deploy:verify": "node scripts/verify-deploy-channel.cjs --online",
+    "deploy:preview": "npm run deploy:verify && npx netlify deploy --site 3ba4bf38-60ec-4bc4-b49f-aca9495a9aa2 --context deploy-preview --message \"OddsPadi verified preview\"",
+    "deploy:production": "node scripts/verify-deploy-channel.cjs --production && npx netlify deploy --site 3ba4bf38-60ec-4bc4-b49f-aca9495a9aa2 --context production --prod --message \"OddsPadi verified production\"",
     "doctor": "node scripts/oddspadi-doctor.cjs",
     "setup:admin-token": "node scripts/ensure-local-admin-token.cjs",
     "start": "next start",
