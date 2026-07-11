@@ -58,12 +58,27 @@ const faqJsonLd = {
   }))
 };
 
+/**
+ * The home page must render fast even when upstream sports providers are
+ * slow or cold: give each data source a time budget and fall back to the
+ * friendly empty states (the live ticker re-fetches client-side anyway).
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise.catch(() => fallback),
+    new Promise<T>((resolve) => {
+      const timer = setTimeout(() => resolve(fallback), ms);
+      if (typeof timer === "object" && "unref" in timer) timer.unref();
+    })
+  ]);
+}
+
 export default async function HomePage() {
   const date = todayIsoDate();
   const [predictions, valuePicks, liveBoard] = await Promise.all([
-    getPredictions({ date, sport: "football" }),
-    getValuePicks(date, "football"),
-    fetchLiveScoreBoard()
+    withTimeout(getPredictions({ date, sport: "football" }), 8_000, []),
+    withTimeout(getValuePicks(date, "football"), 8_000, []),
+    withTimeout(fetchLiveScoreBoard(), 8_000, null)
   ]);
 
   return (
@@ -91,7 +106,7 @@ export default async function HomePage() {
           </div>
           <div className="hero-stats">
             <div className="hero-stat">
-              <strong>{liveBoard.counts.live || "—"}</strong>
+              <strong>{liveBoard?.counts.live || "—"}</strong>
               <span>matches live now</span>
             </div>
             <div className="hero-stat">
