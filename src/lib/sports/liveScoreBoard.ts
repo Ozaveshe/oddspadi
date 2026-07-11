@@ -80,7 +80,7 @@ type ApiFootballLiveFixture = {
 
 const LIVE_STATUS = new Set(["1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"]);
 const UPCOMING_STATUS = new Set(["TBD", "NS"]);
-const FINISHED_STATUS = new Set(["FT", "AET", "PEN"]);
+const FINISHED_STATUS = new Set(["FT", "AET", "PEN", "AWD", "WO", "ABD"]);
 
 const STATUS_LABELS: Record<string, string> = {
   HT: "HT",

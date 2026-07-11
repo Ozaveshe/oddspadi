@@ -567,8 +567,13 @@ function buildProviderForm(teamId: string, rating: number, offset: number): Team
 }
 
 function matchStatus(shortStatus: string | undefined): MatchStatus {
-  if (["FT", "AET", "PEN"].includes(shortStatus ?? "")) return "finished";
-  if (["1H", "HT", "2H", "ET", "BT", "P", "LIVE", "INT"].includes(shortStatus ?? "")) return "live";
+  const status = shortStatus ?? "";
+  // Concluded — full time, extra time, penalties, plus technical outcomes
+  // (awarded, walkover, abandoned) which are all done, not upcoming.
+  if (["FT", "AET", "PEN", "AWD", "WO", "ABD"].includes(status)) return "finished";
+  // In play — including suspended/interrupted matches that are still active.
+  if (["1H", "HT", "2H", "ET", "BT", "P", "LIVE", "INT", "SUSP"].includes(status)) return "live";
+  // NS, TBD, PST, CANC and anything unknown remain scheduled.
   return "scheduled";
 }
 
@@ -1448,6 +1453,11 @@ function providerMaxConcurrency(env: EnvMap): number {
   return Math.max(6, providerRequestConcurrency(env));
 }
 
+function providerRequestTimeoutMs(env: EnvMap): number {
+  const configured = Number(env.SPORTS_PROVIDER_REQUEST_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0 ? Math.round(clampRange(configured, 1_000, 15_000)) : 4_000;
+}
+
 /** Minimal FIFO counting semaphore — bounds concurrent tasks to `max`. */
 class RequestSemaphore {
   private available: number;
@@ -1465,6 +1475,27 @@ class RequestSemaphore {
       if (next) next();
       else this.available++;
     }
+  }
+}
+
+const PROVIDER_CACHE_MAX_ENTRIES = 500;
+
+/**
+ * Set a cache entry with a size bound so the module-singleton caches can't grow
+ * without limit on a long-lived (warm) server instance. Over budget, expired
+ * entries are dropped first, then the oldest (Map preserves insertion order).
+ */
+function setBoundedCache<V extends { expiresAt: number }>(cache: Map<string, V>, key: string, value: V): void {
+  cache.set(key, value);
+  if (cache.size <= PROVIDER_CACHE_MAX_ENTRIES) return;
+  const now = Date.now();
+  for (const [entryKey, entryValue] of cache) {
+    if (entryValue.expiresAt <= now) cache.delete(entryKey);
+  }
+  while (cache.size > PROVIDER_CACHE_MAX_ENTRIES) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
   }
 }
 
@@ -1521,9 +1552,7 @@ function warnProviderIssue(url: URL, reason: string, response?: Response): void 
   console.warn(`[sports-provider] ${url.host}${url.pathname} — ${reason}${quota}`);
 }
 
-async function fetchJson(fetchImpl: FetchLike, url: URL, init?: RequestInit): Promise<unknown | null> {
-  const configuredTimeout = Number(process.env.SPORTS_PROVIDER_REQUEST_TIMEOUT_MS);
-  const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0 ? Math.round(clampRange(configuredTimeout, 1_000, 15_000)) : 4_000;
+async function fetchJson(fetchImpl: FetchLike, url: URL, init?: RequestInit, timeoutMs = 4_000): Promise<unknown | null> {
   const controller = new AbortController();
   const parentSignal = init?.signal;
   const abortFromParent = () => controller.abort();
@@ -1697,7 +1726,8 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
    */
   private limitedFetch(url: URL, init?: RequestInit): Promise<unknown | null> {
     if (!this.requestLimiter) this.requestLimiter = new RequestSemaphore(providerMaxConcurrency(this.env));
-    return this.requestLimiter.run(() => fetchJson(this.fetchImpl, url, init));
+    const timeoutMs = providerRequestTimeoutMs(this.env);
+    return this.requestLimiter.run(() => fetchJson(this.fetchImpl, url, init, timeoutMs));
   }
 
   private now(): Date {
@@ -1716,7 +1746,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
 
     const expiresAt = Date.now() + fixtureCacheTtlMs(this.env, date);
     const matches = this.fetchFixtures(date, sport).then((rows) => {
-      for (const match of rows) this.matchCache.set(match.id, { expiresAt, match });
+      for (const match of rows) setBoundedCache(this.matchCache, match.id, { expiresAt, match });
       return rows;
     });
     // Cache the in-flight promise to de-dupe concurrent callers, but never let a
@@ -1725,7 +1755,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     matches.catch(() => {
       if (this.fixtureCache.get(cacheKey)?.matches === matches) this.fixtureCache.delete(cacheKey);
     });
-    this.fixtureCache.set(cacheKey, { expiresAt, matches });
+    setBoundedCache(this.fixtureCache, cacheKey, { expiresAt, matches });
     return matches;
   }
 
@@ -2138,7 +2168,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
             ? oddsBackedTennisFixturesFromEvents(date, [event], await this.getHistoricalTennisStrengths())
             : oddsBackedFootballFixturesFromEvents(date, [event], await this.getHistoricalFootballRatings());
       const match = matches.find((candidate) => candidate.id === matchId) ?? null;
-      if (match) this.matchCache.set(matchId, { expiresAt: Date.now() + oddsCacheTtlMs(this.env), match });
+      if (match) setBoundedCache(this.matchCache, matchId, { expiresAt: Date.now() + oddsCacheTtlMs(this.env), match });
       return match;
     }
 
@@ -2235,7 +2265,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       }
       return [];
     })();
-    this.oddsEventsCache.set(cacheKey, { expiresAt: Date.now() + oddsCacheTtlMs(this.env), events });
+    setBoundedCache(this.oddsEventsCache, cacheKey, { expiresAt: Date.now() + oddsCacheTtlMs(this.env), events });
     return (await events)[0] ?? null;
   }
 
@@ -2278,7 +2308,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     events.catch(() => {
       if (this.oddsEventsCache.get(cacheKey)?.events === events) this.oddsEventsCache.delete(cacheKey);
     });
-    this.oddsEventsCache.set(cacheKey, { expiresAt: Date.now() + oddsCacheTtlMs(this.env), events });
+    setBoundedCache(this.oddsEventsCache, cacheKey, { expiresAt: Date.now() + oddsCacheTtlMs(this.env), events });
     return events;
   }
 
