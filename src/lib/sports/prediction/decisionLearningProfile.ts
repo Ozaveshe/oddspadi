@@ -1,0 +1,222 @@
+import type { DecisionLearningProfile, Sport } from "@/lib/sports/types";
+import { getTrainingDataSnapshot, type StoredBacktestRun, type TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import { readActiveCalibrationPromotion, type ActiveCalibrationPromotion } from "./decisionCalibrationPromotion";
+
+function numberFromWeight(weights: Record<string, unknown>, key: string): number | null {
+  const value = weights[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function learnedValue(backtest: StoredBacktestRun | null, key: string): number | null {
+  return backtest ? numberFromWeight(backtest.learnedWeights, key) : null;
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function finiteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function calibrationBuckets(backtest: StoredBacktestRun | null): NonNullable<DecisionLearningProfile["calibrationBuckets"]> {
+  return (backtest?.calibrationBuckets ?? []).flatMap((value) => {
+    const row = record(value);
+    const minProbability = finiteNumber(row.minProbability);
+    const maxProbability = finiteNumber(row.maxProbability);
+    const sampleSize = finiteNumber(row.sampleSize);
+    const averageProbability = finiteNumber(row.averageProbability);
+    const observedRate = finiteNumber(row.observedRate);
+    const calibrationError = finiteNumber(row.calibrationError);
+    if (
+      minProbability === null ||
+      maxProbability === null ||
+      sampleSize === null ||
+      averageProbability === null ||
+      observedRate === null ||
+      calibrationError === null ||
+      sampleSize <= 0 ||
+      minProbability < 0 ||
+      maxProbability > 1 ||
+      maxProbability <= minProbability ||
+      averageProbability < 0 ||
+      averageProbability > 1 ||
+      observedRate < 0 ||
+      observedRate > 1
+    ) {
+      return [];
+    }
+    return [{ minProbability, maxProbability, sampleSize, averageProbability, observedRate, calibrationError }];
+  }).sort((left, right) => left.minProbability - right.minProbability);
+}
+
+function calibrationBucketsFromPromotion(promotion: ActiveCalibrationPromotion | null): NonNullable<DecisionLearningProfile["calibrationBuckets"]> {
+  return (promotion?.candidate.probabilityBuckets ?? []).flatMap((bucket) => {
+    const averageProbability = bucket.averageProbability;
+    const observedRate = bucket.winRate;
+    const calibrationError = bucket.calibrationGap;
+    if (
+      averageProbability === null ||
+      observedRate === null ||
+      calibrationError === null ||
+      bucket.sampleSize <= 0 ||
+      bucket.lowerBound < 0 ||
+      bucket.upperBound > 1 ||
+      bucket.upperBound <= bucket.lowerBound
+    ) {
+      return [];
+    }
+    return [
+      {
+        minProbability: bucket.lowerBound,
+        maxProbability: bucket.upperBound,
+        sampleSize: bucket.sampleSize,
+        averageProbability,
+        observedRate,
+        calibrationError
+      }
+    ];
+  });
+}
+
+function hasExplicitLivePromotion(backtest: StoredBacktestRun | null): boolean {
+  const promotion = record(backtest?.config?.promotion);
+  const approvedAt = typeof promotion.approvedAt === "string" ? Date.parse(promotion.approvedAt) : Number.NaN;
+  return promotion.status === "approved" && promotion.scope === "live-guardrails" && Number.isFinite(approvedAt);
+}
+
+function liveMetricBlockers(snapshot: TrainingDataSnapshot, backtest: StoredBacktestRun | null): string[] {
+  if (!backtest) return ["no completed backtest"];
+  const blockers: string[] = [];
+  if (backtest.status !== "completed") blockers.push("backtest is not completed");
+  if (backtest.sampleSize < snapshot.readiness.minimumRecommendedFixtures) blockers.push("sample is below the minimum recommendation");
+  if (backtest.brierScore === null || backtest.logLoss === null) blockers.push("proper scoring metrics are missing");
+  if (backtest.calibrationError === null || !backtest.calibrationBuckets.length || backtest.calibrationError > 0.08) {
+    blockers.push("calibration has not passed the live threshold");
+  }
+  if (backtest.yield === null || backtest.yield <= 0) blockers.push("holdout yield is not positive");
+  if (backtest.closingLineValue === null || backtest.closingLineValue <= 0) blockers.push("closing-line value is not positive");
+  if (Object.keys(backtest.learnedWeights).length < 3) blockers.push("learned-weight payload is incomplete");
+  return blockers;
+}
+
+function profileReason({
+  snapshot,
+  backtest,
+  active,
+  demoOnly,
+  promotionApproved,
+  metricBlockers,
+  durablePromotionRequired
+}: {
+  snapshot: TrainingDataSnapshot;
+  backtest: StoredBacktestRun | null;
+  active: boolean;
+  demoOnly: boolean;
+  promotionApproved: boolean;
+  metricBlockers: string[];
+  durablePromotionRequired: boolean;
+}): string {
+  if (snapshot.status === "not-configured") return snapshot.reason ?? "Supabase training reads are not configured.";
+  if (snapshot.status === "failed") return snapshot.reason ?? "Training profile could not be read.";
+  if (!backtest) return "No historical backtest is stored yet, so live decisions use conservative default guardrails.";
+  if (demoOnly) return "Latest backtest includes demo-seed data, so it is displayed for smoke testing but not applied to live decisions.";
+  if (!snapshot.readiness.readyForTraining) return snapshot.readiness.detail;
+  if (!promotionApproved) {
+    return durablePromotionRequired
+      ? "Latest real-data backtest is available for shadow comparison only; live guardrails require an active model-bound calibration promotion."
+      : "Latest real-data backtest is available for shadow comparison only; live guardrails require an explicit operator-approved promotion.";
+  }
+  if (metricBlockers.length) return `Latest real-data backtest remains shadow-only: ${metricBlockers.join("; ")}.`;
+  if (!active) return "Latest backtest is present but not authorized to tune live decisions.";
+  return "Latest real-data backtest has explicit live promotion and passed validation gates for value-edge and data-quality guardrails.";
+}
+
+export function buildDecisionLearningProfileFromSnapshot(
+  snapshot: TrainingDataSnapshot,
+  {
+    activePromotion = null,
+    requireDurablePromotion = false
+  }: {
+    activePromotion?: ActiveCalibrationPromotion | null;
+    requireDurablePromotion?: boolean;
+  } = {}
+): DecisionLearningProfile {
+  const backtest = snapshot.latestBacktest;
+  const promotionMatchesBacktest = Boolean(
+    activePromotion && backtest && activePromotion.modelKey === backtest.modelKey && activePromotion.engineVersion === backtest.engineVersion
+  );
+  const promotedCalibrationBuckets = promotionMatchesBacktest ? calibrationBucketsFromPromotion(activePromotion) : [];
+  const promotedBucketSample = promotedCalibrationBuckets.reduce((sum, bucket) => sum + bucket.sampleSize, 0);
+  const resolvedCalibrationBuckets =
+    promotionMatchesBacktest && promotedBucketSample >= snapshot.readiness.minimumRecommendedFixtures
+      ? promotedCalibrationBuckets
+      : calibrationBuckets(backtest);
+  const demoOnly = Boolean(backtest?.dataSource.includes("demo")) || snapshot.counts.realFinishedFixtures === 0;
+  const promotionApproved = requireDurablePromotion ? promotionMatchesBacktest : promotionMatchesBacktest || hasExplicitLivePromotion(backtest);
+  const metricBlockers = liveMetricBlockers(snapshot, backtest);
+  const shadowReady = snapshot.status === "ready" && Boolean(backtest) && snapshot.readiness.readyForTraining && !demoOnly;
+  const active = shadowReady && promotionApproved && metricBlockers.length === 0;
+  const status: DecisionLearningProfile["status"] =
+    snapshot.status === "not-configured"
+      ? "not-configured"
+      : snapshot.status === "failed"
+        ? "failed"
+        : active
+          ? "active"
+          : shadowReady
+            ? "shadow-only"
+          : demoOnly && backtest
+            ? "demo-only"
+            : "untrained";
+
+  return {
+    status,
+    source: activePromotion?.candidate.source ?? backtest?.dataSource ?? null,
+    active,
+    modelKey: backtest?.modelKey ?? activePromotion?.modelKey ?? null,
+    engineVersion: backtest?.engineVersion ?? activePromotion?.engineVersion ?? null,
+    calibrationPromotion: promotionMatchesBacktest && activePromotion
+      ? { id: activePromotion.id, candidateId: activePromotion.candidateId, approvedAt: activePromotion.approvedAt, expiresAt: activePromotion.expiresAt }
+      : null,
+    sampleSize: backtest?.sampleSize ?? 0,
+    realFinishedFixtures: snapshot.counts.realFinishedFixtures,
+    minimumRecommendedFixtures: snapshot.readiness.minimumRecommendedFixtures,
+    minimumEdge: learnedValue(backtest, "minimumEdge"),
+    valueEdgeWeight: learnedValue(backtest, "valueEdgeWeight"),
+    dataQualityWeight: learnedValue(backtest, "dataQualityWeight"),
+    marketAdjustmentWeight: learnedValue(backtest, "marketAdjustmentWeight"),
+    homeAdvantageElo: learnedValue(backtest, "homeAdvantageElo"),
+    brierScore: backtest?.brierScore ?? null,
+    yield: backtest?.yield ?? null,
+    closingLineValue: backtest?.closingLineValue ?? null,
+    calibrationBuckets: resolvedCalibrationBuckets,
+    generatedAt: snapshot.generatedAt,
+    reason: profileReason({ snapshot, backtest, active, demoOnly, promotionApproved, metricBlockers, durablePromotionRequired: requireDurablePromotion }),
+    notes: [
+      ...(backtest?.notes ?? []),
+      ...(shadowReady && !active ? ["Learned weights are available to the read-only shadow comparator but are disabled in live pick selection."] : []),
+      ...(promotionMatchesBacktest && promotedBucketSample < snapshot.readiness.minimumRecommendedFixtures
+        ? ["The approved live calibration cohort is retained as evidence; the larger historical curve remains active until the live cohort reaches the configured bucket sample floor."]
+        : [])
+    ]
+  };
+}
+
+export async function getDecisionLearningProfile(sport: Sport = "football"): Promise<DecisionLearningProfile> {
+  const [snapshot, promotionResult] = await Promise.all([getTrainingDataSnapshot(sport), readActiveCalibrationPromotion(sport)]);
+  return buildDecisionLearningProfileFromSnapshot(snapshot, {
+    activePromotion: promotionResult.status === "found" ? promotionResult.promotion : null,
+    requireDurablePromotion: true
+  });
+}

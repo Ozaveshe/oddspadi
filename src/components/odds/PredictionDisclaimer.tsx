@@ -1,0 +1,18 @@
+export function PredictionDisclaimer() {
+  return (
+    <div className="notice">
+      <strong>Real talk:</strong> football is unpredictable — that&apos;s why we love it. OddsPadi predictions are
+      statistical opinions, not guarantees. Use them to think clearly, not to bet blindly. 18+ where betting applies.
+    </div>
+  );
+}
+
+export function ResponsibleUseNotice() {
+  return (
+    <div className="notice">
+      <strong>Play it smart, padi:</strong> good analysis helps you decide better, but no analysis removes risk.
+      OddsPadi never promises &ldquo;sure odds&rdquo;, doesn&apos;t take bets, and doesn&apos;t hold your money. If you
+      bet, keep it fun — only stake what you can afford to lose.
+    </div>
+  );
+}

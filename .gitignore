@@ -1,0 +1,26 @@
+node_modules
+.next
+.netlify
+.playwright-cli
+out
+dist
+coverage
+output
+*.log
+*.tsbuildinfo
+.env
+.env*.local
+supabase/.temp
+
+# local workspace/tooling artifacts
+.codex
+.codex-logs
+.logs
+logs
+artifacts
+.agents
+.claude/settings.local.json
+dashboard-smoke.html
+fixtures-smoke.json
+materializer-smoke.json
+predictions-smoke.json

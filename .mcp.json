@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "supabase_oddspadi": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=wncwtzqipnoqwmqlznqn&features=database,development,debugging,docs"
+    }
+  }
+}

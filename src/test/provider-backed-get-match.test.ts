@@ -1,0 +1,179 @@
+import { describe, expect, it, vi } from "vitest";
+import { ProviderBackedSportsDataProvider } from "@/lib/sports/providers/providerBackedProvider";
+import type { SportsDataProvider } from "@/lib/sports/types";
+
+function fallbackThatMustNotHandleProviderIds(): SportsDataProvider {
+  return {
+    getFixtures: vi.fn(async () => []),
+    getMatch: vi.fn(async () => {
+      throw new Error("provider IDs must not delegate to the mock fallback");
+    }),
+    getLiveScores: vi.fn(async () => []),
+    getOdds: vi.fn(async () => []),
+    getTeamForm: vi.fn(async (teamId) => ({
+      teamId,
+      recentResults: [],
+      goalsFor: 0,
+      goalsAgainst: 0,
+      attackStrength: 1,
+      defenseStrength: 1
+    }))
+  };
+}
+
+const basketballGame = {
+  id: 501,
+  date: "2026-07-10T19:30:00Z",
+  status: { short: "NS" },
+  league: { id: 12, name: "NBA", country: "USA", season: "2026" },
+  teams: { home: { id: 1, name: "Boston Celtics" }, away: { id: 2, name: "Miami Heat" } },
+  scores: { home: { total: null }, away: { total: null } }
+};
+
+const tennisEvent = {
+  event_key: 701,
+  event_date: "2026-07-10",
+  event_time: "13:00",
+  event_status: "Not Started",
+  event_first_player: "Carlos Alcaraz",
+  event_second_player: "Daniil Medvedev",
+  first_player_key: 1,
+  second_player_key: 2,
+  tournament_key: 444,
+  tournament_name: "ATP Hard Court",
+  surface: "Hard"
+};
+
+describe("provider-backed match detail retrieval", () => {
+  it("loads and caches api-basketball game IDs without using the fallback", async () => {
+    const calls: string[] = [];
+    const fallback = fallbackThatMustNotHandleProviderIds();
+    const provider = new ProviderBackedSportsDataProvider({
+      env: { API_BASKETBALL_KEY: "basketball-key" },
+      fallback,
+      historicalBasketballStrengthLoader: async () => new Map(),
+      fetchImpl: async (input) => {
+        const url = input.toString();
+        calls.push(url);
+        return new Response(JSON.stringify({ response: [basketballGame] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+    });
+
+    const first = await provider.getMatch("api-basketball:501");
+    const second = await provider.getMatch("api-basketball:501");
+
+    expect(first?.id).toBe("api-basketball:501");
+    expect(first?.dataSource?.fixtureProvider).toBe("api-basketball");
+    expect(second).toBe(first);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toContain("games?id=501");
+    expect(calls[1]).toContain("games?date=2026-07-10");
+    expect(fallback.getMatch).not.toHaveBeenCalled();
+  });
+
+  it("loads and caches api-tennis event IDs without using the fallback", async () => {
+    const calls: string[] = [];
+    const fallback = fallbackThatMustNotHandleProviderIds();
+    const provider = new ProviderBackedSportsDataProvider({
+      env: { API_TENNIS_KEY: "tennis-key" },
+      fallback,
+      historicalTennisStrengthLoader: async () => new Map(),
+      fetchImpl: async (input) => {
+        const url = input.toString();
+        calls.push(url);
+        return new Response(JSON.stringify({ result: [tennisEvent] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+    });
+
+    const first = await provider.getMatch("api-tennis:701");
+    const second = await provider.getMatch("api-tennis:701");
+
+    expect(first?.id).toBe("api-tennis:701");
+    expect(first?.dataSource?.fixtureProvider).toBe("api-tennis");
+    expect(second).toBe(first);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toContain("event_key=701");
+    expect(calls[1]).toContain("date_start=2026-07-10");
+    expect(fallback.getMatch).not.toHaveBeenCalled();
+  });
+
+  it("finds and caches opaque the-odds-api event IDs across configured sport keys", async () => {
+    const calls: string[] = [];
+    const fallback = fallbackThatMustNotHandleProviderIds();
+    const provider = new ProviderBackedSportsDataProvider({
+      env: {
+        THE_ODDS_API_KEY: "odds-key",
+        ODDS_API_FOOTBALL_SPORT_KEY: "soccer_epl",
+        ODDS_API_BASKETBALL_SPORT_KEY: "basketball_nba",
+        ODDS_API_TENNIS_SPORT_KEY: "tennis_atp"
+      },
+      fallback,
+      historicalTennisStrengthLoader: async () => new Map(),
+      fetchImpl: async (input) => {
+        const url = input.toString();
+        calls.push(url);
+        if (!url.includes("/sports/tennis_atp/events/odds-event-701/odds")) {
+          return new Response("not found", { status: 404 });
+        }
+        return new Response(
+          JSON.stringify({
+            id: "odds-event-701",
+            sport_key: "tennis_atp",
+            sport_title: "ATP Tennis",
+            commence_time: "2026-07-10T13:00:00Z",
+            home_team: "Carlos Alcaraz",
+            away_team: "Daniil Medvedev",
+            bookmakers: [
+              {
+                title: "Test Book",
+                markets: [
+                  {
+                    key: "h2h",
+                    outcomes: [
+                      { name: "Carlos Alcaraz", price: 1.68 },
+                      { name: "Daniil Medvedev", price: 2.22 }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    });
+
+    const first = await provider.getMatch("the-odds-api:odds-event-701");
+    const second = await provider.getMatch("the-odds-api:odds-event-701");
+
+    expect(first?.id).toBe("the-odds-api:odds-event-701");
+    expect(first?.sport).toBe("tennis");
+    expect(first?.dataSource?.fixtureProvider).toBe("the-odds-api-events");
+    expect(first?.oddsMarkets[0]?.id).toBe("match_winner");
+    expect(second).toBe(first);
+    expect(calls).toHaveLength(3);
+    expect(calls.map((url) => new URL(url).pathname)).toEqual([
+      "/v4/sports/soccer_epl/events/odds-event-701/odds",
+      "/v4/sports/basketball_nba/events/odds-event-701/odds",
+      "/v4/sports/tennis_atp/events/odds-event-701/odds"
+    ]);
+    expect(fallback.getMatch).not.toHaveBeenCalled();
+  });
+
+  it.each(["api-basketball:501", "api-tennis:701", "the-odds-api:odds-event-701"])(
+    "returns null for an unconfigured %s ID instead of delegating to fallback",
+    async (matchId) => {
+      const fallback = fallbackThatMustNotHandleProviderIds();
+      const provider = new ProviderBackedSportsDataProvider({ env: {}, fallback });
+
+      await expect(provider.getMatch(matchId)).resolves.toBeNull();
+      expect(fallback.getMatch).not.toHaveBeenCalled();
+    }
+  );
+});
