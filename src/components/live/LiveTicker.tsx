@@ -33,7 +33,17 @@ export function LiveTicker({ initial }: { initial: LiveScoreBoard | null }) {
     );
   }
 
-  if (!picks.length) return null;
+  if (!picks.length) {
+    return (
+      <div className="ticker-empty">
+        <span className="te-dot" aria-hidden="true" />
+        <span>No matches kicking off right now.</span>
+        <Link className="inline-link" href="/live-scores">
+          Browse all live scores
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="ticker-wrap">

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function BetSlipPage() {
   return (
-    <main className="container">
+    <main id="main" className="container">
       <div className="page-heading">
         <h1>
           Slip Check is <span className="accent">coming soon</span>

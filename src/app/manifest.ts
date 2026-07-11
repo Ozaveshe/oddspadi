@@ -8,8 +8,8 @@ export default function manifest(): MetadataRoute.Manifest {
       "Your football padi: AI predictions, real-time live scores, and honest value analysis for matches across Africa and beyond.",
     start_url: "/",
     display: "standalone",
-    background_color: "#0B1310",
-    theme_color: "#0B1310",
+    background_color: "#0a0e0c",
+    theme_color: "#0a0e0c",
     categories: ["sports", "news"],
     icons: [
       {

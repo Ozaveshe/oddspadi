@@ -82,7 +82,7 @@ export default async function HomePage() {
   ]);
 
   return (
-    <main className="container">
+    <main id="main" className="container">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
 
       <section className="hero">
@@ -119,24 +119,53 @@ export default async function HomePage() {
             </div>
           </div>
         </div>
-        <div className="panel">
+        <div className="panel hero-panel">
           <div className="panel-header">
             <div>
               <h2>Today&apos;s top matches</h2>
-              <p className="muted small">Model probabilities, odds, confidence and risk — at a glance.</p>
+              <p className="muted small">Probabilities, odds, confidence &amp; risk — at a glance.</p>
             </div>
             <Link className="button small-btn" href="/predictions">
               View all
             </Link>
           </div>
-          <div className="match-list" style={{ marginTop: 14 }}>
-            {predictions.slice(0, 2).map((row) => (
-              <MatchCard key={row.match.id} match={row.match} prediction={row.prediction} />
-            ))}
-            {!predictions.length ? (
-              <p className="muted">No fixtures loaded yet for today — check back shortly.</p>
-            ) : null}
-          </div>
+          {predictions.length ? (
+            <div className="match-list">
+              <MatchCard
+                key={predictions[0].match.id}
+                match={predictions[0].match}
+                prediction={predictions[0].prediction}
+              />
+              {predictions.length > 1 ? (
+                <div className="mini-match-list">
+                  {predictions.slice(1, 4).map((row) => (
+                    <Link className="mini-match" key={row.match.id} href={`/predictions/${row.match.id}`}>
+                      <span className="mm-time">
+                        {new Date(row.match.kickoffTime).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        })}
+                      </span>
+                      <span className="mm-teams">
+                        {row.match.homeTeam.name} v {row.match.awayTeam.name}
+                      </span>
+                      <span className={`badge ${row.prediction.bestPick.hasValue ? "positive" : "no-value"}`}>
+                        {row.prediction.bestPick.hasValue ? "Value" : "No value"}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-emoji" aria-hidden="true">
+                📋
+              </div>
+              <h2>No fixtures loaded yet</h2>
+              <p className="muted">Today&apos;s matches appear here as kickoff nears — check back shortly.</p>
+            </div>
+          )}
         </div>
       </section>
 

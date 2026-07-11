@@ -69,7 +69,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
   };
 
   return (
-    <main className="container">
+    <main id="main" className="container">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(sportsEventJsonLd) }} />
 
       <div className="page-heading">

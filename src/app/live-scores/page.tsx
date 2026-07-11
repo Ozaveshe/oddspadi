@@ -19,7 +19,7 @@ export default async function LiveScoresPage() {
   const board = await fetchLiveScoreBoard();
 
   return (
-    <main className="container">
+    <main id="main" className="container">
       <div className="page-heading">
         <h1>
           Live scores, <span className="accent">as they happen</span>

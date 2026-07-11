@@ -54,7 +54,7 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
   const label = sportLabel(sport);
 
   return (
-    <main className="container">
+    <main id="main" className="container">
       <div className="page-heading">
         <h1>
           Today&apos;s {label} <span className="accent">predictions</span>

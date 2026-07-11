@@ -20,6 +20,7 @@ logs
 artifacts
 .agents
 .claude/settings.local.json
+.claude/skills
 dashboard-smoke.html
 fixtures-smoke.json
 materializer-smoke.json

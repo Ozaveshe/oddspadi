@@ -8,12 +8,12 @@ export const contentType = "image/png";
 function Mark({ size: markSize }: { size: number }) {
   return (
     <svg width={markSize} height={markSize} viewBox="0 0 512 512">
-      <rect width="512" height="512" rx="116" fill="#101d17" />
-      <circle cx="256" cy="260" r="128" fill="none" stroke="#2BD673" strokeWidth="34" />
+      <rect width="512" height="512" rx="116" fill="#0c1613" />
+      <circle cx="256" cy="260" r="128" fill="none" stroke="#26e07d" strokeWidth="34" />
       <path
         d="M 298 84 L 194 286 L 252 286 L 216 428 L 330 220 L 270 220 L 306 84 Z"
-        fill="#FFC53D"
-        stroke="#101d17"
+        fill="#ffc24b"
+        stroke="#0c1613"
         strokeWidth="18"
         strokeLinejoin="round"
       />
@@ -32,10 +32,10 @@ export default function OpengraphImage() {
           flexDirection: "column",
           justifyContent: "space-between",
           padding: 64,
-          backgroundColor: "#0B1310",
+          backgroundColor: "#0a0e0c",
           backgroundImage:
-            "radial-gradient(circle at 12% 0%, rgba(43,214,115,0.22), transparent 55%), radial-gradient(circle at 95% 10%, rgba(255,197,61,0.16), transparent 50%)",
-          color: "#EDF5F0",
+            "radial-gradient(circle at 10% 0%, rgba(38,224,125,0.28), transparent 55%), radial-gradient(circle at 96% 8%, rgba(255,194,75,0.16), transparent 52%)",
+          color: "#eaf5ee",
           fontFamily: "sans-serif"
         }}
       >
@@ -43,7 +43,7 @@ export default function OpengraphImage() {
           <Mark size={96} />
           <div style={{ display: "flex", fontSize: 56, fontWeight: 700 }}>
             <span>Odds</span>
-            <span style={{ color: "#2BD673" }}>Padi</span>
+            <span style={{ color: "#26e07d" }}>Padi</span>
           </div>
         </div>
 
@@ -51,10 +51,10 @@ export default function OpengraphImage() {
           <div style={{ display: "flex", fontSize: 76, fontWeight: 800, lineHeight: 1.05, letterSpacing: -2 }}>
             Your football padi for
           </div>
-          <div style={{ display: "flex", fontSize: 76, fontWeight: 800, lineHeight: 1.05, letterSpacing: -2, color: "#2BD673" }}>
+          <div style={{ display: "flex", fontSize: 76, fontWeight: 800, lineHeight: 1.05, letterSpacing: -2, color: "#26e07d" }}>
             smarter predictions.
           </div>
-          <div style={{ display: "flex", fontSize: 30, color: "#9DB3A7", marginTop: 10 }}>
+          <div style={{ display: "flex", fontSize: 30, color: "#9eb4a8", marginTop: 10 }}>
             AI predictions · Real-time live scores · Honest value analysis
           </div>
         </div>
@@ -65,8 +65,8 @@ export default function OpengraphImage() {
               display: "flex",
               alignItems: "center",
               gap: 12,
-              backgroundColor: "rgba(43,214,115,0.14)",
-              color: "#7EE8AB",
+              backgroundColor: "rgba(38,224,125,0.14)",
+              color: "#86f2b4",
               borderRadius: 999,
               padding: "12px 28px",
               fontSize: 28,
@@ -75,7 +75,7 @@ export default function OpengraphImage() {
           >
             oddspadi.com
           </div>
-          <div style={{ display: "flex", fontSize: 24, color: "#70867A" }}>18+ · Analysis only · Play responsibly</div>
+          <div style={{ display: "flex", fontSize: 24, color: "#6f867a" }}>18+ · Analysis only · Play responsibly</div>
         </div>
       </div>
     ),

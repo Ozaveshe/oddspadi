@@ -81,7 +81,7 @@ export function DecisionEngineClient({ params }: { params: DecisionEngineSearchP
   const valueRows = state.rows.filter((row) => row.prediction.bestPick.hasValue).length;
 
   return (
-    <main className="container">
+    <main id="main" className="container">
       <header className="page-heading">
         <div className="row-between">
           <div>

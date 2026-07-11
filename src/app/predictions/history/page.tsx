@@ -19,7 +19,7 @@ export default function PredictionHistoryPage() {
   const summary = getHistorySummary(history);
 
   return (
-    <main className="container">
+    <main id="main" className="container">
       <div className="page-heading">
         <h1>
           Our results — <span className="accent">wins and losses</span>

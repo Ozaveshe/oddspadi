@@ -76,7 +76,16 @@ export function SearchBox({ defaultValue }: { defaultValue?: string }) {
   return (
     <div className="field">
       <label htmlFor="q">Search</label>
-      <input id="q" name="q" type="search" placeholder="Team or league" defaultValue={defaultValue ?? ""} />
+      <input
+        id="q"
+        name="q"
+        type="search"
+        autoComplete="off"
+        spellCheck={false}
+        enterKeyHint="search"
+        placeholder="Team or league…"
+        defaultValue={defaultValue ?? ""}
+      />
     </div>
   );
 }

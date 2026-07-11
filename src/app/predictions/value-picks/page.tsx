@@ -22,7 +22,7 @@ export default async function ValuePicksPage() {
   const rows = await getValuePicks(todayIsoDate(), "football");
 
   return (
-    <main className="container">
+    <main id="main" className="container">
       <div className="page-heading">
         <h1>
           Today&apos;s <span className="accent">value picks</span>

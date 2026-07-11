@@ -69,7 +69,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B1310",
+  themeColor: "#0a0e0c",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover"
@@ -107,7 +107,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         />
         <link
           rel="preload"
-          href="/fonts/space-grotesk-latin.woff2"
+          href="/fonts/bricolage-grotesque-latin.woff2"
           as="font"
           type="font/woff2"
           crossOrigin="anonymous"
@@ -116,6 +116,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteJsonLd) }} />
       </head>
       <body>
+        <a className="skip-link" href="#main">
+          Skip to content
+        </a>
         <div className="site-shell">
           <header className="site-header">
             <nav className="nav" aria-label="Primary navigation">
