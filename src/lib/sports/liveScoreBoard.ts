@@ -111,9 +111,15 @@ const PRIORITY_LEAGUE_IDS = new Map<number, number>([
   [3, 9], // UEFA Europa League
   [848, 10], // UEFA Conference League
   [20, 11], // CAF Confederation Cup
-  [88, 14], // Eredivisie
-  [94, 15], // Primeira Liga
-  [203, 16] // Süper Lig
+  [399, 12], // NPFL (Nigeria)
+  [288, 13], // Premier Soccer League (South Africa)
+  [233, 14], // Egyptian Premier League
+  [200, 15], // Botola Pro (Morocco)
+  [570, 16], // Ghana Premier League
+  [276, 17], // FKF Premier League (Kenya)
+  [88, 20], // Eredivisie
+  [94, 21], // Primeira Liga
+  [203, 22] // Süper Lig
 ]);
 
 const AFRICAN_COUNTRIES = new Set(
