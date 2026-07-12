@@ -1,5 +1,6 @@
 -- ============================================================
 -- OddsPadi community: accounts (profiles), feed, and forums.
+-- Live migration version: 20260712050714.
 -- Read-open, write-own, authenticated-write. RLS enabled on every table.
 -- Apply via the supabase_oddspadi MCP connector (project ref
 -- wncwtzqipnoqwmqlznqn) — see docs/community-feature-plan.md.
@@ -9,6 +10,7 @@
 create or replace function public.op_set_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   new.updated_at = now();
@@ -38,20 +40,27 @@ create trigger op_profiles_set_updated_at
 alter table public.op_profiles enable row level security;
 
 create policy "profiles are readable by everyone"
-  on public.op_profiles for select using (true);
+  on public.op_profiles for select
+  to anon, authenticated
+  using (true);
 
 create policy "users insert their own profile"
-  on public.op_profiles for insert with check (auth.uid() = id);
+  on public.op_profiles for insert
+  to authenticated
+  with check ((select auth.uid()) = id);
 
 create policy "users update their own profile"
-  on public.op_profiles for update using (auth.uid() = id) with check (auth.uid() = id);
+  on public.op_profiles for update
+  to authenticated
+  using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);
 
 -- Auto-create a profile row when a new auth user signs up.
 create or replace function public.op_handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   base_handle text;
@@ -106,13 +115,22 @@ create trigger op_feed_posts_set_updated_at
 alter table public.op_feed_posts enable row level security;
 
 create policy "feed posts are readable by everyone"
-  on public.op_feed_posts for select using (true);
+  on public.op_feed_posts for select
+  to anon, authenticated
+  using (true);
 create policy "authenticated users create their own posts"
-  on public.op_feed_posts for insert with check (auth.uid() = author_id);
+  on public.op_feed_posts for insert
+  to authenticated
+  with check ((select auth.uid()) = author_id);
 create policy "authors edit their own posts"
-  on public.op_feed_posts for update using (auth.uid() = author_id) with check (auth.uid() = author_id);
+  on public.op_feed_posts for update
+  to authenticated
+  using ((select auth.uid()) = author_id)
+  with check ((select auth.uid()) = author_id);
 create policy "authors delete their own posts"
-  on public.op_feed_posts for delete using (auth.uid() = author_id);
+  on public.op_feed_posts for delete
+  to authenticated
+  using ((select auth.uid()) = author_id);
 
 create table if not exists public.op_feed_comments (
   id uuid primary key default gen_random_uuid(),
@@ -127,11 +145,17 @@ create index if not exists op_feed_comments_post_idx on public.op_feed_comments 
 alter table public.op_feed_comments enable row level security;
 
 create policy "feed comments are readable by everyone"
-  on public.op_feed_comments for select using (true);
+  on public.op_feed_comments for select
+  to anon, authenticated
+  using (true);
 create policy "authenticated users create their own comments"
-  on public.op_feed_comments for insert with check (auth.uid() = author_id);
+  on public.op_feed_comments for insert
+  to authenticated
+  with check ((select auth.uid()) = author_id);
 create policy "authors delete their own comments"
-  on public.op_feed_comments for delete using (auth.uid() = author_id);
+  on public.op_feed_comments for delete
+  to authenticated
+  using ((select auth.uid()) = author_id);
 
 create table if not exists public.op_feed_post_likes (
   post_id uuid not null references public.op_feed_posts (id) on delete cascade,
@@ -143,11 +167,17 @@ create table if not exists public.op_feed_post_likes (
 alter table public.op_feed_post_likes enable row level security;
 
 create policy "likes are readable by everyone"
-  on public.op_feed_post_likes for select using (true);
+  on public.op_feed_post_likes for select
+  to anon, authenticated
+  using (true);
 create policy "users manage their own likes"
-  on public.op_feed_post_likes for insert with check (auth.uid() = user_id);
+  on public.op_feed_post_likes for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
 create policy "users remove their own likes"
-  on public.op_feed_post_likes for delete using (auth.uid() = user_id);
+  on public.op_feed_post_likes for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
 
 -- ---------- Forums ----------
 create table if not exists public.op_forum_categories (
@@ -162,7 +192,9 @@ create table if not exists public.op_forum_categories (
 alter table public.op_forum_categories enable row level security;
 -- Categories are curated: read-open, writes only via service role (no write policy).
 create policy "forum categories are readable by everyone"
-  on public.op_forum_categories for select using (true);
+  on public.op_forum_categories for select
+  to anon, authenticated
+  using (true);
 
 create table if not exists public.op_forum_threads (
   id uuid primary key default gen_random_uuid(),
@@ -187,13 +219,22 @@ create trigger op_forum_threads_set_updated_at
 alter table public.op_forum_threads enable row level security;
 
 create policy "forum threads are readable by everyone"
-  on public.op_forum_threads for select using (true);
+  on public.op_forum_threads for select
+  to anon, authenticated
+  using (true);
 create policy "authenticated users create their own threads"
-  on public.op_forum_threads for insert with check (auth.uid() = author_id);
+  on public.op_forum_threads for insert
+  to authenticated
+  with check ((select auth.uid()) = author_id);
 create policy "authors edit their own threads"
-  on public.op_forum_threads for update using (auth.uid() = author_id) with check (auth.uid() = author_id);
+  on public.op_forum_threads for update
+  to authenticated
+  using ((select auth.uid()) = author_id and is_locked = false)
+  with check ((select auth.uid()) = author_id and is_locked = false);
 create policy "authors delete their own threads"
-  on public.op_forum_threads for delete using (auth.uid() = author_id);
+  on public.op_forum_threads for delete
+  to authenticated
+  using ((select auth.uid()) = author_id);
 
 create table if not exists public.op_forum_replies (
   id uuid primary key default gen_random_uuid(),
@@ -213,25 +254,39 @@ create trigger op_forum_replies_set_updated_at
 alter table public.op_forum_replies enable row level security;
 
 create policy "forum replies are readable by everyone"
-  on public.op_forum_replies for select using (true);
+  on public.op_forum_replies for select
+  to anon, authenticated
+  using (true);
 -- Replies only allowed on threads that are not locked.
 create policy "authenticated users reply on open threads"
   on public.op_forum_replies for insert
+  to authenticated
   with check (
-    auth.uid() = author_id
+    (select auth.uid()) = author_id
     and exists (select 1 from public.op_forum_threads t where t.id = thread_id and t.is_locked = false)
   );
 create policy "authors edit their own replies"
-  on public.op_forum_replies for update using (auth.uid() = author_id) with check (auth.uid() = author_id);
+  on public.op_forum_replies for update
+  to authenticated
+  using (
+    (select auth.uid()) = author_id
+    and exists (select 1 from public.op_forum_threads t where t.id = thread_id and t.is_locked = false)
+  )
+  with check (
+    (select auth.uid()) = author_id
+    and exists (select 1 from public.op_forum_threads t where t.id = thread_id and t.is_locked = false)
+  );
 create policy "authors delete their own replies"
-  on public.op_forum_replies for delete using (auth.uid() = author_id);
+  on public.op_forum_replies for delete
+  to authenticated
+  using ((select auth.uid()) = author_id);
 
 -- Keep thread activity + reply_count fresh.
 create or replace function public.op_touch_thread_on_reply()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   if (tg_op = 'INSERT') then
@@ -252,6 +307,58 @@ $$;
 create trigger op_forum_replies_touch_thread
   after insert or delete on public.op_forum_replies
   for each row execute function public.op_touch_thread_on_reply();
+
+-- ---------- Data API privileges ----------
+-- RLS controls rows; column privileges keep users away from moderation and
+-- denormalized fields even when they own the row.
+revoke all on table
+  public.op_profiles,
+  public.op_feed_posts,
+  public.op_feed_comments,
+  public.op_feed_post_likes,
+  public.op_forum_categories,
+  public.op_forum_threads,
+  public.op_forum_replies
+from anon, authenticated;
+
+grant select on table
+  public.op_profiles,
+  public.op_feed_posts,
+  public.op_feed_comments,
+  public.op_feed_post_likes,
+  public.op_forum_categories,
+  public.op_forum_threads,
+  public.op_forum_replies
+to anon, authenticated;
+
+grant insert (id, username, display_name, avatar_url, bio, favourite_team)
+  on public.op_profiles to authenticated;
+grant update (username, display_name, avatar_url, bio, favourite_team)
+  on public.op_profiles to authenticated;
+
+grant insert (author_id, body, match_id) on public.op_feed_posts to authenticated;
+grant update (body, match_id) on public.op_feed_posts to authenticated;
+grant delete on public.op_feed_posts to authenticated;
+
+grant insert (post_id, author_id, body) on public.op_feed_comments to authenticated;
+grant delete on public.op_feed_comments to authenticated;
+
+grant insert (post_id, user_id) on public.op_feed_post_likes to authenticated;
+grant delete on public.op_feed_post_likes to authenticated;
+
+grant insert (category_id, author_id, title, body) on public.op_forum_threads to authenticated;
+grant update (title, body) on public.op_forum_threads to authenticated;
+grant delete on public.op_forum_threads to authenticated;
+
+grant insert (thread_id, author_id, body) on public.op_forum_replies to authenticated;
+grant update (body) on public.op_forum_replies to authenticated;
+grant delete on public.op_forum_replies to authenticated;
+
+-- Trigger functions are not client APIs. Revoking EXECUTE does not prevent
+-- PostgreSQL from invoking them through their configured triggers.
+revoke execute on function public.op_set_updated_at() from public, anon, authenticated;
+revoke execute on function public.op_handle_new_user() from public, anon, authenticated;
+revoke execute on function public.op_touch_thread_on_reply() from public, anon, authenticated;
 
 -- ---------- Seed a few starter forum categories ----------
 insert into public.op_forum_categories (slug, name, description, sort_order) values

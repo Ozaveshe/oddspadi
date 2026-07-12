@@ -1,39 +1,40 @@
 # Community: accounts, feed & forums — build plan
 
 This documents the accounts/feed/forums feature. The **data model + security (RLS)
-foundation is done** as a migration; the rest is a focused follow-up that needs the
-Supabase connector authorized.
+foundation and application layer are ready against the live OddsPadi Supabase
+project**. The remaining production step is to rebuild and deploy the local app;
+the browser-safe Supabase variables and email-auth settings are already configured.
 
 ## Status
 
 | Piece | State |
 |---|---|
-| DB schema + RLS (profiles, feed, forums) | ✅ `supabase/migrations/20260712000000_community_accounts_feed_forums.sql` |
+| DB schema + RLS (profiles, feed, forums) | ✅ `supabase/migrations/20260712050714_community_accounts_feed_forums.sql` |
 | Auto-profile-on-signup trigger | ✅ in the migration |
 | Auth wiring (`@supabase/ssr` clients + session middleware) | ✅ `src/lib/supabase/*`, `src/middleware.ts` |
 | Auth UI (`/account` sign up/in/out + profile) | ✅ built |
 | Community feed (`/community` read + post) + API | ✅ built |
 | Forums (`/forums`, category, thread + replies) + API | ✅ built |
 | Nav entry ("Community") | ✅ built |
-| Migration **applied** to the live DB | ⛔ still blocked — needs `supabase_oddspadi` connector authorized |
-| Auth **enabled** in Supabase dashboard (email confirm / provider) | ⛔ needs dashboard config |
+| Migration **applied** to the live DB | ✅ `20260712050714_community_accounts_feed_forums` |
+| Auth **enabled** in Supabase dashboard (email confirm / provider) | ✅ Email/password enabled; sign-up open; confirmation required |
+| Netlify public Supabase variables | ✅ configured across deploy contexts |
 
 **The whole app layer is built, compiles, builds, and renders graceful
-"not switched on" states without a DB.** It goes live the moment (a) the
-migration is applied and (b) `NEXT_PUBLIC_SUPABASE_URL` + a publishable/anon key
-are set and email auth is enabled in the Supabase dashboard. Everything below the
-first divider was the plan; it is now done except the two ⛔ steps.
+"not switched on" states without a DB.** The database and Auth sides are active,
+and Netlify now has `NEXT_PUBLIC_SUPABASE_URL` + the publishable key. Production
+still needs a rebuild/deploy: as of this verification, `/community`, `/forums`, and
+`/account` return 404 on `https://oddspadi.com` because the six local feature commits
+have not been pushed or deployed.
 
-## Blocker: apply the migration
+## Live database status
 
-The migration is **not applied yet**. Applying it requires the `supabase_oddspadi`
-MCP connector (project ref `wncwtzqipnoqwmqlznqn` — per AGENTS.md). That connector is
-currently unauthenticated in the agent session, so migrations can't be run from here.
-
-To apply: authorize the connector (via `claude mcp` / `/mcp` in an interactive
-session, or the Supabase CLI `supabase db push`), then apply
-`20260712000000_community_accounts_feed_forums.sql`. Verify `get_project_url` returns
-`https://wncwtzqipnoqwmqlznqn.supabase.co` first.
+The named `supabase_oddspadi` connector was verified against project ref
+`wncwtzqipnoqwmqlznqn`, then the community migration and its foreign-key index
+follow-up were applied as `20260712050714_community_accounts_feed_forums` and
+`20260712050829_add_community_fk_indexes`. All seven community tables have RLS,
+the four starter categories are seeded, and the Supabase security advisor reports
+no findings for these tables.
 
 ## Data model (in the migration)
 
