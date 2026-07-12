@@ -41,6 +41,8 @@ export interface Team {
   id: string;
   name: string;
   rating: number;
+  /** Team crest URL from the fixture provider (API-Football), when available. */
+  logo?: string | null;
   ratingEvidence?: {
     source: string;
     rawRating?: number | null;
@@ -64,6 +66,9 @@ export interface League {
   name: string;
   country: string;
   strength: number;
+  /** League badge + country flag URLs from the fixture provider, when available. */
+  logo?: string | null;
+  flag?: string | null;
 }
 
 export interface Score {

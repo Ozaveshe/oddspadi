@@ -813,11 +813,67 @@ p {
 }
 
 .teams {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
   font-family: var(--font-display);
-  font-size: 21px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.025em;
   line-height: 1.15;
+}
+
+.team-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.teams-vs {
+  color: var(--faint);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.league-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-match {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.match-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+/* ---------- Crests / logos ---------- */
+.team-crest {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 6px;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.team-crest--fallback {
+  background: var(--surface-3);
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .meta {

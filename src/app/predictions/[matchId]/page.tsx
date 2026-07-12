@@ -7,6 +7,7 @@ import { OddsTable } from "@/components/odds/OddsTable";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { PredictionExplanation } from "@/components/odds/PredictionExplanation";
 import { ProbabilityBar } from "@/components/odds/ProbabilityBar";
+import { TeamCrest } from "@/components/odds/TeamCrest";
 import { formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { getMatchPrediction } from "@/lib/sports/service";
 
@@ -81,8 +82,16 @@ export default async function MatchDetailPage({ params }: PageProps) {
             {new Date(match.kickoffTime).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
           </span>
         </div>
-        <h1>
-          {match.homeTeam.name} <span className="accent">vs</span> {match.awayTeam.name}
+        <h1 className="match-title">
+          <span className="team-inline">
+            <TeamCrest name={match.homeTeam.name} logo={match.homeTeam.logo} size={34} />
+            {match.homeTeam.name}
+          </span>
+          <span className="accent">vs</span>
+          <span className="team-inline">
+            <TeamCrest name={match.awayTeam.name} logo={match.awayTeam.logo} size={34} />
+            {match.awayTeam.name}
+          </span>
         </h1>
         {match.score ? (
           <p>

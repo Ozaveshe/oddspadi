@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Match, Prediction } from "@/lib/sports/types";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { ConfidenceBadge, MatchStatusBadge, RiskBadge } from "./Badges";
+import { TeamCrest } from "./TeamCrest";
 
 export function MatchPredictionTable({ rows }: { rows: Array<{ match: Match; prediction: Prediction }> }) {
   return (
@@ -38,9 +39,17 @@ export function MatchPredictionTable({ rows }: { rows: Array<{ match: Match; pre
                   <MatchStatusBadge status={match.status} />
                 </td>
                 <td>
-                  <strong>
-                    {match.homeTeam.name} vs {match.awayTeam.name}
-                  </strong>
+                  <span className="table-match">
+                    <span className="team-inline">
+                      <TeamCrest name={match.homeTeam.name} logo={match.homeTeam.logo} size={20} />
+                      <strong>{match.homeTeam.name}</strong>
+                    </span>
+                    <span className="teams-vs">vs</span>
+                    <span className="team-inline">
+                      <TeamCrest name={match.awayTeam.name} logo={match.awayTeam.logo} size={20} />
+                      <strong>{match.awayTeam.name}</strong>
+                    </span>
+                  </span>
                   <br />
                   <span className="small muted">
                     {match.league.name}, {match.league.country}

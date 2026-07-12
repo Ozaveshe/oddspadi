@@ -41,10 +41,12 @@ type ApiFootballFixture = {
     name?: string;
     country?: string;
     season?: number | string;
+    logo?: string | null;
+    flag?: string | null;
   };
   teams?: {
-    home?: { id?: number | string; name?: string };
-    away?: { id?: number | string; name?: string };
+    home?: { id?: number | string; name?: string; logo?: string | null };
+    away?: { id?: number | string; name?: string; logo?: string | null };
   };
   goals?: {
     home?: number | null;
@@ -1841,11 +1843,25 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
             id: `api-football:${safeId(fixture.league?.id, slug(leagueName) || "league")}`,
             name: leagueName,
             country,
-            strength
+            strength,
+            logo: cleanText(fixture.league?.logo) || null,
+            flag: cleanText(fixture.league?.flag) || null
           },
           kickoffTime,
-          homeTeam: { id: homeId, name: homeName, rating: homeRating.rating, ratingEvidence: homeRating.evidence },
-          awayTeam: { id: awayId, name: awayName, rating: awayRating.rating, ratingEvidence: awayRating.evidence },
+          homeTeam: {
+            id: homeId,
+            name: homeName,
+            rating: homeRating.rating,
+            ratingEvidence: homeRating.evidence,
+            logo: cleanText(fixture.teams?.home?.logo) || null
+          },
+          awayTeam: {
+            id: awayId,
+            name: awayName,
+            rating: awayRating.rating,
+            ratingEvidence: awayRating.evidence,
+            logo: cleanText(fixture.teams?.away?.logo) || null
+          },
           venue: {
             name: fixture.fixture?.venue?.name ?? null,
             city: fixture.fixture?.venue?.city ?? null,

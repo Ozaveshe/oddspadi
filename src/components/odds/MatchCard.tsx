@@ -3,6 +3,7 @@ import type { Match, Prediction } from "@/lib/sports/types";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { ConfidenceBadge, MatchStatusBadge, RiskBadge, ValueEdgeBadge } from "./Badges";
 import { ProbabilityBar } from "./ProbabilityBar";
+import { TeamCrest } from "./TeamCrest";
 
 function mainOdds(match: Match) {
   return match.oddsMarkets.find((market) => market.id === "match_winner")?.selections ?? [];
@@ -45,12 +46,23 @@ export function MatchCard({ match, prediction }: { match: Match; prediction: Pre
         <div>
           <div className="meta">
             <span>{new Date(match.kickoffTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-            <span>{match.league.name}</span>
+            <span className="league-tag">
+              {match.league.logo ? <TeamCrest name={match.league.name} logo={match.league.logo} size={16} /> : null}
+              {match.league.name}
+            </span>
             <span>{match.league.country}</span>
             <MatchStatusBadge status={match.status} />
           </div>
           <div className="teams">
-            {match.homeTeam.name} vs {match.awayTeam.name}
+            <span className="team-inline">
+              <TeamCrest name={match.homeTeam.name} logo={match.homeTeam.logo} size={26} />
+              {match.homeTeam.name}
+            </span>
+            <span className="teams-vs">vs</span>
+            <span className="team-inline">
+              <TeamCrest name={match.awayTeam.name} logo={match.awayTeam.logo} size={26} />
+              {match.awayTeam.name}
+            </span>
           </div>
         </div>
         <Link className="button small-btn" href={`/predictions/${match.id}`}>
