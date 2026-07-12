@@ -1424,7 +1424,7 @@ function filterFootballFixtures(fixtures: ApiFootballFixture[], env: EnvMap): Ap
 
 function selectFootballEnrichmentFixtures(fixtures: ApiFootballFixture[], env: EnvMap): ApiFootballFixture[] {
   const configuredMax = Number(env.API_FOOTBALL_MAX_ENRICHED_FIXTURES);
-  const maxFixtures = Number.isFinite(configuredMax) && configuredMax > 0 ? Math.round(clampRange(configuredMax, 1, 30)) : 6;
+  const maxFixtures = Number.isFinite(configuredMax) && configuredMax > 0 ? Math.round(clampRange(configuredMax, 1, 40)) : 12;
   return [...fixtures]
     .sort((left, right) => {
       const statusWeight = (fixture: ApiFootballFixture) => {

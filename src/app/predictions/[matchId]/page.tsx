@@ -48,7 +48,15 @@ export default async function MatchDetailPage({ params }: PageProps) {
   const displayDecision = prediction.decision;
   const displayPrediction = prediction;
   const winner = prediction.markets.find((market) => market.marketId === "match_winner");
-  const bestEdge = prediction.bestPick.hasValue ? prediction.bestPick.edge : 0;
+  const hasValue = prediction.bestPick.hasValue;
+  const bestEdge = hasValue ? prediction.bestPick.edge : 0;
+  const hasWinnerOdds = match.oddsMarkets.some((m) => m.id === "match_winner" && m.selections.length > 0);
+  const leanEntries: Array<[string, number]> = [
+    [match.homeTeam.name, winner?.probabilities.home ?? 0],
+    ...(match.sport === "football" ? ([["Draw", winner?.probabilities.draw ?? 0]] as Array<[string, number]>) : []),
+    [match.awayTeam.name, winner?.probabilities.away ?? 0]
+  ];
+  const [leanLabel, leanProb] = leanEntries.reduce((best, current) => (current[1] > best[1] ? current : best));
   const winnerTitle = "Who wins? The model's view";
 
   const sportsEventJsonLd = {
@@ -112,32 +120,49 @@ export default async function MatchDetailPage({ params }: PageProps) {
             <div className="metrics-grid" style={{ marginTop: 12 }}>
               <div className="metric">
                 <span className="metric-label">Best pick</span>
-                <span className="metric-value">{prediction.bestPick.label}</span>
+                <span className="metric-value">{hasValue ? prediction.bestPick.label : "No value bet"}</span>
+              </div>
+              <div className="metric">
+                <span className="metric-label">Model lean</span>
+                <span className="metric-value">
+                  {leanLabel} · {formatPercent(leanProb)}
+                </span>
               </div>
               <div className="metric">
                 <span className="metric-label">Value edge</span>
                 <span className="metric-value">
-                  {prediction.bestPick.hasValue ? formatSignedPercent(prediction.bestPick.edge) : "None found"}
+                  {hasValue ? formatSignedPercent(prediction.bestPick.edge) : hasWinnerOdds ? "None found" : "Needs odds"}
                 </span>
               </div>
               <div className="metric">
                 <span className="metric-label">Expected value</span>
                 <span className="metric-value">
-                  {prediction.bestPick.hasValue ? formatSignedPercent(prediction.bestPick.expectedValue) : "Not positive"}
+                  {hasValue ? formatSignedPercent(prediction.bestPick.expectedValue) : hasWinnerOdds ? "Not positive" : "Needs odds"}
                 </span>
               </div>
-              <div className="metric">
-                <span className="metric-label">Confidence</span>
-                <span className="metric-value">
-                  <ConfidenceBadge level={prediction.confidence} />
-                </span>
-              </div>
-              <div className="metric">
-                <span className="metric-label">Risk</span>
-                <span className="metric-value">
-                  <RiskBadge level={prediction.risk} />
-                </span>
-              </div>
+              {hasValue ? (
+                <>
+                  <div className="metric">
+                    <span className="metric-label">Confidence</span>
+                    <span className="metric-value">
+                      <ConfidenceBadge level={prediction.confidence} />
+                    </span>
+                  </div>
+                  <div className="metric">
+                    <span className="metric-label">Risk</span>
+                    <span className="metric-value">
+                      <RiskBadge level={prediction.risk} />
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="metric">
+                  <span className="metric-label">Value check</span>
+                  <span className="metric-value" style={{ fontSize: 13, fontWeight: 600 }}>
+                    {hasWinnerOdds ? "No edge at current odds" : "Odds pending"}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
