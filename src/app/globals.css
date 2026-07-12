@@ -1622,13 +1622,35 @@ details.fold > .fold-body {
 }
 
 /* ---------- Live scores board ---------- */
+.live-datenav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 6px;
+}
+
+.live-datenav-label {
+  min-width: 132px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15.5px;
+  letter-spacing: -0.02em;
+}
+
+.live-datenav .button.small-btn {
+  min-width: 42px;
+  font-size: 18px;
+  line-height: 1;
+}
+
 .live-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 20px 0;
+  margin: 16px 0 20px;
 }
 
 .live-search {

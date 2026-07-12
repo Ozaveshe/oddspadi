@@ -7,7 +7,7 @@ import type { LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
  * Polls /api/live while the tab is visible.
  * The endpoint is CDN-cached, so many viewers share one upstream call.
  */
-export function useLiveBoard(initial: LiveScoreBoard | null, pollMs = 45_000) {
+export function useLiveBoard(initial: LiveScoreBoard | null, pollMs = 45_000, date?: string) {
   const [board, setBoard] = useState<LiveScoreBoard | null>(initial);
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<number | null>(initial ? Date.now() : null);
@@ -16,7 +16,7 @@ export function useLiveBoard(initial: LiveScoreBoard | null, pollMs = 45_000) {
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const response = await fetch("/api/live", { cache: "no-store" });
+      const response = await fetch(date ? `/api/live?date=${encodeURIComponent(date)}` : "/api/live", { cache: "no-store" });
       if (response.ok) {
         const next = (await response.json()) as LiveScoreBoard;
         setBoard(next);
@@ -27,10 +27,14 @@ export function useLiveBoard(initial: LiveScoreBoard | null, pollMs = 45_000) {
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [date]);
+
+  const mountedRef = useRef(false);
 
   useEffect(() => {
-    if (!initial) void refresh();
+    // Refresh on mount (when no server board) and whenever the date changes.
+    if (!initial || mountedRef.current) void refresh();
+    mountedRef.current = true;
 
     const start = () => {
       if (timerRef.current) return;

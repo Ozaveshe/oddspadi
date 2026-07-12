@@ -131,10 +131,37 @@ function BoardSkeleton() {
   );
 }
 
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function shiftIso(iso: string, days: number): string {
+  const date = new Date(`${iso}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function dayLabel(iso: string): string {
+  const today = todayIso();
+  if (iso === today) return "Today";
+  if (iso === shiftIso(today, -1)) return "Yesterday";
+  if (iso === shiftIso(today, 1)) return "Tomorrow";
+  return new Date(`${iso}T12:00:00Z`).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+}
+
+const DATE_WINDOW_BACK = 6;
+const DATE_WINDOW_FORWARD = 8;
+
 export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null }) {
-  const { board, refreshing, updatedAt, refresh } = useLiveBoard(initial);
+  const [date, setDate] = useState<string | undefined>(undefined);
+  const { board, refreshing, updatedAt, refresh } = useLiveBoard(initial, 45_000, date);
   const [tab, setTab] = useState<TabId>("all");
   const [query, setQuery] = useState("");
+
+  const activeDate = date ?? board?.date ?? todayIso();
+  const isToday = activeDate === todayIso();
+  const minDate = shiftIso(todayIso(), -DATE_WINDOW_BACK);
+  const maxDate = shiftIso(todayIso(), DATE_WINDOW_FORWARD);
 
   const filtered = useMemo(() => {
     const fixtures = board?.fixtures ?? [];
@@ -165,6 +192,33 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
 
   return (
     <div>
+      <div className="live-datenav" role="group" aria-label="Choose day">
+        <button
+          className="button small-btn"
+          type="button"
+          aria-label="Previous day"
+          disabled={activeDate <= minDate}
+          onClick={() => setDate(shiftIso(activeDate, -1))}
+        >
+          ‹
+        </button>
+        <span className="live-datenav-label">{dayLabel(activeDate)}</span>
+        <button
+          className="button small-btn"
+          type="button"
+          aria-label="Next day"
+          disabled={activeDate >= maxDate}
+          onClick={() => setDate(shiftIso(activeDate, 1))}
+        >
+          ›
+        </button>
+        {!isToday ? (
+          <button className="button small-btn" type="button" onClick={() => setDate(undefined)}>
+            Jump to today
+          </button>
+        ) : null}
+      </div>
+
       <div className="live-toolbar">
         <div className="seg" role="tablist" aria-label="Filter matches by status">
           {TABS.map(({ id, label }) => (
@@ -186,10 +240,14 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
       </div>
 
       <div className="live-meta-row" style={{ marginBottom: 14 }}>
-        <span className="badge live">Live updates</span>
+        {isToday ? (
+          <span className="badge live">Live updates</span>
+        ) : (
+          <span className="badge finished">{dayLabel(activeDate)} · fixtures &amp; results</span>
+        )}
         <span suppressHydrationWarning>
           {updatedAt ? `Updated ${new Date(updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "Updating…"}
-          {" · auto-refreshes every 45s"}
+          {isToday ? " · auto-refreshes every 45s" : ""}
         </span>
         <button className="button small-btn" type="button" onClick={() => void refresh()} disabled={refreshing}>
           {refreshing ? "Refreshing…" : "Refresh now"}

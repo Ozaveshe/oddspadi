@@ -184,8 +184,8 @@ const EXCLUDED_NAME_PATTERN = /friendl/i;
 const BOARD_TTL_MS = 30_000;
 const MAX_FIXTURES = 500;
 
-let cachedBoard: { expiresAt: number; board: LiveScoreBoard } | null = null;
-let inFlight: Promise<LiveScoreBoard> | null = null;
+const boardCache = new Map<string, { expiresAt: number; board: LiveScoreBoard }>();
+const inFlightByDate = new Map<string, Promise<LiveScoreBoard>>();
 
 function apiKey(): string | null {
   // Filter placeholder / whitespace-only values so a stub key isn't sent
@@ -325,7 +325,7 @@ function toBoardFixture(raw: ApiFootballLiveFixture, analysisLeagues: Set<number
   };
 }
 
-function buildBoard(rawLive: ApiFootballLiveFixture[], rawToday: ApiFootballLiveFixture[]): LiveScoreBoard {
+function buildBoard(rawLive: ApiFootballLiveFixture[], rawToday: ApiFootballLiveFixture[], boardDate: string): LiveScoreBoard {
   const analysisLeagues = analysisLeagueIds();
   const byId = new Map<number, LiveBoardFixture>();
 
@@ -362,19 +362,23 @@ function buildBoard(rawLive: ApiFootballLiveFixture[], rawToday: ApiFootballLive
 
   return {
     generatedAt: new Date().toISOString(),
-    date: utcTodayIsoDate(),
+    date: boardDate,
     source: "api-football",
     counts,
     fixtures
   };
 }
 
-export async function fetchLiveScoreBoard(): Promise<LiveScoreBoard> {
+export async function fetchLiveScoreBoard(dateArg?: string): Promise<LiveScoreBoard> {
+  const today = utcTodayIsoDate();
+  const date = dateArg && /^\d{4}-\d{2}-\d{2}$/.test(dateArg) ? dateArg : today;
+  const isToday = date === today;
+
   const key = apiKey();
   if (!key) {
     return {
       generatedAt: new Date().toISOString(),
-      date: utcTodayIsoDate(),
+      date,
       source: "none",
       counts: { live: 0, upcoming: 0, finished: 0, other: 0 },
       fixtures: [],
@@ -382,25 +386,31 @@ export async function fetchLiveScoreBoard(): Promise<LiveScoreBoard> {
     };
   }
 
-  if (cachedBoard && cachedBoard.expiresAt > Date.now()) return cachedBoard.board;
-  if (inFlight) return inFlight;
+  const cached = boardCache.get(date);
+  if (cached && cached.expiresAt > Date.now()) return cached.board;
+  const existing = inFlightByDate.get(date);
+  if (existing) return existing;
 
-  inFlight = (async () => {
+  const promise = (async () => {
     try {
-      const today = utcTodayIsoDate();
-      const [rawLive, rawToday] = await Promise.all([
-        fetchApiFootball("fixtures", { live: "all", timezone: "UTC" }, key),
-        fetchApiFootball("fixtures", { date: today, timezone: "UTC" }, key)
+      // Only "today" pulls the in-play feed; other days are fixtures/results.
+      const [rawLive, rawDate] = await Promise.all([
+        isToday ? fetchApiFootball("fixtures", { live: "all", timezone: "UTC" }, key) : Promise.resolve([]),
+        fetchApiFootball("fixtures", { date, timezone: "UTC" }, key)
       ]);
-      const board = buildBoard(rawLive, rawToday);
-      if (board.fixtures.length || !cachedBoard) {
-        cachedBoard = { expiresAt: Date.now() + BOARD_TTL_MS, board };
+      const board = buildBoard(rawLive, rawDate, date);
+      // Non-today boards change slowly; cache them longer than the live board.
+      const ttl = isToday ? BOARD_TTL_MS : 5 * 60_000;
+      if (board.fixtures.length || !boardCache.get(date)) {
+        boardCache.set(date, { expiresAt: Date.now() + ttl, board });
+        if (boardCache.size > 16) boardCache.delete(boardCache.keys().next().value as string);
       }
-      return cachedBoard?.board ?? board;
+      return boardCache.get(date)?.board ?? board;
     } finally {
-      inFlight = null;
+      inFlightByDate.delete(date);
     }
   })();
 
-  return inFlight;
+  inFlightByDate.set(date, promise);
+  return promise;
 }
