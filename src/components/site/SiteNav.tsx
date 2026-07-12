@@ -6,18 +6,18 @@ import { BallIcon, HistoryIcon, HomeIcon, LiveIcon, StarIcon } from "./NavIcons"
 
 const desktopItems = [
   { href: "/", label: "Home" },
-  { href: "/live-scores", label: "Live Scores", live: true },
-  { href: "/predictions", label: "Predictions" },
-  { href: "/predictions/value-picks", label: "Value Picks" },
-  { href: "/predictions/decision-engine", label: "AI Engine" },
+  { href: "/live-scores", label: "Live Scores", live: true, prefetch: false },
+  { href: "/predictions", label: "Predictions", prefetch: false },
+  { href: "/predictions/value-picks", label: "Value Picks", prefetch: false },
+  { href: "/predictions/decision-engine", label: "AI Engine", prefetch: false },
   { href: "/predictions/history", label: "Results" }
 ];
 
 const tabItems = [
   { href: "/", label: "Home", Icon: HomeIcon },
-  { href: "/live-scores", label: "Live", Icon: LiveIcon },
-  { href: "/predictions", label: "Predictions", Icon: BallIcon },
-  { href: "/predictions/value-picks", label: "Picks", Icon: StarIcon },
+  { href: "/live-scores", label: "Live", Icon: LiveIcon, prefetch: false },
+  { href: "/predictions", label: "Predictions", Icon: BallIcon, prefetch: false },
+  { href: "/predictions/value-picks", label: "Picks", Icon: StarIcon, prefetch: false },
   { href: "/predictions/history", label: "Results", Icon: HistoryIcon }
 ];
 
@@ -41,7 +41,12 @@ export function DesktopNavLinks() {
   return (
     <div className="nav-links">
       {desktopItems.map((item) => (
-        <Link href={item.href} key={item.href} aria-current={isActive(pathname, item.href) ? "page" : undefined}>
+        <Link
+          href={item.href}
+          key={item.href}
+          prefetch={item.prefetch}
+          aria-current={isActive(pathname, item.href) ? "page" : undefined}
+        >
           {item.label}
           {item.live ? <span className="nav-live-dot" aria-hidden="true" /> : null}
         </Link>
@@ -55,8 +60,8 @@ export function MobileTabBar() {
 
   return (
     <nav className="tabbar" aria-label="Quick navigation">
-      {tabItems.map(({ href, label, Icon }) => (
-        <Link href={href} key={href} aria-current={isActive(pathname, href) ? "page" : undefined}>
+      {tabItems.map(({ href, label, Icon, prefetch }) => (
+        <Link href={href} key={href} prefetch={prefetch} aria-current={isActive(pathname, href) ? "page" : undefined}>
           <Icon />
           <span>{label}</span>
         </Link>

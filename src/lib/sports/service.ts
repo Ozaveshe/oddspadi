@@ -291,8 +291,18 @@ export async function getDecisionSupervisorQueue(filters: PredictionFilters = {}
   return buildDecisionSupervisorQueue({ rows, date, sport });
 }
 
-export async function getValuePicks(date = todayIsoDate(), sport: Sport = "football", providerMode?: PredictionFilters["providerMode"]) {
-  const rows = await getPredictions({ date, sport, ...(providerMode ? { providerMode } : {}) });
+export async function getValuePicks(
+  date = todayIsoDate(),
+  sport: Sport = "football",
+  providerMode?: PredictionFilters["providerMode"],
+  storageMode?: PredictionFilters["storageMode"]
+) {
+  const rows = await getPredictions({
+    date,
+    sport,
+    ...(providerMode ? { providerMode } : {}),
+    ...(storageMode ? { storageMode } : {})
+  });
 
   return rows
     .filter(

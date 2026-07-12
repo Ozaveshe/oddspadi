@@ -21,7 +21,11 @@ export const GET = withApiHandler(async (request: Request) => {
     country,
     query: search,
     publicHistory,
-    providerMode: "live"
+    providerMode: "live",
+    // Public requests must not wait on the operator-only training corpus and
+    // decision-memory scans. Those proof lanes remain available on the
+    // dedicated decision/training APIs.
+    storageMode: "preview"
   });
   return apiSuccess(data);
 });

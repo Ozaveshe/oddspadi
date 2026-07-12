@@ -49,8 +49,10 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
   const country = single(params.country);
   const confidence = single(params.confidence);
   const query = single(params.q);
-  const allMatches = await sportsProvider.getFixtures(date, sport);
-  const rows = await getPredictions({ date, sport, league, country, confidence, query });
+  const [allMatches, rows] = await Promise.all([
+    sportsProvider.getFixtures(date, sport),
+    getPredictions({ date, sport, league, country, confidence, query, storageMode: "preview" })
+  ]);
   const label = sportLabel(sport);
 
   return (

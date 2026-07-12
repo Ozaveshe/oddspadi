@@ -4,6 +4,6 @@ import { getValuePicks } from "@/lib/sports/service";
 export const GET = withApiHandler(async (request: Request) => {
   const query = parseSportsQuery(request);
   if ("error" in query) return apiError(query.error);
-  const data = await getValuePicks(query.date, query.sport, "live");
+  const data = await getValuePicks(query.date, query.sport, "live", "preview");
   return apiSuccess(data);
 });

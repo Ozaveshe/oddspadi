@@ -57,6 +57,11 @@ export function DecisionEngineClient({ params }: { params: DecisionEngineSearchP
 
   useEffect(() => {
     const controller = new AbortController();
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 12_000);
     setState({ status: "loading", rows: [], error: null });
 
     async function load() {
@@ -68,14 +73,23 @@ export function DecisionEngineClient({ params }: { params: DecisionEngineSearchP
         }
         if (!controller.signal.aborted) setState({ status: "ready", rows: payload.data, error: null });
       } catch (error) {
-        if (controller.signal.aborted) return;
-        const message = error instanceof Error ? error.message : "Live analysis is temporarily unavailable.";
+        if (controller.signal.aborted && !timedOut) return;
+        const message = timedOut
+          ? "Live analysis took too long. Please retry in a moment."
+          : error instanceof Error
+            ? error.message
+            : "Live analysis is temporarily unavailable.";
         setState({ status: "failed", rows: [], error: message });
+      } finally {
+        window.clearTimeout(timeout);
       }
     }
 
     void load();
-    return () => controller.abort();
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
   }, [attempt, requestUrl]);
 
   const valueRows = state.rows.filter((row) => row.prediction.bestPick.hasValue).length;

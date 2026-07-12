@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ValuePicksPage() {
-  const rows = await getValuePicks(todayIsoDate(), "football");
+  const rows = await getValuePicks(todayIsoDate(), "football", undefined, "preview");
 
   return (
     <main id="main" className="container">

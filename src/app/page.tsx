@@ -76,9 +76,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 export default async function HomePage() {
   const date = todayIsoDate();
   const [predictions, valuePicks, liveBoard] = await Promise.all([
-    withTimeout(getPredictions({ date, sport: "football" }), 8_000, []),
-    withTimeout(getValuePicks(date, "football"), 8_000, []),
-    withTimeout(fetchLiveScoreBoard(), 8_000, null)
+    withTimeout(getPredictions({ date, sport: "football", storageMode: "preview" }), 5_000, []),
+    withTimeout(getValuePicks(date, "football", undefined, "preview"), 5_000, []),
+    withTimeout(fetchLiveScoreBoard(), 5_000, null)
   ]);
 
   return (
