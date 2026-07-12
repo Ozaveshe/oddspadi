@@ -10,9 +10,19 @@ Supabase connector authorized.
 |---|---|
 | DB schema + RLS (profiles, feed, forums) | ✅ `supabase/migrations/20260712000000_community_accounts_feed_forums.sql` |
 | Auto-profile-on-signup trigger | ✅ in the migration |
-| Migration **applied** to the live DB | ⛔ blocked — needs `supabase_oddspadi` connector authorized |
-| Auth wiring (sessions) | ⬜ needs `@supabase/ssr` + build |
-| API routes + UI (feed, forums, profile) | ⬜ to build |
+| Auth wiring (`@supabase/ssr` clients + session middleware) | ✅ `src/lib/supabase/*`, `src/middleware.ts` |
+| Auth UI (`/account` sign up/in/out + profile) | ✅ built |
+| Community feed (`/community` read + post) + API | ✅ built |
+| Forums (`/forums`, category, thread + replies) + API | ✅ built |
+| Nav entry ("Community") | ✅ built |
+| Migration **applied** to the live DB | ⛔ still blocked — needs `supabase_oddspadi` connector authorized |
+| Auth **enabled** in Supabase dashboard (email confirm / provider) | ⛔ needs dashboard config |
+
+**The whole app layer is built, compiles, builds, and renders graceful
+"not switched on" states without a DB.** It goes live the moment (a) the
+migration is applied and (b) `NEXT_PUBLIC_SUPABASE_URL` + a publishable/anon key
+are set and email auth is enabled in the Supabase dashboard. Everything below the
+first divider was the plan; it is now done except the two ⛔ steps.
 
 ## Blocker: apply the migration
 

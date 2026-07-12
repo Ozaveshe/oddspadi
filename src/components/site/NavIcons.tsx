@@ -20,6 +20,16 @@ export function HomeIcon({ size = 22 }: IconProps) {
   );
 }
 
+export function CommunityIcon({ size = 22 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base}>
+      <path d="M4 5.5h16v10H8l-4 3.5z" />
+      <path d="M8 9.5h8" />
+      <path d="M8 12.5h5" />
+    </svg>
+  );
+}
+
 export function LiveIcon({ size = 22 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base}>

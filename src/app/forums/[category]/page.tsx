@@ -1,0 +1,114 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { NewThreadForm } from "@/components/community/ForumComposers";
+import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+
+export const dynamic = "force-dynamic";
+
+type PageProps = { params: Promise<{ category: string }> };
+
+type Category = { id: string; name: string; description: string | null };
+type AuthorRaw = { username?: string | null };
+type Thread = {
+  id: string;
+  title: string;
+  reply_count: number;
+  last_activity_at: string;
+  is_pinned: boolean;
+  author: AuthorRaw | AuthorRaw[] | null;
+};
+
+function authorName(author: Thread["author"]): string {
+  const a = Array.isArray(author) ? author[0] : author;
+  return a?.username ?? "padi";
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { category } = await params;
+  return { title: `${category} — Forums` };
+}
+
+export default async function ForumCategoryPage({ params }: PageProps) {
+  const { category: slug } = await params;
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return (
+      <main id="main" className="container">
+        <div className="notice">The forums aren’t switched on for this environment yet.</div>
+      </main>
+    );
+  }
+
+  const { data: category } = await supabase
+    .from("op_forum_categories")
+    .select("id, name, description")
+    .eq("slug", slug)
+    .maybeSingle<Category>();
+  if (!category) notFound();
+
+  const [{ data: threadsData }, userResult] = await Promise.all([
+    supabase
+      .from("op_forum_threads")
+      .select("id, title, reply_count, last_activity_at, is_pinned, author:op_profiles(username)")
+      .eq("category_id", category.id)
+      .order("is_pinned", { ascending: false })
+      .order("last_activity_at", { ascending: false })
+      .limit(50),
+    supabase.auth.getUser()
+  ]);
+  const threads = (threadsData as Thread[] | null) ?? [];
+  const user = userResult.data.user;
+
+  return (
+    <main id="main" className="container">
+      <div className="page-heading">
+        <div className="meta">
+          <Link className="inline-link" href="/forums">
+            ← Forums
+          </Link>
+        </div>
+        <h1>{category.name}</h1>
+        {category.description ? <p>{category.description}</p> : null}
+      </div>
+
+      {user ? (
+        <NewThreadForm categoryId={category.id} />
+      ) : (
+        <div className="notice">
+          <Link className="inline-link" href="/account">
+            Sign in
+          </Link>{" "}
+          to start a thread.
+        </div>
+      )}
+
+      <section className="section" style={{ paddingTop: 20 }}>
+        {threads.length ? (
+          <div className="forum-list">
+            {threads.map((thread) => (
+              <Link className="forum-row" key={thread.id} href={`/forums/${slug}/${thread.id}`}>
+                <span>
+                  <strong style={{ display: "block", fontSize: 15.5 }}>
+                    {thread.is_pinned ? "📌 " : ""}
+                    {thread.title}
+                  </strong>
+                  <span className="muted small">by @{authorName(thread.author)}</span>
+                </span>
+                <span className="forum-meta">{thread.reply_count} repl{thread.reply_count === 1 ? "y" : "ies"}</span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <div className="empty-emoji" aria-hidden="true">
+              💬
+            </div>
+            <h2>No threads yet</h2>
+            <p className="muted">Start the first conversation in {category.name}.</p>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}

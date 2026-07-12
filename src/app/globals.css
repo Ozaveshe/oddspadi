@@ -857,6 +857,81 @@ p {
   gap: 8px 16px;
 }
 
+/* ---------- Community (feed + forums + auth) ---------- */
+.auth-panel {
+  padding: 22px;
+}
+
+.feed-composer {
+  padding: 16px;
+}
+
+.feed-textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 12px 14px;
+  line-height: 1.5;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.feed-textarea:focus {
+  border-color: var(--green-deep);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 3px var(--green-soft);
+  outline: none;
+}
+
+.feed-list {
+  display: grid;
+  gap: 14px;
+}
+
+.feed-post {
+  padding: 18px;
+}
+
+.feed-post-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.forum-list {
+  display: grid;
+  gap: 12px;
+}
+
+.forum-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  box-shadow: inset 0 1px 0 var(--ridge);
+  transition: border-color 0.3s var(--ease), transform 0.4s var(--ease-spring);
+}
+
+.forum-row:hover {
+  border-color: var(--green-line);
+  transform: translateY(-2px);
+}
+
+.forum-row .forum-meta {
+  color: var(--faint);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* ---------- Crests / logos ---------- */
 .team-crest {
   display: inline-grid;

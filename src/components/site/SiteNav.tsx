@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BallIcon, HistoryIcon, HomeIcon, LiveIcon, StarIcon } from "./NavIcons";
+import { BallIcon, CommunityIcon, HistoryIcon, HomeIcon, LiveIcon } from "./NavIcons";
 
 const desktopItems = [
   { href: "/", label: "Home" },
@@ -10,6 +10,7 @@ const desktopItems = [
   { href: "/predictions", label: "Predictions", prefetch: false },
   { href: "/predictions/value-picks", label: "Value Picks", prefetch: false },
   { href: "/predictions/decision-engine", label: "AI Engine", prefetch: false },
+  { href: "/community", label: "Community", prefetch: false },
   { href: "/predictions/history", label: "Results" }
 ];
 
@@ -17,7 +18,7 @@ const tabItems = [
   { href: "/", label: "Home", Icon: HomeIcon },
   { href: "/live-scores", label: "Live", Icon: LiveIcon, prefetch: false },
   { href: "/predictions", label: "Predictions", Icon: BallIcon, prefetch: false },
-  { href: "/predictions/value-picks", label: "Picks", Icon: StarIcon, prefetch: false },
+  { href: "/community", label: "Community", Icon: CommunityIcon, prefetch: false },
   { href: "/predictions/history", label: "Results", Icon: HistoryIcon }
 ];
 

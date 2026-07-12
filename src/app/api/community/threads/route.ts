@@ -1,0 +1,30 @@
+import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(request: Request) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return Response.json({ error: "Community is not enabled yet." }, { status: 503 });
+
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) return Response.json({ error: "Sign in to start a thread." }, { status: 401 });
+
+  const payload = (await request.json().catch(() => ({}))) as { categoryId?: unknown; title?: unknown; body?: unknown };
+  const categoryId = typeof payload.categoryId === "string" ? payload.categoryId : "";
+  const title = typeof payload.title === "string" ? payload.title.trim() : "";
+  const body = typeof payload.body === "string" ? payload.body.trim() : "";
+  if (!categoryId) return Response.json({ error: "Missing category." }, { status: 400 });
+  if (title.length < 3 || title.length > 160) return Response.json({ error: "Title must be 3–160 characters." }, { status: 400 });
+  if (body.length < 1 || body.length > 8000) return Response.json({ error: "Post must be 1–8000 characters." }, { status: 400 });
+
+  const { data, error } = await supabase
+    .from("op_forum_threads")
+    .insert({ category_id: categoryId, author_id: user.id, title, body })
+    .select("id")
+    .single();
+
+  if (error) return Response.json({ error: error.message }, { status: 400 });
+  return Response.json({ id: data.id }, { status: 201 });
+}
