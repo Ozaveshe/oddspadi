@@ -47,7 +47,7 @@ export function LiveTicker({ initial }: { initial: LiveScoreBoard | null }) {
 
   return (
     <div className="ticker-wrap">
-      <div className="ticker" aria-label="Live and upcoming matches">
+      <div className="ticker" aria-label="Live and upcoming matches" aria-live="polite" aria-atomic="false">
         {picks.map((fixture) => (
           <Link className="ticker-chip" href="/live-scores" key={fixture.id}>
             <span className="t-league">

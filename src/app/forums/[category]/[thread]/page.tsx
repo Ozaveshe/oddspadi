@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ReplyForm } from "@/components/community/ForumComposers";
@@ -5,7 +6,13 @@ import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 
 export const dynamic = "force-dynamic";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+
 type PageProps = { params: Promise<{ category: string; thread: string }> };
+
+function prettifySlug(slug: string): string {
+  return slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 type AuthorRaw = { username?: string | null };
 type ThreadRow = {
@@ -24,6 +31,26 @@ function authorName(author: AuthorRaw | AuthorRaw[] | null): string {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { category: slug, thread: threadId } = await params;
+  const fallback: Metadata = { title: "Forum thread", robots: { index: false, follow: true } };
+  const supabase = await createSupabaseServerClient();
+  if (!supabase || !UUID.test(threadId)) return fallback;
+  const { data } = await supabase
+    .from("op_forum_threads")
+    .select("title, body")
+    .eq("id", threadId)
+    .maybeSingle<{ title: string; body: string }>();
+  if (!data) return fallback;
+  const description = data.body.replace(/\s+/g, " ").trim().slice(0, 155) || "A discussion on the OddsPadi forums.";
+  return {
+    title: data.title,
+    description,
+    alternates: { canonical: `/forums/${slug}/${threadId}` },
+    openGraph: { type: "article", title: `${data.title} — OddsPadi Forums`, description }
+  };
+}
 
 export default async function ThreadPage({ params }: PageProps) {
   const { category: slug, thread: threadId } = await params;
@@ -48,9 +75,44 @@ export default async function ThreadPage({ params }: PageProps) {
   ]);
   const replies = (repliesData as Reply[] | null) ?? [];
   const user = userResult.data.user;
+  const threadUrl = `${siteUrl}/forums/${slug}/${thread.id}`;
+
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: `${siteUrl}/` },
+        { "@type": "ListItem", position: 2, name: "Forums", item: `${siteUrl}/forums` },
+        { "@type": "ListItem", position: 3, name: prettifySlug(slug), item: `${siteUrl}/forums/${slug}` },
+        { "@type": "ListItem", position: 4, name: thread.title, item: threadUrl }
+      ]
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "DiscussionForumPosting",
+      headline: thread.title,
+      text: thread.body,
+      datePublished: thread.created_at,
+      url: threadUrl,
+      author: { "@type": "Person", name: authorName(thread.author) },
+      interactionStatistic: {
+        "@type": "InteractionCounter",
+        interactionType: "https://schema.org/CommentAction",
+        userInteractionCount: replies.length
+      },
+      comment: replies.map((reply) => ({
+        "@type": "Comment",
+        text: reply.body,
+        datePublished: reply.created_at,
+        author: { "@type": "Person", name: authorName(reply.author) }
+      }))
+    }
+  ];
 
   return (
     <main id="main" className="container">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <div className="page-heading">
         <div className="meta">
           <Link className="inline-link" href={`/forums/${slug}`}>

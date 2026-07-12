@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { trackEvent } from "@/lib/analytics/events";
 
 async function postJson(url: string, payload: unknown): Promise<{ id?: string; error?: string }> {
   const response = await fetch(url, {
@@ -27,6 +28,7 @@ export function NewThreadForm({ categoryId }: { categoryId: string }) {
     setError(null);
     try {
       await postJson("/api/community/threads", { categoryId, title: title.trim(), body: body.trim() });
+      trackEvent("forum_thread_created", { category_id: categoryId });
       setTitle("");
       setBody("");
       router.refresh();
@@ -62,7 +64,7 @@ export function NewThreadForm({ categoryId }: { categoryId: string }) {
         aria-label="Thread body"
       />
       {error ? (
-        <p className="small" style={{ color: "var(--red)", marginTop: 8 }}>
+        <p className="small" role="alert" style={{ color: "var(--red)", marginTop: 8 }}>
           {error}
         </p>
       ) : null}
@@ -88,6 +90,7 @@ export function ReplyForm({ threadId }: { threadId: string }) {
     setError(null);
     try {
       await postJson("/api/community/replies", { threadId, body: body.trim() });
+      trackEvent("forum_reply_created", { thread_id: threadId });
       setBody("");
       router.refresh();
     } catch (err) {
@@ -109,7 +112,7 @@ export function ReplyForm({ threadId }: { threadId: string }) {
         aria-label="Reply"
       />
       {error ? (
-        <p className="small" style={{ color: "var(--red)", marginTop: 8 }}>
+        <p className="small" role="alert" style={{ color: "var(--red)", marginTop: 8 }}>
           {error}
         </p>
       ) : null}

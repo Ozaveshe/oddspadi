@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { trackEvent } from "@/lib/analytics/events";
 
 export function FeedComposer() {
   const router = useRouter();
@@ -23,6 +24,7 @@ export function FeedComposer() {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error ?? "Could not post.");
+      trackEvent("community_post_created");
       setBody("");
       router.refresh();
     } catch (err) {
@@ -44,7 +46,7 @@ export function FeedComposer() {
         aria-label="Write a post"
       />
       {error ? (
-        <p className="small" style={{ color: "var(--red)", marginTop: 8 }}>
+        <p className="small" role="alert" style={{ color: "var(--red)", marginTop: 8 }}>
           {error}
         </p>
       ) : null}

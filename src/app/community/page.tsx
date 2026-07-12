@@ -7,7 +7,12 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Community feed",
-  description: "What football fans are saying on OddsPadi — reads, reactions and matchday talk."
+  description: "What football fans are saying on OddsPadi — reads, reactions and matchday talk.",
+  alternates: { canonical: "/community" },
+  openGraph: {
+    title: "Community feed — OddsPadi",
+    description: "What football fans are saying on OddsPadi — reads, reactions and matchday talk."
+  }
 };
 
 type FeedAuthorRaw = { username?: string | null; display_name?: string | null };

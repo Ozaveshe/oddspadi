@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Match, Prediction } from "@/lib/sports/types";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { ConfidenceBadge, RiskBadge } from "./Badges";
+import { LocalTime } from "./LocalTime";
 
 export function ValuePickCard({ match, prediction }: { match: Match; prediction: Prediction }) {
   if (!prediction.bestPick.hasValue) return null;
@@ -14,10 +15,18 @@ export function ValuePickCard({ match, prediction }: { match: Match; prediction:
             {match.homeTeam.name} vs {match.awayTeam.name}
           </strong>
           <div className="small muted">
-            {match.league.name} · {new Date(match.kickoffTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {match.league.name} · <LocalTime iso={match.kickoffTime} />
           </div>
         </div>
-        <Link className="button small-btn" href={`/predictions/${match.id}`}>
+        <Link
+          className="button small-btn"
+          href={`/predictions/${match.id}`}
+          aria-label={`See why: ${match.homeTeam.name} vs ${match.awayTeam.name}`}
+          data-analytics-event="value_pick_clicked"
+          data-analytics-match-id={match.id}
+          data-analytics-sport={match.sport}
+          data-analytics-source="value_pick_card"
+        >
           See why
         </Link>
       </div>

@@ -64,13 +64,13 @@ export default function PredictionHistoryPage() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Match</th>
-              <th>Pick</th>
-              <th>Odds</th>
-              <th>Model</th>
-              <th>Edge</th>
-              <th>Result</th>
+              <th scope="col">Date</th>
+              <th scope="col">Match</th>
+              <th scope="col">Pick</th>
+              <th scope="col">Odds</th>
+              <th scope="col">Model</th>
+              <th scope="col">Edge</th>
+              <th scope="col">Result</th>
             </tr>
           </thead>
           <tbody>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LiveTicker } from "@/components/live/LiveTicker";
+import { LocalTime } from "@/components/odds/LocalTime";
 import { MatchCard } from "@/components/odds/MatchCard";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 import { ValuePickCard } from "@/components/odds/ValuePickCard";
@@ -106,7 +107,7 @@ export default async function HomePage() {
           </div>
           <div className="hero-stats">
             <div className="hero-stat">
-              <strong>{liveBoard?.counts.live || "—"}</strong>
+              <strong>{liveBoard ? liveBoard.counts.live : "—"}</strong>
               <span>matches live now</span>
             </div>
             <div className="hero-stat">
@@ -139,12 +140,14 @@ export default async function HomePage() {
               {predictions.length > 1 ? (
                 <div className="mini-match-list">
                   {predictions.slice(1, 4).map((row) => (
-                    <Link className="mini-match" key={row.match.id} href={`/predictions/${row.match.id}`}>
+                    <Link
+                      className="mini-match"
+                      key={row.match.id}
+                      href={`/predictions/${row.match.id}`}
+                      aria-label={`${row.match.homeTeam.name} v ${row.match.awayTeam.name} prediction`}
+                    >
                       <span className="mm-time">
-                        {new Date(row.match.kickoffTime).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit"
-                        })}
+                        <LocalTime iso={row.match.kickoffTime} />
                       </span>
                       <span className="mm-teams">
                         {row.match.homeTeam.name} v {row.match.awayTeam.name}

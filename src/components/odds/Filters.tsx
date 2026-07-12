@@ -14,7 +14,13 @@ export function SportFilter({ selected = "football" }: { selected?: Sport }) {
   return (
     <div className="field">
       <label htmlFor="sport">Sport</label>
-      <select id="sport" name="sport" defaultValue={selected}>
+      <select
+        id="sport"
+        name="sport"
+        defaultValue={selected}
+        data-analytics-event="sport_selected"
+        data-analytics-source="prediction_filters"
+      >
         {sports.map((sport) => (
           <option key={sport.id} value={sport.id} disabled={!sport.active}>
             {sport.label}

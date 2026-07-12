@@ -6,8 +6,8 @@ export function PredictionExplanation({ explanation }: { explanation: MatchPredi
       <h2>OddsPadi explanation</h2>
       <p>{explanation.summary}</p>
       <ul>
-        {explanation.drivers.map((driver) => (
-          <li key={driver}>{driver}</li>
+        {explanation.drivers.map((driver, index) => (
+          <li key={`${driver}-${index}`}>{driver}</li>
         ))}
       </ul>
       <p className="small muted">{explanation.disclaimer}</p>

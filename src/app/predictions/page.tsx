@@ -67,7 +67,11 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
         </p>
       </div>
 
-      <form className="filters">
+      <form
+        className="filters"
+        data-analytics-event="filter_used"
+        data-analytics-source="predictions_page"
+      >
         <DateSelector defaultValue={date} />
         <SportFilter selected={sport} />
         <LeagueFilter matches={allMatches} selected={league} />

@@ -6,6 +6,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 
 export const dynamic = "force-dynamic";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+
 type PageProps = { params: Promise<{ category: string }> };
 
 type Category = { id: string; name: string; description: string | null };
@@ -25,8 +27,23 @@ function authorName(author: Thread["author"]): string {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { category } = await params;
-  return { title: `${category} — Forums` };
+  const { category: slug } = await params;
+  const fallback: Metadata = { title: "Forum category", alternates: { canonical: `/forums/${slug}` } };
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return fallback;
+  const { data } = await supabase
+    .from("op_forum_categories")
+    .select("name, description")
+    .eq("slug", slug)
+    .maybeSingle<{ name: string; description: string | null }>();
+  if (!data) return fallback;
+  const description = data.description ?? `Threads, predictions debate and match talk in ${data.name} on the OddsPadi forums.`;
+  return {
+    title: data.name,
+    description,
+    alternates: { canonical: `/forums/${slug}` },
+    openGraph: { title: `${data.name} — OddsPadi Forums`, description }
+  };
 }
 
 export default async function ForumCategoryPage({ params }: PageProps) {
@@ -60,8 +77,19 @@ export default async function ForumCategoryPage({ params }: PageProps) {
   const threads = (threadsData as Thread[] | null) ?? [];
   const user = userResult.data.user;
 
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${siteUrl}/` },
+      { "@type": "ListItem", position: 2, name: "Forums", item: `${siteUrl}/forums` },
+      { "@type": "ListItem", position: 3, name: category.name, item: `${siteUrl}/forums/${slug}` }
+    ]
+  };
+
   return (
     <main id="main" className="container">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <div className="page-heading">
         <div className="meta">
           <Link className="inline-link" href="/forums">

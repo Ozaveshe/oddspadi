@@ -430,7 +430,7 @@ p {
     gap: 3px;
     padding: 10px 4px 9px;
     color: var(--faint);
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.01em;
     transition: color 0.2s var(--ease);
@@ -451,6 +451,12 @@ p {
 
   .nav-links {
     display: none;
+  }
+
+  /* Lift the consent banner above the tab bar wherever the bar is shown,
+     not just on the narrowest phones. */
+  .analytics-consent {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -874,6 +880,8 @@ p {
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
+  /* 16px avoids iOS zoom-on-focus. */
+  font-size: 16px;
   padding: 12px 14px;
   line-height: 1.5;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -1148,6 +1156,8 @@ p {
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
+  /* 16px keeps iOS Safari from auto-zooming the viewport on focus. */
+  font-size: 16px;
   padding: 8px 12px;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
   transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
@@ -1249,7 +1259,10 @@ p {
 
 .data-table th {
   position: sticky;
-  top: 0;
+  /* Park below the sticky site header so column labels stay visible on
+     vertical scroll instead of sliding behind the floating nav. */
+  top: var(--header-h);
+  z-index: 1;
   background: var(--surface-2);
   color: var(--faint);
   font-size: 11px;
@@ -1740,6 +1753,8 @@ details.fold > .fold-body {
   border-radius: 999px;
   background: var(--surface);
   color: var(--text);
+  /* 16px avoids iOS zoom-on-focus. */
+  font-size: 16px;
   padding: 8px 20px;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
   transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
@@ -1983,7 +1998,8 @@ a.score-row:hover {
   gap: 32px;
 }
 
-.footer h4 {
+.footer h4,
+.footer h2 {
   margin: 0 0 14px;
   color: var(--text);
   font-size: 12px;
@@ -2044,6 +2060,104 @@ a.score-row:hover {
   font-size: 12px;
 }
 
+.footer-link-button {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.footer-link-button:hover,
+.footer-link-button:focus-visible {
+  color: var(--text);
+}
+
+/* ---------- Privacy + consent ---------- */
+.legal-copy {
+  max-width: 780px;
+  display: grid;
+  gap: 28px;
+}
+
+.legal-copy section {
+  display: grid;
+  gap: 10px;
+}
+
+.legal-copy h2,
+.legal-copy p,
+.legal-copy ul {
+  margin: 0;
+}
+
+.legal-copy ul {
+  padding-left: 20px;
+  color: var(--muted);
+}
+
+.analytics-consent {
+  position: fixed;
+  z-index: 1000;
+  right: 18px;
+  bottom: 18px;
+  left: 18px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface-2) 96%, transparent);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.48), inset 0 1px 0 var(--ridge);
+  backdrop-filter: blur(18px);
+}
+
+.analytics-consent h2 {
+  margin: 4px 0 6px;
+  font-size: 20px;
+}
+
+.analytics-consent p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.analytics-consent a {
+  color: var(--green-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.analytics-consent-actions {
+  min-width: 172px;
+  display: grid;
+  gap: 8px;
+}
+
+.analytics-consent-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.analytics-consent-close:hover,
+.analytics-consent-close:focus-visible {
+  color: var(--text);
+}
+
 /* ---------- Trust strip ---------- */
 .trust-strip {
   display: grid;
@@ -2088,6 +2202,37 @@ a.score-row:hover {
 .faq-list {
   display: grid;
   gap: 12px;
+}
+
+/* ---------- Touch ergonomics ---------- */
+/* On touch devices enforce a ~44px hit area on the compact controls and give
+   tappable rows/cards a real pressed state (hover doesn't fire on touch). */
+@media (pointer: coarse) {
+  .button.small-btn,
+  .seg button,
+  .seg a,
+  .live-datenav .button.small-btn {
+    min-height: 44px;
+  }
+
+  .live-datenav .button.small-btn {
+    min-width: 44px;
+  }
+
+  .analytics-consent-close {
+    min-height: 44px;
+  }
+}
+
+.mini-match:active,
+.forum-row:active,
+a.score-row:active,
+.ticker-chip:active,
+.sport-tile:not([aria-disabled="true"]):active,
+.match-card:active,
+.value-card:active {
+  transform: scale(0.99);
+  border-color: var(--green-line);
 }
 
 /* ---------- Scroll reveal (progressive enhancement) ---------- */
@@ -2231,5 +2376,22 @@ a.score-row:hover {
 
   .badge-row {
     justify-content: flex-start;
+  }
+
+  .analytics-consent {
+    right: 10px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    left: 10px;
+    padding: 17px;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .analytics-consent-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .analytics-consent-close {
+    grid-column: 1 / -1;
   }
 }

@@ -6,10 +6,13 @@ import { FormGuide } from "@/components/odds/FormGuide";
 import { OddsTable } from "@/components/odds/OddsTable";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { PredictionExplanation } from "@/components/odds/PredictionExplanation";
+import { LocalTime } from "@/components/odds/LocalTime";
 import { ProbabilityBar } from "@/components/odds/ProbabilityBar";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { getMatchPrediction } from "@/lib/sports/service";
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
 
 type PageProps = {
   params: Promise<{ matchId: string }>;
@@ -30,11 +33,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!row) return { title: "Match Prediction" };
   const title = `${row.match.homeTeam.name} vs ${row.match.awayTeam.name} — Prediction & Analysis`;
   const description = `AI prediction for ${row.match.homeTeam.name} vs ${row.match.awayTeam.name} (${row.match.league.name}): probabilities vs odds, value edge, confidence and risk — explained in plain language.`;
+  const url = `/predictions/${encodeURIComponent(matchId)}`;
   return {
     title,
     description,
-    alternates: { canonical: `/predictions/${encodeURIComponent(matchId)}` },
-    openGraph: { title: `${title} | OddsPadi`, description }
+    alternates: { canonical: url },
+    openGraph: { type: "article", url: `${siteUrl}${url}`, title: `${title} | OddsPadi`, description },
+    twitter: { card: "summary_large_image", title: `${title} | OddsPadi`, description }
   };
 }
 
@@ -59,36 +64,49 @@ export default async function MatchDetailPage({ params }: PageProps) {
   const [leanLabel, leanProb] = leanEntries.reduce((best, current) => (current[1] > best[1] ? current : best));
   const winnerTitle = "Who wins? The model's view";
 
-  const sportsEventJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "SportsEvent",
-    name: `${match.homeTeam.name} vs ${match.awayTeam.name}`,
-    sport: match.sport === "football" ? "Soccer" : match.sport,
-    startDate: match.kickoffTime,
-    homeTeam: { "@type": "SportsTeam", name: match.homeTeam.name },
-    awayTeam: { "@type": "SportsTeam", name: match.awayTeam.name },
-    location: match.venue?.name
-      ? {
-          "@type": "Place",
-          name: match.venue.name,
-          address: [match.venue.city, match.venue.country].filter(Boolean).join(", ") || undefined
-        }
-      : undefined,
-    organizer: { "@type": "SportsOrganization", name: match.league.name }
-  };
+  const matchUrl = `${siteUrl}/predictions/${encodeURIComponent(matchId)}`;
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "SportsEvent",
+      name: `${match.homeTeam.name} vs ${match.awayTeam.name}`,
+      url: matchUrl,
+      description: `${match.league.name} fixture — OddsPadi prediction, probabilities vs odds, value edge, confidence and risk.`,
+      sport: match.sport === "football" ? "Soccer" : match.sport,
+      startDate: match.kickoffTime,
+      eventStatus: "https://schema.org/EventScheduled",
+      homeTeam: { "@type": "SportsTeam", name: match.homeTeam.name },
+      awayTeam: { "@type": "SportsTeam", name: match.awayTeam.name },
+      location: match.venue?.name
+        ? {
+            "@type": "Place",
+            name: match.venue.name,
+            address: [match.venue.city, match.venue.country].filter(Boolean).join(", ") || undefined
+          }
+        : undefined,
+      organizer: { "@type": "SportsOrganization", name: match.league.name }
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: `${siteUrl}/` },
+        { "@type": "ListItem", position: 2, name: "Predictions", item: `${siteUrl}/predictions` },
+        { "@type": "ListItem", position: 3, name: `${match.homeTeam.name} vs ${match.awayTeam.name}`, item: matchUrl }
+      ]
+    }
+  ];
 
   return (
     <main id="main" className="container">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(sportsEventJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <div className="page-heading">
         <div className="meta">
           <MatchStatusBadge status={match.status} />
           <span>{match.league.name}</span>
           <span>{match.league.country}</span>
-          <span suppressHydrationWarning>
-            {new Date(match.kickoffTime).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
-          </span>
+          <LocalTime iso={match.kickoffTime} variant="datetime" />
         </div>
         <h1 className="match-title">
           <span className="team-inline">

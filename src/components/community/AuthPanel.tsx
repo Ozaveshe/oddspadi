@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browserClient";
+import { trackEvent } from "@/lib/analytics/events";
 
 type Status = { kind: "idle" | "loading" | "error" | "sent"; message?: string };
 
@@ -34,11 +35,13 @@ export function AuthPanel() {
           options: { emailRedirectTo: `${window.location.origin}/account` }
         });
         if (error) throw error;
+        trackEvent("account_auth_completed", { auth_mode: "signup", requires_email_confirmation: true });
         setStatus({ kind: "sent", message: "Check your email to confirm your account, then sign in." });
         return;
       }
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      trackEvent("account_auth_completed", { auth_mode: "signin" });
       router.refresh();
     } catch (error) {
       setStatus({ kind: "error", message: error instanceof Error ? error.message : "Something went wrong. Try again." });
@@ -49,7 +52,7 @@ export function AuthPanel() {
 
   return (
     <form className="panel auth-panel" onSubmit={onSubmit}>
-      <div className="seg" role="tablist" aria-label="Sign in or create account" style={{ marginBottom: 18 }}>
+      <div className="seg" role="group" aria-label="Sign in or create account" style={{ marginBottom: 18 }}>
         <button type="button" aria-pressed={mode === "signin"} onClick={() => setMode("signin")}>
           Sign in
         </button>
@@ -87,12 +90,12 @@ export function AuthPanel() {
       </div>
 
       {status.kind === "error" ? (
-        <p className="small" style={{ color: "var(--red)", marginTop: 12 }}>
+        <p className="small" role="alert" style={{ color: "var(--red)", marginTop: 12 }}>
           {status.message}
         </p>
       ) : null}
       {status.kind === "sent" ? (
-        <p className="small" style={{ color: "var(--green-strong)", marginTop: 12 }}>
+        <p className="small" role="status" style={{ color: "var(--green-strong)", marginTop: 12 }}>
           {status.message}
         </p>
       ) : null}

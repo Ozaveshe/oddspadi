@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Match, Prediction } from "@/lib/sports/types";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { ConfidenceBadge, MatchStatusBadge, RiskBadge, ValueEdgeBadge } from "./Badges";
+import { LocalTime } from "./LocalTime";
 import { ProbabilityBar } from "./ProbabilityBar";
 import { TeamCrest } from "./TeamCrest";
 
@@ -45,7 +46,9 @@ export function MatchCard({ match, prediction }: { match: Match; prediction: Pre
       <div className="match-main">
         <div>
           <div className="meta">
-            <span>{new Date(match.kickoffTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+            <span>
+              <LocalTime iso={match.kickoffTime} />
+            </span>
             <span className="league-tag">
               {match.league.logo ? <TeamCrest name={match.league.name} logo={match.league.logo} size={16} /> : null}
               {match.league.name}
@@ -65,7 +68,15 @@ export function MatchCard({ match, prediction }: { match: Match; prediction: Pre
             </span>
           </div>
         </div>
-        <Link className="button small-btn" href={`/predictions/${match.id}`}>
+        <Link
+          className="button small-btn"
+          href={`/predictions/${match.id}`}
+          aria-label={`Full analysis: ${match.homeTeam.name} vs ${match.awayTeam.name}`}
+          data-analytics-event="match_detail_opened"
+          data-analytics-match-id={match.id}
+          data-analytics-sport={match.sport}
+          data-analytics-source="match_card"
+        >
           Full analysis
         </Link>
       </div>

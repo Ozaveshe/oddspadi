@@ -6,7 +6,12 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Forums",
-  description: "OddsPadi forums — match talk, predictions debate, and league chat with fellow fans."
+  description: "OddsPadi forums — match talk, predictions debate, and league chat with fellow fans.",
+  alternates: { canonical: "/forums" },
+  openGraph: {
+    title: "Forums — OddsPadi",
+    description: "OddsPadi forums — match talk, predictions debate, and league chat with fellow fans."
+  }
 };
 
 type Category = { id: string; slug: string; name: string; description: string | null };

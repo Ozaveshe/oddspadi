@@ -9,15 +9,15 @@ export function OddsTable({ oddsMarkets, prediction }: { oddsMarkets: OddsMarket
       <table className="data-table">
         <thead>
           <tr>
-            <th>Market</th>
-            <th>Selection</th>
-            <th>Odds</th>
-            <th>Model</th>
-            <th>Raw implied</th>
-            <th>No-vig implied</th>
-            <th>Margin</th>
-            <th>No-vig edge</th>
-            <th>EV</th>
+            <th scope="col">Market</th>
+            <th scope="col">Selection</th>
+            <th scope="col">Odds</th>
+            <th scope="col">Model</th>
+            <th scope="col">Raw implied</th>
+            <th scope="col">No-vig implied</th>
+            <th scope="col">Margin</th>
+            <th scope="col">No-vig edge</th>
+            <th scope="col">EV</th>
           </tr>
         </thead>
         <tbody>

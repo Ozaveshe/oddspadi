@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AnalyticsPreferencesButton } from "@/components/analytics/Analytics";
 import { BrandWord, LogoMark } from "./Logo";
 
 const year = new Date().getFullYear();
@@ -19,7 +20,7 @@ export function SiteFooter() {
         </div>
 
         <div>
-          <h4>Explore</h4>
+          <h2>Explore</h2>
           <div className="footer-links">
             <Link href="/live-scores">Live scores</Link>
             <Link href="/predictions">Today&apos;s predictions</Link>
@@ -29,7 +30,7 @@ export function SiteFooter() {
         </div>
 
         <div>
-          <h4>The engine</h4>
+          <h2>The engine</h2>
           <div className="footer-links">
             <Link href="/predictions/decision-engine">AI decision engine</Link>
             <Link href="/predictions/bet-slip">Slip check (soon)</Link>
@@ -39,12 +40,14 @@ export function SiteFooter() {
         </div>
 
         <div>
-          <h4>Play responsibly</h4>
+          <h2>Play responsibly</h2>
           <div className="footer-links">
             <span className="muted">
               Predictions are informed opinions, never guarantees. Only stake what you can afford to lose.
             </span>
             <span className="muted">OddsPadi does not take bets or hold money.</span>
+            <Link href="/privacy">Privacy</Link>
+            <AnalyticsPreferencesButton />
           </div>
         </div>
       </div>

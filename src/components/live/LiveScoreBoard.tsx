@@ -82,6 +82,10 @@ function FixtureRow({ fixture }: { fixture: LiveBoardFixture }) {
       <Link
         className="score-row"
         href={`/predictions/${encodeURIComponent(fixture.matchId)}`}
+        data-analytics-event="live_score_opened"
+        data-analytics-match-id={fixture.matchId}
+        data-analytics-phase={fixture.phase}
+        data-analytics-source="live_score_board"
         title={`${fixture.home.name} vs ${fixture.away.name} — open OddsPadi analysis`}
       >
         {body}
@@ -190,6 +194,10 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
     other: board.counts.other
   };
 
+  // Only surface the "Other" bucket (postponed / cancelled / TBD) when it has
+  // fixtures — otherwise Live + Upcoming + Finished wouldn't add up to All.
+  const visibleTabs = board.counts.other > 0 ? [...TABS, { id: "other" as const, label: "Other" }] : TABS;
+
   return (
     <div>
       <div className="live-datenav" role="group" aria-label="Choose day">
@@ -199,6 +207,9 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
           aria-label="Previous day"
           disabled={activeDate <= minDate}
           onClick={() => setDate(shiftIso(activeDate, -1))}
+          data-analytics-event="filter_used"
+          data-analytics-filter-name="live_date"
+          data-analytics-filter-value="previous"
         >
           ‹
         </button>
@@ -209,20 +220,38 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
           aria-label="Next day"
           disabled={activeDate >= maxDate}
           onClick={() => setDate(shiftIso(activeDate, 1))}
+          data-analytics-event="filter_used"
+          data-analytics-filter-name="live_date"
+          data-analytics-filter-value="next"
         >
           ›
         </button>
         {!isToday ? (
-          <button className="button small-btn" type="button" onClick={() => setDate(undefined)}>
+          <button
+            className="button small-btn"
+            type="button"
+            onClick={() => setDate(undefined)}
+            data-analytics-event="filter_used"
+            data-analytics-filter-name="live_date"
+            data-analytics-filter-value="today"
+          >
             Jump to today
           </button>
         ) : null}
       </div>
 
       <div className="live-toolbar">
-        <div className="seg" role="tablist" aria-label="Filter matches by status">
-          {TABS.map(({ id, label }) => (
-            <button key={id} type="button" aria-pressed={tab === id} onClick={() => setTab(id)}>
+        <div className="seg" role="group" aria-label="Filter matches by status">
+          {visibleTabs.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={tab === id}
+              onClick={() => setTab(id)}
+              data-analytics-event="filter_used"
+              data-analytics-filter-name="live_status"
+              data-analytics-filter-value={id}
+            >
               {label}
               <span className="count">{counts[id]}</span>
             </button>
@@ -239,13 +268,13 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
         </div>
       </div>
 
-      <div className="live-meta-row" style={{ marginBottom: 14 }}>
+      <div className="live-meta-row" style={{ marginBottom: 14 }} aria-busy={refreshing}>
         {isToday ? (
           <span className="badge live">Live updates</span>
         ) : (
           <span className="badge finished">{dayLabel(activeDate)} · fixtures &amp; results</span>
         )}
-        <span suppressHydrationWarning>
+        <span suppressHydrationWarning aria-live="polite">
           {updatedAt ? `Updated ${new Date(updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "Updating…"}
           {isToday ? " · auto-refreshes every 45s" : ""}
         </span>
@@ -261,7 +290,7 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
           <p className="muted">{board.note ?? "Scores will appear here as soon as the data feed is connected."}</p>
         </div>
       ) : groups.length ? (
-        <div className="match-list">
+        <div className="match-list" aria-live="polite" aria-atomic="false">
           {groups.map((group) => (
             <section className="league-group" key={group.key}>
               <header className="league-head">

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browserClient";
+import { trackEvent } from "@/lib/analytics/events";
 
 export function SignOutButton() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export function SignOutButton() {
     setBusy(true);
     try {
       await supabase.auth.signOut();
+      trackEvent("account_signed_out");
       router.refresh();
     } finally {
       setBusy(false);

@@ -2,8 +2,13 @@ import type { Metadata } from "next";
 import { DecisionEngineClient } from "./DecisionEngineClient";
 
 export const metadata: Metadata = {
-  title: "Decision Engine | OddsPadi",
-  description: "Live, evidence-aware football, basketball, and tennis prediction decisions with market odds and value checks."
+  title: "AI Decision Engine",
+  description: "Live, evidence-aware football, basketball, and tennis prediction decisions with market odds and value checks.",
+  alternates: { canonical: "/predictions/decision-engine" },
+  openGraph: {
+    title: "AI Decision Engine — OddsPadi",
+    description: "Live, evidence-aware football, basketball, and tennis prediction decisions with market odds and value checks."
+  }
 };
 
 export type DecisionEngineSearchParams = Record<string, string | string[] | undefined>;

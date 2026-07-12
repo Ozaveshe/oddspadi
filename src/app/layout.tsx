@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { Analytics } from "@/components/analytics/Analytics";
 import { BrandWord, LogoMark } from "@/components/site/Logo";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { DesktopNavLinks, MobileTabBar } from "@/components/site/SiteNav";
 import "./globals.css";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+const googleSiteVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim();
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -33,9 +35,6 @@ export const metadata: Metadata = {
   creator: "OddsPadi",
   publisher: "OddsPadi",
   category: "sports",
-  alternates: {
-    canonical: "/"
-  },
   openGraph: {
     type: "website",
     url: siteUrl,
@@ -65,7 +64,8 @@ export const metadata: Metadata = {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
     shortcut: "/favicon.svg",
     apple: "/apple-icon"
-  }
+  },
+  ...(googleSiteVerification ? { verification: { google: googleSiteVerification } } : {})
 };
 
 export const viewport: Viewport = {
@@ -91,13 +91,30 @@ const webSiteJsonLd = {
   "@type": "WebSite",
   name: "OddsPadi",
   alternateName: "Odds Padi",
-  url: siteUrl
+  url: siteUrl,
+  potentialAction: {
+    "@type": "SearchAction",
+    target: {
+      "@type": "EntryPoint",
+      urlTemplate: `${siteUrl}/predictions?q={search_term_string}`
+    },
+    "query-input": "required name=search_term_string"
+  }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <head>
+        {/* Preload the primary UI + display fonts to cut first-paint FOUT / LCP. */}
+        <link rel="preload" href="/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link
+          rel="preload"
+          href="/fonts/bricolage-grotesque-latin.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteJsonLd) }} />
       </head>
@@ -119,6 +136,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <SiteFooter />
         </div>
         <MobileTabBar />
+        <Analytics />
       </body>
     </html>
   );

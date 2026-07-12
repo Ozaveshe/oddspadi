@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Match, Prediction } from "@/lib/sports/types";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { ConfidenceBadge, MatchStatusBadge, RiskBadge } from "./Badges";
+import { LocalTime } from "./LocalTime";
 import { TeamCrest } from "./TeamCrest";
 
 export function MatchPredictionTable({ rows }: { rows: Array<{ match: Match; prediction: Prediction }> }) {
@@ -10,15 +11,15 @@ export function MatchPredictionTable({ rows }: { rows: Array<{ match: Match; pre
       <table className="data-table">
         <thead>
           <tr>
-            <th>Kickoff</th>
-            <th>Match</th>
-            <th>Odds</th>
-            <th>Model</th>
-            <th>Pick</th>
-            <th>No-vig edge</th>
-            <th>EV</th>
-            <th>Risk</th>
-            <th>Detail</th>
+            <th scope="col">Kickoff</th>
+            <th scope="col">Match</th>
+            <th scope="col">Odds</th>
+            <th scope="col">Model</th>
+            <th scope="col">Pick</th>
+            <th scope="col">No-vig edge</th>
+            <th scope="col">EV</th>
+            <th scope="col">Risk</th>
+            <th scope="col">Detail</th>
           </tr>
         </thead>
         <tbody>
@@ -34,7 +35,7 @@ export function MatchPredictionTable({ rows }: { rows: Array<{ match: Match; pre
             return (
               <tr key={match.id}>
                 <td>
-                  {new Date(match.kickoffTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  <LocalTime iso={match.kickoffTime} />
                   <br />
                   <MatchStatusBadge status={match.status} />
                 </td>
@@ -68,7 +69,11 @@ export function MatchPredictionTable({ rows }: { rows: Array<{ match: Match; pre
                   <RiskBadge level={prediction.risk} />
                 </td>
                 <td>
-                  <Link className="button" href={`/predictions/${match.id}`}>
+                  <Link
+                    className="button"
+                    href={`/predictions/${match.id}`}
+                    aria-label={`Open ${match.homeTeam.name} vs ${match.awayTeam.name} analysis`}
+                  >
                     Open
                   </Link>
                 </td>
