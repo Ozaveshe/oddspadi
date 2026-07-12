@@ -1618,7 +1618,7 @@ function configuredOddsSportKeys(
         .map((key) => key.trim())
         .filter(Boolean)
     )
-  ).slice(0, sport === "football" ? 4 : 8);
+  ).slice(0, 8);
 }
 
 function defaultOddsRegionsForSport(sport: Extract<Sport, "football" | "basketball" | "tennis">): string {
