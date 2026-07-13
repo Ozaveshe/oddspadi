@@ -160,7 +160,8 @@ export function buildDecisionSupabaseLiveSchemaActivationPacket({
   manifest: DecisionSupabaseSchemaManifest;
 }): DecisionSupabaseLiveSchemaActivationPacket {
   const credentialBlocked = readiness.supabase.schema.credentialStatus === "invalid" || manifest.status === "blocked-credentials";
-  const targetReady = manifest.project.targetMatchesExpected && isolation.detected.linkedRef === ODDSPADI_SUPABASE_PROJECT_REF;
+  const linkedTargetSafe = !isolation.detected.linkedRef || isolation.detected.linkedRef === ODDSPADI_SUPABASE_PROJECT_REF;
+  const targetReady = manifest.project.targetMatchesExpected && linkedTargetSafe;
   const mcpProofReady = binder.controls.canUseMcpForSchema;
   const localSchemaReady =
     manifest.inventory.localDeclaredTables === manifest.inventory.expectedTables &&

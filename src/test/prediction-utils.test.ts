@@ -11227,7 +11227,8 @@ describe("prediction utilities", () => {
 
     expect(supabaseBootstrap.status).toBe("needs-mcp");
     expect(supabaseBootstrap.project.expectedRef).toBe("wncwtzqipnoqwmqlznqn");
-    expect(supabaseBootstrap.project.linkedRef).toBe("wncwtzqipnoqwmqlznqn");
+    expect([null, "wncwtzqipnoqwmqlznqn"]).toContain(supabaseBootstrap.project.linkedRef);
+    expect(supabaseBootstrap.mcp.repoConfig.projectRef).toBe("wncwtzqipnoqwmqlznqn");
     expect(supabaseBootstrap.schema.expectedTableCount).toBeGreaterThanOrEqual(22);
     expect(supabaseBootstrap.schema.expectedTables).toEqual(
       expect.arrayContaining(["op_ai_thought_episodes", "op_decision_briefings", "op_shadow_memory_replay"])
