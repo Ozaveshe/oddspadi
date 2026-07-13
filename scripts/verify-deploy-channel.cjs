@@ -10,6 +10,7 @@ const expected = {
   schemaVersion: 1,
   product: "OddsPadi",
   releaseBranch: "main",
+  gitRepository: "https://github.com/Ozaveshe/oddspadi",
   netlify: {
     siteId: "3ba4bf38-60ec-4bc4-b49f-aca9495a9aa2",
     siteName: "oddspadi",
@@ -21,8 +22,10 @@ const expected = {
   }
 };
 
-const online = process.argv.includes("--online") || process.argv.includes("--production");
+const manifestOnly = process.argv.includes("--manifest");
 const production = process.argv.includes("--production");
+const release = production || process.argv.includes("--release");
+const online = process.argv.includes("--online") || release;
 const failures = [];
 
 function readJson(filePath, label) {
@@ -53,6 +56,14 @@ function npx(args) {
   return run(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", command]);
 }
 
+function normalizeRepository(rawUrl) {
+  return rawUrl
+    ?.trim()
+    .replace(/^git@github\.com:/u, "https://github.com/")
+    .replace(/\.git$/u, "")
+    .replace(/\/$/u, "");
+}
+
 function envValue(env, key) {
   const value = env?.[key];
   if (typeof value === "string") return value;
@@ -62,12 +73,15 @@ function envValue(env, key) {
 
 const manifest = readJson(manifestPath, "deploy-channel.json");
 const packageJson = readJson(path.join(workspaceRoot, "package.json"), "package.json");
-const linkState = readJson(path.join(workspaceRoot, ".netlify", "state.json"), ".netlify/state.json");
+const linkState = manifestOnly
+  ? null
+  : readJson(path.join(workspaceRoot, ".netlify", "state.json"), ".netlify/state.json");
 
 if (manifest) {
   assertEqual("schemaVersion", manifest.schemaVersion, expected.schemaVersion);
   assertEqual("product", manifest.product, expected.product);
   assertEqual("releaseBranch", manifest.releaseBranch, expected.releaseBranch);
+  assertEqual("Git repository", normalizeRepository(manifest.gitRepository), expected.gitRepository);
   assertEqual("Netlify site ID", manifest.netlify?.siteId, expected.netlify.siteId);
   assertEqual("Netlify site name", manifest.netlify?.siteName, expected.netlify.siteName);
   assertEqual("Netlify production URL", manifest.netlify?.productionUrl, expected.netlify.productionUrl);
@@ -76,16 +90,39 @@ if (manifest) {
 }
 
 assertEqual("package name", packageJson?.name, "oddspadi");
-assertEqual("linked Netlify site ID", linkState?.siteId, expected.netlify.siteId);
+if (!manifestOnly) assertEqual("linked Netlify site ID", linkState?.siteId, expected.netlify.siteId);
 
 let branch = "";
 try {
-  branch = process.env.BRANCH?.trim() || run("git", ["branch", "--show-current"]);
+  branch = run("git", ["branch", "--show-current"]);
 } catch {
   failures.push("The Git release branch could not be determined.");
 }
 
-if (production) assertEqual("production release branch", branch, expected.releaseBranch);
+try {
+  const repository = normalizeRepository(run("git", ["remote", "get-url", "origin"]));
+  assertEqual("origin Git repository", repository, expected.gitRepository);
+} catch {
+  failures.push("The origin Git repository could not be verified.");
+}
+
+if (release) {
+  assertEqual("release branch", branch, expected.releaseBranch);
+
+  try {
+    run("git", ["fetch", "origin", expected.releaseBranch, "--prune"]);
+    const dirty = run("git", ["status", "--porcelain=v1", "--untracked-files=all"]);
+    if (dirty) failures.push("The release checkout is dirty. Commit or remove every change before deploying.");
+
+    const head = run("git", ["rev-parse", "HEAD"]);
+    const remoteHead = run("git", ["rev-parse", `origin/${expected.releaseBranch}`]);
+    if (head !== remoteHead) {
+      failures.push(`HEAD ${head.slice(0, 12)} does not exactly match origin/${expected.releaseBranch} ${remoteHead.slice(0, 12)}.`);
+    }
+  } catch {
+    failures.push("The exact Git release commit could not be verified against origin/main.");
+  }
+}
 
 if (online) {
   try {
@@ -135,3 +172,4 @@ console.log(`Release branch: ${branch || "not required"}`);
 console.log(`Netlify: ${expected.netlify.siteName} (${expected.netlify.siteId}) -> ${expected.netlify.productionUrl}`);
 console.log(`Supabase: ${expected.supabase.projectRef}`);
 if (online) console.log("Production URL variables matched; secret values were not printed.");
+if (release && failures.length === 0) console.log("Git release proof: clean main exactly matches origin/main.");

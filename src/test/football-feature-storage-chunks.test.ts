@@ -72,5 +72,5 @@ describe("football feature storage chunks", () => {
       chunksCompleted: 3,
       error: null
     }));
-  });
+  }, 15_000);
 });

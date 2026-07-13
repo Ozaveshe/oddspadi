@@ -54,6 +54,7 @@ export function LiveTicker({ initial }: { initial: LiveScoreBoard | null }) {
               {fixture.league.flag ? (
                 <img className="flag" src={fixture.league.flag} alt="" width={16} height={11} loading="lazy" referrerPolicy="no-referrer" />
               ) : null}
+              <span aria-hidden="true">{fixture.sport === "football" ? "⚽" : fixture.sport === "basketball" ? "🏀" : "🎾"}</span>
               {fixture.league.name}
             </span>
             <span className="t-row">

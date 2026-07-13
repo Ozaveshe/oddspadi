@@ -4,9 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/lib/analytics/events";
 
-export function FeedComposer() {
+export type ComposerMatch = { id: string; label: string; kickoff: string };
+
+export function FeedComposer({ matches = [], initialMatchId = "", initialBody = "" }: { matches?: ComposerMatch[]; initialMatchId?: string; initialBody?: string }) {
   const router = useRouter();
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(initialBody);
+  const [matchId, setMatchId] = useState(initialMatchId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,12 +23,13 @@ export function FeedComposer() {
       const response = await fetch("/api/community/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: text })
+        body: JSON.stringify({ body: text, matchId: matchId || null })
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error ?? "Could not post.");
-      trackEvent("community_post_created");
+      trackEvent("community_post_created", { ...(matchId ? { match_id: matchId } : {}) });
       setBody("");
+      setMatchId("");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not post.");
@@ -45,6 +49,15 @@ export function FeedComposer() {
         maxLength={2000}
         aria-label="Write a post"
       />
+      {matches.length ? (
+        <label className="composer-match-picker">
+          <span>Attach a match</span>
+          <select value={matchId} onChange={(event) => setMatchId(event.target.value)}>
+            <option value="">No match attached</option>
+            {matches.map((match) => <option value={match.id} key={match.id}>{match.label}</option>)}
+          </select>
+        </label>
+      ) : null}
       {error ? (
         <p className="small" role="alert" style={{ color: "var(--red)", marginTop: 8 }}>
           {error}

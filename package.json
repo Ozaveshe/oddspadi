@@ -5,10 +5,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "node scripts/run-next-build.cjs",
+    "release:status": "node scripts/worktree-release.cjs status",
+    "worktrees:sync": "node scripts/worktree-release.cjs sync",
+    "release:verify": "npm run build && npm run typecheck && npm test && node scripts/verify-deploy-channel.cjs --release",
+    "deploy:verify:manifest": "node scripts/verify-deploy-channel.cjs --manifest",
     "deploy:verify:local": "node scripts/verify-deploy-channel.cjs",
     "deploy:verify": "node scripts/verify-deploy-channel.cjs --online",
     "deploy:preview": "npm run deploy:verify && npx netlify deploy --site 3ba4bf38-60ec-4bc4-b49f-aca9495a9aa2 --context deploy-preview --message \"OddsPadi verified preview\"",
-    "deploy:production": "node scripts/verify-deploy-channel.cjs --production && npx netlify deploy --site 3ba4bf38-60ec-4bc4-b49f-aca9495a9aa2 --context production --prod --message \"OddsPadi verified production\"",
+    "deploy:production": "npm run release:verify && npx netlify deploy --site 3ba4bf38-60ec-4bc4-b49f-aca9495a9aa2 --context production --prod --message \"OddsPadi verified production\"",
     "doctor": "node scripts/oddspadi-doctor.cjs",
     "setup:admin-token": "node scripts/ensure-local-admin-token.cjs",
     "start": "next start",
@@ -24,7 +28,8 @@
     "fflate": "^0.8.2",
     "next": "^15.3.4",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "web-push": "^3.6.7"
   },
   "overrides": {
     "postcss": "^8.5.10"
@@ -35,6 +40,7 @@
     "@types/node": "^22.15.33",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/web-push": "^3.6.4",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   }

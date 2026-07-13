@@ -112,7 +112,16 @@ function verifyUrl(matchId: string): string {
 function caseFromScenario(row: DecisionRow, type: DecisionCounterfactualType, scenarioId: string): DecisionCounterfactualCase | null {
   const decision = row.prediction.decision;
   const scenario = decision.scenarioMatrix.find((item) => item.id === scenarioId);
-  if (!scenario) return null;
+  if (!scenario) {
+    return {
+      id: `${row.match.id}:market:unpriced`, matchId: row.match.id, match: matchLabel(row), type: "market", severity: "high",
+      label: "Market price unavailable", baselineAction: decision.action, actionAfterShock: decision.action, confidence: "low",
+      baselineScore: decision.decisionScore, projectedScore: null, scoreDelta: null, probabilityShift: null, edgeAfterShock: null,
+      expectedValueAfterShock: null, survival: "downgrades", thesis: "No usable bookmaker scenario exists, so the model lean cannot be stress-tested against a price move.",
+      falsifier: "A complete, fresh market price could materially change the edge and action.", mitigation: decision.marketMovement.nextAction,
+      evidence: [decision.marketMovement.summary, "No priced market-movement scenario was available."], verifyUrl: verifyUrl(row.match.id), command: commandFor(row.match.id)
+    };
+  }
   const survival = survivalForAction(decision.action, scenario.projectedAction);
   const scoreDelta = scenario.projectedScore - decision.decisionScore;
   const severity = severityForCase({
@@ -291,7 +300,12 @@ export function buildDecisionCounterfactualLab({
   limit?: number;
 }): DecisionCounterfactualLab {
   const allCases = sortCases(rows.flatMap(casesForRow));
-  const cases = allCases.slice(0, limit);
+  // A bounded response should still represent every available shock class;
+  // otherwise many critical cases of one kind can hide an entire risk domain.
+  const representatives = (["market", "team-news", "lineup", "weather", "data-quality", "model-boundary", "robustness"] as const)
+    .map((type) => allCases.find((item) => item.type === type)).filter((item): item is DecisionCounterfactualCase => Boolean(item));
+  const representativeIds = new Set(representatives.map((item) => item.id));
+  const cases = [...representatives, ...allCases.filter((item) => !representativeIds.has(item.id))].slice(0, limit);
   const status = labStatus(allCases);
   const stableCases = allCases.filter((item) => item.survival === "survives").length;
   const downgradeCases = allCases.filter((item) => item.survival === "downgrades").length;

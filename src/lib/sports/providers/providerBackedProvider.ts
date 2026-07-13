@@ -18,7 +18,9 @@ import {
   type HistoricalTennisStrengthMap,
   type HistoricalTennisStrengthRating
 } from "@/lib/sports/prediction/historicalTennisStrength";
-import type { Match, MatchContextSignal, MatchStatus, OddsMarket, Sport, SportsDataProvider, TeamForm } from "@/lib/sports/types";
+import type { HeadToHeadSummary, Match, MatchContextSignal, MatchStatus, OddsMarket, Sport, SportsDataProvider, TeamForm } from "@/lib/sports/types";
+import { currentFootballSeason, leagueBySlug, type LeagueTable } from "@/lib/sports/leagueStandings";
+import { configuredPredictionLeagueIds, footballLeaguePriority } from "@/lib/sports/footballLeagues";
 
 type EnvMap = Record<string, string | undefined>;
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -57,6 +59,9 @@ type ApiFootballFixture = {
 type ApiFootballResponse = {
   response?: ApiFootballFixture[];
 };
+
+type HeadToHeadCacheEntry = { expiresAt: number; summary: Promise<HeadToHeadSummary | null> };
+type StandingsCacheEntry = { expiresAt: number; table: Promise<LeagueTable | null> };
 
 type ApiBasketballGame = {
   id?: number | string;
@@ -146,6 +151,8 @@ type ApiFootballInjuryResponse = {
   response?: ApiFootballInjury[];
 };
 
+type ApiFootballStatisticsResponse = { response?: Array<{ team?: { id?: number | string }; statistics?: Array<{ type?: string; value?: number | string | null }> }> };
+
 type ApiFootballEvent = {
   time?: {
     elapsed?: number | null;
@@ -181,6 +188,7 @@ type ApiFootballStanding = {
   points?: number;
   goalsDiff?: number;
   form?: string;
+  all?: { played?: number; win?: number; draw?: number; lose?: number; goals?: { for?: number; against?: number } };
 };
 
 type ApiFootballStandingsResponse = {
@@ -203,6 +211,7 @@ type OddsApiMarket = {
 };
 
 type OddsApiBookmaker = {
+  key?: string;
   title?: string;
   markets?: OddsApiMarket[];
 };
@@ -840,7 +849,14 @@ function outcomeSelection(outcomeName: string | undefined, homeName: string, awa
 type CoherentOddsQuote = {
   point?: number;
   selections: OddsMarket["selections"];
+  bookmaker?: OddsMarket["bookmaker"];
 };
+
+function oddsBookmaker(bookmaker: OddsApiBookmaker): OddsMarket["bookmaker"] | undefined {
+  const id = cleanText(bookmaker.key);
+  const name = cleanText(bookmaker.title);
+  return id && name ? { id, name } : undefined;
+}
 
 function quoteMargin(quote: CoherentOddsQuote): number {
   return quote.selections.reduce((sum, selection) => sum + 1 / selection.decimalOdds, 0) - 1;
@@ -888,6 +904,7 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
         if (!prices.home || !prices.away || (sport === "football" && !prices.draw)) return [];
         return [
           {
+            bookmaker: oddsBookmaker(bookmaker),
             selections: [
               { id: "home", label: homeName, decimalOdds: prices.home },
               ...(sport === "football" ? [{ id: "draw", label: "Draw", decimalOdds: prices.draw as number }] : []),
@@ -904,7 +921,8 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
     markets.push({
       id: "match_winner",
       name: sport === "basketball" ? "Moneyline" : "Match winner",
-      selections: h2hQuote.selections
+      selections: h2hQuote.selections,
+      bookmaker: h2hQuote.bookmaker
     });
   }
 
@@ -927,6 +945,7 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
           return [
             {
               point: homeOutcome.point,
+              bookmaker: oddsBookmaker(bookmaker),
               selections: [
                 {
                   id: "home_cover",
@@ -949,7 +968,8 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
     markets.push({
       id: "spread",
       name: "Spread",
-      selections: spreadQuote.selections
+      selections: spreadQuote.selections,
+      bookmaker: spreadQuote.bookmaker
     });
   }
 
@@ -971,6 +991,7 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
         return [
           {
             point: overOutcome.point,
+            bookmaker: oddsBookmaker(bookmaker),
             selections: [
               {
                 id: sport === "football" ? "over_25" : "over",
@@ -993,7 +1014,8 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
     markets.push({
       id: sport === "tennis" ? "total_games" : sport === "basketball" ? "total_points" : "over_under_25",
       name: sport === "tennis" ? "Total games" : sport === "basketball" ? "Total points" : "Goals over/under",
-      selections: totalQuote.selections
+      selections: totalQuote.selections,
+      bookmaker: totalQuote.bookmaker
     });
   }
 
@@ -1010,6 +1032,7 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
         if (!prices.yes || !prices.no) return [];
         return [
           {
+            bookmaker: oddsBookmaker(bookmaker),
             selections: [
               { id: "yes", label: "Yes", decimalOdds: prices.yes },
               { id: "no", label: "No", decimalOdds: prices.no }
@@ -1023,7 +1046,8 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
     markets.push({
       id: "both_teams_to_score",
       name: "Both teams to score",
-      selections: bttsQuote.selections
+      selections: bttsQuote.selections,
+      bookmaker: bttsQuote.bookmaker
     });
   }
 
@@ -1408,17 +1432,40 @@ function fixtureCacheTtlMs(env: EnvMap, date: string): number {
 }
 
 function configuredFootballLeagueIds(env: EnvMap): Set<string> {
-  return new Set(
-    (env.API_FOOTBALL_LEAGUE_IDS ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean)
-  );
+  return configuredPredictionLeagueIds(env.API_FOOTBALL_LEAGUE_IDS);
+}
+
+function playerStarterPosition(injury: ApiFootballInjury, lineups: ApiFootballLineup[]): string | null {
+  const playerId = String(injury.player?.id ?? "");
+  const playerName = cleanText(injury.player?.name);
+  const starter = lineups.flatMap((lineup) => lineup.startXI ?? []).find((entry) => {
+    const candidateId = String(entry.player?.id ?? "");
+    return (playerId && candidateId === playerId) || (playerName && sameTeam(cleanText(entry.player?.name), playerName));
+  });
+  return starter ? cleanText(starter.player?.pos).toUpperCase() || "UNKNOWN" : null;
+}
+
+export function weightedAvailabilityImpact(type = "", reason = "", starterPosition: string | null = null): number {
+  const detail = `${type} ${reason}`.toLowerCase();
+  const severity = /acl|achilles|fracture|surgery|rupture|suspended/.test(detail)
+    ? 1.5
+    : /hamstring|muscle|knee|ankle|groin/.test(detail)
+      ? 1.2
+      : /doubtful|illness|knock|fatigue/.test(detail)
+        ? 0.7
+        : 1;
+  if (!starterPosition) return severity;
+  const position = starterPosition.toUpperCase();
+  const positionWeight = position === "G" ? 1.18 : position === "F" ? 1.2 : position === "M" ? 1.12 : position === "D" ? 1.08 : 1.06;
+  return severity * 1.2 * positionWeight;
+}
+
+function availabilityImpact(injury: ApiFootballInjury, lineups: ApiFootballLineup[] = []): number {
+  return weightedAvailabilityImpact(injury.player?.type, injury.player?.reason, playerStarterPosition(injury, lineups));
 }
 
 function filterFootballFixtures(fixtures: ApiFootballFixture[], env: EnvMap): ApiFootballFixture[] {
   const leagueIds = configuredFootballLeagueIds(env);
-  if (!leagueIds.size) return fixtures;
   return fixtures.filter((fixture) => leagueIds.has(String(fixture.league?.id ?? "")));
 }
 
@@ -1433,7 +1480,9 @@ function selectFootballEnrichmentFixtures(fixtures: ApiFootballFixture[], env: E
       };
       const leftStrength = leagueStrength(cleanText(left.league?.country) || "World", cleanText(left.league?.name) || "Football");
       const rightStrength = leagueStrength(cleanText(right.league?.country) || "World", cleanText(right.league?.name) || "Football");
-      return statusWeight(right) - statusWeight(left) || rightStrength - leftStrength;
+      const leftPriority = footballLeaguePriority(String(left.league?.id ?? "")) ?? 999;
+      const rightPriority = footballLeaguePriority(String(right.league?.id ?? "")) ?? 999;
+      return statusWeight(right) - statusWeight(left) || leftPriority - rightPriority || rightStrength - leftStrength;
     })
     .slice(0, maxFixtures);
 }
@@ -1441,6 +1490,16 @@ function selectFootballEnrichmentFixtures(fixtures: ApiFootballFixture[], env: E
 function providerRequestConcurrency(env: EnvMap): number {
   const configured = Number(env.API_FOOTBALL_ENRICHMENT_CONCURRENCY);
   return Number.isFinite(configured) && configured > 0 ? Math.round(clampRange(configured, 1, 8)) : 4;
+}
+
+function footballXgTeamLimit(env: EnvMap): number {
+  const configured = Number(env.API_FOOTBALL_MAX_XG_TEAMS);
+  return Number.isFinite(configured) && configured > 0 ? Math.round(clampRange(configured, 1, 24)) : 12;
+}
+
+function footballXgMatchesPerTeam(env: EnvMap): number {
+  const configured = Number(env.API_FOOTBALL_XG_MATCHES_PER_TEAM);
+  return Number.isFinite(configured) && configured > 0 ? Math.round(clampRange(configured, 1, 5)) : 3;
 }
 
 /**
@@ -1643,8 +1702,8 @@ function teamMatchesFixtureTeam(teamId: string, fixtureTeamId: unknown): boolean
   return teamId === `api-football:${String(fixtureTeamId ?? "").trim()}`;
 }
 
-function providerFormFromRecentFixtures(teamId: string, fixtures: ApiFootballFixture[]): TeamForm | null {
-  const rows = fixtures.flatMap((fixture) => {
+function providerFormFromRecentFixtures(teamId: string, fixtures: ApiFootballFixture[], venue?: "home" | "away", xg?: { for: number; against: number } | null): TeamForm | null {
+  const rows = [...fixtures].sort((left, right) => new Date(cleanText(right.fixture?.date)).getTime() - new Date(cleanText(left.fixture?.date)).getTime()).flatMap((fixture) => {
     const homeGoals = fixture.goals?.home;
     const awayGoals = fixture.goals?.away;
     if (typeof homeGoals !== "number" || typeof awayGoals !== "number") return [];
@@ -1652,6 +1711,8 @@ function providerFormFromRecentFixtures(teamId: string, fixtures: ApiFootballFix
     const isHome = teamMatchesFixtureTeam(teamId, fixture.teams?.home?.id);
     const isAway = teamMatchesFixtureTeam(teamId, fixture.teams?.away?.id);
     if (!isHome && !isAway) return [];
+    if (venue === "home" && !isHome) return [];
+    if (venue === "away" && !isAway) return [];
 
     const goalsFor = isHome ? homeGoals : awayGoals;
     const goalsAgainst = isHome ? awayGoals : homeGoals;
@@ -1673,6 +1734,8 @@ function providerFormFromRecentFixtures(teamId: string, fixtures: ApiFootballFix
     recentResults: formRows.map((row) => row.result),
     goalsFor: Number(avgGoalsFor.toFixed(2)),
     goalsAgainst: Number(avgGoalsAgainst.toFixed(2)),
+    xgFor: xg ? Number(xg.for.toFixed(2)) : null,
+    xgAgainst: xg ? Number(xg.against.toFixed(2)) : null,
     attackStrength: Number(clampRange(0.48 + avgGoalsFor * 0.22 + formPoints * 0.18, 0.35, 1.35).toFixed(2)),
     defenseStrength: Number(clampRange(1.16 - avgGoalsAgainst * 0.2 + formPoints * 0.12, 0.35, 1.35).toFixed(2))
   };
@@ -1698,6 +1761,8 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private readonly oddsEventsCache = new Map<string, OddsEventCacheEntry>();
   private readonly fixtureCache = new Map<string, FixtureCacheEntry>();
   private readonly matchCache = new Map<string, MatchCacheEntry>();
+  private readonly headToHeadCache = new Map<string, HeadToHeadCacheEntry>();
+  private readonly standingsCache = new Map<string, StandingsCacheEntry>();
 
   constructor(
     private readonly options: {
@@ -2196,6 +2261,30 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     return matches.filter((match) => match.status === "live" || match.status === "finished" || match.status === "scheduled");
   }
 
+  async getFootballHeadToHead(match: Match): Promise<HeadToHeadSummary | null> {
+    if (match.sport !== "football" || !match.homeTeam.id.startsWith("api-football:") || !match.awayTeam.id.startsWith("api-football:")) return null;
+    const homeId = match.homeTeam.id.replace("api-football:", ""); const awayId = match.awayTeam.id.replace("api-football:", "");
+    if (!/^\d+$/.test(homeId) || !/^\d+$/.test(awayId)) return null;
+    const key = [homeId, awayId].sort().join("-"); const cached = this.headToHeadCache.get(key); if (cached && cached.expiresAt > Date.now()) return cached.summary;
+    const apiKey = firstEnv(this.env, ["API_FOOTBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"]); if (!apiKey) return null;
+    const summary = (async () => {
+      const endpoint = new URL("https://v3.football.api-sports.io/fixtures/headtohead"); endpoint.searchParams.set("h2h", `${homeId}-${awayId}`); endpoint.searchParams.set("last", "8"); endpoint.searchParams.set("status", "FT");
+      const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballResponse | null;
+      const fixtures = Array.isArray(data?.response) ? data.response : []; const meetings = fixtures.flatMap((fixture) => { const hs = fixture.goals?.home; const as = fixture.goals?.away; if (typeof hs !== "number" || typeof as !== "number") return []; return [{ id: `api-football:${fixture.fixture?.id ?? "h2h"}`, kickoffTime: cleanText(fixture.fixture?.date), homeTeam: cleanText(fixture.teams?.home?.name) || "Home", awayTeam: cleanText(fixture.teams?.away?.name) || "Away", homeScore: hs, awayScore: as }]; });
+      if (!meetings.length) return null; let homeWins = 0; let awayWins = 0; let draws = 0;
+      for (const meeting of meetings) { if (meeting.homeScore === meeting.awayScore) { draws++; continue; } const requestedHomeWasHome = sameTeam(meeting.homeTeam, match.homeTeam.name); const requestedHomeWon = requestedHomeWasHome ? meeting.homeScore > meeting.awayScore : meeting.awayScore > meeting.homeScore; if (requestedHomeWon) homeWins++; else awayWins++; }
+      return { source: "api-football-headtohead" as const, meetings, homeWins, draws, awayWins, fetchedAt: this.now().toISOString() };
+    })();
+    summary.catch(() => { if (this.headToHeadCache.get(key)?.summary === summary) this.headToHeadCache.delete(key); }); setBoundedCache(this.headToHeadCache, key, { expiresAt: Date.now() + 12 * 60 * 60_000, summary }); return summary;
+  }
+
+  async getFootballLeagueTable(slug: string, season = currentFootballSeason(this.now())): Promise<LeagueTable | null> {
+    const league = leagueBySlug(slug); if (!league) return null; const key = `${league.leagueId}:${season}`; const cached = this.standingsCache.get(key); if (cached && cached.expiresAt > Date.now()) return cached.table;
+    const apiKey = firstEnv(this.env, ["API_FOOTBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"]); if (!apiKey) return null;
+    const table = (async () => { const endpoint = new URL("https://v3.football.api-sports.io/standings"); endpoint.searchParams.set("league", league.leagueId); endpoint.searchParams.set("season", season); const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballStandingsResponse | null; const standings = data?.response?.[0]?.league?.standings?.[0] ?? []; const rows = standings.flatMap((standing) => { const position = Number(standing.rank); const played = Number(standing.all?.played ?? 0); if (!position || !standing.team?.name) return []; const goalsFor = Number(standing.all?.goals?.for ?? 0); const goalsAgainst = Number(standing.all?.goals?.against ?? 0); return [{ position, previousPosition: null, movement: null, teamId: `api-football:${standing.team.id ?? standing.team.name}`, teamName: standing.team.name, played, wins: Number(standing.all?.win ?? 0), draws: Number(standing.all?.draw ?? 0), losses: Number(standing.all?.lose ?? 0), goalsFor, goalsAgainst, goalDifference: goalsFor - goalsAgainst, points: Number(standing.points ?? 0), form: cleanText(standing.form).replace(/[^WDL]/gi, "").slice(-6).toUpperCase() }]; }); return rows.length ? { ...league, season, source: "api-football-standings" as const, updatedAt: this.now().toISOString(), rows: rows.sort((a,b) => a.position-b.position) } : null; })();
+    table.catch(() => { if (this.standingsCache.get(key)?.table === table) this.standingsCache.delete(key); }); setBoundedCache(this.standingsCache, key, { expiresAt: Date.now() + 3 * 60 * 60_000, table }); return table;
+  }
+
   async getOdds(matchId: string): Promise<OddsMarket[]> {
     const match = await this.getMatch(matchId);
     return match?.oddsMarkets ?? [];
@@ -2229,14 +2318,11 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     const apiKey = firstEnv(this.env, ["API_FOOTBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"]);
     if (!apiKey) return new Map();
 
-    const teamIds = Array.from(
-      new Set(
-        fixtures.flatMap((fixture) => [
-          fixture.teams?.home?.id ? `api-football:${String(fixture.teams?.home?.id)}` : "",
-          fixture.teams?.away?.id ? `api-football:${String(fixture.teams?.away?.id)}` : ""
-        ])
-      )
-    ).filter(Boolean);
+    const teamVenues = new Map<string, "home" | "away">();
+    for (const fixture of fixtures) { if (fixture.teams?.home?.id) teamVenues.set(`api-football:${fixture.teams.home.id}`, "home"); if (fixture.teams?.away?.id) teamVenues.set(`api-football:${fixture.teams.away.id}`, "away"); }
+    const teamIds = [...teamVenues.keys()];
+    const xgTeamIds = new Set(teamIds.slice(0, footballXgTeamLimit(this.env)));
+    const xgMatchesPerTeam = footballXgMatchesPerTeam(this.env);
 
     const entries = await mapWithConcurrency(teamIds, providerRequestConcurrency(this.env), async (teamId) => {
         const endpoint = new URL("https://v3.football.api-sports.io/fixtures");
@@ -2244,8 +2330,27 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
         endpoint.searchParams.set("last", "8");
         endpoint.searchParams.set("timezone", "UTC");
         const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballResponse | null;
-        const recentFixtures = Array.isArray(data?.response) ? data.response : [];
-        const form = providerFormFromRecentFixtures(teamId, recentFixtures);
+        const recentFixtures = (Array.isArray(data?.response) ? data.response : []).sort(
+          (left, right) => new Date(cleanText(right.fixture?.date)).getTime() - new Date(cleanText(left.fixture?.date)).getTime()
+        );
+        const xgFixtures = xgTeamIds.has(teamId) ? recentFixtures.slice(0, xgMatchesPerTeam) : [];
+        const xgRows = await mapWithConcurrency(xgFixtures, Math.min(3, providerRequestConcurrency(this.env)), async (fixture) => {
+          const fixtureId = String(fixture.fixture?.id ?? ""); if (!fixtureId) return null;
+          const statsEndpoint = new URL("https://v3.football.api-sports.io/fixtures/statistics"); statsEndpoint.searchParams.set("fixture", fixtureId);
+          const stats = (await this.limitedFetch(statsEndpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballStatisticsResponse | null;
+          const teamRawId = teamId.replace("api-football:", ""); const own = stats?.response?.find((row) => String(row.team?.id ?? "") === teamRawId); const opponent = stats?.response?.find((row) => String(row.team?.id ?? "") !== teamRawId);
+          const value = (row: typeof own) => { const raw = row?.statistics?.find((stat) => cleanText(stat.type).replace(/\s|_/g, "").toLowerCase() === "expectedgoals")?.value; const parsed = Number(raw); return Number.isFinite(parsed) ? parsed : null; };
+          const ownXg = value(own); const opponentXg = value(opponent);
+          const venue = teamMatchesFixtureTeam(teamId, fixture.teams?.home?.id) ? "home" as const : "away" as const;
+          return ownXg === null || opponentXg === null ? null : { for: ownXg, against: opponentXg, venue };
+        });
+        const validXg = xgRows.filter((row): row is { for: number; against: number; venue: "home" | "away" } => Boolean(row));
+        const venue = teamVenues.get(teamId);
+        const venueXg = validXg.filter((row) => row.venue === venue);
+        const selectedXg = venueXg.length >= 2 ? venueXg : validXg;
+        const xg = selectedXg.length ? { for: selectedXg.reduce((sum, row) => sum + row.for, 0) / selectedXg.length, against: selectedXg.reduce((sum, row) => sum + row.against, 0) / selectedXg.length } : null;
+        const venueForm = providerFormFromRecentFixtures(teamId, recentFixtures, venue, xg);
+        const form = venueForm && venueForm.recentResults.length >= 3 ? venueForm : providerFormFromRecentFixtures(teamId, recentFixtures, undefined, xg);
         return form ? ([teamId, form] as const) : null;
       });
 
@@ -2643,25 +2748,29 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
           confidence: homeLineup && awayLineup ? 0.82 : 0.64,
           weight: 0,
           source: "api-football-lineups"
+          ,items: [homeLineup, awayLineup].flatMap((lineup) => (lineup?.startXI ?? []).map((entry) => ({ team: cleanText(lineup?.team?.name), player: cleanText(entry.player?.name), reason: cleanText(entry.player?.pos), status: "Confirmed starter" })))
         })
       );
     }
 
     const homeInjuries = injuries.filter((item) => sameTeam(cleanText(item.team?.name), homeName) && !isSuspension(item));
     const awayInjuries = injuries.filter((item) => sameTeam(cleanText(item.team?.name), awayName) && !isSuspension(item));
-    const injuryDelta = homeInjuries.length - awayInjuries.length;
+    const homeInjuryImpact = homeInjuries.reduce((sum, item) => sum + availabilityImpact(item, lineups), 0);
+    const awayInjuryImpact = awayInjuries.reduce((sum, item) => sum + availabilityImpact(item, lineups), 0);
+    const injuryDelta = homeInjuryImpact - awayInjuryImpact;
     if (homeInjuries.length || awayInjuries.length) {
       signals.push(
         providerSignal({
           id: `${fixtureId}-provider-injuries`,
           category: "injury",
           label: "Provider injury report",
-          detail: `${homeName || "Home"} injuries: ${homeInjuries.length}; ${awayName || "Away"} injuries: ${awayInjuries.length}.`,
+          detail: `${homeName || "Home"} injuries: ${homeInjuries.length} (impact ${homeInjuryImpact.toFixed(1)}); ${awayName || "Away"} injuries: ${awayInjuries.length} (impact ${awayInjuryImpact.toFixed(1)}).`,
           quality: "acceptable",
           impact: injuryDelta > 0 ? "home-negative" : injuryDelta < 0 ? "away-negative" : "unknown",
           confidence: 0.72,
-          weight: Math.min(0.026, 0.012 + Math.abs(injuryDelta) * 0.004),
+          weight: Math.min(0.026, 0.01 + Math.abs(injuryDelta) * 0.005),
           source: "api-football-injuries"
+          ,items: [...homeInjuries, ...awayInjuries].map((item) => ({ team: cleanText(item.team?.name), player: cleanText(item.player?.name), reason: cleanText(item.player?.reason), status: cleanText(item.player?.type) || "Injury" }))
         })
       );
     }
@@ -2681,6 +2790,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
           confidence: 0.76,
           weight: Math.min(0.024, 0.012 + Math.abs(suspensionDelta) * 0.005),
           source: "api-football-injuries"
+          ,items: [...homeSuspensions, ...awaySuspensions].map((item) => ({ team: cleanText(item.team?.name), player: cleanText(item.player?.name), reason: cleanText(item.player?.reason), status: cleanText(item.player?.type) || "Suspended" }))
         })
       );
     } else if (homeInjuries.length || awayInjuries.length) {

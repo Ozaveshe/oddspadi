@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
 
-type PageProps = { params: Promise<{ category: string }> };
+type PageProps = { params: Promise<{ category: string }>; searchParams?: Promise<{ cursor?: string }> };
 
 type Category = { id: string; name: string; description: string | null };
 type AuthorRaw = { username?: string | null };
@@ -46,8 +46,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function ForumCategoryPage({ params }: PageProps) {
+export default async function ForumCategoryPage({ params, searchParams }: PageProps) {
   const { category: slug } = await params;
+  const cursor = (await searchParams)?.cursor;
   const supabase = await createSupabaseServerClient();
   if (!supabase) {
     return (
@@ -64,17 +65,20 @@ export default async function ForumCategoryPage({ params }: PageProps) {
     .maybeSingle<Category>();
   if (!category) notFound();
 
-  const [{ data: threadsData }, userResult] = await Promise.all([
-    supabase
+  let threadQuery = supabase
       .from("op_forum_threads")
       .select("id, title, reply_count, last_activity_at, is_pinned, author:op_profiles(username)")
       .eq("category_id", category.id)
       .order("is_pinned", { ascending: false })
-      .order("last_activity_at", { ascending: false })
-      .limit(50),
+      .order("last_activity_at", { ascending: false }).limit(21);
+  if (cursor) threadQuery = threadQuery.lt("last_activity_at", cursor);
+  const [{ data: threadsData }, userResult] = await Promise.all([
+    threadQuery,
     supabase.auth.getUser()
   ]);
-  const threads = (threadsData as Thread[] | null) ?? [];
+  const threadRows = (threadsData as Thread[] | null) ?? [];
+  const threads = threadRows.slice(0, 20);
+  const nextCursor = threadRows.length > 20 ? threads[19]?.last_activity_at : null;
   const user = userResult.data.user;
 
   const breadcrumbJsonLd = {
@@ -113,7 +117,7 @@ export default async function ForumCategoryPage({ params }: PageProps) {
 
       <section className="section" style={{ paddingTop: 20 }}>
         {threads.length ? (
-          <div className="forum-list">
+          <><div className="forum-list">
             {threads.map((thread) => (
               <Link className="forum-row" key={thread.id} href={`/forums/${slug}/${thread.id}`}>
                 <span>
@@ -126,7 +130,7 @@ export default async function ForumCategoryPage({ params }: PageProps) {
                 <span className="forum-meta">{thread.reply_count} repl{thread.reply_count === 1 ? "y" : "ies"}</span>
               </Link>
             ))}
-          </div>
+          </div>{nextCursor ? <Link className="button secondary community-load-more" href={`/forums/${slug}?cursor=${encodeURIComponent(nextCursor)}`}>Load more</Link> : null}</>
         ) : (
           <div className="empty-state">
             <div className="empty-emoji" aria-hidden="true">

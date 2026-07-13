@@ -2,15 +2,22 @@ import type { ExpectedGoals, FootballModelDiagnostics, Match, MatchContextSignal
 import { clampProbability } from "./odds";
 import { applyDixonColesAdjustment, buildScoreMatrix, probabilityFromScoreMatrix, topScorelines } from "./poisson";
 import { isFreshProviderContextSignal } from "./contextSignalPolicy";
+import { homeAdvantageForLeague } from "@/lib/sports/footballLeagues";
 
-function formScore(results: Array<"W" | "D" | "L">): number {
-  const total = results.reduce((score, result) => {
-    if (result === "W") return score + 1;
-    if (result === "D") return score + 0.45;
-    return score;
-  }, 0);
-  return total / Math.max(results.length, 1);
+export function recencyWeightedFormScore(results: Array<"W" | "D" | "L">, decay = 0.82): number {
+  if (!results.length) return 0;
+  let weighted = 0;
+  let totalWeight = 0;
+  // Provider form is newest -> oldest; the latest result receives weight 1.
+  results.forEach((result, index) => {
+    const weight = decay ** index;
+    weighted += (result === "W" ? 1 : result === "D" ? 0.45 : 0) * weight;
+    totalWeight += weight;
+  });
+  return weighted / totalWeight;
 }
+
+const formScore = recencyWeightedFormScore;
 
 function clampRange(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -109,7 +116,7 @@ function expectedGoalsForMatch(match: Match) {
   const ratingDiff = (match.homeTeam.rating - match.awayTeam.rating) / 100;
   const formDiff = formScore(match.homeForm.recentResults) - formScore(match.awayForm.recentResults);
   const leagueGoalRate = 2.48 + (match.league.strength - 0.72) * 0.38;
-  const homeAdvantage = 1.11;
+  const homeAdvantage = homeAdvantageForLeague(match.league.id);
 
   const homeAttack = 0.78 + match.homeForm.attackStrength * 0.34 + match.homeForm.goalsFor * 0.08;
   const awayAttack = 0.78 + match.awayForm.attackStrength * 0.34 + match.awayForm.goalsFor * 0.08;
@@ -270,14 +277,14 @@ export function modelFootballMatch(match: Match): { markets: PredictionMarket[];
       {
         label: "Recent form edge",
         value: Number((formScore(match.homeForm.recentResults) - formScore(match.awayForm.recentResults)).toFixed(3)),
-        note: "Computed from W/D/L form with draws treated as partial positive outcomes."
+        note: "Computed from W/D/L form with exponential recency weighting; the latest result carries the most weight."
       },
       {
         label: "Expected goals total",
         value: expectedGoals.total,
         note: liveProjection
           ? "Projected final total from current score plus remaining-time Poisson expected goals."
-          : "Derived from attack, defense, rating, home advantage, and league goal-rate assumptions."
+          : `Derived from attack, defense, rating, registry home advantage (${homeAdvantageForLeague(match.league.id).toFixed(2)}), and league goal-rate assumptions.`
       },
       {
         label: "xG blend adjustment",

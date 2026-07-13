@@ -3,7 +3,7 @@ export type Sport = "football" | "basketball" | "tennis" | "cricket" | "rugby" |
 export type MatchStatus = "scheduled" | "live" | "finished";
 export type ConfidenceLevel = "low" | "medium" | "high";
 export type RiskLevel = "low" | "medium" | "high";
-export type PredictionResult = "pending" | "won" | "lost" | "push";
+export type PredictionResult = "pending" | "won" | "lost" | "push" | "void";
 export type AgentVerdict = "value-found" | "watchlist" | "no-clear-value";
 export type DecisionVerdict = "strong-value" | "lean-value" | "watchlist" | "avoid" | "insufficient-data";
 export type DecisionAction = "consider" | "monitor" | "avoid";
@@ -98,6 +98,10 @@ export interface OddsMarket {
   id: "match_winner" | "over_under_25" | "both_teams_to_score" | "spread" | "total_points" | "set_handicap" | "total_games";
   name: string;
   selections: OddsSelection[];
+  bookmaker?: {
+    id: string;
+    name: string;
+  };
 }
 
 export interface Match {
@@ -119,6 +123,8 @@ export interface Match {
   awayForm: TeamForm;
   dataQualityScore: number;
   providerContextSignals?: MatchContextSignal[];
+  headToHead?: HeadToHeadSummary;
+  leagueTable?: import("./leagueStandings").LeagueTable;
   dataSource?: {
     kind: "mock" | "provider";
     fixtureProvider?: string;
@@ -130,6 +136,24 @@ export interface Match {
     fetchedAt?: string;
     notes?: string[];
   };
+}
+
+export interface HeadToHeadMeeting {
+  id: string;
+  kickoffTime: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number;
+  awayScore: number;
+}
+
+export interface HeadToHeadSummary {
+  source: "api-football-headtohead";
+  meetings: HeadToHeadMeeting[];
+  homeWins: number;
+  draws: number;
+  awayWins: number;
+  fetchedAt: string;
 }
 
 export interface PredictionMarket {
@@ -178,6 +202,7 @@ export interface MatchContextSignal {
   weight: number;
   source: string;
   publishedAt?: string;
+  items?: Array<{ team: string; player?: string; reason?: string; status: string }>;
 }
 
 export interface MatchContextAdjustment {

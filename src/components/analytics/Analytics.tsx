@@ -84,8 +84,9 @@ function ProductEventTracker() {
       if (!link) return;
       try {
         const url = new URL(link.href, window.location.href);
-        if (url.origin !== window.location.origin && ["http:", "https:"].includes(url.protocol)) {
-          trackEvent("outbound_link_clicked", { destination_host: url.hostname });
+        if (url.origin !== window.location.origin && ["http:", "https:"].includes(url.protocol) && tracked?.dataset.analyticsEvent !== "affiliate_outbound_clicked") {
+          const main = document.querySelector<HTMLElement>("main");
+          trackEvent("outbound_link_clicked", { destination_host: url.hostname, ...(main ? metadataFromElement(main) : {}), ...metadataFromElement(link) });
         }
       } catch {
         // Ignore malformed or non-web links.
@@ -153,7 +154,8 @@ export function AnalyticsPreferencesButton() {
 
 export function Analytics() {
   const pathname = usePathname() ?? "/";
-  const previousPath = useRef<string | null>(null);
+  const previousFunnelPath = useRef<string | null>(null);
+  const previousGooglePath = useRef<string | null>(null);
   const [choice, setChoice] = useState<ConsentChoice | null>(null);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [googleReady, setGoogleReady] = useState(false);
@@ -217,20 +219,31 @@ export function Analytics() {
   }, [preferencesOpen]);
 
   useEffect(() => {
-    if (choice !== "granted" || !googleReady || !measurementId) return;
-    const previous = previousPath.current;
+    if (choice !== "granted" || !googleReady || !measurementId || previousGooglePath.current === pathname) return;
+    const previous = previousGooglePath.current;
     window.gtag?.("event", "page_view", {
       page_title: document.title,
       page_location: `${window.location.origin}${pathname}`,
       ...(previous ? { page_referrer: `${window.location.origin}${previous}` } : {})
     });
 
-    const match = pathname.match(/^\/predictions\/([^/]+)$/);
-    if (match && !["value-picks", "history", "decision-engine", "bet-slip"].includes(match[1])) {
-      trackEvent("prediction_viewed", { match_id: decodeURIComponent(match[1]) });
-    }
-    previousPath.current = pathname;
+    previousGooglePath.current = pathname;
   }, [choice, googleReady, pathname]);
+
+  useEffect(() => {
+    if (choice !== "granted" || previousFunnelPath.current === pathname) return;
+    previousFunnelPath.current = pathname;
+    const main = document.querySelector<HTMLElement>("main");
+    const context = main ? metadataFromElement(main) : {};
+    if (pathname === "/") trackEvent("site_landed", { page_context: "home" });
+    else if (pathname === "/predictions") trackEvent("predictions_viewed", { page_context: "predictions", ...context });
+    else {
+      const match = pathname.match(/^\/predictions\/([^/]+)$/);
+      if (match && !["value-picks", "history", "decision-engine", "bet-slip"].includes(match[1])) {
+        trackEvent("match_detail_opened", { page_context: "match_prediction", match_id: decodeURIComponent(match[1]), ...context });
+      }
+    }
+  }, [choice, pathname]);
 
   useEffect(() => {
     if (choice !== "granted") return;

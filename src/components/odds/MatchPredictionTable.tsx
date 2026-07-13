@@ -4,6 +4,8 @@ import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/pre
 import { ConfidenceBadge, MatchStatusBadge, RiskBadge } from "./Badges";
 import { LocalTime } from "./LocalTime";
 import { TeamCrest } from "./TeamCrest";
+import { CountryFlag } from "./CountryFlag";
+import { AddToSlipButton } from "./AddToSlipButton";
 
 export function MatchPredictionTable({ rows }: { rows: Array<{ match: Match; prediction: Prediction }> }) {
   return (
@@ -53,7 +55,7 @@ export function MatchPredictionTable({ rows }: { rows: Array<{ match: Match; pre
                   </span>
                   <br />
                   <span className="small muted">
-                    {match.league.name}, {match.league.country}
+                    <span className="country-inline"><CountryFlag country={match.league.country} flag={match.league.flag} size={14} />{match.league.name}, {match.league.country}</span>
                   </span>
                 </td>
                 <td>{odds.map((selection) => formatOdds(selection.decimalOdds)).join(" / ")}</td>
@@ -76,6 +78,7 @@ export function MatchPredictionTable({ rows }: { rows: Array<{ match: Match; pre
                   >
                     Open
                   </Link>
+                  <AddToSlipButton match={match} prediction={prediction} compact />
                 </td>
               </tr>
             );

@@ -21,6 +21,7 @@ import { buildDecisionSupervisorQueue } from "./prediction/decisionSupervisor";
 import { buildFootballDataHistoricalLearningDossier } from "@/lib/sports/training/footballDataHistoricalLearningDossier";
 import { buildPublicHistoricalTrainingEvidence, type PublicHistoricalTrainingEvidence } from "@/lib/sports/training/publicHistoricalTrainingEvidence";
 import { isRequiredProductionDataSignalBlocked } from "./prediction/contextSignalPolicy";
+import { leagueSlugFromProviderId } from "./leagueStandings";
 
 export const sports: Array<{ id: Sport; label: string; active: boolean }> = [
   { id: "football", label: "Football", active: true },
@@ -274,6 +275,8 @@ export async function getPredictions(filters: PredictionFilters = {}) {
 export async function getMatchPrediction(matchId: string) {
   const match = await sportsProvider.getMatch(matchId);
   if (!match) return null;
+  if (match.sport === "football") match.headToHead = (await sportsProvider.getFootballHeadToHead(match)) ?? undefined;
+  if (match.sport === "football") { const slug = leagueSlugFromProviderId(match.league.id); if (slug) match.leagueTable = (await sportsProvider.getFootballLeagueTable(slug)) ?? undefined; }
   const [learningProfile, caseMemoryBank] = await Promise.all([
     getLearningProfileForSport(match.sport),
     getDecisionCaseMemoryBank({ sport: match.sport }).catch(() => undefined)

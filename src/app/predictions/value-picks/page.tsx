@@ -3,8 +3,10 @@ import { EmptyState } from "@/components/odds/EmptyState";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { ValuePickCard } from "@/components/odds/ValuePickCard";
 import { getValuePicks, todayIsoDate } from "@/lib/sports/service";
+import { getCachedPublicPredictionHistory } from "@/lib/sports/prediction/cachedPublicReads";
+import { RecordStrip } from "@/components/odds/RecordStrip";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Today's Best Football Value Picks — Free AI Selections",
@@ -19,7 +21,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ValuePicksPage() {
-  const rows = await getValuePicks(todayIsoDate(), "football", undefined, "preview");
+  const [rows, ledger] = await Promise.all([getValuePicks(todayIsoDate(), "football", "live", "preview"), getCachedPublicPredictionHistory()]);
 
   return (
     <main id="main" className="container">
@@ -33,6 +35,7 @@ export default async function ValuePicksPage() {
           top.
         </p>
       </div>
+      <RecordStrip items={ledger.items} compact />
 
       {rows.length ? (
         <div className="match-list">

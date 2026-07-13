@@ -1,11 +1,10 @@
 import { apiSuccess, withApiHandler } from "@/app/api/sports/_utils";
-import { getPredictionHistory } from "@/lib/sports/service";
-import { getHistorySummary } from "@/lib/sports/prediction/history";
+import { getHistorySummary, getPublicPredictionHistory } from "@/lib/sports/prediction/history";
 
 export const GET = withApiHandler(async () => {
-  const items = getPredictionHistory();
+  const ledger = await getPublicPredictionHistory();
   return apiSuccess({
-    items,
-    summary: getHistorySummary(items)
+    ...ledger,
+    summary: getHistorySummary(ledger.items)
   });
 });

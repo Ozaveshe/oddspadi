@@ -15,6 +15,15 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+[functions."push-notification-sweep"]
+  schedule = "*/10 * * * *"
+
+[functions."weekly-results-recap"]
+  schedule = "15 6 * * 1"
+
+[functions."editorial-generation-sweep"]
+  schedule = "35 5 * * *"
+
 [dev]
   command = "npm run dev -- -H 127.0.0.1 -p 3013"
   framework = "next"
@@ -42,3 +51,9 @@
   for = "/brand/*"
   [headers.values]
     Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Service-Worker-Allowed = "/"

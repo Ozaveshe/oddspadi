@@ -22,6 +22,7 @@ export function explainPrediction(
       summary: `OddsPadi estimates ${winnerSummary}. The current prices do not show a clear positive value edge, so the responsible call is to avoid forcing a pick.`,
       drivers: [
         "The model weighs ratings, recent form, attack and defensive strength.",
+        ...(match.headToHead ? [`Recent H2H (${match.headToHead.meetings.length}): ${match.homeTeam.name} ${match.headToHead.homeWins} wins, ${match.headToHead.draws} draws, ${match.awayTeam.name} ${match.headToHead.awayWins} wins.`] : []),
         "Bookmaker margin is removed where possible before value edge is calculated.",
         "Confidence stays cautious when the edge is weak or data quality is limited."
       ],
@@ -44,6 +45,7 @@ export function explainPrediction(
     drivers: [
       `${match.homeTeam.name} recent form: ${match.homeForm.recentResults.join("-")}.`,
       `${match.awayTeam.name} recent form: ${match.awayForm.recentResults.join("-")}.`,
+      ...(match.headToHead ? [`Recent H2H (${match.headToHead.meetings.length}): ${match.homeTeam.name} ${match.headToHead.homeWins} wins, ${match.headToHead.draws} draws, ${match.awayTeam.name} ${match.headToHead.awayWins} wins.`] : []),
       `Data quality score is ${formatPercent(match.dataQualityScore)}, so the output should be read as analysis only.`
     ],
     disclaimer: "No prediction is guaranteed. Use OddsPadi as analysis, not certainty."

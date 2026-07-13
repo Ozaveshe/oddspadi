@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "product": "OddsPadi",
   "releaseBranch": "main",
+  "gitRepository": "https://github.com/Ozaveshe/oddspadi",
   "netlify": {
     "siteId": "3ba4bf38-60ec-4bc4-b49f-aca9495a9aa2",
     "siteName": "oddspadi",

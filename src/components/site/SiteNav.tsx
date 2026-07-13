@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BallIcon, CommunityIcon, HistoryIcon, HomeIcon, LiveIcon } from "./NavIcons";
+import { AccountIcon, BallIcon, CommunityIcon, HistoryIcon, HomeIcon, LiveIcon } from "./NavIcons";
 
 const desktopItems = [
   { href: "/", label: "Home" },
@@ -11,7 +11,11 @@ const desktopItems = [
   { href: "/predictions/value-picks", label: "Value Picks", prefetch: false },
   { href: "/predictions/decision-engine", label: "AI Engine", prefetch: false },
   { href: "/community", label: "Community", prefetch: false },
-  { href: "/predictions/history", label: "Results" }
+  { href: "/predictions/history", label: "Results" },
+  { href: "/season-outlooks", label: "Seasons" },
+  { href: "/news", label: "News" },
+  { href: "/forums", label: "Forums", prefetch: false },
+  { href: "/account", label: "Sign in / Account", prefetch: false }
 ];
 
 const tabItems = [
@@ -19,7 +23,8 @@ const tabItems = [
   { href: "/live-scores", label: "Live", Icon: LiveIcon, prefetch: false },
   { href: "/predictions", label: "Predictions", Icon: BallIcon, prefetch: false },
   { href: "/community", label: "Community", Icon: CommunityIcon, prefetch: false },
-  { href: "/predictions/history", label: "Results", Icon: HistoryIcon }
+  { href: "/predictions/history", label: "Results", Icon: HistoryIcon },
+  { href: "/account", label: "Account", Icon: AccountIcon, prefetch: false }
 ];
 
 function isActive(pathname: string, href: string): boolean {

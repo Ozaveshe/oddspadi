@@ -13,6 +13,7 @@ const multiBookBasketballEvent = {
   away_team: "Golden State Valkyries",
   bookmakers: [
     {
+      key: "book-a",
       title: "Book A",
       markets: [
         {
@@ -39,6 +40,7 @@ const multiBookBasketballEvent = {
       ]
     },
     {
+      key: "book-b",
       title: "Book B",
       markets: [
         {
@@ -65,6 +67,7 @@ const multiBookBasketballEvent = {
       ]
     },
     {
+      key: "book-c",
       title: "Book C",
       markets: [
         {
@@ -114,6 +117,11 @@ describe("provider odds market coherence", () => {
 
     expect(match.oddsMarkets.map((market) => market.id)).toEqual(["match_winner", "spread", "total_points"]);
     expect(match.oddsMarkets.every((market) => market.selections.length === 2)).toBe(true);
+    expect(match.oddsMarkets.map((market) => market.bookmaker)).toEqual([
+      { id: "book-a", name: "Book A" },
+      { id: "book-a", name: "Book A" },
+      { id: "book-a", name: "Book A" }
+    ]);
     expect(match.oddsMarkets.find((market) => market.id === "spread")?.selections.map((selection) => selection.label)).toEqual([
       "Connecticut Sun -3.5",
       "Golden State Valkyries +3.5"

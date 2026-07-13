@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { sportsProvider, todayIsoDate } from "@/lib/sports/service";
 import type { Match } from "@/lib/sports/types";
+import { getNewsStories } from "@/lib/editorial/news";
+import { footballLeagues } from "@/lib/sports/leagueStandings";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
 
@@ -23,6 +25,7 @@ function shiftIso(iso: string, days: number): string {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
+  const newsStories = await getNewsStories();
 
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: `${siteUrl}/`, lastModified: now, changeFrequency: "hourly", priority: 1 },
@@ -31,8 +34,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteUrl}/predictions/value-picks`, lastModified: now, changeFrequency: "hourly", priority: 0.8 },
     { url: `${siteUrl}/predictions/history`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
     { url: `${siteUrl}/predictions/decision-engine`, lastModified: now, changeFrequency: "daily", priority: 0.5 },
+    { url: `${siteUrl}/predictions/bet-slip`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
     { url: `${siteUrl}/community`, lastModified: now, changeFrequency: "hourly", priority: 0.5 },
     { url: `${siteUrl}/forums`, lastModified: now, changeFrequency: "daily", priority: 0.5 },
+    { url: `${siteUrl}/news`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
+    { url: `${siteUrl}/season-outlooks`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
     { url: `${siteUrl}/privacy`, lastModified: now, changeFrequency: "yearly", priority: 0.2 }
   ];
 
@@ -64,5 +70,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Static routes still ship even if fixtures can't be fetched.
   }
 
-  return [...staticRoutes, ...matchEntries];
+  const newsEntries: MetadataRoute.Sitemap = newsStories.map((story) => ({
+    url: `${siteUrl}/news/${story.slug}`,
+    lastModified: new Date(story.updatedAt ?? story.publishedAt),
+    changeFrequency: "daily",
+    priority: 0.7
+  }));
+  const standingsEntries: MetadataRoute.Sitemap = footballLeagues.map((league) => ({ url: `${siteUrl}/predictions/league/${league.slug}/table`, lastModified: now, changeFrequency: "daily", priority: 0.65 }));
+  return [...staticRoutes, ...standingsEntries, ...newsEntries, ...matchEntries];
 }

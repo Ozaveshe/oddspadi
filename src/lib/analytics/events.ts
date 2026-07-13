@@ -1,5 +1,6 @@
 export type AnalyticsEvent =
-  | "prediction_viewed"
+  | "site_landed"
+  | "predictions_viewed"
   | "value_pick_clicked"
   | "match_detail_opened"
   | "filter_used"
@@ -12,10 +13,23 @@ export type AnalyticsEvent =
   | "forum_thread_created"
   | "forum_reply_created"
   | "outbound_link_clicked"
+  | "affiliate_outbound_clicked"
+  | "share_clicked"
+  | "team_followed"
+  | "team_unfollowed"
+  | "community_post_liked"
+  | "community_post_unliked"
   | "web_vital"
   | "client_error";
 
 export type AnalyticsMetadata = Record<string, string | number | boolean>;
+
+export const CORE_ANALYTICS_FUNNEL = [
+  { step: "land", event: "site_landed" },
+  { step: "view_predictions", event: "predictions_viewed" },
+  { step: "open_match_detail", event: "match_detail_opened" },
+  { step: "action", events: ["share_clicked", "betslip_pick_added", "team_followed", "outbound_link_clicked", "affiliate_outbound_clicked"] }
+] as const satisfies ReadonlyArray<{ step: string; event?: AnalyticsEvent; events?: readonly AnalyticsEvent[] }>;
 
 export const ANALYTICS_CONSENT_KEY = "oddspadi-analytics-consent-v1";
 export const ANALYTICS_PREFERENCES_EVENT = "oddspadi:analytics-preferences";
@@ -48,6 +62,7 @@ export function trackEvent(event: AnalyticsEvent, metadata: AnalyticsMetadata = 
   if (typeof window === "undefined" || !hasAnalyticsConsent()) return;
 
   try {
+    if (process.env.NODE_ENV !== "production") console.debug("[OddsPadi analytics]", event, metadata);
     window.gtag?.("event", event, metadata);
 
     const endpoint = process.env.NEXT_PUBLIC_ANALYTICS_ENDPOINT?.trim();

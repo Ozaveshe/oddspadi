@@ -13,16 +13,13 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["sports", "news"],
     icons: [
       {
-        src: "/brand/oddspadi-mark.svg",
-        sizes: "any",
-        type: "image/svg+xml",
-        purpose: "any"
+        src: "/brand/oddspadi-icon-192-maskable.png", sizes: "192x192", type: "image/png", purpose: "any"
       },
       {
-        src: "/apple-icon",
-        sizes: "180x180",
-        type: "image/png"
-      }
+        src: "/brand/oddspadi-icon-192-maskable.png", sizes: "192x192", type: "image/png", purpose: "maskable"
+      },
+      { src: "/brand/oddspadi-icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/brand/oddspadi-icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" }
     ]
   };
 }

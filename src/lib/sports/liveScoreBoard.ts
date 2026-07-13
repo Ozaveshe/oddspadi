@@ -8,6 +8,10 @@
  */
 
 import { isConfiguredSecretValue } from "@/lib/env";
+import { providerBackedSportsDataProvider } from "@/lib/sports/providers/providerBackedProvider";
+import type { Match, Sport } from "@/lib/sports/types";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { configuredPredictionLeagueIds, footballLeaguePriority } from "@/lib/sports/footballLeagues";
 
 export type LiveFixturePhase = "live" | "upcoming" | "finished" | "other";
 
@@ -19,7 +23,8 @@ export interface LiveBoardSide {
 }
 
 export interface LiveBoardFixture {
-  id: number;
+  id: number | string;
+  sport: Extract<Sport, "football" | "basketball" | "tennis">;
   matchId: string;
   kickoff: string;
   phase: LiveFixturePhase;
@@ -46,13 +51,15 @@ export interface LiveBoardFixture {
 export interface LiveScoreBoard {
   generatedAt: string;
   date: string;
-  source: "api-football" | "none";
+  source: "multi-provider" | "api-football" | "repository" | "none";
   counts: {
     live: number;
     upcoming: number;
     finished: number;
     other: number;
   };
+  sportCounts: Record<Extract<Sport, "football" | "basketball" | "tennis">, number>;
+  availableSports: Array<Extract<Sport, "football" | "basketball" | "tennis">>;
   fixtures: LiveBoardFixture[];
   note?: string;
 }
@@ -186,6 +193,10 @@ const MAX_FIXTURES = 500;
 
 const boardCache = new Map<string, { expiresAt: number; board: LiveScoreBoard }>();
 const inFlightByDate = new Map<string, Promise<LiveScoreBoard>>();
+const multiSportBoardCache = new Map<string, { expiresAt: number; board: LiveScoreBoard }>();
+const multiSportInFlightByDate = new Map<string, Promise<LiveScoreBoard>>();
+const storedFixturesCache = new Map<string, { expiresAt: number; fixtures: LiveBoardFixture[] }>();
+const storedFixturesInFlight = new Map<string, Promise<LiveBoardFixture[]>>();
 
 function apiKey(): string | null {
   // Filter placeholder / whitespace-only values so a stub key isn't sent
@@ -199,13 +210,7 @@ function apiKey(): string | null {
 const LIVE_BOARD_REQUEST_TIMEOUT_MS = 4_000;
 
 function analysisLeagueIds(): Set<number> {
-  const raw = process.env.API_FOOTBALL_LEAGUE_IDS ?? "39";
-  return new Set(
-    raw
-      .split(",")
-      .map((value) => Number.parseInt(value.trim(), 10))
-      .filter((value) => Number.isFinite(value))
-  );
+  return new Set([...configuredPredictionLeagueIds(process.env.API_FOOTBALL_LEAGUE_IDS)].map(Number));
 }
 
 function utcTodayIsoDate(): string {
@@ -255,7 +260,7 @@ function statusLabelFor(statusShort: string, elapsed: number | null, extra: numb
 }
 
 function leagueRank(leagueId: number, country: string, name: string): number {
-  const pinned = PRIORITY_LEAGUE_IDS.get(leagueId);
+  const pinned = footballLeaguePriority(leagueId) ?? PRIORITY_LEAGUE_IDS.get(leagueId);
   if (pinned !== undefined) return pinned;
   if (INTERNATIONAL_NAME_PATTERN.test(name) && !EXCLUDED_NAME_PATTERN.test(name)) return 20;
   if (AFRICAN_COUNTRIES.has(country.toLowerCase())) return 30;
@@ -267,14 +272,6 @@ function phaseOrder(phase: LiveFixturePhase): number {
   if (phase === "upcoming") return 1;
   if (phase === "finished") return 2;
   return 3;
-}
-
-function isRelevantForSchedule(leagueId: number, country: string, name: string): boolean {
-  if (PRIORITY_LEAGUE_IDS.has(leagueId)) return true;
-  if (AFRICAN_COUNTRIES.has(country.toLowerCase())) return true;
-  const international = country.toLowerCase() === "world" || country.toLowerCase() === "europe";
-  if (international && INTERNATIONAL_NAME_PATTERN.test(name) && !EXCLUDED_NAME_PATTERN.test(name)) return true;
-  return false;
 }
 
 function toBoardFixture(raw: ApiFootballLiveFixture, analysisLeagues: Set<number>): LiveBoardFixture | null {
@@ -291,6 +288,7 @@ function toBoardFixture(raw: ApiFootballLiveFixture, analysisLeagues: Set<number
 
   return {
     id,
+    sport: "football",
     matchId: `api-football:${id}`,
     kickoff,
     phase: phaseFor(statusShort),
@@ -325,14 +323,13 @@ function toBoardFixture(raw: ApiFootballLiveFixture, analysisLeagues: Set<number
   };
 }
 
-function buildBoard(rawLive: ApiFootballLiveFixture[], rawToday: ApiFootballLiveFixture[], boardDate: string): LiveScoreBoard {
+export function buildFootballBoardFromPayloads(rawLive: ApiFootballLiveFixture[], rawToday: ApiFootballLiveFixture[], boardDate: string): LiveScoreBoard {
   const analysisLeagues = analysisLeagueIds();
-  const byId = new Map<number, LiveBoardFixture>();
+  const byId = new Map<LiveBoardFixture["id"], LiveBoardFixture>();
 
   for (const raw of rawToday) {
     const fixture = toBoardFixture(raw, analysisLeagues);
     if (!fixture) continue;
-    if (!isRelevantForSchedule(fixture.league.id, fixture.league.country, fixture.league.name)) continue;
     byId.set(fixture.id, fixture);
   }
 
@@ -365,11 +362,13 @@ function buildBoard(rawLive: ApiFootballLiveFixture[], rawToday: ApiFootballLive
     date: boardDate,
     source: "api-football",
     counts,
+    sportCounts: { football: fixtures.length, basketball: 0, tennis: 0 },
+    availableSports: fixtures.length ? ["football"] : [],
     fixtures
   };
 }
 
-export async function fetchLiveScoreBoard(dateArg?: string): Promise<LiveScoreBoard> {
+async function fetchFootballLiveScoreBoard(dateArg?: string): Promise<LiveScoreBoard> {
   const today = utcTodayIsoDate();
   const date = dateArg && /^\d{4}-\d{2}-\d{2}$/.test(dateArg) ? dateArg : today;
   const isToday = date === today;
@@ -381,6 +380,8 @@ export async function fetchLiveScoreBoard(dateArg?: string): Promise<LiveScoreBo
       date,
       source: "none",
       counts: { live: 0, upcoming: 0, finished: 0, other: 0 },
+      sportCounts: { football: 0, basketball: 0, tennis: 0 },
+      availableSports: [],
       fixtures: [],
       note: "Live scores are warming up. Add an API-Football key to switch them on."
     };
@@ -398,7 +399,7 @@ export async function fetchLiveScoreBoard(dateArg?: string): Promise<LiveScoreBo
         isToday ? fetchApiFootball("fixtures", { live: "all", timezone: "UTC" }, key) : Promise.resolve([]),
         fetchApiFootball("fixtures", { date, timezone: "UTC" }, key)
       ]);
-      const board = buildBoard(rawLive, rawDate, date);
+      const board = buildFootballBoardFromPayloads(rawLive, rawDate, date);
       // Non-today boards change slowly; cache them longer than the live board.
       const ttl = isToday ? BOARD_TTL_MS : 5 * 60_000;
       if (board.fixtures.length || !boardCache.get(date)) {
@@ -412,5 +413,193 @@ export async function fetchLiveScoreBoard(dateArg?: string): Promise<LiveScoreBo
   })();
 
   inFlightByDate.set(date, promise);
+  return promise;
+}
+
+const MULTI_SPORTS = ["basketball", "tennis"] as const;
+
+function genericFixturePhase(match: Match): LiveFixturePhase {
+  if (match.status === "live") return "live";
+  if (match.status === "finished") return "finished";
+  if (match.status === "scheduled") return "upcoming";
+  return "other";
+}
+
+export function liveBoardFixtureFromMatch(match: Match): LiveBoardFixture | null {
+  if (match.sport !== "basketball" && match.sport !== "tennis") return null;
+  if (match.dataSource?.kind !== "provider") return null;
+  const phase = genericFixturePhase(match);
+  const minute = match.score?.minute;
+  return {
+    id: match.id,
+    matchId: match.id,
+    sport: match.sport,
+    kickoff: match.kickoffTime,
+    phase,
+    statusShort: phase === "live" ? "LIVE" : phase === "finished" ? "FT" : "NS",
+    statusLabel: phase === "live" ? (typeof minute === "number" ? `${minute}'` : "Live") : phase === "finished" ? "FT" : "NS",
+    elapsed: typeof minute === "number" ? minute : null,
+    league: {
+      id: Number.parseInt(match.league.id.replace(/\D+/g, ""), 10) || 0,
+      name: match.league.name,
+      country: match.league.country,
+      logo: match.league.logo ?? null,
+      flag: match.league.flag ?? null,
+      round: null
+    },
+    home: { id: null, name: match.homeTeam.name, logo: match.homeTeam.logo ?? null, winner: phase === "finished" && match.score ? match.score.home > match.score.away : null },
+    away: { id: null, name: match.awayTeam.name, logo: match.awayTeam.logo ?? null, winner: phase === "finished" && match.score ? match.score.away > match.score.home : null },
+    goals: { home: match.score?.home ?? null, away: match.score?.away ?? null },
+    analysis: true
+  };
+}
+
+function timedFixtures(date: string, sport: (typeof MULTI_SPORTS)[number]): Promise<Match[]> {
+  return Promise.race([
+    providerBackedSportsDataProvider.getFixtures(date, sport).catch(() => []),
+    new Promise<Match[]>((resolve) => setTimeout(() => resolve([]), 6_000))
+  ]);
+}
+
+type RepositoryFixture = {
+  id: string; sport: string; external_id: string; league_external_id: string | null; kickoff_at: string; status: string;
+  home_team_external_id: string; away_team_external_id: string; home_score: number | null; away_score: number | null;
+  country: string | null; metadata: Record<string, unknown> | null;
+};
+
+type RepositoryNamedEntity = { external_id: string; name: string; country?: string | null; metadata: Record<string, unknown> | null };
+
+function metadataText(metadata: Record<string, unknown> | null, key: string): string | null {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+async function readStoredFixturesForDate(date: string): Promise<LiveBoardFixture[]> {
+  const client = getSupabaseServerClient();
+  if (!client) return [];
+  const from = `${date}T00:00:00.000Z`;
+  const untilDate = new Date(`${date}T00:00:00.000Z`);
+  untilDate.setUTCDate(untilDate.getUTCDate() + 1);
+  const { data, error } = await client.from("op_fixtures")
+    .select("id,sport,external_id,league_external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,country,metadata")
+    .gte("kickoff_at", from).lt("kickoff_at", untilDate.toISOString()).order("kickoff_at").limit(MAX_FIXTURES);
+  if (error) {
+    console.warn(`[live-board] stored fixture read failed — ${error.message}`);
+    return [];
+  }
+  if (!data?.length) return [];
+  const rows = (data as RepositoryFixture[]).filter((row) => row.sport === "football" || row.sport === "basketball" || row.sport === "tennis");
+  const leagueIds = [...new Set(rows.map((row) => row.league_external_id).filter((id): id is string => Boolean(id)))];
+  const teamIds = [...new Set(rows.flatMap((row) => [row.home_team_external_id, row.away_team_external_id]))];
+  const [{ data: leagues }, { data: teams }] = await Promise.all([
+    leagueIds.length ? client.from("op_leagues").select("external_id,name,country,metadata").in("external_id", leagueIds) : Promise.resolve({ data: [] }),
+    teamIds.length ? client.from("op_teams").select("external_id,name,country,metadata").in("external_id", teamIds) : Promise.resolve({ data: [] })
+  ]);
+  const leagueMap = new Map((leagues as RepositoryNamedEntity[] | null ?? []).map((row) => [row.external_id, row]));
+  const teamMap = new Map((teams as RepositoryNamedEntity[] | null ?? []).map((row) => [row.external_id, row]));
+  return rows.flatMap((row) => {
+    const sport = row.sport as LiveBoardFixture["sport"];
+    const home = teamMap.get(row.home_team_external_id);
+    const away = teamMap.get(row.away_team_external_id);
+    if (!home?.name || !away?.name) return [];
+    const league = row.league_external_id ? leagueMap.get(row.league_external_id) : undefined;
+    const status = row.status.toLowerCase();
+    const phase: LiveFixturePhase = status === "live" || status === "in_play" ? "live" : status === "finished" || status === "ft" ? "finished" : status === "scheduled" || status === "not_started" ? "upcoming" : "other";
+    const elapsed = typeof row.metadata?.elapsed === "number" ? row.metadata.elapsed : null;
+    return [{
+      id: row.id, matchId: row.external_id, sport, kickoff: row.kickoff_at, phase,
+      statusShort: phase === "live" ? "LIVE" : phase === "finished" ? "FT" : phase === "upcoming" ? "NS" : row.status,
+      statusLabel: phase === "live" ? (elapsed ? `${elapsed}'` : "Live") : phase === "finished" ? "FT" : phase === "upcoming" ? "NS" : row.status,
+      elapsed,
+      league: { id: Number.parseInt((row.league_external_id ?? "").replace(/\D+/g, ""), 10) || 0, name: league?.name ?? "Competition", country: league?.country ?? row.country ?? "World", logo: metadataText(league?.metadata ?? null, "logo"), flag: metadataText(league?.metadata ?? null, "flag"), round: metadataText(row.metadata, "round") },
+      home: { id: null, name: home.name, logo: metadataText(home.metadata, "logo"), winner: phase === "finished" && row.home_score !== null && row.away_score !== null ? row.home_score > row.away_score : null },
+      away: { id: null, name: away.name, logo: metadataText(away.metadata, "logo"), winner: phase === "finished" && row.home_score !== null && row.away_score !== null ? row.away_score > row.home_score : null },
+      goals: { home: row.home_score, away: row.away_score }, analysis: true
+    } satisfies LiveBoardFixture];
+  });
+}
+
+async function storedFixturesForDate(date: string): Promise<LiveBoardFixture[]> {
+  const cached = storedFixturesCache.get(date);
+  if (cached && cached.expiresAt > Date.now()) return cached.fixtures;
+  const existing = storedFixturesInFlight.get(date);
+  if (existing) return existing;
+
+  const promise = readStoredFixturesForDate(date).then((fixtures) => {
+    storedFixturesCache.set(date, { expiresAt: Date.now() + 60_000, fixtures });
+    if (storedFixturesCache.size > 16) storedFixturesCache.delete(storedFixturesCache.keys().next().value as string);
+    return fixtures;
+  }).finally(() => storedFixturesInFlight.delete(date));
+  storedFixturesInFlight.set(date, promise);
+  return promise;
+}
+
+export function mergeLiveBoardCoverage(
+  providerFixtures: LiveBoardFixture[],
+  repositoryFixtures: LiveBoardFixture[]
+): LiveBoardFixture[] {
+  const providerSports = new Set(providerFixtures.map((fixture) => fixture.sport));
+  return [
+    ...providerFixtures,
+    ...repositoryFixtures.filter((fixture) => !providerSports.has(fixture.sport))
+  ];
+}
+
+async function fetchLiveScoreBoardUncached(date: string): Promise<LiveScoreBoard> {
+  const [football, basketballMatches, tennisMatches] = await Promise.all([
+    fetchFootballLiveScoreBoard(date),
+    timedFixtures(date, "basketball"),
+    timedFixtures(date, "tennis")
+  ]);
+  const extraFixtures = [...basketballMatches, ...tennisMatches]
+    .map(liveBoardFixtureFromMatch)
+    .filter((fixture): fixture is LiveBoardFixture => Boolean(fixture));
+  const providerFixtures = [...football.fixtures, ...extraFixtures];
+  const repositoryFixtures = await storedFixturesForDate(date);
+  const fixtures = mergeLiveBoardCoverage(providerFixtures, repositoryFixtures).sort((a, b) => {
+    const phaseDiff = phaseOrder(a.phase) - phaseOrder(b.phase);
+    if (phaseDiff !== 0) return phaseDiff;
+    const sportDiff = a.sport.localeCompare(b.sport);
+    if (sportDiff !== 0) return sportDiff;
+    return new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime();
+  });
+  const counts = { live: 0, upcoming: 0, finished: 0, other: 0 };
+  const sportCounts = { football: 0, basketball: 0, tennis: 0 };
+  for (const fixture of fixtures) {
+    counts[fixture.phase] += 1;
+    sportCounts[fixture.sport] += 1;
+  }
+  const availableSports = (["football", "basketball", "tennis"] as const).filter((sport) => sportCounts[sport] > 0);
+  return {
+    generatedAt: new Date().toISOString(),
+    date,
+    source: providerFixtures.length ? "multi-provider" : repositoryFixtures.length ? "repository" : "none",
+    counts,
+    sportCounts,
+    availableSports,
+    fixtures,
+    note: repositoryFixtures.some((fixture) => !providerFixtures.some((provider) => provider.sport === fixture.sport))
+      ? providerFixtures.length
+        ? "Live provider coverage is supplemented with normalized stored fixtures for unavailable sports."
+        : "Showing the latest normalized fixtures stored by the OddsPadi ingestion engine."
+      : fixtures.length ? undefined : "No provider-backed or stored score feeds returned fixtures for this date."
+  };
+}
+
+export async function fetchLiveScoreBoard(dateArg?: string): Promise<LiveScoreBoard> {
+  const today = utcTodayIsoDate();
+  const date = dateArg && /^\d{4}-\d{2}-\d{2}$/.test(dateArg) ? dateArg : today;
+  const cached = multiSportBoardCache.get(date);
+  if (cached && cached.expiresAt > Date.now()) return cached.board;
+  const existing = multiSportInFlightByDate.get(date);
+  if (existing) return existing;
+
+  const promise = fetchLiveScoreBoardUncached(date).then((board) => {
+    const ttl = date === today ? BOARD_TTL_MS : 5 * 60_000;
+    multiSportBoardCache.set(date, { expiresAt: Date.now() + ttl, board });
+    if (multiSportBoardCache.size > 16) multiSportBoardCache.delete(multiSportBoardCache.keys().next().value as string);
+    return board;
+  }).finally(() => multiSportInFlightByDate.delete(date));
+  multiSportInFlightByDate.set(date, promise);
   return promise;
 }

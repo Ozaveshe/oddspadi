@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
 
-type PageProps = { params: Promise<{ category: string; thread: string }> };
+type PageProps = { params: Promise<{ category: string; thread: string }>; searchParams?: Promise<{ cursor?: string }> };
 
 function prettifySlug(slug: string): string {
   return slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -52,9 +52,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function ThreadPage({ params }: PageProps) {
+export default async function ThreadPage({ params, searchParams }: PageProps) {
   const { category: slug, thread: threadId } = await params;
   const supabase = await createSupabaseServerClient();
+  const cursor = (await searchParams)?.cursor;
   if (!supabase || !UUID.test(threadId)) notFound();
 
   const { data: thread } = await supabase
@@ -64,16 +65,19 @@ export default async function ThreadPage({ params }: PageProps) {
     .maybeSingle<ThreadRow>();
   if (!thread) notFound();
 
-  const [{ data: repliesData }, userResult] = await Promise.all([
-    supabase
+  let replyQuery = supabase
       .from("op_forum_replies")
       .select("id, body, created_at, author:op_profiles(username)")
       .eq("thread_id", threadId)
-      .order("created_at", { ascending: true })
-      .limit(200),
+      .order("created_at", { ascending: true }).limit(51);
+  if (cursor) replyQuery = replyQuery.gt("created_at", cursor);
+  const [{ data: repliesData }, userResult] = await Promise.all([
+    replyQuery,
     supabase.auth.getUser()
   ]);
-  const replies = (repliesData as Reply[] | null) ?? [];
+  const replyRows = (repliesData as Reply[] | null) ?? [];
+  const replies = replyRows.slice(0, 50);
+  const nextCursor = replyRows.length > 50 ? replies[49]?.created_at : null;
   const user = userResult.data.user;
   const threadUrl = `${siteUrl}/forums/${slug}/${thread.id}`;
 
@@ -143,6 +147,7 @@ export default async function ThreadPage({ params }: PageProps) {
             </article>
           ))}
         </div>
+        {nextCursor ? <Link className="button secondary community-load-more" href={`/forums/${slug}/${thread.id}?cursor=${encodeURIComponent(nextCursor)}`}>Load more</Link> : null}
 
         <div style={{ marginTop: 18 }}>
           {thread.is_locked ? (

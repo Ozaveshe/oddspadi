@@ -5,6 +5,8 @@ import { BrandWord, LogoMark } from "@/components/site/Logo";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { DesktopNavLinks, MobileTabBar } from "@/components/site/SiteNav";
 import "./globals.css";
+import { FollowedTeamsProvider } from "@/components/account/FollowedTeamsProvider";
+import { ServiceWorkerRegistration } from "@/components/pwa/ServiceWorkerRegistration";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
 const googleSiteVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim();
@@ -12,11 +14,11 @@ const googleSiteVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "OddsPadi — Football Predictions, Live Scores & AI Analysis",
+    default: "OddsPadi — Live Scores, Sports Predictions & Matchday News",
     template: "%s | OddsPadi"
   },
   description:
-    "OddsPadi is your football padi: AI-powered football predictions, live scores, value picks, and honest match analysis for fans across Africa and beyond. No fake 'sure odds' — just clear numbers.",
+    "Live scores, football, basketball and tennis predictions, transparent results, and matchday news for sports fans across Africa and beyond.",
   applicationName: "OddsPadi",
   keywords: [
     "football predictions",
@@ -69,7 +71,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0e0c",
+  themeColor: "#ffffff",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover"
@@ -119,6 +121,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteJsonLd) }} />
       </head>
       <body>
+        <FollowedTeamsProvider>
         <a className="skip-link" href="#main">
           Skip to content
         </a>
@@ -137,6 +140,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </div>
         <MobileTabBar />
         <Analytics />
+        <ServiceWorkerRegistration />
+        </FollowedTeamsProvider>
       </body>
     </html>
   );

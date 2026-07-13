@@ -3,9 +3,15 @@ import type { Match, Prediction } from "@/lib/sports/types";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { ConfidenceBadge, RiskBadge } from "./Badges";
 import { LocalTime } from "./LocalTime";
+import { ShareBar } from "@/components/share/ShareBar";
+import { AddToSlipButton } from "./AddToSlipButton";
+import { AffiliateBookmakerLink } from "./AffiliateBookmakerLink";
+import { bookmakerDisplayName } from "@/lib/affiliate/bookmakerLinks";
 
 export function ValuePickCard({ match, prediction }: { match: Match; prediction: Prediction }) {
-  if (!prediction.bestPick.hasValue) return null;
+  const bestPick = prediction.bestPick;
+  if (!bestPick.hasValue) return null;
+  const pricedMarket = match.oddsMarkets.find((market) => market.id === bestPick.marketId);
 
   return (
     <article className="value-card">
@@ -25,6 +31,7 @@ export function ValuePickCard({ match, prediction }: { match: Match; prediction:
           data-analytics-event="value_pick_clicked"
           data-analytics-match-id={match.id}
           data-analytics-sport={match.sport}
+          data-analytics-league={match.league.name}
           data-analytics-source="value_pick_card"
         >
           See why
@@ -33,35 +40,48 @@ export function ValuePickCard({ match, prediction }: { match: Match; prediction:
       <div className="metrics-grid">
         <div className="metric">
           <span className="metric-label">Pick</span>
-          <span className="metric-value">{prediction.bestPick.label}</span>
+          <span className="metric-value">{bestPick.label}</span>
         </div>
         <div className="metric">
           <span className="metric-label">Odds</span>
-          <span className="metric-value">{formatOdds(prediction.bestPick.odds)}</span>
+          <span className="metric-value">{formatOdds(bestPick.odds)}</span>
+          {pricedMarket?.bookmaker ? <span className="small muted">{bookmakerDisplayName(pricedMarket.bookmaker.id, pricedMarket.bookmaker.name)}</span> : null}
         </div>
         <div className="metric">
           <span className="metric-label">Model / no-vig</span>
           <span className="metric-value">
-            {formatPercent(prediction.bestPick.modelProbability)} / {formatPercent(prediction.bestPick.noVigImpliedProbability)}
+            {formatPercent(bestPick.modelProbability)} / {formatPercent(bestPick.noVigImpliedProbability)}
           </span>
         </div>
         <div className="metric">
           <span className="metric-label">No-vig edge</span>
-          <span className="metric-value">{formatSignedPercent(prediction.bestPick.edge)}</span>
+          <span className="metric-value">{formatSignedPercent(bestPick.edge)}</span>
         </div>
         <div className="metric">
           <span className="metric-label">EV / unit</span>
-          <span className="metric-value">{formatSignedPercent(prediction.bestPick.expectedValue)}</span>
+          <span className="metric-value">{formatSignedPercent(bestPick.expectedValue)}</span>
         </div>
         <div className="metric">
           <span className="metric-label">Book margin</span>
-          <span className="metric-value">{formatSignedPercent(prediction.bestPick.bookmakerMargin)}</span>
+          <span className="metric-value">{formatSignedPercent(bestPick.bookmakerMargin)}</span>
         </div>
       </div>
       <div className="meta">
-        <ConfidenceBadge level={prediction.bestPick.confidence} />
-        <RiskBadge level={prediction.bestPick.risk} />
+        <ConfidenceBadge level={bestPick.confidence} />
+        <RiskBadge level={bestPick.risk} />
       </div>
+      <div className="card-actions"><AddToSlipButton match={match} prediction={prediction} /><Link className="button" href="/predictions/bet-slip">Check slip</Link></div>
+      {pricedMarket?.bookmaker ? <AffiliateBookmakerLink bookmaker={pricedMarket.bookmaker} country={match.league.country} matchId={match.id} sport={match.sport} league={match.league.name} placement="value_pick_card" /> : null}
+      <ShareBar
+        compact
+        pageContext="value_pick"
+        matchId={match.id}
+        sport={match.sport}
+        league={match.league.name}
+        title={`${match.homeTeam.name} vs ${match.awayTeam.name} analysis`}
+        text={`⚽ ${match.homeTeam.name} vs ${match.awayTeam.name} — OddsPadi’s analysis flags ${bestPick.label} at ${Math.round(bestPick.modelProbability * 100)}% model probability. Full analysis:`}
+        url={`/predictions/${encodeURIComponent(match.id)}`}
+      />
     </article>
   );
 }

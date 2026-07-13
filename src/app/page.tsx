@@ -7,13 +7,19 @@ import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 import { ValuePickCard } from "@/components/odds/ValuePickCard";
 import { fetchLiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import { getPredictions, getValuePicks, sports, todayIsoDate } from "@/lib/sports/service";
+import { getNewsStories } from "@/lib/editorial/news";
+import { getPublicPredictionHistory, type PublicPredictionHistory } from "@/lib/sports/prediction/history";
+import { YourTeamsStrip } from "@/components/account/YourTeamsStrip";
+import { RecordStrip } from "@/components/odds/RecordStrip";
 
-export const dynamic = "force-dynamic";
+// The live ticker refreshes through /api/live after hydration; cache the heavier
+// prediction/editorial shell so a homepage view does not fan out to providers.
+export const revalidate = 60;
 
 export const metadata: Metadata = {
-  title: "OddsPadi — Football Predictions, Live Scores & AI Analysis",
+  title: "OddsPadi — Live Scores, Sports Predictions & Matchday News",
   description:
-    "Your football padi: AI-powered predictions, real-time live scores, and honest value picks for today's matches. Clear numbers, plain language, no fake 'sure odds'.",
+    "Live scores and transparent football, basketball and tennis predictions, plus results and matchday news for fans across Africa and beyond.",
   alternates: { canonical: "/" }
 };
 
@@ -76,11 +82,22 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 
 export default async function HomePage() {
   const date = todayIsoDate();
-  const [predictions, valuePicks, liveBoard] = await Promise.all([
+  const unavailableLedger: PublicPredictionHistory = { items: [], source: "unavailable", reason: "Results timed out.", generatedAt: new Date().toISOString() };
+  const [football, basketball, tennis, valuePicks, liveBoard, ledger, newsStories] = await Promise.all([
     withTimeout(getPredictions({ date, sport: "football", storageMode: "preview" }), 5_000, []),
-    withTimeout(getValuePicks(date, "football", undefined, "preview"), 5_000, []),
-    withTimeout(fetchLiveScoreBoard(), 5_000, null)
+    withTimeout(getPredictions({ date, sport: "basketball", storageMode: "preview" }), 5_000, []),
+    withTimeout(getPredictions({ date, sport: "tennis", storageMode: "preview" }), 5_000, []),
+    withTimeout(getValuePicks(date, "football", "preview", "preview"), 5_000, []),
+    withTimeout(fetchLiveScoreBoard(), 5_000, null),
+    withTimeout(getPublicPredictionHistory(), 4_000, unavailableLedger),
+    getNewsStories()
   ]);
+  const predictions = [...football.slice(0, 2), ...basketball.slice(0, 1), ...tennis.slice(0, 1)];
+  const predictionsArePreview = predictions.length > 0 && predictions.every(row => row.match.dataSource?.kind === "mock");
+  const teamMatches = [
+    ...predictions.map(({ match }) => ({ id: match.id, href: `/predictions/${encodeURIComponent(match.id)}`, home: match.homeTeam.name, away: match.awayTeam.name, kickoff: match.kickoffTime, sport: match.sport })),
+    ...(liveBoard?.fixtures ?? []).map((fixture) => ({ id: String(fixture.id), href: fixture.analysis ? `/predictions/${encodeURIComponent(fixture.matchId)}` : "/live-scores", home: fixture.home.name, away: fixture.away.name, kickoff: fixture.kickoff, sport: fixture.sport }))
+  ];
 
   return (
     <main id="main" className="container">
@@ -88,14 +105,13 @@ export default async function HomePage() {
 
       <section className="hero">
         <div>
-          <span className="section-kicker">AI predictions · Live scores · Honest analysis</span>
+          <span className="section-kicker">Live scores · Multi-sport predictions · Matchday news</span>
           <h1>
-            Your football padi for <span className="accent">smarter predictions</span>.
+            Your matchday, <span className="accent">properly covered</span>.
           </h1>
           <p>
-            OddsPadi reads the odds, runs the numbers, and tells you — in plain language — where the real value is.
-            Follow live scores as they happen, then see exactly why the engine likes (or avoids) a pick. No noise, no
-            fake &ldquo;sure odds&rdquo;.
+            Follow more live football, open today&apos;s football, basketball and tennis analysis, and check every stored
+            result after the final whistle. The numbers are explained, uncertainty stays visible, and the story keeps moving.
           </p>
           <div className="actions">
             <Link className="button primary" href="/predictions">
@@ -124,7 +140,7 @@ export default async function HomePage() {
           <div className="panel-header">
             <div>
               <h2>Today&apos;s top matches</h2>
-              <p className="muted small">Probabilities, odds, confidence &amp; risk — at a glance.</p>
+              <p className="muted small">{predictionsArePreview ? "Prediction lab preview · seeded fixtures, not live picks." : "Probabilities, odds, confidence & risk — at a glance."}</p>
             </div>
             <Link className="button small-btn" href="/predictions">
               View all
@@ -171,6 +187,8 @@ export default async function HomePage() {
           )}
         </div>
       </section>
+
+      <YourTeamsStrip matches={teamMatches} />
 
       <section className="section" id="live">
         <div className="section-title">
@@ -268,6 +286,16 @@ export default async function HomePage() {
       </section>
 
       <section className="section">
+        <div className="section-title"><div><span className="section-kicker">Engine ledger</span><h2>Recent picks and results</h2></div><Link className="button small-btn" href="/predictions/history">Open full results</Link></div>
+        <RecordStrip items={ledger.items} compact />
+        <div className="ledger-home">
+          <aside><span className={`badge ${ledger.source === "live" ? "positive" : "no-value"}`}>{ledger.source === "live" ? "Repository connected" : "Repository unavailable"}</span><p>{ledger.source === "live" ? "Every stored win, loss, push and void remains inspectable." : "No sample record is substituted while the public repository cannot be read."}</p></aside>
+          <div className="ledger-list">{ledger.items.slice(0,5).map(item => <article key={item.id}><span className={`badge ${item.result === "won" ? "positive" : item.result === "lost" ? "no-value" : "scheduled"}`}>{item.result}</span><div><strong>{item.match}</strong><small>{item.sport} · {item.pick} · {item.date}</small></div></article>)}
+          {!ledger.items.length ? <div className="empty-state compact"><h3>No results substituted</h3><p className="muted">{ledger.reason ?? "The engine has not stored public outcomes yet."} Seeded preview matches never appear here.</p></div> : null}</div>
+        </div>
+      </section>
+
+      <section className="section">
         <div className="trust-strip">
           <div className="trust-item">
             <span className="ti-icon" aria-hidden="true">
@@ -308,6 +336,29 @@ export default async function HomePage() {
               <span>Live scores, predictions, and full analysis — no paywall, no signup wall.</span>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="section season-outlook">
+        <div className="section-title">
+          <div><span className="section-kicker">The next campaign starts now</span><h2>Upcoming season outlooks</h2></div>
+          <Link className="button small-btn" href="/season-outlooks">Open season predictions</Link>
+        </div>
+        <div className="grid-3">
+          <article className="step-card"><span className="step-num">01</span><h3>Baseline</h3><p>Historical strength and confirmed schedules establish the first forecast range.</p></article>
+          <article className="step-card"><span className="step-num">02</span><h3>Squad watch</h3><p>Transfers, injuries and manager changes revise the outlook as evidence arrives.</p></article>
+          <article className="step-card"><span className="step-num">03</span><h3>Match-ready</h3><p>Fixture-level predictions publish when teams, timing and usable market prices are confirmed.</p></article>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-title"><div><span className="section-kicker">The Matchday Desk</span><h2>Fresh from OddsPadi</h2></div><Link className="button small-btn" href="/news">All news</Link></div>
+        <div className="news-grid">
+          {newsStories.slice(0, 2).map((story) => <article className="news-card" key={story.slug}>
+            <div className="story-meta"><span>{story.category}</span><span>{story.sport}</span></div>
+            <h2><Link href={`/news/${story.slug}`}>{story.title}</Link></h2><p>{story.excerpt}</p>
+            <Link className="text-link" href={`/news/${story.slug}`}>Read story →</Link>
+          </article>)}
         </div>
       </section>
 

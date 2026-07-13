@@ -3,6 +3,8 @@ import Link from "next/link";
 import { AuthPanel } from "@/components/community/AuthPanel";
 import { SignOutButton } from "@/components/community/SignOutButton";
 import { createSupabaseServerClient, getCurrentUser } from "@/lib/supabase/serverAuthClient";
+import { ProfileEditor } from "@/components/account/ProfileEditor";
+import { PushNotificationOptIn } from "@/components/account/PushNotificationOptIn";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,8 @@ export default async function AccountPage() {
   }
 
   const profile = await loadProfile(user.id);
+  const followClient = await createSupabaseServerClient();
+  const followedCount = followClient ? (await followClient.from("op_followed_teams").select("team_id", { count: "exact", head: true }).eq("user_id", user.id)).count ?? 0 : 0;
   const handle = profile?.username ?? user.email?.split("@")[0] ?? "padi";
 
   return (
@@ -57,6 +61,9 @@ export default async function AccountPage() {
         <h1>@{handle}</h1>
         <p>{profile?.display_name ?? user.email}</p>
       </div>
+
+      <ProfileEditor displayName={profile?.display_name ?? ""} bio={profile?.bio ?? ""} favouriteTeam={profile?.favourite_team ?? ""} />
+      <PushNotificationOptIn hasFollowedTeams={followedCount > 0} publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() ?? ""} />
 
       <div className="panel" style={{ maxWidth: 560 }}>
         <div className="metrics-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>

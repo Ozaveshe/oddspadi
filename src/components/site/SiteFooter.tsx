@@ -14,8 +14,7 @@ export function SiteFooter() {
             <BrandWord />
           </Link>
           <p>
-            Your football padi. We read the odds, run the numbers, and explain every prediction in plain language —
-            with live scores to follow it all as it happens.
+            Your matchday padi. Live scores, model-led predictions, transparent results, and sports stories in plain language.
           </p>
         </div>
 
@@ -26,6 +25,11 @@ export function SiteFooter() {
             <Link href="/predictions">Today&apos;s predictions</Link>
             <Link href="/predictions/value-picks">Value picks</Link>
             <Link href="/predictions/history">Results &amp; accuracy</Link>
+            <Link href="/predictions/league/premier-league/table">League tables</Link>
+            <Link href="/season-outlooks">Season outlooks</Link>
+            <Link href="/news">Matchday news</Link>
+            <Link href="/forums">Fan forums</Link>
+            <Link href="/account">Sign in / account</Link>
           </div>
         </div>
 
@@ -33,7 +37,7 @@ export function SiteFooter() {
           <h2>The engine</h2>
           <div className="footer-links">
             <Link href="/predictions/decision-engine">AI decision engine</Link>
-            <Link href="/predictions/bet-slip">Slip check (soon)</Link>
+            <Link href="/predictions/bet-slip">Slip Check</Link>
             <Link href="/predictions?sport=basketball">Basketball</Link>
             <Link href="/predictions?sport=tennis">Tennis</Link>
           </div>

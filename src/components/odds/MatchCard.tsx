@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { Match, Prediction } from "@/lib/sports/types";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
@@ -5,6 +7,9 @@ import { ConfidenceBadge, MatchStatusBadge, RiskBadge, ValueEdgeBadge } from "./
 import { LocalTime } from "./LocalTime";
 import { ProbabilityBar } from "./ProbabilityBar";
 import { TeamCrest } from "./TeamCrest";
+import { CountryFlag } from "./CountryFlag";
+import { useFollowedTeams } from "@/components/account/FollowedTeamsProvider";
+import { AddToSlipButton } from "./AddToSlipButton";
 
 function mainOdds(match: Match) {
   return match.oddsMarkets.find((market) => market.id === "match_winner")?.selections ?? [];
@@ -33,6 +38,7 @@ function modelLean(match: Match, probabilities: Record<string, number | undefine
 }
 
 export function MatchCard({ match, prediction }: { match: Match; prediction: Prediction }) {
+  const followed = useFollowedTeams();
   const odds = mainOdds(match);
   const probabilities = winnerProbabilities(prediction);
   const hasValue = prediction.bestPick.hasValue;
@@ -42,10 +48,11 @@ export function MatchCard({ match, prediction }: { match: Match; prediction: Pre
   const [leanLabel, leanProb] = modelLean(match, probabilities);
 
   return (
-    <article className="match-card">
+    <article className={`match-card${followed.isFollowed(match.homeTeam.name) || followed.isFollowed(match.awayTeam.name) ? " followed-team-row" : ""}`}>
       <div className="match-main">
         <div>
           <div className="meta">
+            {match.dataSource?.kind === "mock" ? <span className="badge scheduled">Preview</span> : null}
             <span>
               <LocalTime iso={match.kickoffTime} />
             </span>
@@ -53,7 +60,7 @@ export function MatchCard({ match, prediction }: { match: Match; prediction: Pre
               {match.league.logo ? <TeamCrest name={match.league.name} logo={match.league.logo} size={16} /> : null}
               {match.league.name}
             </span>
-            <span>{match.league.country}</span>
+            <span className="country-inline"><CountryFlag country={match.league.country} flag={match.league.flag} size={16} />{match.league.country}</span>
             <MatchStatusBadge status={match.status} />
           </div>
           <div className="teams">
@@ -72,10 +79,6 @@ export function MatchCard({ match, prediction }: { match: Match; prediction: Pre
           className="button small-btn"
           href={`/predictions/${match.id}`}
           aria-label={`Full analysis: ${match.homeTeam.name} vs ${match.awayTeam.name}`}
-          data-analytics-event="match_detail_opened"
-          data-analytics-match-id={match.id}
-          data-analytics-sport={match.sport}
-          data-analytics-source="match_card"
         >
           Full analysis
         </Link>
@@ -140,6 +143,7 @@ export function MatchCard({ match, prediction }: { match: Match; prediction: Pre
           </>
         )}
       </div>
+      <div className="card-actions"><AddToSlipButton match={match} prediction={prediction} compact /><Link className="button small-btn" href="/predictions/bet-slip">View slip</Link></div>
     </article>
   );
 }

@@ -2,22 +2,39 @@ import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 
 export const dynamic = "force-dynamic";
 
-const POST_SELECT = "id, body, match_id, created_at, author:op_profiles(username, display_name, avatar_url)";
+const POST_SELECT = "id, author_id, body, match_id, created_at, author:op_profiles(username, display_name, avatar_url), likes:op_feed_post_likes(user_id)";
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return Response.json({ posts: [] });
   try {
-    const { data, error } = await supabase
+    const cursor = new URL(request.url).searchParams.get("cursor");
+    let query = supabase
       .from("op_feed_posts")
       .select(POST_SELECT)
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(21);
+    if (cursor) query = query.lt("created_at", cursor);
+    const { data, error } = await query;
     if (error) return Response.json({ posts: [], note: error.message });
-    return Response.json({ posts: data ?? [] });
+    const rows = data ?? [];
+    return Response.json({ posts: rows.slice(0, 20), nextCursor: rows.length > 20 ? rows[19]?.created_at : null });
   } catch {
     return Response.json({ posts: [] });
   }
+}
+
+export async function DELETE(request: Request) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return Response.json({ error: "Community is not enabled yet." }, { status: 503 });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return Response.json({ error: "Sign in to delete a post." }, { status: 401 });
+  const postId = new URL(request.url).searchParams.get("postId") ?? "";
+  if (!postId) return Response.json({ error: "Missing post." }, { status: 400 });
+  // RLS is the final ownership check; author_id also avoids ambiguous success.
+  const { error } = await supabase.from("op_feed_posts").delete().eq("id", postId).eq("author_id", user.id);
+  if (error) return Response.json({ error: error.message }, { status: 400 });
+  return Response.json({ ok: true });
 }
 
 export async function POST(request: Request) {

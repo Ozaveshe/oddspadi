@@ -4,8 +4,17 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { LiveBoardFixture, LiveFixturePhase, LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import { useLiveBoard } from "./useLiveBoard";
+import { useFollowedTeams } from "@/components/account/FollowedTeamsProvider";
 
 type TabId = "all" | LiveFixturePhase;
+type SportTab = "all" | LiveBoardFixture["sport"];
+
+const SPORT_TABS: Array<{ id: SportTab; label: string; icon: string }> = [
+  { id: "all", label: "All sports", icon: "●" },
+  { id: "football", label: "Football", icon: "⚽" },
+  { id: "basketball", label: "Basketball", icon: "🏀" },
+  { id: "tennis", label: "Tennis", icon: "🎾" }
+];
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "all", label: "All" },
@@ -66,6 +75,8 @@ function ScoreCell({ fixture }: { fixture: LiveBoardFixture }) {
 }
 
 function FixtureRow({ fixture }: { fixture: LiveBoardFixture }) {
+  const followed = useFollowedTeams();
+  const highlighted = followed.isFollowed(fixture.home.name) || followed.isFollowed(fixture.away.name);
   const body = (
     <>
       <StatusCell fixture={fixture} />
@@ -80,10 +91,12 @@ function FixtureRow({ fixture }: { fixture: LiveBoardFixture }) {
   if (fixture.analysis) {
     return (
       <Link
-        className="score-row"
+        className={`score-row${highlighted ? " followed-team-row" : ""}`}
         href={`/predictions/${encodeURIComponent(fixture.matchId)}`}
         data-analytics-event="live_score_opened"
         data-analytics-match-id={fixture.matchId}
+        data-analytics-sport={fixture.sport}
+        data-analytics-league={fixture.league.name}
         data-analytics-phase={fixture.phase}
         data-analytics-source="live_score_board"
         title={`${fixture.home.name} vs ${fixture.away.name} — open OddsPadi analysis`}
@@ -93,7 +106,7 @@ function FixtureRow({ fixture }: { fixture: LiveBoardFixture }) {
     );
   }
 
-  return <div className="score-row">{body}</div>;
+  return <div className={`score-row${highlighted ? " followed-team-row" : ""}`}>{body}</div>;
 }
 
 type LeagueGroup = {
@@ -107,7 +120,7 @@ function groupByLeague(fixtures: LiveBoardFixture[]): LeagueGroup[] {
   const groups: LeagueGroup[] = [];
   let current: LeagueGroup | null = null;
   for (const fixture of fixtures) {
-    const key = `${fixture.league.id}:${fixture.league.name}`;
+    const key = `${fixture.sport}:${fixture.league.id}:${fixture.league.name}`;
     if (!current || current.key !== key) {
       current = { key, league: fixture.league, fixtures: [], liveCount: 0 };
       groups.push(current);
@@ -160,6 +173,7 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
   const [date, setDate] = useState<string | undefined>(undefined);
   const { board, refreshing, updatedAt, refresh } = useLiveBoard(initial, 45_000, date);
   const [tab, setTab] = useState<TabId>("all");
+  const [sport, setSport] = useState<SportTab>("all");
   const [query, setQuery] = useState("");
 
   const activeDate = date ?? board?.date ?? todayIso();
@@ -171,6 +185,7 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
     const fixtures = board?.fixtures ?? [];
     const search = query.trim().toLowerCase();
     return fixtures.filter((fixture) => {
+      if (sport !== "all" && fixture.sport !== sport) return false;
       if (tab !== "all" && fixture.phase !== tab) return false;
       if (!search) return true;
       return (
@@ -180,7 +195,7 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
         fixture.league.country.toLowerCase().includes(search)
       );
     });
-  }, [board, tab, query]);
+  }, [board, sport, tab, query]);
 
   const groups = useMemo(() => groupByLeague(filtered), [filtered]);
 
@@ -200,6 +215,27 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
 
   return (
     <div>
+      <div className="sport-switcher" role="group" aria-label="Choose sport">
+        {SPORT_TABS.map((item) => {
+          const count = item.id === "all" ? board.fixtures.length : board.sportCounts[item.id];
+          return (
+            <button
+              key={item.id}
+              type="button"
+              aria-pressed={sport === item.id}
+              onClick={() => setSport(item.id)}
+              data-analytics-event="filter_used"
+              data-analytics-filter-name="live_sport"
+              data-analytics-filter-value={item.id}
+            >
+              <span aria-hidden="true">{item.icon}</span>
+              {item.label}
+              <span className="count">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="live-datenav" role="group" aria-label="Choose day">
         <button
           className="button small-btn"
@@ -269,7 +305,11 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
       </div>
 
       <div className="live-meta-row" style={{ marginBottom: 14 }} aria-busy={refreshing}>
-        {isToday ? (
+        {board.source === "none" ? (
+          <span className="badge no-value">Feed unavailable</span>
+        ) : board.source === "repository" ? (
+          <span className="badge scheduled">Stored ingestion feed</span>
+        ) : isToday ? (
           <span className="badge live">Live updates</span>
         ) : (
           <span className="badge finished">{dayLabel(activeDate)} · fixtures &amp; results</span>
@@ -281,6 +321,7 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
         <button className="button small-btn" type="button" onClick={() => void refresh()} disabled={refreshing}>
           {refreshing ? "Refreshing…" : "Refresh now"}
         </button>
+        {board.note ? <span>{board.note}</span> : null}
       </div>
 
       {board.source === "none" ? (
@@ -301,6 +342,7 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
                 ) : null}
                 <span>{group.league.name}</span>
                 <span className="league-country">· {group.league.country}</span>
+                <span className="league-sport">{group.fixtures[0].sport}</span>
                 {group.liveCount ? <span className="league-live-count">{group.liveCount} live</span> : null}
               </header>
               {group.fixtures.map((fixture) => (

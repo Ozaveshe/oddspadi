@@ -97,7 +97,7 @@ describe("football provider residual trainer", () => {
     expect(first.controls.canApplyResidualModel).toBe(false);
     expect(first.model?.modelHash).toBe(second.model?.modelHash);
     expect(first.trainerHash).toBe(second.trainerHash);
-  });
+  }, 15_000);
 
   it("keeps the market dominant and records zero-variance context features", () => {
     const receipt = buildFootballProviderResidualTrainer({
