@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Match, Prediction } from "@/lib/sports/types";
+import type { MatchSummary, PredictionSummary } from "@/lib/sports/prediction/listRow";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { ConfidenceBadge, RiskBadge } from "./Badges";
 import { LocalTime } from "./LocalTime";
@@ -8,7 +8,7 @@ import { AddToSlipButton } from "./AddToSlipButton";
 import { AffiliateBookmakerLink } from "./AffiliateBookmakerLink";
 import { bookmakerDisplayName } from "@/lib/affiliate/bookmakerLinks";
 
-export function ValuePickCard({ match, prediction }: { match: Match; prediction: Prediction }) {
+export function ValuePickCard({ match, prediction }: { match: MatchSummary; prediction: PredictionSummary }) {
   const bestPick = prediction.bestPick;
   if (!bestPick.hasValue) return null;
   const pricedMarket = match.oddsMarkets.find((market) => market.id === bestPick.marketId);

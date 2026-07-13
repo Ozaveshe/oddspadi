@@ -1,5 +1,6 @@
-import { apiError, apiSuccess, parseSportsQuery, withApiHandler } from "@/app/api/sports/_utils";
+import { apiError, apiSuccess, parseSportsQuery, publicCacheInit, withApiHandler } from "@/app/api/sports/_utils";
 import { getPredictions } from "@/lib/sports/service";
+import { toPredictionListRow } from "@/lib/sports/prediction/listRow";
 
 export const GET = withApiHandler(async (request: Request) => {
   const query = parseSportsQuery(request);
@@ -27,5 +28,8 @@ export const GET = withApiHandler(async (request: Request) => {
     // dedicated decision/training APIs.
     storageMode: "preview"
   });
-  return apiSuccess(data);
+  // view=summary strips the decision dossier from each row — card/list UIs
+  // only need the summary and the full payload is megabytes on busy days.
+  if (url.searchParams.get("view") === "summary") return apiSuccess(data.map(toPredictionListRow), publicCacheInit(60));
+  return apiSuccess(data, publicCacheInit(60));
 });

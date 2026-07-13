@@ -13,6 +13,7 @@ import { CountryFlag } from "@/components/odds/CountryFlag";
 import { formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { getCachedMatchPrediction } from "@/lib/sports/prediction/cachedPublicReads";
 import { ShareBar } from "@/components/share/ShareBar";
+import { FollowTeamButton } from "@/components/account/FollowTeamButton";
 import Link from "next/link";
 import { leagueSlugFromProviderId } from "@/lib/sports/leagueStandings";
 
@@ -148,6 +149,10 @@ export default async function MatchDetailPage({ params }: PageProps) {
         )}
       </div>
 
+      <div className="feed-actions" style={{ marginTop: 0 }}>
+        <FollowTeamButton teamName={match.homeTeam.name} sport={match.sport} />
+        <FollowTeamButton teamName={match.awayTeam.name} sport={match.sport} />
+      </div>
       <ShareBar
         pageContext="match_prediction"
         matchId={match.id}

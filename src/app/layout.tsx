@@ -37,6 +37,12 @@ export const metadata: Metadata = {
   creator: "OddsPadi",
   publisher: "OddsPadi",
   category: "sports",
+  alternates: {
+    types: {
+      "application/rss+xml": [{ url: "/news/rss.xml", title: "OddsPadi Matchday Desk" }],
+      "application/feed+json": [{ url: "/news/feed.json", title: "OddsPadi Matchday Desk" }]
+    }
+  },
   openGraph: {
     type: "website",
     url: siteUrl,

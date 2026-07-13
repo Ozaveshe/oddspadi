@@ -9,7 +9,7 @@ export type ShareBarProps = {
   text: string;
   url: string;
   title?: string;
-  pageContext: "match_prediction" | "value_pick" | "results_ledger";
+  pageContext: "match_prediction" | "value_pick" | "results_ledger" | "news_story";
   matchId?: string;
   sport?: string;
   league?: string;

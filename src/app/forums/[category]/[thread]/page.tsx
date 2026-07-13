@@ -60,14 +60,14 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
 
   const { data: thread } = await supabase
     .from("op_forum_threads")
-    .select("id, title, body, is_locked, created_at, author:op_profiles(username)")
+    .select("id, title, body, is_locked, created_at, author:op_profiles!op_forum_threads_author_id_fkey(username)")
     .eq("id", threadId)
     .maybeSingle<ThreadRow>();
   if (!thread) notFound();
 
   let replyQuery = supabase
       .from("op_forum_replies")
-      .select("id, body, created_at, author:op_profiles(username)")
+      .select("id, body, created_at, author:op_profiles!op_forum_replies_author_id_fkey(username)")
       .eq("thread_id", threadId)
       .order("created_at", { ascending: true }).limit(51);
   if (cursor) replyQuery = replyQuery.gt("created_at", cursor);

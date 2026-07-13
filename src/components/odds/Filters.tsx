@@ -1,5 +1,5 @@
-import type { Match, Sport } from "@/lib/sports/types";
-import { sports, uniqueCountries, uniqueLeagues } from "@/lib/sports/service";
+import type { Sport } from "@/lib/sports/types";
+import { sports } from "@/lib/sports/service";
 
 export function DateSelector({ defaultValue }: { defaultValue: string }) {
   return (
@@ -32,13 +32,13 @@ export function SportFilter({ selected = "football" }: { selected?: Sport }) {
   );
 }
 
-export function LeagueFilter({ matches, selected }: { matches: Match[]; selected?: string }) {
+export function LeagueFilter({ options, selected }: { options: string[]; selected?: string }) {
   return (
     <div className="field">
       <label htmlFor="league">League</label>
       <select id="league" name="league" defaultValue={selected ?? ""}>
         <option value="">All leagues</option>
-        {uniqueLeagues(matches).map((league) => (
+        {options.map((league) => (
           <option key={league} value={league}>
             {league}
           </option>
@@ -48,13 +48,13 @@ export function LeagueFilter({ matches, selected }: { matches: Match[]; selected
   );
 }
 
-export function CountryFilter({ matches, selected }: { matches: Match[]; selected?: string }) {
+export function CountryFilter({ options, selected }: { options: string[]; selected?: string }) {
   return (
     <div className="field">
       <label htmlFor="country">Country</label>
       <select id="country" name="country" defaultValue={selected ?? ""}>
         <option value="">All countries</option>
-        {uniqueCountries(matches).map((country) => (
+        {options.map((country) => (
           <option key={country} value={country}>
             {country}
           </option>

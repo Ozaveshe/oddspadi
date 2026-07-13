@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Match, Prediction } from "@/lib/sports/types";
+import type { PredictionListRow } from "@/lib/sports/prediction/listRow";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { ConfidenceBadge, MatchStatusBadge, RiskBadge } from "./Badges";
 import { LocalTime } from "./LocalTime";
@@ -7,7 +7,7 @@ import { TeamCrest } from "./TeamCrest";
 import { CountryFlag } from "./CountryFlag";
 import { AddToSlipButton } from "./AddToSlipButton";
 
-export function MatchPredictionTable({ rows }: { rows: Array<{ match: Match; prediction: Prediction }> }) {
+export function MatchPredictionTable({ rows }: { rows: PredictionListRow[] }) {
   return (
     <div className="table-wrap">
       <table className="data-table">

@@ -11,6 +11,10 @@ describe("deterministic editorial generators", () => {
     const stories = generateEditorialStories(rows, now);
     expect(stories.map((story) => story.generator)).toEqual(["weekend-preview", "results-recap", "value-picks-watch", "model-vs-market"]);
     expect(stories.find((story) => story.generator === "results-recap")?.body.join(" ")).toContain("1 wins, 1 losses");
+    const marketStory = stories.find((story) => story.generator === "model-vs-market");
+    expect(marketStory?.title).not.toContain("today");
+    expect(marketStory?.body.join(" ")).toContain("Scheduled 2026-07-14T16:00:00.000Z");
+    expect(marketStory?.dataFingerprint).toMatch(/^template-v2-fnv1a-/);
     expect(stories.every((story) => story.sources.some((source) => source.url === "/predictions/history"))).toBe(true);
   });
 

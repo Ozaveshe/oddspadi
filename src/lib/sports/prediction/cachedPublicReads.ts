@@ -1,25 +1,62 @@
 import { unstable_cache } from "next/cache";
 import type { Sport } from "@/lib/sports/types";
-import { getMatchPrediction, getPredictions, sportsProvider } from "@/lib/sports/service";
+import { getMatchPrediction, getPredictions, sportsProvider, uniqueCountries, uniqueLeagues } from "@/lib/sports/service";
 import { getPublicPredictionHistory } from "@/lib/sports/prediction/history";
+import { toPredictionListRow, type PredictionListRow } from "@/lib/sports/prediction/listRow";
 
 type MemoryEntry<T> = { expiresAt: number; promise: Promise<T> };
-const predictionsPageCache = new Map<string, MemoryEntry<Awaited<ReturnType<typeof readPredictionsPageData>>>>();
 const matchPredictionCache = new Map<string, MemoryEntry<Awaited<ReturnType<typeof getMatchPrediction>>>>();
 
-async function readPredictionsPageData(
+export type PredictionsPageData = { leagues: string[]; countries: string[]; rows: PredictionListRow[] };
+
+/**
+ * One durable snapshot per (date, sport). unstable_cache persists in Next's
+ * Data Cache (blob-backed on Netlify), so it survives serverless cold starts —
+ * unlike the module-scope Maps this file used before, which forced a full
+ * ~130-request provider fan-out on nearly every invocation. Filters are
+ * applied in-process on the slim rows, so every filter combination shares the
+ * same cached provider read.
+ */
+const readPredictionsPageSnapshot = unstable_cache(
+  async (date: string, sport: Sport): Promise<PredictionsPageData> => {
+    const [allMatches, rows] = await Promise.all([
+      sportsProvider.getFixtures(date, sport),
+      getPredictions({ date, sport, storageMode: "preview" })
+    ]);
+    return {
+      leagues: uniqueLeagues(allMatches),
+      countries: uniqueCountries(allMatches),
+      rows: rows.map(toPredictionListRow)
+    };
+  },
+  ["predictions-page-snapshot-v1"],
+  { revalidate: 120 }
+);
+
+export async function getCachedPredictionsPageData(
   date: string,
   sport: Sport,
   league?: string,
   country?: string,
   confidence?: string,
   query?: string
-) {
-    const [allMatches, rows] = await Promise.all([
-      sportsProvider.getFixtures(date, sport),
-      getPredictions({ date, sport, league, country, confidence, query, storageMode: "preview" })
-    ]);
-    return { allMatches, rows };
+): Promise<PredictionsPageData> {
+  const snapshot = await readPredictionsPageSnapshot(date, sport);
+  const q = query?.trim().toLowerCase();
+  const rows = snapshot.rows.filter(({ match, prediction }) => {
+    const matchesSearch =
+      !q ||
+      match.homeTeam.name.toLowerCase().includes(q) ||
+      match.awayTeam.name.toLowerCase().includes(q) ||
+      match.league.name.toLowerCase().includes(q);
+    return (
+      (!league || match.league.name === league) &&
+      (!country || match.league.country === country) &&
+      (!confidence || prediction.confidence === confidence) &&
+      matchesSearch
+    );
+  });
+  return { ...snapshot, rows };
 }
 
 function cachePromise<T>(cache: Map<string, MemoryEntry<T>>, key: string, ttl: number, read: () => Promise<T>): Promise<T> {
@@ -33,18 +70,6 @@ function cachePromise<T>(cache: Map<string, MemoryEntry<T>>, key: string, ttl: n
   promise.catch(() => { if (cache.get(key) === entry) cache.delete(key); });
   if (cache.size > 32) cache.delete(cache.keys().next().value as string);
   return promise;
-}
-
-export function getCachedPredictionsPageData(
-  date: string,
-  sport: Sport,
-  league?: string,
-  country?: string,
-  confidence?: string,
-  query?: string
-) {
-  const key = JSON.stringify([date, sport, league ?? "", country ?? "", confidence ?? "", query ?? ""]);
-  return cachePromise(predictionsPageCache, key, 120_000, () => readPredictionsPageData(date, sport, league, country, confidence, query));
 }
 
 export function getCachedMatchPrediction(matchId: string) {

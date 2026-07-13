@@ -17,7 +17,7 @@ export default async function CommunityPage({ searchParams }: PageProps) {
   let posts: CommunityPost[] = []; let nextCursor: string | null = null;
   if (supabase) {
     const { data } = await supabase.from("op_feed_posts")
-      .select("id, author_id, body, match_id, created_at, author:op_profiles(username, display_name), likes:op_feed_post_likes(user_id)")
+      .select("id, author_id, body, match_id, created_at, author:op_profiles!op_feed_posts_author_id_fkey(username, display_name), likes:op_feed_post_likes(user_id), comments:op_feed_comments!op_feed_comments_post_id_fkey(count)")
       .order("created_at", { ascending: false }).limit(21);
     const rows = (data as CommunityPost[] | null) ?? []; posts = rows.slice(0, 20); nextCursor = rows.length > 20 ? rows[19]?.created_at ?? null : null;
   }

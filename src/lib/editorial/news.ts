@@ -33,18 +33,24 @@ export const newsStories: NewsStory[] = [
   },
   {
     slug: "basketball-summer-league-matchday-watchlist",
-    title: "Basketball watchlist: what the engine is tracking today",
-    excerpt: "Summer League volatility, short rotations and why early prices need more caution than confidence badges suggest.",
+    title: "NBA Summer League July 13 desk: official slate, storage gap",
+    excerpt: "Eight official Las Vegas games are scheduled, but OddsPadi has no July 13 fixture rows yet—so this is a schedule watch, not a prediction card.",
     category: "Matchday briefing",
     sport: "Basketball",
     publishedAt: "2026-07-12",
+    updatedAt: "2026-07-13",
+    sourceAsOf: "2026-07-13T06:00:00Z",
+    revision: 2,
     readMinutes: 4,
     body: [
-      "Summer League basketball creates a difficult forecasting environment: rotations change quickly, player availability is fluid and small samples can make team strength look more certain than it is.",
-      "OddsPadi is tracking today's slate, but a model lean is not automatically a value pick. The public cards separate direction from action so fans can see which team the numbers favour while still seeing when the decision engine is monitoring instead of recommending.",
-      "The results ledger will settle those stored observations after games finish. That feedback is what turns a busy matchday into evidence for the next one."
+      "The NBA's official schedule lists eight Las Vegas Summer League games for Monday, July 13: Detroit–New York, Toronto–Indiana, Atlanta–Boston, Dallas–Memphis, Miami–Cleveland, Chicago–Utah, Phoenix–Milwaukee and Minnesota–Portland.",
+      "OddsPadi's verified July 13 UTC fixture window currently contains no stored rows. That means the Matchday Desk cannot honestly attach model probabilities, prices or decision outcomes to this slate yet; an official schedule is not a substitute for ingested evidence.",
+      "Summer League also remains a volatile forecasting environment because rotations and availability move quickly. Until provider fixtures and usable prices arrive, treat this page as a dated schedule watch and use the public predictions page to confirm whether any match has become available."
     ],
-    sources: [{ label: "Official 2026 NBA Summer League schedule", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-12" }]
+    sources: [
+      { label: "Official 2026 NBA Summer League schedule", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-13" },
+      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-13" }
+    ]
   },
   {
     slug: "upcoming-football-season-predictions-explained",
@@ -83,7 +89,8 @@ export async function getNewsStories(): Promise<NewsStory[]> {
   const { data, error } = await db.from("op_editorial_stories").select("slug,title,excerpt,category,sport,published_at,updated_at,source_as_of,revision,read_minutes,body,sources").order("published_at", { ascending: false }).limit(100);
   if (error) return newsStories;
   const generated = (data as EditorialStoryRow[] ?? []).map(generatedStory).filter((story): story is NewsStory => Boolean(story));
-  return generated.length ? generated : newsStories;
+  const generatedSlugs = new Set(generated.map((story) => story.slug));
+  return [...generated, ...newsStories.filter((story) => !generatedSlugs.has(story.slug))];
 }
 
 export async function getNewsStory(slug: string): Promise<NewsStory | null> {

@@ -67,7 +67,7 @@ export default async function ForumCategoryPage({ params, searchParams }: PagePr
 
   let threadQuery = supabase
       .from("op_forum_threads")
-      .select("id, title, reply_count, last_activity_at, is_pinned, author:op_profiles(username)")
+      .select("id, title, reply_count, last_activity_at, is_pinned, author:op_profiles!op_forum_threads_author_id_fkey(username)")
       .eq("category_id", category.id)
       .order("is_pinned", { ascending: false })
       .order("last_activity_at", { ascending: false }).limit(21);

@@ -4,6 +4,30 @@ import { BrandWord, LogoMark } from "./Logo";
 
 const year = new Date().getFullYear();
 
+const exploreLinks = [
+  { href: "/live-scores", label: "Live scores" },
+  { href: "/predictions", label: "Today's predictions" },
+  { href: "/predictions/value-picks", label: "Value picks" },
+  { href: "/predictions/history", label: "Results & accuracy" },
+  { href: "/predictions/league/premier-league/table", label: "League tables" },
+  { href: "/season-outlooks", label: "Season outlooks" },
+  { href: "/news", label: "Matchday news" }
+];
+
+const communityLinks = [
+  { href: "/community", label: "The padi feed" },
+  { href: "/forums", label: "Fan forums" },
+  { href: "/account", label: "Sign in / account" },
+  { href: "/about", label: "About OddsPadi" }
+];
+
+const engineLinks = [
+  { href: "/predictions/decision-engine", label: "AI decision engine" },
+  { href: "/predictions/bet-slip", label: "Slip Check" },
+  { href: "/predictions?sport=basketball", label: "Basketball" },
+  { href: "/predictions?sport=tennis", label: "Tennis" }
+];
+
 export function SiteFooter() {
   return (
     <footer className="footer">
@@ -21,25 +45,27 @@ export function SiteFooter() {
         <div>
           <h2>Explore</h2>
           <div className="footer-links">
-            <Link href="/live-scores">Live scores</Link>
-            <Link href="/predictions">Today&apos;s predictions</Link>
-            <Link href="/predictions/value-picks">Value picks</Link>
-            <Link href="/predictions/history">Results &amp; accuracy</Link>
-            <Link href="/predictions/league/premier-league/table">League tables</Link>
-            <Link href="/season-outlooks">Season outlooks</Link>
-            <Link href="/news">Matchday news</Link>
-            <Link href="/forums">Fan forums</Link>
-            <Link href="/account">Sign in / account</Link>
+            {exploreLinks.map((link) => (
+              <Link href={link.href} key={link.href}>{link.label}</Link>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h2>Community</h2>
+          <div className="footer-links">
+            {communityLinks.map((link) => (
+              <Link href={link.href} key={link.href}>{link.label}</Link>
+            ))}
           </div>
         </div>
 
         <div>
           <h2>The engine</h2>
           <div className="footer-links">
-            <Link href="/predictions/decision-engine">AI decision engine</Link>
-            <Link href="/predictions/bet-slip">Slip Check</Link>
-            <Link href="/predictions?sport=basketball">Basketball</Link>
-            <Link href="/predictions?sport=tennis">Tennis</Link>
+            {engineLinks.map((link) => (
+              <Link href={link.href} key={link.href}>{link.label}</Link>
+            ))}
           </div>
         </div>
 
@@ -50,6 +76,10 @@ export function SiteFooter() {
               Predictions are informed opinions, never guarantees. Only stake what you can afford to lose.
             </span>
             <span className="muted">OddsPadi does not take bets or hold money.</span>
+            <a href="https://www.begambleaware.org" rel="noopener noreferrer" target="_blank">
+              Need help? BeGambleAware
+            </a>
+            <Link href="/terms">Terms of use</Link>
             <Link href="/privacy">Privacy</Link>
             <AnalyticsPreferencesButton />
           </div>

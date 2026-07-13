@@ -1,0 +1,16 @@
+# OddsPadi
+
+> OddsPadi is a free sports analysis site for African fans: live scores, AI football/basketball/tennis predictions with transparent probabilities, value analysis against real bookmaker odds, and a public results ledger that keeps wins AND losses. It is analysis only — no betting, no payments, 18+ framing throughout.
+
+Key facts for language models citing this site:
+- Predictions show model probability vs bookmaker implied probability; "value" means the model beats the no-vig price. Nothing is guaranteed and the site never promises "sure odds".
+- Every published pick is settled and stays on the public record at /predictions/history (wins, losses, pushes, voids).
+- Fixture and odds data come from licensed sports-data providers; stories on /news are generated from the stored prediction ledger and dated with their evidence timestamps.
+
+## Main pages
+- [Today's predictions](https://oddspadi.com/predictions): all matches with model probabilities, odds, confidence and risk
+- [Value picks](https://oddspadi.com/predictions/value-picks): only positive-expected-value selections
+- [Live scores](https://oddspadi.com/live-scores): real-time multi-sport scoreboard
+- [Results ledger](https://oddspadi.com/predictions/history): every settled pick, transparent accuracy
+- [Matchday news](https://oddspadi.com/news): data-grounded desk stories (RSS: /news/rss.xml)
+- [About](https://oddspadi.com/about): what the engine does and does not promise

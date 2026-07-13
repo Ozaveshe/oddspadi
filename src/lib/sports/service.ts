@@ -327,8 +327,15 @@ export async function getValuePicks(
       if (edgeDiff !== 0) return edgeDiff;
       const confidenceDiff = confidenceRank(b.prediction.confidence) - confidenceRank(a.prediction.confidence);
       if (confidenceDiff !== 0) return confidenceDiff;
-      return new Date(a.match.kickoffTime).getTime() - new Date(b.match.kickoffTime).getTime();
+      return safeKickoffMs(a.match.kickoffTime) - safeKickoffMs(b.match.kickoffTime);
     });
+}
+
+/** NaN from an invalid kickoff makes Array.sort's comparator inconsistent
+ *  (order becomes engine-dependent); park unparseable dates at the end. */
+function safeKickoffMs(iso: string): number {
+  const ms = new Date(iso).getTime();
+  return Number.isFinite(ms) ? ms : Number.MAX_SAFE_INTEGER;
 }
 
 export async function getLiveScores(date = todayIsoDate(), sport: Sport = "football") {

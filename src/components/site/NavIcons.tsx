@@ -71,3 +71,13 @@ export function HistoryIcon({ size = 22 }: IconProps) {
 export function AccountIcon({ size = 22 }: IconProps) {
   return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base}><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.7-4 3-6 7-6s6.3 2 7 6"/></svg>;
 }
+
+export function MoreIcon({ size = 22 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base}>
+      <circle cx="5" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="19" cy="12" r="1.6" />
+    </svg>
+  );
+}

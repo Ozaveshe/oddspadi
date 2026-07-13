@@ -2,9 +2,22 @@ import type { Metadata } from "next";
 import { EmptyState } from "@/components/odds/EmptyState";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { ValuePickCard } from "@/components/odds/ValuePickCard";
+import { unstable_cache } from "next/cache";
 import { getValuePicks, todayIsoDate } from "@/lib/sports/service";
 import { getCachedPublicPredictionHistory } from "@/lib/sports/prediction/cachedPublicReads";
+import { toPredictionListRow } from "@/lib/sports/prediction/listRow";
 import { RecordStrip } from "@/components/odds/RecordStrip";
+
+// Durable across serverless invocations (unlike the in-memory provider cache),
+// and slimmed to the fields ValuePickCard renders so the RSC payload stays small.
+const getCachedValuePickRows = unstable_cache(
+  async (date: string) => {
+    const rows = await getValuePicks(date, "football", "live", "preview");
+    return rows.map(toPredictionListRow);
+  },
+  ["value-picks-rows-v1"],
+  { revalidate: 300 }
+);
 
 export const revalidate = 300;
 
@@ -21,7 +34,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ValuePicksPage() {
-  const [rows, ledger] = await Promise.all([getValuePicks(todayIsoDate(), "football", "live", "preview"), getCachedPublicPredictionHistory()]);
+  const [rows, ledger] = await Promise.all([getCachedValuePickRows(todayIsoDate()), getCachedPublicPredictionHistory()]);
 
   return (
     <main id="main" className="container">
@@ -48,6 +61,8 @@ export default async function ValuePicksPage() {
           emoji="🧐"
           title="No value picks right now"
           body="When the edge isn't clear, we don't force a pick — that's a promise, not a bug. Check back closer to kickoff, or browse today's full predictions."
+          actionHref="/predictions"
+          actionLabel="See today's full slate"
         />
       )}
 

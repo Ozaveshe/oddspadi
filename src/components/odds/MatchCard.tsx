@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { Match, Prediction } from "@/lib/sports/types";
+import type { MatchSummary, PredictionSummary } from "@/lib/sports/prediction/listRow";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { ConfidenceBadge, MatchStatusBadge, RiskBadge, ValueEdgeBadge } from "./Badges";
 import { LocalTime } from "./LocalTime";
@@ -11,15 +11,15 @@ import { CountryFlag } from "./CountryFlag";
 import { useFollowedTeams } from "@/components/account/FollowedTeamsProvider";
 import { AddToSlipButton } from "./AddToSlipButton";
 
-function mainOdds(match: Match) {
+function mainOdds(match: MatchSummary) {
   return match.oddsMarkets.find((market) => market.id === "match_winner")?.selections ?? [];
 }
 
-function winnerProbabilities(prediction: Prediction) {
+function winnerProbabilities(prediction: PredictionSummary) {
   return prediction.markets.find((market) => market.marketId === "match_winner")?.probabilities ?? {};
 }
 
-function winnerMarketLabel(match: Match): string {
+function winnerMarketLabel(match: MatchSummary): string {
   if (match.sport === "football") return "1-X-2";
   if (match.sport === "basketball") return "Moneyline";
   if (match.sport === "tennis") return "Match winner";
@@ -28,7 +28,7 @@ function winnerMarketLabel(match: Match): string {
 
 /** The model's favoured outcome (highest probability) — its directional read,
  *  which exists even when there are no odds to price a value bet against. */
-function modelLean(match: Match, probabilities: Record<string, number | undefined>) {
+function modelLean(match: MatchSummary, probabilities: Record<string, number | undefined>) {
   const entries: Array<[string, number]> = [
     [match.homeTeam.name, probabilities.home ?? 0],
     ...(match.sport === "football" ? ([["Draw", probabilities.draw ?? 0]] as Array<[string, number]>) : []),
@@ -37,7 +37,7 @@ function modelLean(match: Match, probabilities: Record<string, number | undefine
   return entries.reduce((best, current) => (current[1] > best[1] ? current : best));
 }
 
-export function MatchCard({ match, prediction }: { match: Match; prediction: Prediction }) {
+export function MatchCard({ match, prediction }: { match: MatchSummary; prediction: PredictionSummary }) {
   const followed = useFollowedTeams();
   const odds = mainOdds(match);
   const probabilities = winnerProbabilities(prediction);

@@ -191,6 +191,13 @@ const EXCLUDED_NAME_PATTERN = /friendl/i;
 const BOARD_TTL_MS = 30_000;
 const MAX_FIXTURES = 500;
 
+/** NaN from an invalid kickoff makes Array.sort's comparator inconsistent
+ *  (order becomes engine-dependent); park unparseable dates at the end. */
+function safeKickoffMs(iso: string): number {
+  const ms = new Date(iso).getTime();
+  return Number.isFinite(ms) ? ms : Number.MAX_SAFE_INTEGER;
+}
+
 const boardCache = new Map<string, { expiresAt: number; board: LiveScoreBoard }>();
 const inFlightByDate = new Map<string, Promise<LiveScoreBoard>>();
 const multiSportBoardCache = new Map<string, { expiresAt: number; board: LiveScoreBoard }>();
@@ -350,7 +357,7 @@ export function buildFootballBoardFromPayloads(rawLive: ApiFootballLiveFixture[]
       if (leagueDiff !== 0) return leagueDiff;
       const phaseDiff = phaseOrder(a.phase) - phaseOrder(b.phase);
       if (phaseDiff !== 0) return phaseDiff;
-      return new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime();
+      return safeKickoffMs(a.kickoff) - safeKickoffMs(b.kickoff);
     })
     .slice(0, MAX_FIXTURES);
 
@@ -561,7 +568,7 @@ async function fetchLiveScoreBoardUncached(date: string): Promise<LiveScoreBoard
     if (phaseDiff !== 0) return phaseDiff;
     const sportDiff = a.sport.localeCompare(b.sport);
     if (sportDiff !== 0) return sportDiff;
-    return new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime();
+    return safeKickoffMs(a.kickoff) - safeKickoffMs(b.kickoff);
   });
   const counts = { live: 0, upcoming: 0, finished: 0, other: 0 };
   const sportCounts = { football: 0, basketball: 0, tennis: 0 };

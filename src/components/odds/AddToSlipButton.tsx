@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import type { Match, Prediction } from "@/lib/sports/types";
+import type { MatchSummary, PredictionSummary } from "@/lib/sports/prediction/listRow";
 import { BET_SLIP_CHANGED_EVENT, readSlip, slipLegFromPrediction, writeSlip } from "@/lib/sports/betSlip";
 import { trackEvent } from "@/lib/analytics/events";
 
-export function AddToSlipButton({ match, prediction, compact = false }: { match: Match; prediction: Prediction; compact?: boolean }) {
+export function AddToSlipButton({ match, prediction, compact = false }: { match: MatchSummary; prediction: PredictionSummary; compact?: boolean }) {
   const leg = useMemo(() => slipLegFromPrediction(match, prediction), [match, prediction]); const [added, setAdded] = useState(false);
   useEffect(() => { const sync = () => setAdded(Boolean(leg && readSlip().some((item) => item.id === leg.id))); sync(); window.addEventListener(BET_SLIP_CHANGED_EVENT, sync); return () => window.removeEventListener(BET_SLIP_CHANGED_EVENT, sync); }, [leg]);
   if (!leg) return <span className="muted small">No priced selection for slip</span>;

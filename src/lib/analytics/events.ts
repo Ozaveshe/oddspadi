@@ -19,6 +19,7 @@ export type AnalyticsEvent =
   | "team_unfollowed"
   | "community_post_liked"
   | "community_post_unliked"
+  | "community_comment_posted"
   | "web_vital"
   | "client_error";
 

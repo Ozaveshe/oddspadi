@@ -1,4 +1,5 @@
-import type { Match, Prediction } from "@/lib/sports/types";
+import type { Prediction } from "@/lib/sports/types";
+import type { MatchSummary, PredictionSummary } from "@/lib/sports/prediction/listRow";
 
 export const BET_SLIP_STORAGE_KEY = "oddspadi-bet-slip-v1";
 export const BET_SLIP_CHANGED_EVENT = "oddspadi:bet-slip-changed";
@@ -23,7 +24,7 @@ function isSlipLeg(value: unknown): value is SlipLeg {
     && leg.modelProbability <= 1;
 }
 
-export function slipLegFromPrediction(match: Match, prediction: Prediction): SlipLeg | null {
+export function slipLegFromPrediction(match: MatchSummary, prediction: PredictionSummary): SlipLeg | null {
   if (prediction.bestPick.hasValue && prediction.bestPick.odds > 1 && prediction.bestPick.modelProbability > 0) return { id: `${match.id}:${prediction.bestPick.marketId}:${prediction.bestPick.selectionId}`, matchId: match.id, matchLabel: `${match.homeTeam.name} vs ${match.awayTeam.name}`, league: match.league.name, kickoffTime: match.kickoffTime, selection: prediction.bestPick.label, decimalOdds: prediction.bestPick.odds, modelProbability: prediction.bestPick.modelProbability, noVigProbability: prediction.bestPick.noVigImpliedProbability, risk: prediction.bestPick.risk };
   const market = prediction.markets.find((item) => item.marketId === "match_winner"); const odds = match.oddsMarkets.find((item) => item.id === "match_winner")?.selections ?? [];
   const candidates = [{ id: "home", label: match.homeTeam.name, probability: market?.probabilities.home ?? 0 }, ...(match.sport === "football" ? [{ id: "draw", label: "Draw", probability: market?.probabilities.draw ?? 0 }] : []), { id: "away", label: match.awayTeam.name, probability: market?.probabilities.away ?? 0 }]; const best = candidates.sort((a,b) => b.probability-a.probability)[0]; const price = odds.find((item) => item.id === best.id);

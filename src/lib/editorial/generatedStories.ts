@@ -16,7 +16,7 @@ const pickName = (row: EditorialOutcome) => row.recommended_selection ?? row.sel
 const isoDate = (value: Date) => value.toISOString().slice(0, 10);
 function fingerprint(rows: EditorialOutcome[]) { let hash = 2166136261; for (const char of rows.map((row) => `${row.id}:${row.result}:${row.model_probability}:${row.odds}`).join("|")) { hash ^= char.charCodeAt(0); hash = Math.imul(hash, 16777619); } return `fnv1a-${(hash >>> 0).toString(16)}`; }
 function distinctFixtures(rows: EditorialOutcome[]) { const seen = new Set<string>(); return rows.filter((row) => { if (seen.has(row.fixture_external_id)) return false; seen.add(row.fixture_external_id); return true; }); }
-function base(kind: GeneratedEditorialStory["generator"], date: string, rows: EditorialOutcome[], revision: number, now: Date) { return { slug: `${kind}-${date}`, generator: kind, revision, sourceAsOf: now.toISOString(), publishedAt: now.toISOString(), readMinutes: 3, dataFingerprint: fingerprint(rows), sources: [{ label: "OddsPadi public prediction ledger", url: "/predictions/history", checkedAt: date }, { label: "OddsPadi current predictions", url: "/predictions", checkedAt: date }] }; }
+function base(kind: GeneratedEditorialStory["generator"], date: string, rows: EditorialOutcome[], revision: number, now: Date) { const rowFingerprint = fingerprint(rows); return { slug: `${kind}-${date}`, generator: kind, revision, sourceAsOf: now.toISOString(), publishedAt: now.toISOString(), readMinutes: 3, dataFingerprint: kind === "model-vs-market" ? `template-v2-${rowFingerprint}` : rowFingerprint, sources: [{ label: "OddsPadi public prediction ledger", url: "/predictions/history", checkedAt: date }, { label: "OddsPadi current predictions", url: "/predictions", checkedAt: date }] }; }
 
 export function generateEditorialStories(rows: EditorialOutcome[], now = new Date(), revisions: Partial<Record<GeneratedEditorialStory["generator"], number>> = {}): GeneratedEditorialStory[] {
   const date = isoDate(now); const stories: GeneratedEditorialStory[] = [];
@@ -45,10 +45,10 @@ export function generateEditorialStories(rows: EditorialOutcome[], now = new Dat
   ], sport: "All sports" });
 
   const disagreements = distinctFixtures(pending.map((row) => ({ row, gap: Number(row.model_probability) - (Number(row.odds) > 0 ? 1 / Number(row.odds) : Number(row.model_probability)) })).sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap)).map(({ row }) => row)).map((row) => ({ row, gap: Number(row.model_probability) - (Number(row.odds) > 0 ? 1 / Number(row.odds) : Number(row.model_probability)) })).slice(0, 6);
-  if (disagreements.length) stories.push({ ...base("model-vs-market", date, disagreements.map(({ row }) => row), revisions["model-vs-market"] ?? 1, now), title: "Model vs market: today’s biggest disagreements", excerpt: "Where stored model probabilities differ most from the raw implied bookmaker price—and why disagreement alone is not a bet.", category: "Model vs market", body: [
+  if (disagreements.length) stories.push({ ...base("model-vs-market", date, disagreements.map(({ row }) => row), revisions["model-vs-market"] ?? 1, now), title: "Model vs market: biggest stored disagreements", excerpt: "Where upcoming stored model probabilities differ most from the raw implied bookmaker price—and why disagreement alone is not a bet.", category: "Model vs market", body: [
     `This comparison uses the latest stored rows available at ${now.toISOString()}. Raw implied probabilities are calculated as one divided by decimal odds and do not remove bookmaker margin.`,
-    ...disagreements.map(({ row, gap }) => `${matchName(row)} — ${pickName(row)}: model ${pct(Number(row.model_probability))}, raw market ${pct(1 / Number(row.odds))}, gap ${gap >= 0 ? "+" : ""}${pct(gap)}.`),
-    "A large disagreement can reflect missing data or model uncertainty. The normal value and confidence gates still apply."
+    ...disagreements.map(({ row, gap }) => `${matchName(row)} — ${pickName(row)}: model ${pct(Number(row.model_probability))}, raw market ${pct(1 / Number(row.odds))}, gap ${gap >= 0 ? "+" : ""}${pct(gap)}. Scheduled ${row.kickoff_at ? new Date(row.kickoff_at).toISOString() : "date unavailable"}.`),
+    "These are upcoming stored fixtures, not necessarily today's matches. A large disagreement can reflect missing data or model uncertainty, so the normal value and confidence gates still apply."
   ], sport: "All sports" });
   return stories;
 }

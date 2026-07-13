@@ -36,8 +36,11 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except static assets, fonts, images, and the API (routes handle
-    // their own auth). Keeps middleware cheap.
-    "/((?!_next/static|_next/image|favicon.svg|apple-icon|fonts/|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff2?)$).*)"
+    // Only the surfaces that read the Supabase session server-side. Running the
+    // auth refresh on every public page added a blocking Supabase round-trip to
+    // all navigations; public pages never read the session, so they skip it.
+    "/account/:path*",
+    "/community/:path*",
+    "/forums/:path*"
   ]
 };

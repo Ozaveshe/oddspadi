@@ -6,7 +6,9 @@ import { MatchCard } from "@/components/odds/MatchCard";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 import { ValuePickCard } from "@/components/odds/ValuePickCard";
 import { fetchLiveScoreBoard } from "@/lib/sports/liveScoreBoard";
-import { getPredictions, getValuePicks, sports, todayIsoDate } from "@/lib/sports/service";
+import { getValuePicks, sports, todayIsoDate } from "@/lib/sports/service";
+import { getCachedPredictionsPageData } from "@/lib/sports/prediction/cachedPublicReads";
+import { toPredictionListRow, type PredictionListRow } from "@/lib/sports/prediction/listRow";
 import { getNewsStories } from "@/lib/editorial/news";
 import { getPublicPredictionHistory, type PublicPredictionHistory } from "@/lib/sports/prediction/history";
 import { YourTeamsStrip } from "@/components/account/YourTeamsStrip";
@@ -83,16 +85,26 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 export default async function HomePage() {
   const date = todayIsoDate();
   const unavailableLedger: PublicPredictionHistory = { items: [], source: "unavailable", reason: "Results timed out.", generatedAt: new Date().toISOString() };
-  const [football, basketball, tennis, valuePicks, liveBoard, ledger, newsStories] = await Promise.all([
-    withTimeout(getPredictions({ date, sport: "football", storageMode: "preview" }), 5_000, []),
-    withTimeout(getPredictions({ date, sport: "basketball", storageMode: "preview" }), 5_000, []),
-    withTimeout(getPredictions({ date, sport: "tennis", storageMode: "preview" }), 5_000, []),
+  const emptyRows: PredictionListRow[] = [];
+  // Sport snapshots come from the durable predictions-page cache, so the
+  // homepage shares one provider fan-out per sport with /predictions instead
+  // of triggering its own.
+  const [football, basketball, tennis, valuePickRows, liveBoard, ledger, newsStories] = await Promise.all([
+    withTimeout(getCachedPredictionsPageData(date, "football").then((data) => data.rows), 5_000, emptyRows),
+    withTimeout(getCachedPredictionsPageData(date, "basketball").then((data) => data.rows), 5_000, emptyRows),
+    withTimeout(getCachedPredictionsPageData(date, "tennis").then((data) => data.rows), 5_000, emptyRows),
     withTimeout(getValuePicks(date, "football", "preview", "preview"), 5_000, []),
     withTimeout(fetchLiveScoreBoard(), 5_000, null),
     withTimeout(getPublicPredictionHistory(), 4_000, unavailableLedger),
     getNewsStories()
   ]);
-  const predictions = [...football.slice(0, 2), ...basketball.slice(0, 1), ...tennis.slice(0, 1)];
+  const valuePicks = valuePickRows.map(toPredictionListRow);
+  // Prefer a 2-1-1 football/basketball/tennis mix, but keep filling to four
+  // from whichever sports actually have fixtures — in the European off-season
+  // a football-first slice left the panel nearly empty.
+  const preferred = [...football.slice(0, 2), ...basketball.slice(0, 1), ...tennis.slice(0, 1)];
+  const backfill = [...football.slice(2), ...basketball.slice(1), ...tennis.slice(1)];
+  const predictions = [...preferred, ...backfill].slice(0, 4);
   const predictionsArePreview = predictions.length > 0 && predictions.every(row => row.match.dataSource?.kind === "mock");
   const teamMatches = [
     ...predictions.map(({ match }) => ({ id: match.id, href: `/predictions/${encodeURIComponent(match.id)}`, home: match.homeTeam.name, away: match.awayTeam.name, kickoff: match.kickoffTime, sport: match.sport })),

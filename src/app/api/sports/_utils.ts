@@ -6,6 +6,19 @@ export function apiSuccess<T>(data: T, init?: ResponseInit) {
   return NextResponse.json({ success: true, data }, init);
 }
 
+/**
+ * Response init for public, non-personalised JSON: lets the Netlify CDN share
+ * one cached copy across visitors (the same pattern /api/live uses), so client
+ * polling and page hydration stop re-running the provider pipeline.
+ */
+export function publicCacheInit(sMaxAgeSeconds: number): ResponseInit {
+  return {
+    headers: {
+      "Cache-Control": `public, s-maxage=${sMaxAgeSeconds}, stale-while-revalidate=${sMaxAgeSeconds * 5}`
+    }
+  };
+}
+
 export function apiError(error: string, status = 400) {
   return NextResponse.json({ success: false, data: null, error }, { status });
 }

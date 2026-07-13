@@ -25,7 +25,7 @@ export default function SeasonOutlooksPage() {
   return <main id="main" className="container season-page">
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetJsonLd) }} />
     <header className="page-heading season-hero">
-      <span className="section-kicker">Revision 01 · published {premierLeague2026Baseline.publishedAt}</span>
+      <span className="section-kicker">Revision {String(premierLeague2026Baseline.revision).padStart(2, "0")} · published {premierLeague2026Baseline.publishedAt}</span>
       <h1>Upcoming seasons, <span className="accent">without fake certainty.</span></h1>
       <p>Early forecasts should move when squads and schedules move. Every OddsPadi outlook names its evidence date, missing inputs and next revision trigger.</p>
     </header>
@@ -37,12 +37,17 @@ export default function SeasonOutlooksPage() {
         <p>{premierLeague2026Baseline.caveat}</p>
         <dl className="proof-list">
           <div><dt>Evidence as of</dt><dd>{premierLeague2026Baseline.sourceAsOf.slice(0, 10)}</dd></div>
+          <div><dt>Official evidence checked</dt><dd>{premierLeague2026Baseline.evidenceCheckedAt}</dd></div>
           <div><dt>Model</dt><dd>{premierLeague2026Baseline.model}</dd></div>
           <div><dt>Simulations</dt><dd>{premierLeague2026Baseline.simulations.toLocaleString()}</dd></div>
           <div><dt>Source</dt><dd>{premierLeague2026Baseline.source}</dd></div>
           <div><dt>Season starts</dt><dd>{premierLeague2026Baseline.seasonStarts}</dd></div>
+          <div><dt>Season ends</dt><dd>{premierLeague2026Baseline.seasonEnds}</dd></div>
           <div><dt>Confirmed promoted</dt><dd>{premierLeague2026Baseline.confirmedPromoted.join(", ")}</dd></div>
+          <div><dt>Opening fixture</dt><dd>{premierLeague2026Baseline.openingFixture}</dd></div>
         </dl>
+        <p className="small"><strong>Transfer state:</strong> {premierLeague2026Baseline.transferState}</p>
+        <p className="small"><strong>Manager changes logged, not modelled:</strong> {premierLeague2026Baseline.confirmedManagerChangesSinceBaseline.join("; ")}.</p>
         <div className="season-sources"><strong>Official checks</strong>{premierLeague2026Baseline.officialSources.map(source => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.label} · checked {source.checkedAt} ↗</a>)}</div>
       </div>
       <div className="season-podium" aria-label="Leading title probabilities">
@@ -55,7 +60,7 @@ export default function SeasonOutlooksPage() {
 
     <section className="section">
       <div className="section-title"><div><span className="section-kicker">Full returning-team field</span><h2>Probability bands</h2></div><span className="muted small">Not a betting market · not final squads</span></div>
-      <div className="table-wrap season-table-wrap"><table className="data-table season-table"><thead><tr><th>Baseline rank</th><th>Club</th><th>2025 finish</th><th>Title</th><th>Top four</th><th>Median rank</th></tr></thead>
+      <div className="table-wrap season-table-wrap"><table className="data-table season-table"><thead><tr><th>Baseline rank</th><th>Club</th><th>2025/26 finish</th><th>Title</th><th>Top four</th><th>Median rank</th></tr></thead>
         <tbody>{projection.map((team, index) => <tr key={team.name}><td>{index + 1}</td><td><span className="team-inline"><TeamCrest name={team.name} size={24}/>{team.name}</span></td><td>{team.position}</td><td><strong>{percent.format(team.titleProbability)}</strong></td><td>{percent.format(team.topFourProbability)}</td><td>{team.medianPosition}</td></tr>)}</tbody>
       </table></div>
       <div className="notice season-method"><strong>How to read this:</strong> the simulation carries forward 2025 points-per-game and goal-difference strength, then applies season-level volatility. Coventry City, Ipswich Town and Hull City are officially promoted but stay outside this first probability table until calibrated Championship strength is added. Transfers, injuries, managers and opening prices are also pending.</div>

@@ -9,7 +9,9 @@ self.addEventListener("activate", (event) => { event.waitUntil(caches.keys().the
 self.addEventListener("fetch", (event) => {
   const request = event.request; if (request.method !== "GET") return;
   const url = new URL(request.url); if (url.origin !== self.location.origin) return;
-  const staticAsset = url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/fonts/") || url.pathname.startsWith("/brand/") || /\.(?:js|css|woff2?|png|svg)$/.test(url.pathname);
+  // Cache-first ONLY for content-hashed/immutable paths (mirrors netlify.toml).
+  // A blanket .js/.css match would pin stale bundles for anything unhashed.
+  const staticAsset = url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/fonts/") || url.pathname.startsWith("/brand/");
   if (staticAsset) { event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => { const copy = response.clone(); caches.open(STATIC_CACHE).then((cache) => cache.put(request, copy)); return response; }))); return; }
   event.respondWith(fetch(request).then((response) => { if (response.ok) { const copy = response.clone(); caches.open(DATA_CACHE).then((cache) => cache.put(request, copy)); } return response; }).catch(async () => (await caches.match(request)) || (request.mode === "navigate" ? caches.match("/offline") : Response.error())));
 });

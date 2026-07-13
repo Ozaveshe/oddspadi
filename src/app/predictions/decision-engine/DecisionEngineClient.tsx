@@ -4,18 +4,20 @@ import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/odds/EmptyState";
 import { MatchCard } from "@/components/odds/MatchCard";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
-import type { Match, Prediction, Sport } from "@/lib/sports/types";
+import type { PredictionListRow } from "@/lib/sports/prediction/listRow";
+import type { Sport } from "@/lib/sports/types";
 import type { DecisionEngineSearchParams } from "./page";
 
-type PredictionRow = {
-  match: Match;
-  prediction: Prediction;
-};
-
 type EngineLoadState =
-  | { status: "loading"; rows: PredictionRow[]; error: null }
-  | { status: "ready"; rows: PredictionRow[]; error: null }
-  | { status: "failed"; rows: PredictionRow[]; error: string };
+  | { status: "loading"; rows: PredictionListRow[]; error: null }
+  | { status: "ready"; rows: PredictionListRow[]; error: null }
+  | { status: "failed"; rows: PredictionListRow[]; error: string };
+
+const SPORTS: Array<{ id: Sport; label: string }> = [
+  { id: "football", label: "Football" },
+  { id: "basketball", label: "Basketball" },
+  { id: "tennis", label: "Tennis" }
+];
 
 function one(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -29,29 +31,40 @@ function isSport(value: string | undefined): value is Sport {
   return value === "football" || value === "basketball" || value === "tennis";
 }
 
-function requestHref(params: DecisionEngineSearchParams): string {
+function requestHref(params: DecisionEngineSearchParams, sport: Sport): string {
   const query = new URLSearchParams();
   const date = one(params.date);
-  const sport = one(params.sport);
   const league = one(params.league);
   const country = one(params.country);
   const confidence = one(params.confidence);
   const search = one(params.q);
   if (date) query.set("date", date);
-  if (isSport(sport)) query.set("sport", sport);
+  query.set("sport", sport);
   if (league) query.set("league", league);
   if (country) query.set("country", country);
   if (confidence) query.set("confidence", confidence);
   if (search) query.set("q", search);
-  return `/api/sports/predictions${query.size ? `?${query.toString()}` : ""}`;
+  query.set("view", "summary");
+  return `/api/sports/predictions?${query.toString()}`;
+}
+
+async function fetchRows(url: string, signal: AbortSignal): Promise<PredictionListRow[]> {
+  const response = await fetch(url, { cache: "no-store", signal });
+  const payload = (await response.json().catch(() => null)) as { success?: boolean; data?: PredictionListRow[]; error?: string } | null;
+  if (!response.ok || !payload?.success || !Array.isArray(payload.data)) {
+    throw new Error(payload?.error || `Live analysis is temporarily unavailable (${response.status}).`);
+  }
+  return payload.data;
 }
 
 export function DecisionEngineClient({ params }: { params: DecisionEngineSearchParams }) {
-  const requestUrl = useMemo(() => requestHref(params), [params]);
+  const requestedSport = one(params.sport);
+  const explicitSport = isSport(requestedSport) ? requestedSport : null;
+  const [sport, setSport] = useState<Sport>(explicitSport ?? "football");
+  const [autoNote, setAutoNote] = useState<string | null>(null);
   const [state, setState] = useState<EngineLoadState>({ status: "loading", rows: [], error: null });
   const [attempt, setAttempt] = useState(0);
-  const requestedSport = one(params.sport);
-  const sport = isSport(requestedSport) ? requestedSport : "football";
+  const requestUrl = useMemo(() => requestHref(params, sport), [params, sport]);
   const date = one(params.date) ?? "today";
   const publicHistoryRequested = isEnabled(params.publicHistory) || isEnabled(params.historical);
 
@@ -66,12 +79,26 @@ export function DecisionEngineClient({ params }: { params: DecisionEngineSearchP
 
     async function load() {
       try {
-        const response = await fetch(requestUrl, { cache: "no-store", signal: controller.signal });
-        const payload = (await response.json().catch(() => null)) as { success?: boolean; data?: PredictionRow[]; error?: string } | null;
-        if (!response.ok || !payload?.success || !Array.isArray(payload.data)) {
-          throw new Error(payload?.error || `Live analysis is temporarily unavailable (${response.status}).`);
+        let rows = await fetchRows(requestUrl, controller.signal);
+        // Off-season honesty: when the visitor didn't pick a sport and the
+        // default slate is empty (e.g. football in July), look for a sport
+        // that actually has fixtures instead of rendering a dead page. Probe
+        // the other sports in parallel; prefer them in SPORTS order.
+        if (!rows.length && !explicitSport) {
+          const candidates = SPORTS.filter((item) => item.id !== sport);
+          const probes = await Promise.all(
+            candidates.map((candidate) => fetchRows(requestHref(params, candidate.id), controller.signal).catch(() => []))
+          );
+          const found = candidates.findIndex((_, index) => probes[index].length > 0);
+          if (found >= 0) {
+            rows = probes[found];
+            if (!controller.signal.aborted) {
+              setAutoNote(`No provider-backed ${sport} fixtures today — showing live ${candidates[found].id} instead.`);
+              setSport(candidates[found].id);
+            }
+          }
         }
-        if (!controller.signal.aborted) setState({ status: "ready", rows: payload.data, error: null });
+        if (!controller.signal.aborted) setState({ status: "ready", rows, error: null });
       } catch (error) {
         if (controller.signal.aborted && !timedOut) return;
         const message = timedOut
@@ -90,6 +117,7 @@ export function DecisionEngineClient({ params }: { params: DecisionEngineSearchP
       window.clearTimeout(timeout);
       controller.abort();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt, requestUrl]);
 
   const valueRows = state.rows.filter((row) => row.prediction.bestPick.hasValue).length;
@@ -109,6 +137,25 @@ export function DecisionEngineClient({ params }: { params: DecisionEngineSearchP
         <p>Live model probabilities, bookmaker pricing, evidence quality, and risk controls for {sport} on {date}.</p>
       </header>
 
+      <div className="filters" role="group" aria-label="Choose a sport">
+        {SPORTS.map((item) => (
+          <button
+            key={item.id}
+            className={`button small-btn${item.id === sport ? " primary" : ""}`}
+            type="button"
+            aria-pressed={item.id === sport}
+            onClick={() => {
+              setAutoNote(null);
+              setSport(item.id);
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {autoNote ? <div className="notice" aria-live="polite">{autoNote}</div> : null}
+
       <section className="section" aria-label="Decision status">
         <div className="section-title">
           <div>
@@ -127,7 +174,7 @@ export function DecisionEngineClient({ params }: { params: DecisionEngineSearchP
           </div>
           <div className="metric">
             <span className="metric-label">Source</span>
-            <span className="metric-value">API-Football + Odds</span>
+            <span className="metric-value">Sports providers + odds</span>
           </div>
           <div className="metric">
             <span className="metric-label">Model policy</span>
@@ -171,7 +218,10 @@ export function DecisionEngineClient({ params }: { params: DecisionEngineSearchP
       ) : null}
 
       {state.status === "ready" && !state.rows.length ? (
-        <EmptyState title="No provider-backed fixtures found" body="The engine has not found a live fixture for this date and sport yet." />
+        <EmptyState
+          title={`No provider-backed ${sport} fixtures found`}
+          body="The engine has not found a live fixture for this date and sport yet. Big European football leagues pause in summer — try basketball, or check back when the season resumes."
+        />
       ) : null}
 
       <PredictionDisclaimer />
