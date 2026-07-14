@@ -10,6 +10,7 @@ import {
 } from "@/lib/sports/prediction/contextAdjustment";
 import type { Match, MatchContextSignal } from "@/lib/sports/types";
 import {
+  buildFootballLearnedWeightsProvenance,
   evaluateFootballPrediction,
   footballDecisionLearnedWeights,
   resolveFootballBacktestConfig,
@@ -17,6 +18,7 @@ import {
   type FootballBacktestFixtureResult,
   type FootballBacktestResult,
   type FootballDecisionLearnedWeights,
+  type FootballLearnedWeightsProvenance,
   type FootballOutcome,
   type HistoricalFootballFixture
 } from "@/lib/sports/training/footballBacktest";
@@ -46,6 +48,8 @@ export type FootballRuntimeFeatureContract = {
   sourceFixtures: number;
   eligibleFixtures: number;
   rejectedFixtures: number;
+  trainingEvaluatedFixtures: number;
+  trainingEntrypointInvocations: number;
   evaluatedFixtures: number;
   entrypointInvocations: number;
   optionalCoverage: {
@@ -383,10 +387,14 @@ function rejectionCounts(rejections: FootballRuntimeReplayRejection[]): Record<s
 
 function runtimeNotes(
   contract: FootballRuntimeFeatureContract,
-  summary: ReturnType<typeof summarizeFootballEvaluation>
+  summary: ReturnType<typeof summarizeFootballEvaluation>,
+  weightProvenance: FootballLearnedWeightsProvenance
 ): string[] {
   return [
     `Executed ${contract.entrypointInvocations} holdout fixture(s) through the football runtime model and residual context adjustment with ${contract.version}.`,
+    weightProvenance.source === "training-window"
+      ? `Learned decision weights use only ${contract.trainingEvaluatedFixtures} chronological training fixture(s); holdout outcomes remain evaluation-only.`
+      : "Learned decision weights use conservative defaults because no chronological training fixture was available.",
     contract.rejectedFixtures
       ? `${contract.rejectedFixtures} source fixture(s) were excluded by the fail-closed runtime feature contract.`
       : "Every source fixture satisfied the runtime feature contract.",
@@ -443,15 +451,17 @@ export function runFootballRuntimeReplay(
   const trainSize = prepared.length
     ? Math.min(prepared.length - 1, Math.max(0, Math.floor(prepared.length * config.trainRatio)))
     : 0;
+  const training = prepared.slice(0, trainSize);
   const holdout = prepared.slice(trainSize);
   const evaluationConfig = resolveFootballBacktestConfig({
     trainRatio: config.trainRatio,
     minEdge: config.minEdge,
     minModelProbability: config.minModelProbability
   });
-  const results: FootballBacktestFixtureResult[] = [];
-  let entrypointInvocations = 0;
-  for (const fixture of holdout) {
+  const evaluatePreparedFixture = (
+    fixture: PreparedRuntimeFixture,
+    phase: "training" | "holdout"
+  ): FootballBacktestFixtureResult | null => {
     const historicalClock = new Date(fixture.source.kickoffAt);
     const modeled = modelFootballMatch(fixture.match, { now: historicalClock });
     const contextAdjustment = buildMatchContextAdjustment(fixture.match, {
@@ -459,29 +469,57 @@ export function runFootballRuntimeReplay(
       now: historicalClock
     });
     const runtimeMarkets = applyContextAdjustmentToMarkets(modeled.markets, contextAdjustment);
-    entrypointInvocations += 1;
     const market = runtimeMarkets.find((item) => item.marketId === "match_winner");
     const probabilities = market?.probabilities as Record<FootballOutcome, number> | undefined;
     if (!probabilities || !finite(probabilities.home) || !finite(probabilities.draw) || !finite(probabilities.away)) {
-      rejections.push({ fixtureExternalId: fixture.source.externalId, reasons: ["runtime match-winner output invalid"] });
-      continue;
+      rejections.push({ fixtureExternalId: fixture.source.externalId, reasons: [`${phase} runtime match-winner output invalid`] });
+      return null;
     }
-    results.push(evaluateFootballPrediction({
+    return evaluateFootballPrediction({
       fixture: fixture.evaluationFixture,
       probabilities,
       expectedGoals: modeled.diagnostics.expectedGoals,
       config: evaluationConfig
-    }));
+    });
+  };
+
+  const trainingResults: FootballBacktestFixtureResult[] = [];
+  let trainingEntrypointInvocations = 0;
+  for (const fixture of training) {
+    trainingEntrypointInvocations += 1;
+    const evaluation = evaluatePreparedFixture(fixture, "training");
+    if (evaluation) trainingResults.push(evaluation);
   }
 
+  const results: FootballBacktestFixtureResult[] = [];
+  let entrypointInvocations = 0;
+  for (const fixture of holdout) {
+    entrypointInvocations += 1;
+    const evaluation = evaluatePreparedFixture(fixture, "holdout");
+    if (evaluation) results.push(evaluation);
+  }
+
+  const trainingSummary = summarizeFootballEvaluation(trainingResults);
   const summary = summarizeFootballEvaluation(results);
+  const weightProvenance = buildFootballLearnedWeightsProvenance(
+    trainingResults,
+    trainingSummary,
+    results[0]?.kickoffAt ?? null
+  );
   const contract: FootballRuntimeFeatureContract = {
-    status: results.length > 0 && results.length === entrypointInvocations ? "passed" : "failed",
+    status:
+      results.length > 0 &&
+      results.length === entrypointInvocations &&
+      trainingResults.length === trainingEntrypointInvocations
+        ? "passed"
+        : "failed",
     version: FEATURE_CONTRACT_VERSION,
     chronologyVersion: CHRONOLOGY_VERSION,
     sourceFixtures: fixtures.length,
     eligibleFixtures: prepared.length,
     rejectedFixtures: rejections.length,
+    trainingEvaluatedFixtures: trainingResults.length,
+    trainingEntrypointInvocations,
     evaluatedFixtures: results.length,
     entrypointInvocations,
     optionalCoverage: {
@@ -496,10 +534,10 @@ export function runFootballRuntimeReplay(
     rejectionReasons: rejectionCounts(rejections)
   };
   const learnedWeights = footballDecisionLearnedWeights({
-    pickCount: summary.pickCount,
-    yield: summary.yield,
-    brierScore: summary.brierScore,
-    closingLineValue: summary.closingLineValue,
+    pickCount: trainingSummary.pickCount,
+    yield: trainingSummary.yield,
+    brierScore: trainingSummary.brierScore,
+    closingLineValue: trainingSummary.closingLineValue,
     config
   });
   const windowStart = prepared[0]?.source.kickoffAt ?? null;
@@ -509,7 +547,9 @@ export function runFootballRuntimeReplay(
     entrypoint: "modelFootballMatch+buildMatchContextAdjustment",
     contract,
     fixtureIds: results.map((result) => result.fixtureExternalId),
-    probabilityVectors: results.map((result) => result.probabilities)
+    probabilityVectors: results.map((result) => result.probabilities),
+    trainingProbabilityVectors: trainingResults.map((result) => result.probabilities),
+    learnedWeightsProvenance: weightProvenance
   });
 
   return {
@@ -539,8 +579,9 @@ export function runFootballRuntimeReplay(
     marketBreakdown: summary.marketBreakdown,
     confidenceBreakdown: summary.confidenceBreakdown,
     learnedWeights,
+    learnedWeightsProvenance: weightProvenance,
     config,
-    notes: runtimeNotes(contract, summary),
+    notes: runtimeNotes(contract, summary, weightProvenance),
     results,
     featureContract: contract,
     executionHash,

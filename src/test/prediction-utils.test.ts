@@ -13474,6 +13474,19 @@ describe("prediction utilities", () => {
           marketAdjustmentWeight: 0.18,
           homeAdvantageElo: 58
         },
+        config: {
+          learnedWeightsProvenance: {
+            source: "training-window",
+            sampleSize: 840,
+            pickCount: 112,
+            windowStart: "2022-08-01T00:00:00.000Z",
+            windowEnd: "2025-06-30T00:00:00.000Z",
+            holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+            yield: 0.04,
+            brierScore: 0.2,
+            closingLineValue: 0.01
+          }
+        },
         notes: ["Real provider-only backtest."],
         createdAt: "2026-06-24T10:00:00.000Z"
       },
@@ -13597,6 +13610,7 @@ describe("prediction utilities", () => {
             ...snapshot.latestBacktest,
             modelKey: runtimeModelKey("football"),
             config: {
+              learnedWeightsProvenance: snapshot.latestBacktest.config?.learnedWeightsProvenance,
               modelIdentity: runtimeModelIdentityReceipt("football", {
                 featureContractStatus: "passed",
                 evaluatedFixtures: 300,
@@ -21581,6 +21595,17 @@ describe("prediction utilities", () => {
           marketAdjustmentWeight: 0.08,
           homeAdvantageElo: 62
         },
+        learnedWeightsProvenance: {
+          source: "training-window",
+          sampleSize: 56,
+          pickCount: 6,
+          windowStart: "2024-08-01T00:00:00.000Z",
+          windowEnd: "2025-02-01T00:00:00.000Z",
+          holdoutWindowStart: "2025-02-02T00:00:00.000Z",
+          yield: 0.08,
+          brierScore: 0.21,
+          closingLineValue: 0.01
+        },
         config: {
           trainRatio: 0.7,
           minEdge: 0.035,
@@ -21710,6 +21735,17 @@ describe("prediction utilities", () => {
               minimumEdge: 0.085,
               marketAdjustmentWeight: 0.1591,
               homeAdvantageElo: 62
+            },
+            learnedWeightsProvenance: {
+              source: "training-window",
+              sampleSize: 56,
+              pickCount: 7,
+              windowStart: "2024-08-01T00:00:00.000Z",
+              windowEnd: "2025-02-01T00:00:00.000Z",
+              holdoutWindowStart: "2025-02-02T00:00:00.000Z",
+              yield: -0.12,
+              brierScore: 0.23,
+              closingLineValue: -0.002
             },
             config: {
               trainRatio: 0.7,

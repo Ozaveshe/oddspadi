@@ -1430,6 +1430,7 @@ function backtestInsertPayload(result: HistoricalBacktestResult, includeDemo: bo
     learned_weights: result.learnedWeights,
     config: {
       ...result.config,
+      ...(result.sport === "football" ? { learnedWeightsProvenance: result.learnedWeightsProvenance } : {}),
       ...(runtimeReplay
         ? { featureContract: result.featureContract, executionHash: result.executionHash }
         : {}),

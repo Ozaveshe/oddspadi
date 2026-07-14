@@ -78,6 +78,13 @@ describe("live OddsPadi product UI contract", () => {
     expect(chart).toContain("This is observed movement, not proof that the move is correct");
   });
 
+  it("shows whether backtest weights came from a separate training window", () => {
+    const performance = source("src/app/engine/performance/page.tsx");
+    expect(performance).toContain("Weight source");
+    expect(performance).toContain('row.learnedWeightsTrainingOnly ? "training only" : "unverified"');
+    expect(performance).toContain("learning fixtures");
+  });
+
   it("provides a readable mobile market analysis instead of relying on the desktop table", () => {
     const markets = source("src/components/odds/OddsTable.tsx");
     expect(markets).toContain("market-table-desktop");

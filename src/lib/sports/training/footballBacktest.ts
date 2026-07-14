@@ -91,6 +91,18 @@ export type FootballBacktestBreakdown = {
   averageEdge: number | null;
 };
 
+export type FootballLearnedWeightsProvenance = {
+  source: "training-window" | "defaults-no-training-data";
+  sampleSize: number;
+  pickCount: number;
+  windowStart: string | null;
+  windowEnd: string | null;
+  holdoutWindowStart: string | null;
+  yield: number | null;
+  brierScore: number | null;
+  closingLineValue: number | null;
+};
+
 export type FootballBacktestResult = {
   sport: "football";
   modelKey: string;
@@ -124,6 +136,7 @@ export type FootballBacktestResult = {
     marketAdjustmentWeight: number;
     homeAdvantageElo: number;
   };
+  learnedWeightsProvenance: FootballLearnedWeightsProvenance;
   config: Required<FootballBacktestConfig>;
   notes: string[];
   results: FootballBacktestFixtureResult[];
@@ -507,8 +520,34 @@ export function footballDecisionLearnedWeights(
   };
 }
 
-function resultNotes(result: Pick<FootballBacktestResult, "sampleSize" | "testSize" | "pickCount" | "closingLineValue" | "yield">): string[] {
+export function buildFootballLearnedWeightsProvenance(
+  results: FootballBacktestFixtureResult[],
+  summary: FootballEvaluationSummary,
+  holdoutWindowStart: string | null
+): FootballLearnedWeightsProvenance {
+  return {
+    source: results.length ? "training-window" : "defaults-no-training-data",
+    sampleSize: results.length,
+    pickCount: summary.pickCount,
+    windowStart: results[0]?.kickoffAt ?? null,
+    windowEnd: results.at(-1)?.kickoffAt ?? null,
+    holdoutWindowStart,
+    yield: summary.yield,
+    brierScore: summary.brierScore,
+    closingLineValue: summary.closingLineValue
+  };
+}
+
+function resultNotes(
+  result: Pick<
+    FootballBacktestResult,
+    "sampleSize" | "testSize" | "pickCount" | "closingLineValue" | "yield" | "learnedWeightsProvenance"
+  >
+): string[] {
   return [
+    result.learnedWeightsProvenance.source === "training-window"
+      ? `Learned decision weights use only ${result.learnedWeightsProvenance.sampleSize} chronological training fixture(s); holdout outcomes remain evaluation-only.`
+      : "Learned decision weights use conservative defaults because no chronological training fixture was available.",
     result.sampleSize < 200 ? "Historical sample is thin; import multiple seasons before trusting calibration." : "",
     result.testSize < 50 ? "Holdout set is small; backtest metrics are directional only." : "",
     result.pickCount === 0 ? "No historical picks cleared the value-edge threshold." : "",
@@ -561,6 +600,17 @@ export function runFootballBacktest(
         closingLineValue: null,
         config
       }),
+      learnedWeightsProvenance: {
+        source: "defaults-no-training-data",
+        sampleSize: 0,
+        pickCount: 0,
+        windowStart: null,
+        windowEnd: null,
+        holdoutWindowStart: null,
+        yield: null,
+        brierScore: null,
+        closingLineValue: null
+      },
       config,
       notes: ["No finished historical fixtures are available for backtesting."],
       results: []
@@ -569,6 +619,7 @@ export function runFootballBacktest(
 
   const testStartIndex = Math.min(sampleSize - 1, Math.max(0, Math.floor(sampleSize * clamp(config.trainRatio, 0.1, 0.9))));
   const ratings: EloRatings = new Map();
+  const trainingResults: FootballBacktestFixtureResult[] = [];
   const results: FootballBacktestFixtureResult[] = [];
 
   sortedFixtures.forEach((fixture, index) => {
@@ -577,21 +628,27 @@ export function runFootballBacktest(
     const expectedGoals = estimateExpectedGoals(fixture, homeElo, awayElo, config);
     const probabilities = probabilitiesFromExpectedGoals(expectedGoals);
 
-    if (index >= testStartIndex) {
-      results.push(evaluateFootballPrediction({ fixture, probabilities, expectedGoals, config }));
-    }
+    const evaluation = evaluateFootballPrediction({ fixture, probabilities, expectedGoals, config });
+    if (index < testStartIndex) trainingResults.push(evaluation);
+    else results.push(evaluation);
 
     updateEloRatings(ratings, fixture, config);
   });
 
+  const trainingSummary = summarizeFootballEvaluation(trainingResults);
   const summary = summarizeFootballEvaluation(results);
-  const partialResult = {
-    pickCount: summary.pickCount,
-    yield: summary.yield,
-    brierScore: summary.brierScore,
-    closingLineValue: summary.closingLineValue,
+  const learningResult = {
+    pickCount: trainingSummary.pickCount,
+    yield: trainingSummary.yield,
+    brierScore: trainingSummary.brierScore,
+    closingLineValue: trainingSummary.closingLineValue,
     config
   };
+  const weightProvenance = buildFootballLearnedWeightsProvenance(
+    trainingResults,
+    trainingSummary,
+    results[0]?.kickoffAt ?? null
+  );
 
   const result: FootballBacktestResult = {
     sport: "football",
@@ -619,7 +676,8 @@ export function runFootballBacktest(
     calibrationBuckets: summary.calibrationBuckets,
     marketBreakdown: summary.marketBreakdown,
     confidenceBreakdown: summary.confidenceBreakdown,
-    learnedWeights: learnedWeights(partialResult),
+    learnedWeights: learnedWeights(learningResult),
+    learnedWeightsProvenance: weightProvenance,
     config,
     notes: [],
     results

@@ -96,6 +96,33 @@ function hasExplicitLivePromotion(backtest: StoredBacktestRun | null): boolean {
   return promotion.status === "approved" && promotion.scope === "live-guardrails" && Number.isFinite(approvedAt);
 }
 
+function footballLearningProvenanceBlocker(backtest: StoredBacktestRun): string | null {
+  const provenance = record(backtest.config?.learnedWeightsProvenance);
+  if (provenance.source !== "training-window") {
+    return "learned weights lack training-window-only provenance";
+  }
+
+  const sampleSize = finiteNumber(provenance.sampleSize);
+  if (sampleSize === null || sampleSize <= 0 || sampleSize !== backtest.trainSize) {
+    return "learned-weight provenance does not cover the complete training window";
+  }
+
+  const windowStart = typeof provenance.windowStart === "string" ? Date.parse(provenance.windowStart) : Number.NaN;
+  const windowEnd = typeof provenance.windowEnd === "string" ? Date.parse(provenance.windowEnd) : Number.NaN;
+  const holdoutWindowStart =
+    typeof provenance.holdoutWindowStart === "string" ? Date.parse(provenance.holdoutWindowStart) : Number.NaN;
+  if (
+    !Number.isFinite(windowStart) ||
+    !Number.isFinite(windowEnd) ||
+    !Number.isFinite(holdoutWindowStart) ||
+    windowStart > windowEnd ||
+    windowEnd >= holdoutWindowStart
+  ) {
+    return "learned-weight chronology does not prove a strictly earlier training window";
+  }
+  return null;
+}
+
 function liveMetricBlockers(snapshot: TrainingDataSnapshot, backtest: StoredBacktestRun | null): string[] {
   if (!backtest) return ["no completed backtest"];
   const blockers: string[] = [];
@@ -119,6 +146,10 @@ function liveMetricBlockers(snapshot: TrainingDataSnapshot, backtest: StoredBack
   }
   if (backtest.yield === null || backtest.yield <= 0) blockers.push("holdout yield is not positive");
   if (backtest.closingLineValue === null || backtest.closingLineValue <= 0) blockers.push("closing-line value is not positive");
+  if (snapshot.sport === "football") {
+    const provenanceBlocker = footballLearningProvenanceBlocker(backtest);
+    if (provenanceBlocker) blockers.push(provenanceBlocker);
+  }
   if (Object.keys(backtest.learnedWeights).length < 3) blockers.push("learned-weight payload is incomplete");
   return blockers;
 }

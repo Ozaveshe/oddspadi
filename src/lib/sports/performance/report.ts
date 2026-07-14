@@ -99,6 +99,25 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+export function auditLearnedWeightsProvenance(configValue: unknown) {
+  const provenance = record(record(configValue).learnedWeightsProvenance);
+  const sampleSize = finiteNumber(provenance.sampleSize) ?? 0;
+  const windowEnd = typeof provenance.windowEnd === "string" ? Date.parse(provenance.windowEnd) : Number.NaN;
+  const holdoutWindowStart =
+    typeof provenance.holdoutWindowStart === "string" ? Date.parse(provenance.holdoutWindowStart) : Number.NaN;
+  const trainingOnly =
+    provenance.source === "training-window" &&
+    sampleSize > 0 &&
+    Number.isFinite(windowEnd) &&
+    Number.isFinite(holdoutWindowStart) &&
+    windowEnd < holdoutWindowStart;
+  return {
+    learnedWeightsSource: typeof provenance.source === "string" ? provenance.source : "unverified",
+    learnedWeightsSampleSize: sampleSize,
+    learnedWeightsTrainingOnly: trainingOnly
+  };
+}
+
 async function getHistoricalEngineEvidence() {
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
   const census = await readSupabaseTrainingCorpusCensus({ origin }).catch((error: unknown) => ({
@@ -179,6 +198,7 @@ async function getHistoricalEngineEvidence() {
     census,
     latestBacktests: [...latestBySport.values()].map((row) => {
       const sport = String(row.sport ?? "unknown");
+      const learningAudit = auditLearnedWeightsProvenance(row.config);
       const compatibility = isDecisionModelSport(sport)
         ? historicalModelCompatibility({ sport, evidenceModelKey: String(row.model_key ?? ""), config: record(row.config) })
         : "incompatible" as const;
@@ -197,6 +217,7 @@ async function getHistoricalEngineEvidence() {
         yield: finiteNumber(row.yield),
         closingLineValue: finiteNumber(row.closing_line_value),
         calibrationError: finiteNumber(row.calibration_error),
+        ...learningAudit,
         createdAt: String(row.created_at ?? "")
       };
     }),

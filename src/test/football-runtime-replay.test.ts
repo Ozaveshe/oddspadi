@@ -85,6 +85,13 @@ describe("football exact runtime replay", () => {
     expect(result.featureContract.status).toBe("passed");
     expect(result.featureContract.entrypointInvocations).toBe(result.testSize);
     expect(result.featureContract.evaluatedFixtures).toBe(result.testSize);
+    expect(result.featureContract.trainingEntrypointInvocations).toBe(result.trainSize);
+    expect(result.featureContract.trainingEvaluatedFixtures).toBe(result.trainSize);
+    expect(result.learnedWeightsProvenance).toMatchObject({
+      source: "training-window",
+      sampleSize: result.trainSize,
+      holdoutWindowStart: result.testWindowStart
+    });
     expect(result.executionHash).toMatch(/^fnv1a-[a-f0-9]{8}$/);
     expect(result.results.every((row) => Math.abs(Object.values(row.probabilities).reduce((sum, value) => sum + value, 0) - 1) < 0.001)).toBe(true);
     expect(result.learnedWeights).not.toHaveProperty("homeAdvantageElo");
@@ -104,6 +111,8 @@ describe("football exact runtime replay", () => {
     expect(homeWinLast?.probabilities).toEqual(awayWinLast?.probabilities);
     expect(homeWinLast?.actualOutcome).toBe("home");
     expect(awayWinLast?.actualOutcome).toBe("away");
+    expect(homeWin.learnedWeights).toEqual(awayWin.learnedWeights);
+    expect(homeWin.learnedWeightsProvenance).toEqual(awayWin.learnedWeightsProvenance);
   });
 
   it("fails closed for neutral venues the runtime Match contract cannot represent", () => {

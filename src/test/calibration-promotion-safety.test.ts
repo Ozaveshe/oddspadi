@@ -72,9 +72,14 @@ function readySnapshot(): TrainingDataSnapshot {
       status: "completed",
       dataSource: "supabase:op_fixtures:real-only",
       sampleSize: 1200,
+      trainSize: 840,
+      testSize: 360,
+      pickCount: 120,
       brierScore: 0.19,
       logLoss: 0.55,
+      roiUnits: 4.8,
       yield: 0.04,
+      averageEdge: 0.06,
       closingLineValue: 0.02,
       calibrationError: 0.04,
       calibrationBuckets: [
@@ -82,13 +87,27 @@ function readySnapshot(): TrainingDataSnapshot {
         { minProbability: 0.5, maxProbability: 0.8, sampleSize: 700, averageProbability: 0.62, observedRate: 0.63, calibrationError: 0.01 }
       ],
       learnedWeights: { minimumEdge: 0.03, valueEdgeWeight: 0.4, dataQualityWeight: 0.2 },
-      config: { modelIdentity: runtimeModelIdentityReceipt("football", {
-        featureContractStatus: "passed",
-        evaluatedFixtures: 360,
-        entrypointInvocations: 360,
-        executionHash: "fnv1a-calibration"
-      }) },
-      notes: []
+      config: {
+        learnedWeightsProvenance: {
+          source: "training-window",
+          sampleSize: 840,
+          pickCount: 90,
+          windowStart: "2023-01-01T12:00:00.000Z",
+          windowEnd: "2025-06-30T12:00:00.000Z",
+          holdoutWindowStart: "2025-07-01T12:00:00.000Z",
+          yield: 0.03,
+          brierScore: 0.2,
+          closingLineValue: 0.01
+        },
+        modelIdentity: runtimeModelIdentityReceipt("football", {
+          featureContractStatus: "passed",
+          evaluatedFixtures: 360,
+          entrypointInvocations: 360,
+          executionHash: "fnv1a-calibration"
+        })
+      },
+      notes: [],
+      createdAt: "2026-08-21T12:00:00.000Z"
     },
     readiness: { readyForTraining: true, minimumRecommendedFixtures: 1000, detail: "ready" }
   } as unknown as TrainingDataSnapshot;
@@ -196,6 +215,22 @@ describe("calibration promotion safety", () => {
     expect(benchmarkProfile.reason).toContain("benchmark model");
     expect(unverifiedProfile.active).toBe(false);
     expect(unverifiedProfile.reason).toContain("without a matching execution and feature-contract receipt");
+  });
+
+  it("keeps legacy holdout-derived football weights shadow-only without training-window provenance", () => {
+    const snapshot = readySnapshot();
+    snapshot.latestBacktest = {
+      ...snapshot.latestBacktest!,
+      config: { modelIdentity: snapshot.latestBacktest!.config?.modelIdentity }
+    };
+
+    const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(profile.active).toBe(false);
+    expect(profile.reason).toContain("learned weights lack training-window-only provenance");
   });
 
   it("allows only pending-to-final settlement and never rewrites a final label", () => {
