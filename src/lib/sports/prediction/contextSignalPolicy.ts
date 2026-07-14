@@ -26,6 +26,7 @@ const FRESHNESS_MINUTES: Record<MatchContextSignal["category"], number> = {
   injury: 12 * 60,
   suspension: 12 * 60,
   lineup: 2 * 60,
+  "player-form": 45 * 24 * 60,
   standings: 12 * 60,
   weather: 6 * 60,
   news: 6 * 60,

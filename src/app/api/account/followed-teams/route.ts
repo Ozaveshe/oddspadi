@@ -20,12 +20,19 @@ async function authClient() {
 }
 
 export async function GET() {
-  const auth = await authClient(); if (auth.error) return auth.error;
+  const auth = await authClient();
+  // Reading the optional follow list happens in the global shell. Anonymous
+  // visitors are a normal state, so keep that read out of the browser's error
+  // console while mutations continue to require authentication.
+  if (auth.error) {
+    if (auth.error.status === 401) return Response.json({ teams: [], authenticated: false });
+    return auth.error;
+  }
   const { data, error } = await auth.supabase.from("op_followed_teams")
     .select("team:op_teams!op_followed_teams_team_id_fkey(id,external_id,name,sport,country,metadata)")
     .eq("user_id", auth.user.id).order("created_at");
   if (error) return Response.json({ error: error.message }, { status: 400 });
-  return Response.json({ teams: teamRows(data as Array<{ team: unknown }> | null) });
+  return Response.json({ teams: teamRows(data as Array<{ team: unknown }> | null), authenticated: true });
 }
 
 export async function POST(request: Request) {

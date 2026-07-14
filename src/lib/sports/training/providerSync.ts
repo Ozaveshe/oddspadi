@@ -11,6 +11,11 @@ import {
   type HistoricalFootballStandingInput,
   type HistoricalFootballWeatherInput
 } from "./historicalIngestion";
+import {
+  storePlayerMatchPerformances,
+  type PlayerMatchPerformance,
+  type PlayerPerformanceStoreResult
+} from "./playerPerformance";
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 type TrainingSyncSport = "football" | "basketball" | "tennis";
@@ -36,6 +41,7 @@ export type ProviderSyncRequest = {
   includeStandings?: boolean;
   includeAvailability?: boolean;
   includeLineups?: boolean;
+  includePlayerStats?: boolean;
   includeWeather?: boolean;
   maxEventFixtures?: number;
   maxContextFixtures?: number;
@@ -65,6 +71,10 @@ export type ProviderSyncResult = {
   lineupsFetched?: number;
   lineupsNormalized?: number;
   lineupsErrors?: string[];
+  playerPerformancesFetched?: number;
+  playerPerformancesNormalized?: number;
+  playerPerformancesStored?: number;
+  playerPerformancesErrors?: string[];
   weatherFetched?: number;
   weatherNormalized?: number;
   weatherErrors?: string[];
@@ -271,6 +281,40 @@ type ApiFootballLineupResponse = {
 
 type ApiFootballLineupsResponse = {
   response?: ApiFootballLineupResponse[];
+  errors?: unknown;
+};
+
+type ApiFootballPlayerStatistics = {
+  games?: {
+    minutes?: number | string | null;
+    number?: number | string | null;
+    position?: string | null;
+    rating?: number | string | null;
+    captain?: boolean;
+    substitute?: boolean;
+  };
+  offsides?: number | null;
+  shots?: { total?: number | null; on?: number | null };
+  goals?: { total?: number | null; conceded?: number | null; assists?: number | null; saves?: number | null };
+  passes?: { total?: number | null; key?: number | null; accuracy?: number | string | null };
+  tackles?: { total?: number | null; blocks?: number | null; interceptions?: number | null };
+  duels?: { total?: number | null; won?: number | null };
+  dribbles?: { attempts?: number | null; success?: number | null; past?: number | null };
+  fouls?: { drawn?: number | null; committed?: number | null };
+  cards?: { yellow?: number | null; red?: number | null };
+  penalty?: { won?: number | null; commited?: number | null; scored?: number | null; missed?: number | null; saved?: number | null };
+};
+
+type ApiFootballFixturePlayerResponse = {
+  team?: { id?: number | string; name?: string };
+  players?: Array<{
+    player?: { id?: number | string; name?: string };
+    statistics?: ApiFootballPlayerStatistics[];
+  }>;
+};
+
+type ApiFootballFixturePlayersResponse = {
+  response?: ApiFootballFixturePlayerResponse[];
   errors?: unknown;
 };
 
@@ -1001,6 +1045,98 @@ export function normalizeApiFootballLineupsForFixture(
   });
 }
 
+function percentageNumber(value: unknown): number | null {
+  const normalized = typeof value === "string" ? value.replace("%", "").trim() : value;
+  const parsed = finiteNumber(normalized);
+  return parsed === null ? null : Math.min(100, Math.max(0, parsed));
+}
+
+function playerPerformanceDataQuality({
+  playerId,
+  teamId,
+  minutes,
+  rating,
+  statistics
+}: {
+  playerId: unknown;
+  teamId: unknown;
+  minutes: number;
+  rating: number | null;
+  statistics: ApiFootballPlayerStatistics;
+}): number {
+  let score = 0.45;
+  if (playerId !== undefined && playerId !== null) score += 0.1;
+  if (teamId !== undefined && teamId !== null) score += 0.1;
+  if (minutes > 0) score += 0.1;
+  if (rating !== null) score += 0.1;
+  if (statistics.shots || statistics.passes || statistics.tackles || statistics.goals) score += 0.1;
+  return Number(Math.min(0.95, score).toFixed(4));
+}
+
+export function normalizeApiFootballPlayerPerformancesForFixture(
+  response: ApiFootballFixturePlayersResponse,
+  fixture: HistoricalFootballFixtureInput,
+  { observedAt = new Date().toISOString() }: { observedAt?: string } = {}
+): PlayerMatchPerformance[] {
+  const teams = Array.isArray(response.response) ? response.response : [];
+  const fixtureTeamIds = new Set([fixture.homeTeam.externalId, fixture.awayTeam.externalId]);
+
+  return teams.flatMap((team) => {
+    const teamName = cleanText(team.team?.name);
+    const teamExternalId = apiFootballTeamExternalId(team.team?.id, slugId(teamName, "team"));
+    if (!fixtureTeamIds.has(teamExternalId)) return [];
+    return (team.players ?? []).flatMap((entry) => {
+      const playerName = cleanText(entry.player?.name);
+      const statistics = entry.statistics?.[0];
+      if (!playerName || !statistics) return [];
+      const minutes = Math.min(200, Math.max(0, intOrNull(statistics.games?.minutes) ?? 0));
+      const rating = finiteNumber(statistics.games?.rating);
+      const playerExternalId = apiFootballTeamExternalId(entry.player?.id, slugId(`${teamExternalId}-${playerName}`, "player"));
+      return [{
+        sport: "football" as const,
+        provider: "api_football",
+        sourceKind: "real" as const,
+        fixtureExternalId: fixture.externalId,
+        fixtureKickoffAt: fixture.kickoffAt,
+        teamExternalId,
+        playerExternalId,
+        playerName,
+        position: cleanText(statistics.games?.position) || null,
+        shirtNumber: intOrNull(statistics.games?.number),
+        minutes,
+        started: statistics.games?.substitute === false,
+        captain: statistics.games?.captain === true,
+        rating: rating === null ? null : Math.min(10, Math.max(0, rating)),
+        goals: Math.max(0, intOrNull(statistics.goals?.total) ?? 0),
+        assists: Math.max(0, intOrNull(statistics.goals?.assists) ?? 0),
+        shotsTotal: Math.max(0, intOrNull(statistics.shots?.total) ?? 0),
+        shotsOnTarget: Math.max(0, intOrNull(statistics.shots?.on) ?? 0),
+        passesTotal: Math.max(0, intOrNull(statistics.passes?.total) ?? 0),
+        keyPasses: Math.max(0, intOrNull(statistics.passes?.key) ?? 0),
+        passAccuracy: percentageNumber(statistics.passes?.accuracy),
+        tackles: Math.max(0, intOrNull(statistics.tackles?.total) ?? 0),
+        interceptions: Math.max(0, intOrNull(statistics.tackles?.interceptions) ?? 0),
+        saves: Math.max(0, intOrNull(statistics.goals?.saves) ?? 0),
+        yellowCards: Math.max(0, intOrNull(statistics.cards?.yellow) ?? 0),
+        redCards: Math.max(0, intOrNull(statistics.cards?.red) ?? 0),
+        dataQuality: playerPerformanceDataQuality({ playerId: entry.player?.id, teamId: team.team?.id, minutes, rating, statistics }),
+        metrics: {
+          offsides: statistics.offsides ?? null,
+          goalsConceded: statistics.goals?.conceded ?? null,
+          blocks: statistics.tackles?.blocks ?? null,
+          duels: statistics.duels ?? null,
+          dribbles: statistics.dribbles ?? null,
+          fouls: statistics.fouls ?? null,
+          penalty: statistics.penalty ?? null,
+          teamName,
+          source: "api-football-fixtures-players"
+        },
+        observedAt
+      } satisfies PlayerMatchPerformance];
+    });
+  });
+}
+
 export function normalizeOpenWeatherForecastForFixture(
   response: OpenWeatherForecastResponse,
   fixture: HistoricalFootballFixtureInput
@@ -1239,6 +1375,31 @@ async function fetchApiFootballFixtureLineups({
   };
 }
 
+async function fetchApiFootballFixturePlayerPerformances({
+  fixture,
+  apiKey,
+  fetchImpl
+}: {
+  fixture: HistoricalFootballFixtureInput;
+  apiKey: string;
+  fetchImpl: FetchLike;
+}): Promise<{ endpoint: string; fetched: number; performances: PlayerMatchPerformance[]; error?: string }> {
+  const fixtureId = fixture.externalId.replace("api-football:", "");
+  const endpoint = new URL("https://v3.football.api-sports.io/fixtures/players");
+  endpoint.searchParams.set("fixture", fixtureId);
+  const { data, error } = await fetchJson(fetchImpl, endpoint, { headers: { "x-apisports-key": apiKey } });
+  if (error) return { endpoint: endpoint.toString(), fetched: 0, performances: [], error };
+  const response = data as ApiFootballFixturePlayersResponse;
+  const fetched = Array.isArray(response.response)
+    ? response.response.reduce((sum, team) => sum + (team.players?.length ?? 0), 0)
+    : 0;
+  return {
+    endpoint: endpoint.toString(),
+    fetched,
+    performances: normalizeApiFootballPlayerPerformancesForFixture(response, fixture)
+  };
+}
+
 async function fetchApiFootballFixtureInjuries({
   fixture,
   apiKey,
@@ -1455,6 +1616,7 @@ async function syncApiFootballFixtures({
   const includeStandings = Boolean(request.includeContext || request.includeStandings);
   const includeAvailability = Boolean(request.includeContext || request.includeAvailability);
   const includeLineups = Boolean(request.includeContext || request.includeLineups);
+  const includePlayerStats = Boolean(request.includePlayerStats);
   const includeWeather = Boolean(request.includeContext || request.includeWeather);
   const contextFixtureLimit = boundedOptionalInteger(request.maxContextFixtures, request.dryRun === false ? 24 : 8, 1, 120);
   let eventFetched = 0;
@@ -1472,6 +1634,10 @@ async function syncApiFootballFixtures({
   let lineupsFetched = 0;
   let lineupsNormalized = 0;
   const lineupsErrors: string[] = [];
+  let playerPerformancesFetched = 0;
+  let playerPerformancesNormalized = 0;
+  const playerPerformancesErrors: string[] = [];
+  let playerPerformances: PlayerMatchPerformance[] = [];
   let weatherFetched = 0;
   let weatherNormalized = 0;
   const weatherErrors: string[] = [];
@@ -1592,6 +1758,21 @@ async function syncApiFootballFixtures({
     }));
   }
 
+  if (includePlayerStats && normalized.length) {
+    const finishedFixtures = normalized.filter((fixture) => fixture.status === "finished");
+    const selectedFixtures = cappedFixtureSlice(finishedFixtures, contextFixtureLimit, "Player statistics", playerPerformancesErrors, "maxContextFixtures");
+    const performanceEntries = await Promise.all(
+      selectedFixtures.map(async (fixture) => {
+        const result = await fetchApiFootballFixturePlayerPerformances({ fixture, apiKey, fetchImpl });
+        playerPerformancesFetched += result.fetched;
+        playerPerformancesNormalized += result.performances.length;
+        if (result.error) playerPerformancesErrors.push(`${fixture.externalId}: ${result.error}`);
+        return result.performances;
+      })
+    );
+    playerPerformances = performanceEntries.flat();
+  }
+
   const weatherApiKey = firstEnv(env, ["WEATHER_API_KEY", "OPENWEATHER_API_KEY"]);
   if (includeWeather && normalized.length) {
     const selectedFixtures = cappedFixtureSlice(normalized, contextFixtureLimit, "Weather", weatherErrors, "maxContextFixtures");
@@ -1648,10 +1829,21 @@ async function syncApiFootballFixtures({
     dryRun: request.dryRun ?? true,
     fixtures: normalized
   });
+  const ingestionAccepted = ingestion.status === "stored" || ingestion.status === "dry-run";
+  const playerPerformanceStorage: PlayerPerformanceStoreResult = includePlayerStats && ingestionAccepted
+    ? await storePlayerMatchPerformances(playerPerformances, { dryRun: request.dryRun ?? true })
+    : { status: "dry-run", rowsReceived: 0, rowsWritten: 0, errors: [] };
+  if (includePlayerStats && playerPerformanceStorage.errors.length) {
+    playerPerformancesErrors.push(...playerPerformanceStorage.errors);
+  }
   const emptyDryRun = Boolean((request.dryRun ?? true) && fetched === 0 && normalized.length === 0);
+  const playerStorageFailed = includePlayerStats && (
+    playerPerformanceStorage.status === "failed" ||
+    ((request.dryRun ?? true) === false && playerPerformanceStorage.status === "not-configured")
+  );
 
   return {
-    status: ingestion.status === "stored" || ingestion.status === "dry-run" ? ingestion.status : emptyDryRun ? "dry-run" : "failed",
+    status: playerStorageFailed ? "failed" : ingestion.status === "stored" || ingestion.status === "dry-run" ? ingestion.status : emptyDryRun ? "dry-run" : "failed",
     configured: true,
     provider: "api-football",
     dryRun: ingestion.dryRun,
@@ -1673,6 +1865,10 @@ async function syncApiFootballFixtures({
     lineupsFetched: includeLineups ? lineupsFetched : undefined,
     lineupsNormalized: includeLineups ? lineupsNormalized : undefined,
     lineupsErrors: includeLineups && lineupsErrors.length ? lineupsErrors : undefined,
+    playerPerformancesFetched: includePlayerStats ? playerPerformancesFetched : undefined,
+    playerPerformancesNormalized: includePlayerStats ? playerPerformancesNormalized : undefined,
+    playerPerformancesStored: includePlayerStats ? playerPerformanceStorage.rowsWritten : undefined,
+    playerPerformancesErrors: includePlayerStats && playerPerformancesErrors.length ? playerPerformancesErrors : undefined,
     weatherFetched: includeWeather ? weatherFetched : undefined,
     weatherNormalized: includeWeather ? weatherNormalized : undefined,
     weatherErrors: includeWeather && weatherErrors.length ? weatherErrors : undefined,
@@ -1684,6 +1880,7 @@ async function syncApiFootballFixtures({
       standingsErrors[0] ??
       availabilityErrors[0] ??
       lineupsErrors[0] ??
+      playerPerformancesErrors[0] ??
       weatherErrors[0] ??
       newsErrors[0]
   };

@@ -153,6 +153,7 @@ const SCHEMA_TABLES = [
   "op_standings_snapshots",
   "op_player_availability_snapshots",
   "op_lineup_snapshots",
+  "op_player_match_performances",
   "op_weather_snapshots",
   "op_training_feature_snapshots",
   "op_backtest_runs"
@@ -262,6 +263,7 @@ function buildFixtureBackfillPlan({
     includeStandings: true,
     includeAvailability: true,
     includeLineups: true,
+    includePlayerStats: true,
     includeWeather: true,
     dryRun: true,
     maxJobs: maxJobsPerLeague
@@ -316,6 +318,13 @@ function buildSignalCoverage(): CorpusSignalCoverage[] {
       status: "provider-dependent",
       source: "API-Football injuries and lineup endpoints where historical coverage exists",
       tables: ["op_player_availability_snapshots", "op_lineup_snapshots"]
+    },
+    {
+      id: "player-match-performance",
+      label: "Chronological player performance and form",
+      status: "provider-dependent",
+      source: "API-Football fixture player statistics for completed matches; only earlier kickoffs may feed a prediction",
+      tables: ["op_player_match_performances"]
     },
     {
       id: "odds-history",
@@ -450,6 +459,7 @@ export function buildTenYearFootballCorpusBackfillPlan(
     includeStandings: true,
     includeAvailability: true,
     includeLineups: true,
+    includePlayerStats: true,
     includeNews: newsConfiguredEnv.length > 0,
     includeWeather: weatherConfiguredEnv.length > 0,
     maxEventFixtures: DEFAULT_MAX_EVENT_FIXTURES,

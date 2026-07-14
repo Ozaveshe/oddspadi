@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const row = await getCachedMatchPrediction(matchId);
   if (!row) return { title: "Match Prediction" };
   const title = `${row.match.homeTeam.name} vs ${row.match.awayTeam.name} — Prediction & Analysis`;
-  const description = `AI prediction for ${row.match.homeTeam.name} vs ${row.match.awayTeam.name} (${row.match.league.name}): probabilities vs odds, value edge, confidence and risk — explained in plain language.`;
+  const description = `Model-led analysis for ${row.match.homeTeam.name} vs ${row.match.awayTeam.name} (${row.match.league.name}): probabilities vs odds, value edge, confidence and risk, with traceable evidence.`;
   const url = `/predictions/${encodeURIComponent(matchId)}`;
   return {
     title,
@@ -264,6 +264,20 @@ export default async function MatchDetailPage({ params }: PageProps) {
           <div className="panel">
             <h2>Team news</h2>
             {(() => { const news = (match.providerContextSignals ?? []).filter((signal) => ["injury", "suspension", "lineup"].includes(signal.category)); const items = news.flatMap((signal) => (signal.items ?? []).map((item) => ({ ...item, category: signal.category }))); return items.length ? <div className="team-news-list">{items.slice(0, 28).map((item, index) => <div className="team-news-row" key={`${item.team}-${item.player}-${index}`}><span className={`team-news-kind ${item.category}`}>{item.status}</span><div><strong>{item.player || "Squad update"}</strong><span>{item.team}{item.reason ? ` · ${item.reason}` : ""}</span></div></div>)}</div> : news.length ? <><div className="team-news-signals">{news.map((signal) => <p key={signal.id}><strong>{signal.label}</strong><span>{signal.detail}</span></p>)}</div><p className="muted small">The enriched feed returned aggregate availability context but no player-level rows.</p></> : <p className="muted">This fixture has not entered the enriched context window yet, so there is no verified injury, suspension, or lineup report. OddsPadi will not invent team news.</p>; })()}
+          </div>
+
+          <div className="panel">
+            <h2>Player form evidence</h2>
+            {(() => {
+              const signals = (match.providerContextSignals ?? []).filter((signal) => signal.category === "player-form");
+              const items = signals.flatMap((signal) => signal.items ?? []);
+              if (!signals.length) return <p className="muted">No leakage-safe player-form sample is available for this fixture. The engine assigns no player-form weight.</p>;
+              return <>
+                {signals.map((signal) => <div className="player-form-summary" key={signal.id}><div><strong>{signal.label}</strong><span className={`badge ${signal.quality === "strong" ? "positive" : signal.quality === "acceptable" ? "medium" : "scheduled"}`}>{signal.quality}</span></div><p>{signal.detail}</p><small>Applied weight: {(signal.weight * 100).toFixed(2)}% · Source: {signal.source}</small></div>)}
+                {items.length ? <div className="player-form-list">{items.slice(0, 6).map((item, index) => <div key={`${item.team}-${item.player}-${index}`}><span>{item.team}</span><strong>{item.player ?? "Squad"}</strong><small>{item.reason ?? item.status}</small></div>)}</div> : null}
+                <p className="muted small">Only completed matches with kickoffs earlier than this fixture are included. Same-match and future rows are excluded.</p>
+              </>;
+            })()}
           </div>
 
           <ValueEdgeBadge edge={bestEdge} />

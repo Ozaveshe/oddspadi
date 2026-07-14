@@ -74,7 +74,8 @@ function dedupeMatches(matches: Match[]): Match[] {
   return [...new Map(matches.map((match) => [match.id, match])).values()].sort((left, right) => left.kickoffTime.localeCompare(right.kickoffTime));
 }
 
-function liveRunStatus({
+/** Preserve degraded provider states instead of collapsing them into success. */
+export function classifyProviderRunStatus({
   fixtures,
   errors,
   env
@@ -251,7 +252,7 @@ async function executePipeline({
     }
   }
 
-  const status = liveRunStatus({ fixtures, errors, env });
+  const status = classifyProviderRunStatus({ fixtures, errors, env });
   const providers = Array.from(new Set(fixtures.map((fixture) => fixture.provider))).sort();
   const valuePicksPublished = [...decisionSummariesByFixture.values()].filter((summary) => summary.publicStatus === "value_pick").length;
   const finishedAt = new Date().toISOString();

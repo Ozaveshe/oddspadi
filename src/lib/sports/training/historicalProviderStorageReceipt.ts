@@ -149,6 +149,7 @@ function targetTables(provider: ProviderName): string[] {
     "op_standings_snapshots",
     "op_player_availability_snapshots",
     "op_lineup_snapshots",
+    "op_player_match_performances",
     "op_weather_snapshots",
     "op_news_signals",
     "op_training_feature_snapshots",
@@ -179,6 +180,7 @@ function defaultRequest(input: Partial<HistoricalProviderBackfillRequest> = {}):
     includeStandings: input.includeStandings ?? provider === "api-football",
     includeAvailability: input.includeAvailability ?? provider === "api-football",
     includeLineups: input.includeLineups ?? provider === "api-football",
+    includePlayerStats: input.includePlayerStats ?? provider === "api-football",
     includeWeather: input.includeWeather ?? false,
     maxEventFixtures: input.maxEventFixtures ?? DEFAULT_MAX_EVENT_FIXTURES,
     maxContextFixtures: input.maxContextFixtures ?? DEFAULT_MAX_CONTEXT_FIXTURES,
@@ -197,6 +199,7 @@ function emptyCounts(): HistoricalProviderBackfillResult["counts"] {
     standingsRows: 0,
     availabilityRows: 0,
     lineupRows: 0,
+    playerPerformanceRows: 0,
     weatherRows: 0,
     featureSnapshots: 0
   };
@@ -320,6 +323,7 @@ function buildVerifyUrl(request: HistoricalProviderStorageReceipt["request"], dr
   if (request.includeStandings) params.set("includeStandings", "1");
   if (request.includeAvailability) params.set("includeAvailability", "1");
   if (request.includeLineups) params.set("includeLineups", "1");
+  if (request.includePlayerStats) params.set("includePlayerStats", "1");
   if (request.includeNews) params.set("includeNews", "1");
   if (request.includeWeather) params.set("includeWeather", "1");
   if (request.maxEventFixtures) params.set("maxEventFixtures", String(request.maxEventFixtures));

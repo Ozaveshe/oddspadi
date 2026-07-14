@@ -200,8 +200,8 @@ export function buildFirstCorpusImportQueue({
       sport: "all",
       status: census.totals.fixtures > 0 && census.totals.oddsSnapshots > 0 && census.totals.rawProviderPayloads > 0 ? "complete" : "waiting",
       targetTables: ["op_provider_ingestion_runs", "op_raw_provider_payloads", "op_fixtures", "op_odds_snapshots"],
-      command: `${decisionCurlCommand(`${origin}/api/sports/decision/training/historical-provider-storage-receipt?provider=api-football&league=39&seasonFrom=2025&seasonTo=2025&includeEvents=1&includeContext=1&includeStandings=1&includeAvailability=1&includeLineups=1&maxEventFixtures=1&maxContextFixtures=2&maxJobs=1&limit=25&dryRun=1&run=1`)} -H "x-oddspadi-admin-token: $env:ODDSPADI_ADMIN_TOKEN"`,
-      verifyUrl: "/api/sports/decision/training/historical-provider-storage-receipt?provider=api-football&league=39&seasonFrom=2025&seasonTo=2025&includeEvents=1&includeContext=1&includeStandings=1&includeAvailability=1&includeLineups=1&maxEventFixtures=1&maxContextFixtures=2&maxJobs=1&limit=25&dryRun=1",
+      command: `${decisionCurlCommand(`${origin}/api/sports/decision/training/historical-provider-storage-receipt?provider=api-football&league=39&seasonFrom=2025&seasonTo=2025&includeEvents=1&includeContext=1&includeStandings=1&includeAvailability=1&includeLineups=1&includePlayerStats=1&maxEventFixtures=1&maxContextFixtures=2&maxJobs=1&limit=25&dryRun=1&run=1`)} -H "x-oddspadi-admin-token: $env:ODDSPADI_ADMIN_TOKEN"`,
+      verifyUrl: "/api/sports/decision/training/historical-provider-storage-receipt?provider=api-football&league=39&seasonFrom=2025&seasonTo=2025&includeEvents=1&includeContext=1&includeStandings=1&includeAvailability=1&includeLineups=1&includePlayerStats=1&maxEventFixtures=1&maxContextFixtures=2&maxJobs=1&limit=25&dryRun=1",
       expectedEvidence: "Provider write receipts show rows written and read back while public browser writes remain closed.",
       blocker: providerQueue.totals.passed > 0 ? null : "Provider dry-run counts must pass before write receipts are considered.",
       canRunNow: false

@@ -10,7 +10,7 @@ import {
   normalizeOddsSnapshots,
   utcDateWindow
 } from "@/lib/sports/intelligence/canonical";
-import { runDailyEngine } from "@/lib/sports/intelligence/pipeline";
+import { classifyProviderRunStatus, runDailyEngine } from "@/lib/sports/intelligence/pipeline";
 import type { CanonicalDecision, CanonicalFixture, SlatePublicStatus } from "@/lib/sports/intelligence/types";
 
 async function providerMatch({
@@ -134,6 +134,15 @@ function decision(fixtureId: string, publicStatus: SlatePublicStatus, generatedA
 }
 
 describe("production daily sports intelligence", () => {
+  it("preserves partial and empty provider health instead of reporting success", async () => {
+    const fixture = normalizeCanonicalFixture(await providerMatch());
+    const env = { API_FOOTBALL_KEY: "configured" };
+
+    expect(classifyProviderRunStatus({ fixtures: [fixture], errors: ["tennis odds unavailable"], env })).toBe("partial");
+    expect(classifyProviderRunStatus({ fixtures: [], errors: [], env })).toBe("empty");
+    expect(classifyProviderRunStatus({ fixtures: [], errors: ["provider failed"], env })).toBe("failed");
+  });
+
   it("blocks mock fallback fixtures in production public reads", async () => {
     const provider = new ProviderBackedSportsDataProvider({ env: { NODE_ENV: "production" } });
     expect(await provider.getFixtures("2026-07-13", "football")).toEqual([]);

@@ -48,15 +48,15 @@ export const metadata: Metadata = {
     url: siteUrl,
     siteName: "OddsPadi",
     locale: "en_NG",
-    title: "OddsPadi — Football Predictions, Live Scores & AI Analysis",
+    title: "OddsPadi — Football Predictions, Live Scores & Model Analysis",
     description:
-      "AI-powered football predictions, real-time live scores, and honest value analysis. Your football padi for smarter matchday decisions."
+      "Model-led football predictions, real-time live scores, and honest value analysis. Your football padi for smarter matchday decisions."
   },
   twitter: {
     card: "summary_large_image",
-    title: "OddsPadi — Football Predictions, Live Scores & AI Analysis",
+    title: "OddsPadi — Football Predictions, Live Scores & Model Analysis",
     description:
-      "AI-powered football predictions, real-time live scores, and honest value analysis. Your football padi for smarter matchday decisions."
+      "Model-led football predictions, real-time live scores, and honest value analysis. Your football padi for smarter matchday decisions."
   },
   robots: {
     index: true,
@@ -90,7 +90,7 @@ const organizationJsonLd = {
   url: siteUrl,
   logo: `${siteUrl}/brand/oddspadi-mark.svg`,
   description:
-    "AI-powered football predictions, live scores, and value analysis for fans across Africa and beyond.",
+    "Model-led football predictions, live scores, and value analysis for fans across Africa and beyond.",
   sameAs: []
 };
 

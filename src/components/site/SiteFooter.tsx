@@ -22,7 +22,7 @@ const communityLinks = [
 ];
 
 const engineLinks = [
-  { href: "/predictions/decision-engine", label: "AI decision engine" },
+  { href: "/predictions/decision-engine", label: "Decision engine" },
   { href: "/engine/performance", label: "Engine performance" },
   { href: "/predictions/bet-slip", label: "Slip Check" },
   { href: "/predictions?sport=basketball", label: "Basketball" },

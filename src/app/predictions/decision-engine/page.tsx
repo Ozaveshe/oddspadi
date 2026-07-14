@@ -42,7 +42,7 @@ export default async function DecisionEnginePage() {
     <main id="main" className="container">
       <header className="page-heading">
         <span className="section-kicker">The system behind every public decision</span>
-        <h1>AI decision engine</h1>
+        <h1>Decision engine</h1>
         <p>This is the current operational view: what the provider supplied, how much the engine analysed, what remains blocked, and the same canonical decisions shown across OddsPadi.</p>
         <nav className="intelligence-nav" aria-label="Engine related pages"><Link className="button primary" href="/engine/performance">Performance dashboard</Link><Link className="button" href="/predictions/today">Today&apos;s tips</Link><Link className="button" href="/predictions/history">Public results</Link></nav>
       </header>

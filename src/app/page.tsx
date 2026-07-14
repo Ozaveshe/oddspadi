@@ -79,7 +79,7 @@ export default async function HomePage() {
         <div><span>Tips published</span><strong>{daily?.summary.valuePicks ?? 0}</strong></div>
         <div><span>Watchlist</span><strong>{daily?.summary.watchlist ?? 0}</strong></div>
         <div><span>Last run</span><strong>{lastRun ? new Date(lastRun).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Waiting"}</strong></div>
-        <div><span>Provider health</span><strong className={`engine-health status-${providerStatus}`}>{providerStatus}</strong></div>
+        <div><span>Provider health</span><strong className={`engine-health status-${providerStatus}`}>{providerStatus}</strong><Link className="engine-audit-link" href="/engine/performance">Audit evidence →</Link></div>
       </section>
 
       <section className="section home-today-best">

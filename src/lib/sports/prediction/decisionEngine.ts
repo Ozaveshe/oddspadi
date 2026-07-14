@@ -166,6 +166,7 @@ function stageStatus(score: number): "passed" | "warning" | "failed" {
 
 function contextEvidenceCategory(signal: MatchContextSignal): DecisionEvidence["category"] {
   if (signal.category === "lineup") return "lineups";
+  if (signal.category === "player-form") return "form";
   if (signal.category === "weather" || signal.category === "surface") return "weather";
   if (signal.category === "live-event") return "live-state";
   if (signal.category === "injury" || signal.category === "suspension" || signal.category === "news" || signal.category === "rest") return "team-news";

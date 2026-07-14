@@ -72,7 +72,7 @@ export function DecisionEnginePanel({ decision }: { decision: DecisionEngineRepo
     <div className="panel">
       <div className="panel-header">
         <div>
-          <h2>AI decision engine</h2>
+          <h2>Decision engine</h2>
           <p className="muted small">
             {decision.engineVersion} - {engineMode}
           </p>

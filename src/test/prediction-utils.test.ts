@@ -15546,13 +15546,19 @@ describe("prediction utilities", () => {
     const fetchImpl = async (input: string | URL) => {
       const url = input.toString();
       calls.push(url);
-      if (url.includes("api.the-odds-api.com/v4/sports/tennis_atp/odds")) {
+      if (url.includes("api.the-odds-api.com/v4/sports/?")) {
+        return new Response(
+          JSON.stringify([{ key: "tennis_atp_halle", group: "Tennis", title: "ATP Halle", active: true, has_outrights: false }]),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (url.includes("api.the-odds-api.com/v4/sports/tennis_atp_halle/odds")) {
         expect(url).toContain("markets=h2h%2Cspreads%2Ctotals");
         return new Response(
           JSON.stringify([
             {
               id: "odds-tennis-701",
-              sport_key: "tennis_atp",
+              sport_key: "tennis_atp_halle",
               commence_time: "2026-06-24T13:00:00Z",
               home_team: "Carlos Alcaraz",
               away_team: "Daniil Medvedev",
@@ -15662,7 +15668,7 @@ describe("prediction utilities", () => {
     const [match] = await provider.getFixtures("2026-06-24", "tennis");
     const matchById = await provider.getMatch(match.id);
 
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
     expect(matchById).toBe(match);
     expect(match.id).toBe("api-tennis:701");
     expect(match.sport).toBe("tennis");
@@ -17190,6 +17196,8 @@ describe("prediction utilities", () => {
         availabilityNormalized: 2,
         lineupsFetched: 2,
         lineupsNormalized: 2,
+        playerPerformancesFetched: 28,
+        playerPerformancesNormalized: 28,
         newsFetched: 1,
         newsNormalized: 1,
         weatherFetched: 40,
@@ -17207,6 +17215,7 @@ describe("prediction utilities", () => {
         ["availability", "pass"],
         ["suspensions", "pass"],
         ["lineups", "pass"],
+        ["player-performance", "pass"],
         ["news", "pass"],
         ["weather", "pass"]
       ])

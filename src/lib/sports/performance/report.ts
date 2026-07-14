@@ -1,5 +1,7 @@
 import { getPublicPredictionHistory } from "@/lib/sports/prediction/history";
 import { getDailyTipsProduct } from "@/lib/sports/tips/product";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { readSupabaseTrainingCorpusCensus } from "@/lib/sports/training/supabaseTrainingCorpusCensus";
 import {
   calculateAccuracy,
   calculateBrierScore,
@@ -87,8 +89,102 @@ function average(values: number[]): number | null {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 }
 
+function finiteNumber(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function getHistoricalEngineEvidence() {
+  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+  const census = await readSupabaseTrainingCorpusCensus({ origin }).catch((error: unknown) => ({
+    status: "failed" as const,
+    summary: error instanceof Error ? error.message : "Training corpus census failed.",
+    totals: { fixtures: 0, finishedFixtures: 0, oddsSnapshots: 0, featureSnapshots: 0, completeFeatureSnapshots: 0, completedBacktests: 0 },
+    sports: []
+  }));
+  const client = getSupabaseServerClient();
+  if (!client) {
+    return {
+      source: "unavailable" as const,
+      census,
+      latestBacktests: [],
+      models: [],
+      playerAvailabilitySnapshots: 0,
+      lineupSnapshots: 0,
+      playerMatchPerformances: 0,
+      limitations: [
+        "Historical evidence is stored server-side, but this runtime cannot read the OddsPadi Supabase project.",
+        "Player-level coverage currently tracks availability and lineups, not a complete match-by-match player performance corpus."
+      ]
+    };
+  }
+
+  const [backtests, models, availability, lineups, playerPerformances] = await Promise.all([
+    client
+      .from("op_backtest_runs")
+      .select("sport,model_key,engine_version,status,data_source,sample_size,test_size,pick_count,brier_score,log_loss,yield,closing_line_value,calibration_error,created_at")
+      .eq("status", "completed")
+      .order("created_at", { ascending: false })
+      .limit(30),
+    client
+      .from("op_model_versions")
+      .select("sport,model_key,version_label,is_active,metrics,updated_at")
+      .order("sport", { ascending: true }),
+    client.from("op_player_availability_snapshots").select("id", { count: "exact", head: true }),
+    client.from("op_lineup_snapshots").select("id", { count: "exact", head: true }),
+    client.from("op_player_match_performances").select("id", { count: "exact", head: true })
+  ]);
+  const errors = [backtests.error, models.error, availability.error, lineups.error, playerPerformances.error].flatMap((error) => error ? [error.message] : []);
+  const latestBySport = new Map<string, Record<string, unknown>>();
+  for (const row of (backtests.data ?? []) as Array<Record<string, unknown>>) {
+    const sport = String(row.sport ?? "unknown");
+    if (!latestBySport.has(sport)) latestBySport.set(sport, row);
+  }
+
+  return {
+    source: errors.length ? "degraded" as const : "supabase" as const,
+    census,
+    latestBacktests: [...latestBySport.values()].map((row) => ({
+      sport: String(row.sport ?? "unknown"),
+      modelKey: String(row.model_key ?? "unknown"),
+      engineVersion: String(row.engine_version ?? "unknown"),
+      dataSource: String(row.data_source ?? "unknown"),
+      sampleSize: finiteNumber(row.sample_size) ?? 0,
+      testSize: finiteNumber(row.test_size) ?? 0,
+      pickCount: finiteNumber(row.pick_count) ?? 0,
+      brierScore: finiteNumber(row.brier_score),
+      logLoss: finiteNumber(row.log_loss),
+      yield: finiteNumber(row.yield),
+      closingLineValue: finiteNumber(row.closing_line_value),
+      calibrationError: finiteNumber(row.calibration_error),
+      createdAt: String(row.created_at ?? "")
+    })),
+    models: ((models.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      sport: String(row.sport ?? "unknown"),
+      modelKey: String(row.model_key ?? "unknown"),
+      versionLabel: String(row.version_label ?? "unknown"),
+      active: row.is_active === true,
+      updatedAt: String(row.updated_at ?? "")
+    })),
+    playerAvailabilitySnapshots: availability.count ?? 0,
+    lineupSnapshots: lineups.count ?? 0,
+    playerMatchPerformances: playerPerformances.count ?? 0,
+    limitations: [
+      "Backtests measure historical behaviour; they do not count as settled public-pick performance.",
+      (playerPerformances.count ?? 0) > 0
+        ? "Player match-performance facts are available, but coverage and chronological sample depth must pass promotion gates before the signal receives material weight."
+        : "No player match-performance facts are stored yet; player-form weighting remains inactive rather than inferred.",
+      ...(errors.length ? [`Some historical evidence reads failed: ${errors.join("; ")}`] : [])
+    ]
+  };
+}
+
 export async function getEnginePerformanceReport() {
-  const [ledger, daily] = await Promise.all([getPublicPredictionHistory(), getDailyTipsProduct()]);
+  const [ledger, daily, historicalEvidence] = await Promise.all([
+    getPublicPredictionHistory(),
+    getDailyTipsProduct(),
+    getHistoricalEngineEvidence()
+  ]);
   const publicRows = ledger.items.filter(isPublicPerformancePick);
   const settled = settledPublicPicks(publicRows);
   const roi = calculateRoiSimulation(publicRows);
@@ -128,6 +224,7 @@ export async function getEnginePerformanceReport() {
       settlementBacklog: settlement.backlog,
       providerGaps: providerGapCount
     },
+    historicalEvidence,
     publicPerformance: {
       totalPublicPicks: publicRows.length,
       settledPicks: settled.length,

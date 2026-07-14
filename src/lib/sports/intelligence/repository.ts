@@ -116,6 +116,22 @@ export async function startProviderRun({
     errors: client ? [] : ["OddsPadi Supabase server storage is not configured in this runtime."]
   };
   if (!client) return base;
+  const staleCutoff = new Date(new Date(startedAt).getTime() - 2 * 60 * 60_000).toISOString();
+  const { error: staleRunCleanupError } = await client
+    .from("op_provider_ingestion_runs")
+    .update({
+      status: "failed",
+      completed_at: startedAt,
+      finished_at: startedAt,
+      error_message: "Provider run exceeded the two-hour completion window and was closed as stale.",
+      errors: ["Provider run exceeded the two-hour completion window and was closed as stale."],
+      metadata: { pipelineStatus: "failed", staleRunClosedAt: startedAt }
+    })
+    .eq("status", "running")
+    .lt("started_at", staleCutoff);
+  if (staleRunCleanupError) {
+    console.warn(`[sports-intelligence] stale provider-run cleanup failed: ${staleRunCleanupError.message}`);
+  }
   const { data, error } = await client
     .from("op_provider_ingestion_runs")
     .insert({
@@ -141,11 +157,10 @@ export async function finishProviderRun(
 ): Promise<ProviderRunLog> {
   const finished = { ...run, ...update };
   if (!client || !run.runId) return finished;
-  const databaseStatus = update.status === "failed" || update.status === "unavailable" ? "failed" : "completed";
   const { error } = await client
     .from("op_provider_ingestion_runs")
     .update({
-      status: databaseStatus,
+      status: update.status,
       completed_at: update.finishedAt,
       finished_at: update.finishedAt,
       rows_received: update.fixturesFound,

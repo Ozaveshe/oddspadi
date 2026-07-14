@@ -19,9 +19,9 @@ export function FollowedTeamsProvider({ children }: { children: React.ReactNode 
   const refresh = useCallback(async () => {
     try {
       const response = await fetch("/api/account/followed-teams", { cache: "no-store" });
-      if (response.status === 401) { setStatus("signed-out"); setTeams([]); return; }
       if (!response.ok) { setStatus("unavailable"); return; }
-      const payload = await response.json() as { teams?: FollowedTeam[] };
+      const payload = await response.json() as { teams?: FollowedTeam[]; authenticated?: boolean };
+      if (payload.authenticated === false) { setStatus("signed-out"); setTeams([]); return; }
       setTeams(payload.teams ?? []); setStatus("ready");
     } catch { setStatus("unavailable"); }
   }, []);

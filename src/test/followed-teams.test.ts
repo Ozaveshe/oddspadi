@@ -5,7 +5,7 @@ vi.mock("@/lib/supabase/serverAuthClient", () => ({
   createSupabaseServerClient: createSupabaseServerClientMock
 }));
 
-import { POST as followTeam } from "@/app/api/account/followed-teams/route";
+import { GET as readFollowedTeams, POST as followTeam } from "@/app/api/account/followed-teams/route";
 import { normalizeTeamName } from "@/lib/account/followedTeams";
 
 function request(teamId: unknown) {
@@ -38,6 +38,14 @@ describe("followed teams", () => {
     const { from } = client(null);
     const response = await followTeam(request("team-1"));
     expect(response.status).toBe(401);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("treats an anonymous optional follow-list read as a normal signed-out state", async () => {
+    const { from } = client(null);
+    const response = await readFollowedTeams();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ teams: [], authenticated: false });
     expect(from).not.toHaveBeenCalled();
   });
 

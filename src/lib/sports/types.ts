@@ -26,7 +26,7 @@ export type DecisionEvidenceCategory =
   | "live-state"
   | "weather"
   | "data-quality";
-export type ContextSignalCategory = "injury" | "suspension" | "lineup" | "standings" | "weather" | "news" | "live-event" | "rest" | "surface";
+export type ContextSignalCategory = "injury" | "suspension" | "lineup" | "player-form" | "standings" | "weather" | "news" | "live-event" | "rest" | "surface";
 export type ContextSignalImpact =
   | "home-positive"
   | "home-negative"

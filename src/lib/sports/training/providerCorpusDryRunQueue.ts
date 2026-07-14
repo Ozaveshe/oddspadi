@@ -156,6 +156,7 @@ function routeFor(request: ProviderSyncRequest, jobId: string): string {
   if (request.includeStandings) query.set("includeStandings", "1");
   if (request.includeAvailability) query.set("includeAvailability", "1");
   if (request.includeLineups) query.set("includeLineups", "1");
+  if (request.includePlayerStats) query.set("includePlayerStats", "1");
   if (request.includeWeather) query.set("includeWeather", "1");
   if (request.maxEventFixtures) query.set("maxEventFixtures", String(request.maxEventFixtures));
   if (request.maxContextFixtures) query.set("maxContextFixtures", String(request.maxContextFixtures));
@@ -208,6 +209,7 @@ function fixtureRequest(sport: TrainingCorpusSport, target: TrainingCorpusTarget
         includeStandings: true,
         includeAvailability: true,
         includeLineups: false,
+        includePlayerStats: true,
         includeWeather: false,
         maxContextFixtures: 8,
         limit: 25

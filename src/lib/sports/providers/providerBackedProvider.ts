@@ -21,6 +21,10 @@ import {
 import type { HeadToHeadSummary, Match, MatchContextSignal, MatchStatus, OddsMarket, Sport, SportsDataProvider, TeamForm } from "@/lib/sports/types";
 import { currentFootballSeason, leagueBySlug, type LeagueTable } from "@/lib/sports/leagueStandings";
 import { configuredPredictionLeagueIds, footballLeaguePriority } from "@/lib/sports/footballLeagues";
+import {
+  loadPlayerFormSignalsForFixtures,
+  type PlayerFormFixture
+} from "@/lib/sports/training/playerPerformance";
 
 type EnvMap = Record<string, string | undefined>;
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -237,6 +241,14 @@ type OddsApiHistoricalResponse = {
   data?: OddsApiEvent[];
 };
 
+type OddsApiSport = {
+  key?: string;
+  group?: string;
+  title?: string;
+  active?: boolean;
+  has_outrights?: boolean;
+};
+
 type ProviderRuntimeStatus = {
   runtimeProvider: "providerBackedSportsDataProvider" | "mockSportsDataProvider" | "unavailable";
   liveRuntimeBacked: boolean;
@@ -248,6 +260,11 @@ type ProviderRuntimeStatus = {
 type OddsEventCacheEntry = {
   expiresAt: number;
   events: Promise<OddsApiEvent[]>;
+};
+
+type OddsSportsCacheEntry = {
+  expiresAt: number;
+  sports: Promise<OddsApiSport[]>;
 };
 
 type FixtureCacheEntry = {
@@ -1745,7 +1762,7 @@ function sportKeyForFootball(env: EnvMap): string {
   return env.ODDS_API_FOOTBALL_SPORT_KEY?.trim() || "soccer_epl";
 }
 
-function configuredOddsSportKeys(
+function explicitOddsSportKeys(
   env: EnvMap,
   sport: Extract<Sport, "football" | "basketball" | "tennis">
 ): string[] {
@@ -1761,19 +1778,33 @@ function configuredOddsSportKeys(
       : sport === "basketball"
         ? env.ODDS_API_BASKETBALL_SPORT_KEY
         : env.ODDS_API_TENNIS_SPORT_KEY;
-  // NOTE: The Odds API tennis sports are often tournament-scoped
-  // (e.g. tennis_atp_wimbledon). If "tennis_atp" 404s in the provider logs
-  // (see warnProviderIssue), set ODDS_API_TENNIS_SPORT_KEYS to the active
-  // tournament keys. Kept as the default so tennis odds are still attempted.
-  const defaults = sport === "football" ? sportKeyForFootball(env) : sport === "basketball" ? "basketball_nba" : "tennis_atp";
+  const configured = plural?.trim() || singular?.trim();
+  if (!configured) return [];
   return Array.from(
     new Set(
-      (plural?.trim() || singular?.trim() || defaults)
+      configured
         .split(",")
         .map((key) => key.trim())
         .filter(Boolean)
     )
   ).slice(0, 8);
+}
+
+function fallbackOddsSportKeys(
+  env: EnvMap,
+  sport: Extract<Sport, "football" | "basketball" | "tennis">
+): string[] {
+  if (sport === "football") return [sportKeyForFootball(env)];
+  if (sport === "basketball") return ["basketball_nba"];
+  // The Odds API has tournament-scoped tennis keys. `tennis_atp` is not a
+  // stable sport key and currently returns 404, so do not manufacture one.
+  return [];
+}
+
+function oddsSportKeyPrefix(sport: Extract<Sport, "football" | "basketball" | "tennis">): string {
+  if (sport === "football") return "soccer_";
+  if (sport === "basketball") return "basketball_";
+  return "tennis_";
 }
 
 function defaultOddsRegionsForSport(sport: Extract<Sport, "football" | "basketball" | "tennis">): string {
@@ -1890,6 +1921,7 @@ const unavailableSportsDataProvider: SportsDataProvider = {
 
 export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private readonly oddsEventsCache = new Map<string, OddsEventCacheEntry>();
+  private oddsSportsCache: OddsSportsCacheEntry | null = null;
   private readonly fixtureCache = new Map<string, FixtureCacheEntry>();
   private readonly matchCache = new Map<string, MatchCacheEntry>();
   private readonly headToHeadCache = new Map<string, HeadToHeadCacheEntry>();
@@ -1904,6 +1936,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       historicalFootballEloLoader?: () => Promise<HistoricalFootballEloMap>;
       historicalBasketballStrengthLoader?: () => Promise<HistoricalBasketballStrengthMap>;
       historicalTennisStrengthLoader?: () => Promise<HistoricalTennisStrengthMap>;
+      playerFormSignalsLoader?: (fixtures: PlayerFormFixture[]) => Promise<Map<string, MatchContextSignal[]>>;
     } = {}
   ) {}
 
@@ -1938,6 +1971,39 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     return this.env.NODE_ENV === "production" || this.env.CONTEXT === "production"
       ? unavailableSportsDataProvider
       : mockSportsDataProvider;
+  }
+
+  /**
+   * Resolve tournament-scoped tennis keys from The Odds API's free `/sports`
+   * catalogue. Football and basketball keep their stable configured defaults;
+   * explicit environment configuration remains authoritative for every sport.
+   */
+  private async getOddsSportKeys(
+    sport: Extract<Sport, "football" | "basketball" | "tennis">
+  ): Promise<string[]> {
+    const configured = explicitOddsSportKeys(this.env, sport);
+    if (configured.length) return configured;
+    if (sport !== "tennis") return fallbackOddsSportKeys(this.env, sport);
+    const apiKey = firstEnv(this.env, ["THE_ODDS_API_KEY", "ODDS_API_KEY"]);
+    if (!apiKey) return [];
+
+    const now = Date.now();
+    if (!this.oddsSportsCache || this.oddsSportsCache.expiresAt <= now) {
+      const endpoint = new URL("https://api.the-odds-api.com/v4/sports/");
+      endpoint.searchParams.set("apiKey", apiKey);
+      const sports = this.limitedFetch(endpoint).then((payload) =>
+        Array.isArray(payload) ? payload.filter((row): row is OddsApiSport => Boolean(row) && typeof row === "object") : []
+      );
+      this.oddsSportsCache = { expiresAt: now + 10 * 60_000, sports };
+    }
+
+    const prefix = oddsSportKeyPrefix(sport);
+    const discovered = (await this.oddsSportsCache.sports)
+      .filter((row) => row.active !== false && row.has_outrights !== true)
+      .map((row) => cleanText(row.key))
+      .filter((key) => key.startsWith(prefix))
+      .slice(0, 8);
+    return discovered.length ? discovered : fallbackOddsSportKeys(this.env, sport);
   }
 
   async getFixtures(date: string, sport: Sport): Promise<Match[]> {
@@ -1981,11 +2047,25 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     }
 
     const enrichmentFixtures = selectFootballEnrichmentFixtures(fixtures, this.env);
-    const [oddsEvents, contextByFixture, recentFormByTeam, historicalRatings] = await Promise.all([
+    const playerFormFixtures = enrichmentFixtures.flatMap((fixture) => {
+      const fixtureId = String(fixture.fixture?.id ?? "").trim();
+      const kickoffAt = cleanText(fixture.fixture?.date);
+      const homeName = cleanText(fixture.teams?.home?.name);
+      const awayName = cleanText(fixture.teams?.away?.name);
+      if (!fixtureId || !kickoffAt || !homeName || !awayName) return [];
+      return [{
+        fixtureExternalId: `api-football:${fixtureId}`,
+        kickoffAt,
+        homeTeam: { externalId: `api-football:${safeId(fixture.teams?.home?.id, slug(homeName) || "home")}`, name: homeName },
+        awayTeam: { externalId: `api-football:${safeId(fixture.teams?.away?.id, slug(awayName) || "away")}`, name: awayName }
+      } satisfies PlayerFormFixture];
+    });
+    const [oddsEvents, contextByFixture, recentFormByTeam, historicalRatings, playerFormByFixture] = await Promise.all([
       this.getCurrentOddsEvents(date, "football"),
       this.getFootballContextByFixture(enrichmentFixtures),
       this.getRecentFootballFormByTeam(enrichmentFixtures),
-      this.getHistoricalFootballRatings()
+      this.getHistoricalFootballRatings(),
+      (this.options.playerFormSignalsLoader ?? loadPlayerFormSignalsForFixtures)(playerFormFixtures)
     ]);
     const oddsByEvent = oddsMarketsByEvent(oddsEvents, "football");
     const oddsBackedMatches = oddsBackedFootballFixturesFromEvents(date, oddsEvents, historicalRatings);
@@ -2028,6 +2108,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       const elapsedMinute = numberOrNull(fixture.fixture?.status?.elapsed);
       const providerContextSignals = [
         ...(contextByFixture.get(String(fixture.fixture?.id ?? "")) ?? []),
+        ...(playerFormByFixture.get(`api-football:${String(fixture.fixture?.id ?? "")}`) ?? []),
         ...(mergedOddsFromOddsEvent ? (oddsBackedMatch?.providerContextSignals ?? []) : [])
       ];
       const oddsProviderEventId =
@@ -2099,7 +2180,10 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
                 : ["Historical EPL Elo was unavailable or not applicable; provider form or a league baseline supplies team strength."]),
               ...(mergedOddsFromOddsEvent ? ["Odds were merged from The Odds API event identity after API-Football fixture identity was present without a direct odds match."] : []),
               ...(oddsMarkets.length ? [] : ["No matching live odds snapshot was found for this fixture."]),
-              ...(hasProviderForm ? [] : ["Recent provider form was unavailable, so deterministic team-form proxies were used."])
+              ...(hasProviderForm ? [] : ["Recent provider form was unavailable, so deterministic team-form proxies were used."]),
+              ...(playerFormByFixture.has(`api-football:${String(fixture.fixture?.id ?? "")}`)
+                ? ["Recent player form uses only stored match performances from fixtures completed before this kickoff."]
+                : ["Chronological player-performance form was unavailable for one or both teams."])
             ]
           }
         } satisfies Match
@@ -2510,7 +2594,11 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     const apiKey = firstEnv(this.env, ["THE_ODDS_API_KEY", "ODDS_API_KEY"]);
     if (!apiKey) return null;
     const sports: Array<Extract<Sport, "football" | "basketball" | "tennis">> = ["football", "basketball", "tennis"];
-    const candidates = sports.flatMap((sport) => configuredOddsSportKeys(this.env, sport).map((sportKey) => ({ sport, sportKey })));
+    const candidates = (
+      await Promise.all(
+        sports.map(async (sport) => (await this.getOddsSportKeys(sport)).map((sportKey) => ({ sport, sportKey })))
+      )
+    ).flat();
     const cacheKey = `event:${eventId}:${candidates.map(({ sportKey }) => sportKey).join(",")}`;
     const cached = this.oddsEventsCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return (await cached.events)[0] ?? null;
@@ -2540,7 +2628,8 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private async getCurrentOddsEvents(date: string, sport: Extract<Sport, "football" | "basketball" | "tennis">): Promise<OddsApiEvent[]> {
     const apiKey = firstEnv(this.env, ["THE_ODDS_API_KEY", "ODDS_API_KEY"]);
     if (!apiKey) return [];
-    const sportKeys = configuredOddsSportKeys(this.env, sport);
+    const sportKeys = await this.getOddsSportKeys(sport);
+    if (!sportKeys.length) return [];
     const regions = this.env.ODDS_API_REGIONS?.trim() || defaultOddsRegionsForSport(sport);
     const markets = sport === "football" ? "h2h,totals" : "h2h,spreads,totals";
     const footballEventMarkets = configuredFootballEventMarkets(this.env);

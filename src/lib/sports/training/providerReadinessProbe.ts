@@ -8,7 +8,7 @@ type SyncImpl = (args: { request: ProviderSyncRequest; env?: EnvMap; fetchImpl?:
 
 export type ProviderReadinessProbeStatus = "ready" | "watch" | "blocked";
 export type ProviderReadinessFeedStatus = "pass" | "watch" | "block" | "skipped";
-export type ProviderReadinessFeedId = "fixtures" | "events" | "standings" | "availability" | "suspensions" | "lineups" | "news" | "weather";
+export type ProviderReadinessFeedId = "fixtures" | "events" | "standings" | "availability" | "suspensions" | "lineups" | "player-performance" | "news" | "weather";
 
 export type ProviderReadinessFeedCheck = {
   id: ProviderReadinessFeedId;
@@ -32,6 +32,7 @@ export type ProviderReadinessProbeRequest = {
   includeStandings?: boolean;
   includeAvailability?: boolean;
   includeLineups?: boolean;
+  includePlayerStats?: boolean;
   includeNews?: boolean;
   includeWeather?: boolean;
   limit?: number;
@@ -128,6 +129,7 @@ function defaultRequest(request: ProviderReadinessProbeRequest = {}): ProviderSy
     includeStandings: request.includeStandings ?? true,
     includeAvailability: request.includeAvailability ?? true,
     includeLineups: request.includeLineups ?? true,
+    includePlayerStats: request.includePlayerStats ?? true,
     includeNews: request.includeNews ?? false,
     includeWeather: request.includeWeather ?? false,
     limit: Math.min(Math.max(Math.trunc(request.limit ?? 1), 1), 5)
@@ -238,6 +240,7 @@ function firstBackfillCommand(baseUrl: string, request: ProviderSyncRequest): st
   query.set("includeStandings", request.includeStandings ? "1" : "0");
   query.set("includeAvailability", request.includeAvailability ? "1" : "0");
   query.set("includeLineups", request.includeLineups ? "1" : "0");
+  query.set("includePlayerStats", request.includePlayerStats ? "1" : "0");
   if (request.includeNews) query.set("includeNews", "1");
   if (request.includeWeather) query.set("includeWeather", "1");
   query.set("maxJobs", "1");
@@ -449,6 +452,14 @@ export async function buildApiFootballProviderReadinessProbe({
       errors: result.lineupsErrors
     }),
     feedCheck({
+      id: "player-performance",
+      label: "Player performance",
+      requested: Boolean(syncRequest.includePlayerStats),
+      fetched: result.playerPerformancesFetched,
+      normalized: result.playerPerformancesNormalized,
+      errors: result.playerPerformancesErrors
+    }),
+    feedCheck({
       id: "news",
       label: "News",
       requested: Boolean(syncRequest.includeNews),
@@ -492,6 +503,7 @@ export async function buildApiFootballProviderReadinessProbe({
       includeStandings: syncRequest.includeStandings,
       includeAvailability: syncRequest.includeAvailability,
       includeLineups: syncRequest.includeLineups,
+      includePlayerStats: syncRequest.includePlayerStats,
       includeNews: syncRequest.includeNews,
       includeWeather: syncRequest.includeWeather
     },

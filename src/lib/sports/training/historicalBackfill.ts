@@ -30,6 +30,7 @@ export type HistoricalProviderBackfillRequest = {
   includeStandings?: boolean;
   includeAvailability?: boolean;
   includeLineups?: boolean;
+  includePlayerStats?: boolean;
   includeWeather?: boolean;
   maxEventFixtures?: number;
   maxContextFixtures?: number;
@@ -79,6 +80,7 @@ export type HistoricalProviderBackfillResult = {
     standingsRows: number;
     availabilityRows: number;
     lineupRows: number;
+    playerPerformanceRows: number;
     weatherRows: number;
     featureSnapshots: number;
   };
@@ -184,6 +186,7 @@ function commonSyncRequest(request: HistoricalProviderBackfillRequest): Pick<
   | "includeStandings"
   | "includeAvailability"
   | "includeLineups"
+  | "includePlayerStats"
   | "includeWeather"
   | "maxEventFixtures"
   | "maxContextFixtures"
@@ -197,6 +200,7 @@ function commonSyncRequest(request: HistoricalProviderBackfillRequest): Pick<
     includeStandings: Boolean(request.includeStandings),
     includeAvailability: Boolean(request.includeAvailability),
     includeLineups: Boolean(request.includeLineups),
+    includePlayerStats: Boolean(request.includePlayerStats),
     includeWeather: Boolean(request.includeWeather),
     maxEventFixtures: request.maxEventFixtures,
     maxContextFixtures: request.maxContextFixtures,
@@ -350,6 +354,7 @@ function emptyCounts(): HistoricalProviderBackfillResult["counts"] {
     standingsRows: 0,
     availabilityRows: 0,
     lineupRows: 0,
+    playerPerformanceRows: 0,
     weatherRows: 0,
     featureSnapshots: 0
   };
@@ -412,6 +417,7 @@ export async function runHistoricalProviderBackfill({
     counts.standingsRows += result.ingestion?.counts.standingsRows ?? 0;
     counts.availabilityRows += result.ingestion?.counts.availabilityRows ?? 0;
     counts.lineupRows += result.ingestion?.counts.lineupRows ?? 0;
+    counts.playerPerformanceRows += result.playerPerformancesStored ?? (result.dryRun ? result.playerPerformancesNormalized ?? 0 : 0);
     counts.weatherRows += result.ingestion?.counts.weatherRows ?? 0;
     counts.featureSnapshots += result.ingestion?.counts.featureSnapshots ?? 0;
 
