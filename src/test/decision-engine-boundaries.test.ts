@@ -9,6 +9,8 @@ import {
   buildDecisionOddsIntelligence,
   edgeAfterOddsMultiplier
 } from "@/lib/sports/prediction/decisionMarketIntelligence";
+import { buildDecisionBoundary } from "@/lib/sports/prediction/decisionBoundary";
+import { buildDecisionRobustnessAudit } from "@/lib/sports/prediction/decisionRobustness";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
 import { buildPrediction } from "@/lib/sports/service";
 import type {
@@ -110,7 +112,11 @@ describe("decision engine module boundaries", () => {
     expect(engine).toContain('from "./decisionMarketIntelligence"');
     expect(engine).not.toContain("function buildDecisionOddsIntelligence(");
     expect(engine).not.toContain("function buildDecisionMarketMovement(");
-    expect(engine.split(/\r?\n/).length).toBeLessThan(5200);
+    expect(engine).toContain('import { buildDecisionBoundary } from "./decisionBoundary"');
+    expect(engine).toContain('import { buildDecisionRobustnessAudit } from "./decisionRobustness"');
+    expect(engine).not.toContain("function buildDecisionBoundary(");
+    expect(engine).not.toContain("function buildDecisionRobustnessAudit(");
+    expect(engine.split(/\r?\n/).length).toBeLessThan(4800);
   });
 
   it("preserves evidence and attribution output across football, basketball, and tennis", async () => {
@@ -142,10 +148,35 @@ describe("decision engine module boundaries", () => {
         reviewLoop: decision.reviewLoop
       });
       const rebuiltOddsIntelligence = buildDecisionOddsIntelligence({ match: fixture, valueEdges: prediction.valueEdges });
+      const rebuiltRobustness = buildDecisionRobustnessAudit({
+        bestPick: selectedPick,
+        action: decision.action,
+        diagnostics: prediction.diagnostics,
+        missingSignals: decision.missingSignals,
+        monitoringPlan: decision.monitoringPlan,
+        actionability: decision.actionability,
+        reviewLoop: decision.reviewLoop,
+        saferAlternatives: decision.saferAlternatives
+      });
+      const rebuiltBoundary = buildDecisionBoundary({
+        diagnostics: prediction.diagnostics,
+        bestPick: selectedPick,
+        action: decision.action,
+        decisionScore: decision.decisionScore,
+        learningProfile: decision.learningProfile,
+        probabilityTrace: decision.probabilityTrace,
+        marketMovement: decision.marketMovement,
+        dataCoverage: decision.dataCoverage,
+        uncertainty: decision.uncertainty,
+        robustness: rebuiltRobustness,
+        abstentionRules: decision.abstentionRules
+      });
 
       expect(rebuiltEvidence, `${sport} evidence`).toEqual(decision.evidence);
       expect(rebuiltAttribution, `${sport} attribution`).toEqual(decision.attribution);
       expect(rebuiltOddsIntelligence, `${sport} odds intelligence`).toEqual(decision.oddsIntelligence);
+      expect(rebuiltRobustness, `${sport} robustness`).toEqual(decision.robustness);
+      expect(rebuiltBoundary, `${sport} boundary`).toEqual(decision.decisionBoundary);
       expect(rebuiltAttribution.valueScore).toBeGreaterThanOrEqual(0);
       expect(rebuiltAttribution.riskScore).toBeGreaterThanOrEqual(0);
     }
@@ -188,5 +219,82 @@ describe("decision engine module boundaries", () => {
     expect(movement.maxShorteningBeforeNoValue).toBeCloseTo(1 - (1 / 0.6) / 2, 10);
     expect(fivePercent?.odds).toBeCloseTo(1.9, 10);
     expect(fivePercent?.expectedValue).toBeCloseTo(0.14, 10);
+  });
+
+  it("keeps robustness shocks mathematically traceable and decision boundaries measurable", async () => {
+    const fixture = (await mockSportsDataProvider.getFixtures("2026-07-14", "football"))[0];
+    const prediction = buildPrediction(fixture);
+    const decision = prediction.decision;
+    const priced = {
+      hasValue: true as const,
+      marketId: "match_winner" as const,
+      selectionId: "home",
+      label: "Home",
+      modelProbability: 0.6,
+      rawImpliedProbability: 0.5,
+      noVigImpliedProbability: 0.5 / 1.04,
+      impliedProbability: 0.5,
+      bookmakerMargin: 0.04,
+      edge: 0.6 - 0.5 / 1.04,
+      expectedValue: 0.2,
+      expectedRoi: 0.2,
+      odds: 2,
+      confidence: "high" as const,
+      risk: "medium" as const
+    };
+    const robustness = buildDecisionRobustnessAudit({
+      bestPick: priced,
+      action: "consider",
+      diagnostics,
+      missingSignals: [],
+      monitoringPlan: decision.monitoringPlan,
+      actionability: decision.actionability,
+      reviewLoop: decision.reviewLoop,
+      saferAlternatives: decision.saferAlternatives
+    });
+
+    for (const stress of robustness.cases) {
+      expect(stress.edgeAfterShock, stress.id).toBeCloseTo(priced.edge + stress.probabilityShift, 10);
+      expect(stress.expectedValueAfterShock, stress.id).toBeCloseTo(priced.expectedValue + stress.probabilityShift * priced.odds, 10);
+    }
+
+    const boundary = buildDecisionBoundary({
+      diagnostics,
+      bestPick: priced,
+      action: "consider",
+      decisionScore: 50,
+      probabilityTrace: {
+        ...decision.probabilityTrace,
+        posteriorProbability: priced.modelProbability,
+        posteriorEdge: priced.edge,
+        posteriorExpectedValue: priced.expectedValue
+      },
+      marketMovement: buildDecisionMarketMovement({ bestPick: priced, action: "consider" }),
+      dataCoverage: decision.dataCoverage,
+      uncertainty: decision.uncertainty,
+      robustness,
+      abstentionRules: []
+    });
+    const probabilityFloor = boundary.metrics.find((metric) => metric.id === "probability-floor");
+    const oddsFloor = boundary.metrics.find((metric) => metric.id === "odds-floor");
+
+    expect(probabilityFloor).toMatchObject({ current: 0.6, threshold: 0.5, status: "safe" });
+    expect(probabilityFloor?.margin).toBeCloseTo(0.1, 10);
+    expect(oddsFloor?.threshold).toBeCloseTo(1 / 0.6, 10);
+    expect(oddsFloor?.margin).toBeCloseTo(2 - 1 / 0.6, 10);
+
+    const unavailable = buildDecisionRobustnessAudit({
+      bestPick: noValue,
+      action: "avoid",
+      diagnostics,
+      missingSignals: [],
+      monitoringPlan: decision.monitoringPlan,
+      actionability: decision.actionability,
+      reviewLoop: decision.reviewLoop,
+      saferAlternatives: []
+    });
+    expect(unavailable.survivalRate).toBe(0);
+    expect(unavailable.cases.every((stress) => stress.status === "breaks")).toBe(true);
+    expect(unavailable.cases.every((stress) => stress.edgeAfterShock === null && stress.expectedValueAfterShock === null)).toBe(true);
   });
 });
