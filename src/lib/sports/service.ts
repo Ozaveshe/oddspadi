@@ -27,6 +27,7 @@ import {
   oddsSnapshotsFromMatch
 } from "./prediction/canonicalDecision";
 import { readLatestDecisionSummary } from "./intelligence/repository";
+import type { DecisionProbabilityRuntimeStages } from "./prediction/decisionProbabilityTrace";
 
 export const sports: Array<{ id: Sport; label: string; active: boolean }> = [
   { id: "football", label: "Football", active: true },
@@ -180,6 +181,17 @@ export function buildPrediction(
   const diagnostics = applyMarketPriorAdjustmentToDiagnostics(learnedCalibrationDiagnostics, marketPrior.adjustment);
   const valueEdges = buildValueEdges(markets, match.oddsMarkets, diagnostics.dataQualityScore);
   const candidatePick = selectBestPick(valueEdges, { learningProfile: runtimeLearningProfile, caseMemoryBank });
+  const selectedStageProbability = (stageMarkets: typeof markets): number | null => {
+    if (!candidatePick.hasValue) return null;
+    const probability = stageMarkets.find((market) => market.marketId === candidatePick.marketId)?.probabilities[candidatePick.selectionId];
+    return typeof probability === "number" && Number.isFinite(probability) ? probability : null;
+  };
+  const probabilityStages: DecisionProbabilityRuntimeStages = {
+    rawModelProbability: selectedStageProbability(baseModel.markets),
+    contextAdjustedProbability: selectedStageProbability(contextMarkets),
+    learnedCalibratedProbability: selectedStageProbability(learnedCalibration.markets),
+    finalModelProbability: selectedStageProbability(markets)
+  };
   const decision = buildDecisionEngineReport({
     match,
     markets,
@@ -191,6 +203,7 @@ export function buildPrediction(
     caseMemoryBank,
     contextAdjustment,
     marketPriorAdjustment: marketPrior.adjustment,
+    probabilityStages,
     publicHistoricalTrainingEvidence
   });
   const generatedAt = new Date().toISOString();

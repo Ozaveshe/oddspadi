@@ -87,6 +87,10 @@ import { formatOdds, formatPercent, formatSignedPercent } from "./format";
 import { scoreValueEdge, selectBestPick } from "./odds";
 import { buildDecisionHistoricalDiscipline } from "./decisionHistoricalEvidence";
 import { buildDecisionDataCoverageAudit } from "./decisionDataCoverage";
+import {
+  buildDecisionProbabilityTrace,
+  type DecisionProbabilityRuntimeStages
+} from "./decisionProbabilityTrace";
 
 export const DECISION_ENGINE_VERSION = "decision-engine-v1";
 
@@ -1345,43 +1349,6 @@ function boundProbability(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-const PROBABILITY_TRACE_MIN = 0.02;
-const PROBABILITY_TRACE_MAX = 0.98;
-
-function clampTraceProbability(value: number): number {
-  return Math.max(PROBABILITY_TRACE_MIN, Math.min(PROBABILITY_TRACE_MAX, value));
-}
-
-function probabilityToLogOdds(value: number): number {
-  const bounded = clampTraceProbability(value);
-  return Math.log(bounded / (1 - bounded));
-}
-
-function logOddsToProbability(value: number): number {
-  return 1 / (1 + Math.exp(-value));
-}
-
-function traceConfidence(weight: number): ConfidenceLevel {
-  if (weight >= 0.68) return "high";
-  if (weight >= 0.42) return "medium";
-  return "low";
-}
-
-function contextShiftForBestPick(bestPick: BestPickResult, contextAdjustment?: MatchContextAdjustment): number {
-  if (!bestPick.hasValue || !contextAdjustment?.applied) return 0;
-  const selectionId = bestPick.selectionId.toLowerCase();
-  if (bestPick.marketId === "match_winner" || bestPick.marketId === "spread") {
-    if (selectionId.includes("home")) return contextAdjustment.probabilityShift.home;
-    if (selectionId.includes("away")) return contextAdjustment.probabilityShift.away;
-    if (selectionId.includes("draw")) return contextAdjustment.probabilityShift.draw ?? 0;
-  }
-  if (bestPick.marketId === "over_under_25" || bestPick.marketId === "total_points" || bestPick.marketId === "total_games") {
-    if (selectionId.includes("under")) return -contextAdjustment.totalShift;
-    if (selectionId.includes("over")) return contextAdjustment.totalShift;
-  }
-  return 0;
-}
-
 function beliefSignalDirection(impact: DecisionEvidence["impact"]): DecisionBeliefSignal["direction"] {
   if (impact === "positive") return "supports";
   if (impact === "negative") return "opposes";
@@ -1564,308 +1531,6 @@ function buildDecisionBeliefState({
           bestPick.edge
         )} edge, ${formatSignedPercent(bestPick.expectedValue)} EV, uncertainty ${uncertaintyScore}/100, expires in ${ttlMinutes} minutes.`
       : `Belief is ${grade}: no selection is trusted yet; uncertainty ${uncertaintyScore}/100, expires in ${ttlMinutes} minutes.`
-  };
-}
-
-function buildDecisionProbabilityTrace({
-  diagnostics,
-  bestPick,
-  contextAdjustment,
-  marketPriorAdjustment,
-  caseMemory,
-  abstentionRules,
-  calibration,
-  action,
-  beliefState
-}: {
-  diagnostics: FootballModelDiagnostics;
-  bestPick: BestPickResult;
-  contextAdjustment?: MatchContextAdjustment;
-  marketPriorAdjustment?: MarketPriorAdjustment;
-  caseMemory: DecisionCaseMemory;
-  abstentionRules: DecisionAbstentionRule[];
-  calibration: DecisionCalibration;
-  action: DecisionAction;
-  beliefState: DecisionBeliefState;
-}): DecisionProbabilityTrace {
-  if (!bestPick.hasValue) {
-    return {
-      status: "blocked",
-      summary: "Probability trace is blocked because no priced selection passed the value guardrail.",
-      selection: null,
-      marketId: null,
-      basePriorProbability: null,
-      modelProbability: null,
-      posteriorProbability: null,
-      posteriorEdge: null,
-      posteriorExpectedValue: null,
-      disagreement: null,
-      confidenceBand: {
-        low: null,
-        high: null
-      },
-      clampRange: {
-        min: PROBABILITY_TRACE_MIN,
-        max: PROBABILITY_TRACE_MAX
-      },
-      steps: [
-        {
-          id: "no-selection",
-          kind: "posterior",
-          label: "No priced candidate",
-          status: "skipped",
-          priorProbability: null,
-          posteriorProbability: null,
-          probabilityDelta: null,
-          logOddsDelta: 0,
-          weight: 0,
-          confidence: "low",
-          detail: "The engine cannot run evidence fusion until a selection has model probability, no-vig market probability, and odds."
-        }
-      ],
-      conflicts: ["No selection passed the value, EV, and confidence guardrails."],
-      safeguards: [
-        "Do not infer a posterior probability without a priced candidate.",
-        "Rerun after fresh odds create a positive no-vig edge and positive expected value."
-      ]
-    };
-  }
-
-  const basePriorProbability = clampTraceProbability(bestPick.noVigImpliedProbability);
-  let logOdds = probabilityToLogOdds(basePriorProbability);
-  const steps: DecisionProbabilityTraceStep[] = [
-    {
-      id: "market-prior",
-      kind: "market-prior",
-      label: "No-vig market prior",
-      status: "applied",
-      priorProbability: basePriorProbability,
-      posteriorProbability: basePriorProbability,
-      probabilityDelta: 0,
-      logOddsDelta: 0,
-      weight: 1,
-      confidence: "medium",
-      detail: `Started from bookmaker-margin-adjusted probability ${formatPercent(basePriorProbability)} before applying model and context evidence.`
-    }
-  ];
-
-  function pushStep(input: {
-    id: string;
-    kind: DecisionProbabilityTraceStep["kind"];
-    label: string;
-    rawLogOddsDelta: number;
-    weight: number;
-    detail: string;
-    confidence?: ConfidenceLevel;
-    forceStatus?: DecisionProbabilityTraceStep["status"];
-  }) {
-    const priorProbability = logOddsToProbability(logOdds);
-    const boundedWeight = Math.max(0, Math.min(1, input.weight));
-    const appliedDelta = input.rawLogOddsDelta * boundedWeight;
-    const unclampedProbability = logOddsToProbability(logOdds + appliedDelta);
-    const posteriorProbability = clampTraceProbability(unclampedProbability);
-    const status =
-      input.forceStatus ??
-      (Math.abs(appliedDelta) < 0.0001 ? "skipped" : Math.abs(posteriorProbability - unclampedProbability) > 0.000001 ? "clamped" : "applied");
-    logOdds = probabilityToLogOdds(posteriorProbability);
-    steps.push({
-      id: input.id,
-      kind: input.kind,
-      label: input.label,
-      status,
-      priorProbability,
-      posteriorProbability,
-      probabilityDelta: posteriorProbability - priorProbability,
-      logOddsDelta: appliedDelta,
-      weight: boundedWeight,
-      confidence: input.confidence ?? traceConfidence(boundedWeight),
-      detail: input.detail
-    });
-  }
-
-  const modelDisagreement = bestPick.modelProbability - basePriorProbability;
-  const confidenceWeight = bestPick.confidence === "high" ? 0.72 : bestPick.confidence === "medium" ? 0.58 : 0.44;
-  const marginPenalty = Math.max(0, 1 - Math.min(0.18, Math.max(0, bestPick.bookmakerMargin)) / 0.18);
-  const modelWeight = Math.max(0.35, Math.min(0.86, confidenceWeight * 0.54 + diagnostics.dataQualityScore * 0.34 + marginPenalty * 0.12));
-  pushStep({
-    id: "model-evidence",
-    kind: "model-evidence",
-    label: "Model likelihood update",
-    rawLogOddsDelta: probabilityToLogOdds(bestPick.modelProbability) - probabilityToLogOdds(basePriorProbability),
-    weight: modelWeight,
-    confidence: bestPick.confidence,
-    detail: `Weighted ${bestPick.confidence} model probability ${formatPercent(bestPick.modelProbability)} against the no-vig prior by data quality ${formatPercent(
-      diagnostics.dataQualityScore
-    )} and bookmaker margin ${formatSignedPercent(bestPick.bookmakerMargin)}.`
-  });
-
-  const contextShift = contextShiftForBestPick(bestPick, contextAdjustment);
-  const contextWeight =
-    contextAdjustment?.applied && contextAdjustment.signals.length
-      ? contextAdjustment.signals.some((signal) => signal.quality === "strong" || signal.source.toLowerCase().includes("provider"))
-        ? 0.58
-        : 0.36
-      : 0;
-  const contextPrior = logOddsToProbability(logOdds);
-  const contextTarget = clampTraceProbability(contextPrior + contextShift);
-  pushStep({
-    id: "context-evidence",
-    kind: "context",
-    label: "Context signal update",
-    rawLogOddsDelta: probabilityToLogOdds(contextTarget) - probabilityToLogOdds(contextPrior),
-    weight: contextWeight,
-    detail: contextAdjustment?.applied
-      ? `Applied bounded context shift ${formatSignedPercent(contextShift)} from ${contextAdjustment.signals.length} injury, lineup, weather, news, live, or sport-context signal(s).`
-      : "Skipped because no structured context adjustment was available."
-  });
-
-  const marketCalibrationWeight =
-    marketPriorAdjustment?.applied && typeof marketPriorAdjustment.averageWeight === "number"
-      ? Math.max(0, Math.min(0.18, marketPriorAdjustment.averageWeight * 1.4))
-      : 0;
-  pushStep({
-    id: "market-calibration",
-    kind: "market-calibration",
-    label: "Market calibration pull",
-    rawLogOddsDelta: probabilityToLogOdds(basePriorProbability) - logOdds,
-    weight: marketCalibrationWeight,
-    detail: marketPriorAdjustment?.applied
-      ? `Applied a small pull back toward the no-vig market because ${marketPriorAdjustment.adjustedSelections} selection(s) were market-prior calibrated.`
-      : "Skipped because no market-prior adjustment was available."
-  });
-
-  const qualityGap = Math.max(0, 0.72 - diagnostics.dataQualityScore);
-  const qualitySupport = Math.max(0, diagnostics.dataQualityScore - 0.88);
-  const dataQualityRawDelta =
-    qualityGap > 0
-      ? probabilityToLogOdds(basePriorProbability) - logOdds
-      : modelDisagreement >= 0
-        ? 0.04
-        : -0.04;
-  pushStep({
-    id: "data-quality",
-    kind: "data-quality",
-    label: "Data-quality reliability update",
-    rawLogOddsDelta: dataQualityRawDelta,
-    weight: qualityGap > 0 ? Math.min(0.2, qualityGap * 0.5) : Math.min(0.08, qualitySupport * 0.6),
-    confidence: diagnostics.dataQualityScore >= 0.88 ? "high" : diagnostics.dataQualityScore >= 0.72 ? "medium" : "low",
-    detail:
-      qualityGap > 0
-        ? `Data quality ${formatPercent(diagnostics.dataQualityScore)} is below the reliability floor, so the trace pulls probability toward the market prior.`
-        : `Data quality ${formatPercent(diagnostics.dataQualityScore)} does not force a discount; only a tiny reliability nudge is allowed.`
-  });
-
-  const memoryRawDelta = caseMemory.adjustment === "abstain" ? -0.32 : caseMemory.adjustment === "discount" ? -0.16 : caseMemory.status === "ready" ? 0.04 : 0;
-  const memoryWeight = caseMemory.adjustment === "abstain" ? 0.85 : caseMemory.adjustment === "discount" ? 0.7 : caseMemory.status === "ready" ? 0.42 : 0;
-  pushStep({
-    id: "case-memory",
-    kind: "case-memory",
-    label: "Case-memory update",
-    rawLogOddsDelta: memoryRawDelta,
-    weight: memoryWeight,
-    confidence: caseMemory.status === "ready" ? "medium" : "low",
-    detail: caseMemory.summary
-  });
-
-  const calibrationRawDelta = calibration.action === "trust" ? 0.045 : calibration.action === "discount" ? -0.08 : -0.2;
-  pushStep({
-    id: "calibration",
-    kind: "calibration",
-    label: "Calibration reliability update",
-    rawLogOddsDelta: calibrationRawDelta,
-    weight: calibration.action === "trust" ? 0.62 : calibration.action === "discount" ? 0.68 : 0.82,
-    confidence: calibration.health === "stable" ? "high" : calibration.health === "review" ? "medium" : "low",
-    detail: calibration.detail
-  });
-
-  const triggeredRules = abstentionRules.filter((rule) => rule.triggered);
-  pushStep({
-    id: "abstention",
-    kind: "abstention",
-    label: "Abstention gate update",
-    rawLogOddsDelta: triggeredRules.length ? -0.24 * triggeredRules.length : 0,
-    weight: triggeredRules.length ? 0.85 : 0,
-    confidence: triggeredRules.length ? "high" : "medium",
-    detail: triggeredRules.length
-      ? `Applied downgrade pressure from triggered gate(s): ${triggeredRules.map((rule) => rule.label).join(", ")}.`
-      : "No abstention gate triggered, so the posterior is not downgraded here."
-  });
-
-  const posteriorProbability = clampTraceProbability(logOddsToProbability(logOdds));
-  const posteriorEdge = posteriorProbability - bestPick.noVigImpliedProbability;
-  const posteriorExpectedValue = posteriorProbability * bestPick.odds - 1;
-  const bandWidth =
-    beliefState.confidenceInterval.low !== null && beliefState.confidenceInterval.high !== null
-      ? Math.max(0.035, (beliefState.confidenceInterval.high - beliefState.confidenceInterval.low) / 2)
-      : 0.08;
-  const confidenceBand = {
-    low: clampTraceProbability(posteriorProbability - bandWidth),
-    high: clampTraceProbability(posteriorProbability + bandWidth)
-  };
-  steps.push({
-    id: "posterior",
-    kind: "posterior",
-    label: "Posterior decision probability",
-    status: "applied",
-    priorProbability: posteriorProbability,
-    posteriorProbability,
-    probabilityDelta: 0,
-    logOddsDelta: 0,
-    weight: 1,
-    confidence: beliefState.grade === "strong" ? "high" : beliefState.grade === "moderate" ? "medium" : "low",
-    detail: `Final posterior ${formatPercent(posteriorProbability)} gives edge ${formatSignedPercent(posteriorEdge)} and EV ${formatSignedPercent(
-      posteriorExpectedValue
-    )} at odds ${formatOdds(bestPick.odds)}.`
-  });
-
-  const conflicts = [
-    Math.abs(modelDisagreement) >= 0.1
-      ? `Model-market disagreement is ${formatSignedPercent(modelDisagreement)} between model probability and no-vig prior.`
-      : "",
-    diagnostics.dataQualityScore < 0.75 ? `Data quality ${formatPercent(diagnostics.dataQualityScore)} is below production trust level.` : "",
-    caseMemory.adjustment !== "none" ? `Case memory requires ${caseMemory.adjustment}.` : "",
-    posteriorExpectedValue <= 0 ? "Posterior expected value is not positive after evidence fusion." : "",
-    ...triggeredRules.map((rule) => `Abstention gate triggered: ${rule.label}.`),
-    ...(contextAdjustment?.riskFlags.slice(0, 2) ?? [])
-  ].filter(Boolean);
-  const status: DecisionProbabilityTrace["status"] =
-    action === "avoid" || triggeredRules.length > 0 || posteriorExpectedValue <= 0
-      ? "blocked"
-      : action === "monitor" || posteriorExpectedValue < 0.04 || diagnostics.dataQualityScore < 0.72 || caseMemory.adjustment !== "none"
-        ? "watchlist"
-        : "ready";
-
-  return {
-    status,
-    summary:
-      status === "ready"
-        ? `Probability trace is ready: market prior ${formatPercent(basePriorProbability)} updated to posterior ${formatPercent(
-            posteriorProbability
-          )}, with ${formatSignedPercent(posteriorEdge)} posterior edge and ${formatSignedPercent(posteriorExpectedValue)} EV.`
-        : status === "watchlist"
-          ? `Probability trace is on watch: posterior ${formatPercent(posteriorProbability)} still needs fresh odds or stronger context before trust.`
-          : `Probability trace is blocked: posterior ${formatPercent(posteriorProbability)} does not survive the active guardrail state.`,
-    selection: bestPick.label,
-    marketId: bestPick.marketId,
-    basePriorProbability,
-    modelProbability: bestPick.modelProbability,
-    posteriorProbability,
-    posteriorEdge,
-    posteriorExpectedValue,
-    disagreement: modelDisagreement,
-    confidenceBand,
-    clampRange: {
-      min: PROBABILITY_TRACE_MIN,
-      max: PROBABILITY_TRACE_MAX
-    },
-    steps,
-    conflicts,
-    safeguards: [
-      `Posterior probability is clamped between ${formatPercent(PROBABILITY_TRACE_MIN)} and ${formatPercent(PROBABILITY_TRACE_MAX)}.`,
-      "The probability trace cannot upgrade the final action beyond deterministic guardrails.",
-      "Fresh odds, lineups, injuries, live events, and stored outcomes can still invalidate the posterior.",
-      "This is public audit math, not hidden chain-of-thought or a guarantee of the match result."
-    ]
   };
 }
 
@@ -6235,6 +5900,7 @@ export function buildDecisionEngineReport({
   contextAdjustment,
   probabilityCalibration,
   marketPriorAdjustment,
+  probabilityStages,
   publicHistoricalTrainingEvidence
 }: {
   match: Match;
@@ -6247,6 +5913,7 @@ export function buildDecisionEngineReport({
   contextAdjustment?: MatchContextAdjustment;
   probabilityCalibration?: LearnedProbabilityCalibrationAdjustment;
   marketPriorAdjustment?: MarketPriorAdjustment;
+  probabilityStages?: DecisionProbabilityRuntimeStages;
   publicHistoricalTrainingEvidence?: PublicHistoricalTrainingEvidence | null;
 }): DecisionEngineReport {
   const bestPick = selectBestPick(candidateBestPick.hasValue ? [candidateBestPick] : [], { learningProfile, caseMemoryBank });
@@ -6297,7 +5964,9 @@ export function buildDecisionEngineReport({
   const probabilityTrace = buildDecisionProbabilityTrace({
     diagnostics,
     bestPick,
+    probabilityStages,
     contextAdjustment,
+    probabilityCalibration,
     marketPriorAdjustment,
     caseMemory,
     abstentionRules,
