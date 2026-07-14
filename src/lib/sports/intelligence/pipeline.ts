@@ -1,5 +1,5 @@
 import type { Match, Prediction, Sport } from "@/lib/sports/types";
-import { getPredictions, sportsProvider } from "@/lib/sports/service";
+import { getPredictions, sportsProvider, type PredictionFilters } from "@/lib/sports/service";
 import {
   getRecentSportsProviderIssues,
   getSportsProviderRuntimeStatus
@@ -41,9 +41,18 @@ export type IntelligencePipelineDependencies = {
   getPredictions: (date: string, sport: Sport) => Promise<PredictionRow[]>;
 };
 
+/**
+ * Production decision runs must read the promoted learning profile and case
+ * memory. `storageMode: "preview"` is reserved for deterministic UI/tests; it
+ * deliberately disables those reads in the prediction service.
+ */
+export function productionPredictionFilters(date: string, sport: Sport): PredictionFilters {
+  return { date, sport, providerMode: "live", storageMode: "live" };
+}
+
 const defaultDependencies: IntelligencePipelineDependencies = {
   getFixtures: (date, sport) => sportsProvider.getFixtures(date, sport),
-  getPredictions: (date, sport) => getPredictions({ date, sport, providerMode: "live", storageMode: "preview" })
+  getPredictions: (date, sport) => getPredictions(productionPredictionFilters(date, sport))
 };
 
 function configuredSports(env: Record<string, string | undefined>): Sport[] {

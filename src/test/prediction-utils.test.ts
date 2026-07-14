@@ -5330,6 +5330,8 @@ describe("prediction utilities", () => {
       status: "active",
       source: "supabase:op_fixtures:real-only",
       active: true,
+      modelKey: "football-poisson-v2",
+      engineVersion: "decision-engine-v1",
       sampleSize: 1200,
       realFinishedFixtures: 1200,
       minimumRecommendedFixtures: 1000,
@@ -13618,6 +13620,8 @@ describe("prediction utilities", () => {
       status: "active",
       source: "supabase:op_fixtures:real-only",
       active: true,
+      modelKey: "football-poisson-v2",
+      engineVersion: "decision-engine-v1",
       sampleSize: 1200,
       realFinishedFixtures: 1200,
       minimumRecommendedFixtures: 1000,
@@ -13671,6 +13675,8 @@ describe("prediction utilities", () => {
       status: "active",
       source: "supabase:op_fixtures:real-only",
       active: true,
+      modelKey: "basketball-efficiency-v3",
+      engineVersion: "decision-engine-v1",
       sampleSize: 1400,
       realFinishedFixtures: 1400,
       minimumRecommendedFixtures: 1000,
@@ -13687,7 +13693,9 @@ describe("prediction utilities", () => {
       notes: []
     };
     const basketballPrediction = buildPrediction(basketball, { learningProfile });
-    const tennisPrediction = buildPrediction(tennis, { learningProfile });
+    const tennisPrediction = buildPrediction(tennis, {
+      learningProfile: { ...learningProfile, modelKey: "tennis-surface-elo-v3" }
+    });
 
     expect(basketballPrediction.decision.learningProfile?.active).toBe(true);
     expect(tennisPrediction.decision.learningProfile?.active).toBe(true);

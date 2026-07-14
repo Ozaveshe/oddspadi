@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const isDecisionAdminAuthorized = vi.hoisted(() => vi.fn());
+const isTrainingAdminAuthorized = vi.hoisted(() => vi.fn());
 const readActiveCalibrationPromotion = vi.hoisted(() => vi.fn());
 const approveCalibrationCandidate = vi.hoisted(() => vi.fn());
 const revokeCalibrationPromotion = vi.hoisted(() => vi.fn());
 
-vi.mock("@/_archived/api-sports-decision/_admin", () => ({ isDecisionAdminAuthorized }));
+vi.mock("@/lib/sports/training/adminAuth", () => ({ isTrainingAdminAuthorized }));
 vi.mock("@/lib/sports/prediction/decisionCalibrationPromotion", () => ({
   readActiveCalibrationPromotion,
   approveCalibrationCandidate,
   revokeCalibrationPromotion
 }));
 
-import { GET, POST } from "@/_archived/api-sports-decision/training/calibration-promotion/route";
+import { GET, POST } from "@/app/api/sports/decision/training/calibration-promotion/route";
 
 describe("calibration promotion route", () => {
   beforeEach(() => {
@@ -30,7 +30,7 @@ describe("calibration promotion route", () => {
   });
 
   it("requires an admin token before any approval write", async () => {
-    isDecisionAdminAuthorized.mockReturnValue(false);
+    isTrainingAdminAuthorized.mockReturnValue(false);
 
     const response = await POST(
       new Request("http://localhost/api/sports/decision/training/calibration-promotion", {
@@ -44,7 +44,7 @@ describe("calibration promotion route", () => {
   });
 
   it("approves only a named candidate with an operator rationale", async () => {
-    isDecisionAdminAuthorized.mockReturnValue(true);
+    isTrainingAdminAuthorized.mockReturnValue(true);
     approveCalibrationCandidate.mockResolvedValue({ status: "approved", configured: true, table: "op_calibration_promotions", id: "promotion-1" });
 
     const response = await POST(

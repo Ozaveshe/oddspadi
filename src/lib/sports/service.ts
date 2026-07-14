@@ -76,6 +76,17 @@ export function buildUnavailableLearningProfile(sport: LearningProfileSport, rea
   };
 }
 
+export function buildUnavailableCaseMemoryBank(reason: string): DecisionCaseMemoryBank {
+  return {
+    generatedAt: new Date().toISOString(),
+    status: "failed",
+    configured: true,
+    projectRef: null,
+    runs: [],
+    reason: `Could not read decision case memory: ${reason}`
+  };
+}
+
 async function getLearningProfileForSport(sport: Sport): Promise<DecisionLearningProfile | undefined> {
   if (!isLearningProfileSport(sport)) return undefined;
   return getDecisionLearningProfile(sport).catch((error: unknown) =>
@@ -87,6 +98,30 @@ function modelMatch(match: Match) {
   if (match.sport === "basketball") return modelBasketballMatch(match);
   if (match.sport === "tennis") return modelTennisMatch(match);
   return modelFootballMatch(match);
+}
+
+/** Never let promoted thresholds or weights cross the model/engine boundary they were validated against. */
+export function scopeLearningProfileToRuntime(
+  profile: DecisionLearningProfile | undefined,
+  modelKey: string,
+  engineVersion: string
+): DecisionLearningProfile | undefined {
+  if (!profile?.active) return profile;
+  const modelMatches = profile.modelKey === modelKey;
+  const engineMatches = profile.engineVersion === engineVersion;
+  if (modelMatches && engineMatches) return profile;
+
+  const mismatches = [
+    modelMatches ? null : `model ${profile.modelKey ?? "unversioned"} does not match runtime ${modelKey}`,
+    engineMatches ? null : `engine ${profile.engineVersion ?? "unversioned"} does not match runtime ${engineVersion}`
+  ].filter((value): value is string => Boolean(value));
+  return {
+    ...profile,
+    status: "shadow-only",
+    active: false,
+    reason: `Promoted learning profile is incompatible with this runtime: ${mismatches.join("; ")}.`,
+    notes: [...profile.notes, "Learned probability calibration, edge thresholds, and factor weights are disabled for this prediction."]
+  };
 }
 
 function coreModelContextCategories(match: Match): Array<NonNullable<Match["providerContextSignals"]>[number]["category"]> {
@@ -123,6 +158,11 @@ export function buildPrediction(
   } = {}
 ): Prediction {
   const baseModel = modelMatch(match);
+  const runtimeLearningProfile = scopeLearningProfileToRuntime(
+    learningProfile,
+    baseModel.diagnostics.modelVersion,
+    DECISION_ENGINE_VERSION
+  );
   const contextAdjustment = buildMatchContextAdjustment(match, {
     probabilityHandledCategories: coreModelContextCategories(match)
   });
@@ -130,7 +170,7 @@ export function buildPrediction(
   const contextDiagnostics = applyContextAdjustmentToDiagnostics(baseModel.diagnostics, contextAdjustment);
   const learnedCalibration = applyLearnedProbabilityCalibration({
     markets: contextMarkets,
-    profile: learningProfile,
+    profile: runtimeLearningProfile,
     modelKey: baseModel.diagnostics.modelVersion,
     engineVersion: DECISION_ENGINE_VERSION
   });
@@ -146,7 +186,7 @@ export function buildPrediction(
   const markets = marketPrior.markets;
   const diagnostics = applyMarketPriorAdjustmentToDiagnostics(learnedCalibrationDiagnostics, marketPrior.adjustment);
   const valueEdges = buildValueEdges(markets, match.oddsMarkets, diagnostics.dataQualityScore);
-  const candidatePick = selectBestPick(valueEdges, { learningProfile, caseMemoryBank });
+  const candidatePick = selectBestPick(valueEdges, { learningProfile: runtimeLearningProfile, caseMemoryBank });
   const decision = buildDecisionEngineReport({
     match,
     markets,
@@ -154,7 +194,7 @@ export function buildPrediction(
     probabilityCalibration: learnedCalibration.adjustment,
     bestPick: candidatePick,
     valueEdges,
-    learningProfile,
+    learningProfile: runtimeLearningProfile,
     caseMemoryBank,
     contextAdjustment,
     marketPriorAdjustment: marketPrior.adjustment,
@@ -229,7 +269,11 @@ export async function getPredictions(filters: PredictionFilters = {}) {
   const storageReadsEnabled = filters.storageMode !== "preview";
   const [learningProfile, caseMemoryBank, matches, publicHistoricalTrainingEvidence] = await Promise.all([
     storageReadsEnabled ? getLearningProfileForSport(sport) : Promise.resolve(undefined),
-    storageReadsEnabled ? getDecisionCaseMemoryBank({ sport }).catch(() => undefined) : Promise.resolve(undefined),
+    storageReadsEnabled
+      ? getDecisionCaseMemoryBank({ sport }).catch((error: unknown) =>
+          buildUnavailableCaseMemoryBank(error instanceof Error ? error.message : "unknown error")
+        )
+      : Promise.resolve(undefined),
     fixtureProvider.getFixtures(date, sport),
     getPublicHistoricalTrainingEvidenceForPredictions({ ...filters, sport })
   ]);
@@ -291,7 +335,9 @@ export async function getMatchPrediction(matchId: string) {
   if (match.sport === "football") { const slug = leagueSlugFromProviderId(match.league.id); if (slug) match.leagueTable = (await sportsProvider.getFootballLeagueTable(slug)) ?? undefined; }
   const [learningProfile, caseMemoryBank] = await Promise.all([
     getLearningProfileForSport(match.sport),
-    getDecisionCaseMemoryBank({ sport: match.sport }).catch(() => undefined)
+    getDecisionCaseMemoryBank({ sport: match.sport }).catch((error: unknown) =>
+      buildUnavailableCaseMemoryBank(error instanceof Error ? error.message : "unknown error")
+    )
   ]);
   const freshPrediction = buildPrediction(match, { learningProfile, caseMemoryBank });
   const storedSummary = await readLatestDecisionSummary(match.id).catch(() => null);

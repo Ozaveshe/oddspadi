@@ -9,6 +9,8 @@ function profile(overrides: Partial<DecisionLearningProfile> = {}): DecisionLear
     status: "active",
     source: "validated-holdout",
     active: true,
+    modelKey: "football-poisson-v2",
+    engineVersion: "decision-engine-v1",
     sampleSize: 1200,
     realFinishedFixtures: 1200,
     minimumRecommendedFixtures: 1000,
@@ -39,7 +41,7 @@ describe("learned probability calibration", () => {
       { marketId: "over_under_25", probabilities: { over_25: 0.54, under_25: 0.46 } }
     ];
 
-    const result = applyLearnedProbabilityCalibration({ markets, profile: profile(), modelKey: "football-poisson-elo-v1" });
+    const result = applyLearnedProbabilityCalibration({ markets, profile: profile(), modelKey: "football-poisson-v2", engineVersion: "decision-engine-v1" });
     const winner = result.markets.find((market) => market.marketId === "match_winner");
 
     expect(result.adjustment.status).toBe("applied");
@@ -56,7 +58,8 @@ describe("learned probability calibration", () => {
     const result = applyLearnedProbabilityCalibration({
       markets,
       profile: profile({ active: false, status: "shadow-only" }),
-      modelKey: "football-poisson-elo-v1"
+      modelKey: "football-poisson-v2",
+      engineVersion: "decision-engine-v1"
     });
 
     expect(result.adjustment.status).toBe("inactive");
@@ -73,5 +76,19 @@ describe("learned probability calibration", () => {
     expect(calibrated.calibrationAdjustment?.status).toBe("applied");
     expect(calibrated.diagnostics.calibrationNotes.join(" ")).toContain("Applied a 3-bucket promoted calibration curve");
     expect(calibratedWinner?.probabilities).not.toEqual(baselineWinner?.probabilities);
+  });
+
+  it("keeps every learned parameter shadow-only when the promoted model does not match runtime", async () => {
+    const [match] = await mockSportsDataProvider.getFixtures("2026-08-21", "football");
+    const prediction = buildPrediction(match, {
+      learningProfile: profile({ modelKey: "football-poisson-elo-v1" })
+    });
+
+    expect(prediction.calibrationAdjustment?.status).toBe("inactive");
+    expect(prediction.decision.learningProfile).toMatchObject({
+      status: "shadow-only",
+      active: false
+    });
+    expect(prediction.decision.learningProfile?.reason).toContain("does not match runtime football-poisson-v2");
   });
 });

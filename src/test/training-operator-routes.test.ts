@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { POST as backfill } from "@/app/api/sports/decision/training/backfill/route";
 import { GET as storageReceipt } from "@/app/api/sports/decision/training/historical-provider-storage-receipt/route";
 import { POST as providerSync } from "@/app/api/sports/decision/training/provider-sync/route";
+import { GET as inspectBacktest, POST as runBacktest } from "@/app/api/sports/decision/training/multi-sport-backtest-run/route";
+import { POST as runCalibration } from "@/app/api/sports/decision/training/calibration/route";
+import { POST as promoteCalibration } from "@/app/api/sports/decision/training/calibration-promotion/route";
 import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
 
 const originalToken = process.env.ODDSPADI_ADMIN_TOKEN;
@@ -25,6 +28,25 @@ describe("historical training operator routes", () => {
     const backfillResponse = await backfill(new Request("http://localhost/api/sports/decision/training/backfill?provider=api-football", { method: "POST" }));
     expect(providerResponse.status).toBe(401);
     expect(backfillResponse.status).toBe(401);
+  });
+
+  it("blocks backtest, calibration and promotion writes before any storage work", async () => {
+    process.env.ODDSPADI_ADMIN_TOKEN = "correct-token";
+    const requests = [
+      runBacktest(new Request("http://localhost/api/sports/decision/training/multi-sport-backtest-run?sport=football", { method: "POST" })),
+      runCalibration(new Request("http://localhost/api/sports/decision/training/calibration?sport=football", { method: "POST" })),
+      promoteCalibration(new Request("http://localhost/api/sports/decision/training/calibration-promotion", { method: "POST" }))
+    ];
+    const responses = await Promise.all(requests);
+    expect(responses.map((response) => response.status)).toEqual([401, 401, 401]);
+  });
+
+  it("blocks the legacy GET run switch before loading corpus or storage state", async () => {
+    process.env.ODDSPADI_ADMIN_TOKEN = "correct-token";
+    const response = await inspectBacktest(
+      new Request("http://localhost/api/sports/decision/training/multi-sport-backtest-run?sport=football&run=1")
+    );
+    expect(response.status).toBe(401);
   });
 
   it("blocks receipt execution without a token while retaining a non-executing preview contract", async () => {

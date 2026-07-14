@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
 import { ProviderBackedSportsDataProvider } from "@/lib/sports/providers/providerBackedProvider";
 import type { Match, Prediction, ValueEdge } from "@/lib/sports/types";
+import { buildUnavailableCaseMemoryBank } from "@/lib/sports/service";
 import { buildCanonicalDecision, oddsSnapshotsFromMatch } from "@/lib/sports/prediction/canonicalDecision";
 import {
   buildCanonicalDecisions,
@@ -10,7 +11,7 @@ import {
   normalizeOddsSnapshots,
   utcDateWindow
 } from "@/lib/sports/intelligence/canonical";
-import { classifyProviderRunStatus, runDailyEngine } from "@/lib/sports/intelligence/pipeline";
+import { classifyProviderRunStatus, productionPredictionFilters, runDailyEngine } from "@/lib/sports/intelligence/pipeline";
 import type { CanonicalDecision, CanonicalFixture, SlatePublicStatus } from "@/lib/sports/intelligence/types";
 
 async function providerMatch({
@@ -134,6 +135,24 @@ function decision(fixtureId: string, publicStatus: SlatePublicStatus, generatedA
 }
 
 describe("production daily sports intelligence", () => {
+  it("keeps promoted historical learning enabled for scheduled predictions", () => {
+    expect(productionPredictionFilters("2026-07-13", "football")).toEqual({
+      date: "2026-07-13",
+      sport: "football",
+      providerMode: "live",
+      storageMode: "live"
+    });
+  });
+
+  it("reports a failed case-memory read instead of silently treating it as unconfigured", () => {
+    expect(buildUnavailableCaseMemoryBank("network timeout")).toMatchObject({
+      status: "failed",
+      configured: true,
+      runs: [],
+      reason: "Could not read decision case memory: network timeout"
+    });
+  });
+
   it("preserves partial and empty provider health instead of reporting success", async () => {
     const fixture = normalizeCanonicalFixture(await providerMatch());
     const env = { API_FOOTBALL_KEY: "configured" };
