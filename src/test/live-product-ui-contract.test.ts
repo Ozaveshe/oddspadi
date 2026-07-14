@@ -38,8 +38,28 @@ describe("live OddsPadi product UI contract", () => {
     expect(detail).toContain("const canonical = prediction.canonicalDecision");
     expect(detail.indexOf("match-decision-hero")).toBeGreaterThan(-1);
     expect(detail.indexOf("match-decision-hero")).toBeLessThan(detail.indexOf("Advanced engine audit"));
+    expect(detail).toContain("match-decision-primary");
+    expect(detail).toContain("ProbabilityDistribution");
+    expect(detail).toContain("Fair market chance");
     expect(detail).not.toContain("The short version");
     expect(detail).toContain("Audit-only detail cannot override the canonical public decision above");
+  });
+
+  it("provides a readable mobile market analysis instead of relying on the desktop table", () => {
+    const markets = source("src/components/odds/OddsTable.tsx");
+    expect(markets).toContain("market-table-desktop");
+    expect(markets).toContain('className="market-mobile-list"');
+    expect(markets).toContain("Model chance");
+    expect(markets).toContain("Fair market");
+    expect(markets).toContain("Price details");
+  });
+
+  it("presents the engine as an evidence ledger without AI product language", () => {
+    const engine = source("src/app/predictions/decision-engine/page.tsx");
+    expect(engine).toContain("engine-run-metrics");
+    expect(engine).toContain("engine-empty-ledger");
+    expect(engine).toContain("Waiting for provider data");
+    expect(engine).not.toContain("AI Decision Engine");
   });
 
   it("keeps the advanced engine audit collapsed by default", () => {

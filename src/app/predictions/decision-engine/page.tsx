@@ -7,11 +7,11 @@ import { getDailyTipsProduct } from "@/lib/sports/tips/product";
 export const revalidate = 60;
 
 export const metadata: Metadata = {
-  title: "AI Decision Engine Status",
+  title: "Decision Engine Status",
   description: "Latest OddsPadi engine run, provider health, data coverage, recent canonical decisions and public calibration status.",
   alternates: { canonical: "/predictions/decision-engine" },
   openGraph: {
-    title: "OddsPadi AI Decision Engine",
+    title: "OddsPadi Decision Engine",
     description: "See the latest engine run, provider health, data coverage and canonical public decisions.",
     url: "/predictions/decision-engine"
   }
@@ -37,10 +37,17 @@ export default async function DecisionEnginePage() {
   const marketsAnalysed = slate.fixtures.reduce((sum, row) => sum + row.decisionSummary.auditSummary.marketsAnalysed, 0);
   const lastRun = slate.provider.lastRun;
   const runErrors = [...new Set([...(lastRun?.errors ?? []), ...slate.provider.errors])];
+  const runStatusLabel = lastRun?.status === "completed"
+    ? "Latest cycle completed"
+    : slate.provider.status === "empty"
+      ? "Waiting for provider data"
+      : slate.provider.status === "partial"
+        ? "Partial provider coverage"
+        : `Engine status: ${lastRun?.status ?? slate.provider.status}`;
 
   return (
-    <main id="main" className="container">
-      <header className="page-heading">
+    <main id="main" className="container engine-page">
+      <header className="page-heading engine-page-heading">
         <span className="section-kicker">The system behind every public decision</span>
         <h1>Decision engine</h1>
         <p>This is the current operational view: what the provider supplied, how much the engine analysed, what remains blocked, and the same canonical decisions shown across OddsPadi.</p>
@@ -49,9 +56,9 @@ export default async function DecisionEnginePage() {
 
       <ProviderRunStrip slate={slate} />
 
-      <section className="section" aria-label="Latest engine run summary">
-        <div className="section-title"><div><span className="section-kicker">Latest engine run</span><h2>{lastRun?.status ?? slate.provider.status}</h2></div><span className={`badge ${lastRun?.status === "completed" ? "positive" : "scheduled"}`}>{lastRun?.finishedAt ? new Date(lastRun.finishedAt).toLocaleString() : "Awaiting completion"}</span></div>
-        <div className="metrics-grid">
+      <section className="section engine-run-summary" aria-label="Latest engine run summary">
+        <div className="section-title"><div><span className="section-kicker">Latest engine run</span><h2>{runStatusLabel}</h2></div><span className={`badge ${lastRun?.status === "completed" ? "positive" : "scheduled"}`}>{lastRun?.finishedAt ? new Date(lastRun.finishedAt).toLocaleString() : "Awaiting completion"}</span></div>
+        <div className="metrics-grid engine-run-metrics">
           <div className="metric"><span className="metric-label">Fixtures analysed</span><span className="metric-value">{product.summary.fixturesAnalysed}</span></div>
           <div className="metric"><span className="metric-label">Value picks</span><span className="metric-value">{product.summary.valuePicks}</span></div>
           <div className="metric"><span className="metric-label">Watchlist</span><span className="metric-value">{product.summary.watchlist}</span></div>
@@ -103,7 +110,7 @@ export default async function DecisionEnginePage() {
 
       <section className="section">
         <div className="section-title"><div><span className="section-kicker">Recent decisions</span><h2>Canonical daily output</h2></div><Link className="button small-btn" href="/predictions/today">Open full slate</Link></div>
-        {slate.fixtures.length ? <div className="intelligence-grid">{slate.fixtures.slice(0, 6).map((row) => <SlateFixtureCard key={row.fixture.fixtureId} row={row} compact asOf={product.generatedAt} />)}</div> : <div className="empty-state"><h2>No provider-backed fixtures were analysed</h2><p className="muted">The provider status above explains the gap. This page does not substitute sample fixtures.</p></div>}
+        {slate.fixtures.length ? <div className="intelligence-grid">{slate.fixtures.slice(0, 6).map((row) => <SlateFixtureCard key={row.fixture.fixtureId} row={row} compact asOf={product.generatedAt} />)}</div> : <div className="engine-empty-ledger"><div><span className="section-kicker">Current output</span><h2>No provider-backed fixtures were analysed</h2><p className="muted">The provider status above explains the gap. OddsPadi keeps the public ledger empty instead of substituting sample fixtures.</p></div><div className="engine-empty-next"><strong>What unlocks an analysis</strong><ol><li>A verified fixture identity</li><li>A fresh market snapshot</li><li>Complete model and evidence gates</li></ol></div></div>}
 
         <details className="fold engine-operator-details">
           <summary>Operator run details</summary>

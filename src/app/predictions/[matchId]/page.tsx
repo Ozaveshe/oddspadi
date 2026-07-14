@@ -7,7 +7,7 @@ import { OddsTable } from "@/components/odds/OddsTable";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { PredictionExplanation } from "@/components/odds/PredictionExplanation";
 import { LocalTime } from "@/components/odds/LocalTime";
-import { ProbabilityBar } from "@/components/odds/ProbabilityBar";
+import { ProbabilityDistribution } from "@/components/odds/ProbabilityDistribution";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { AddToSlipButton } from "@/components/odds/AddToSlipButton";
@@ -162,16 +162,20 @@ export default async function MatchDetailPage({ params }: PageProps) {
           <span className={`badge ${hasValue ? "positive" : canonical.publicStatus === "lean" ? "medium" : canonical.publicStatus === "watchlist" || canonical.publicStatus === "stale" ? "scheduled" : "no-value"}`}>{canonical.publicStatus.replaceAll("_", " ")}</span>
           <h2 id="public-decision-title">{publicDecisionLabel}</h2>
           {displayedDecision ? (
-            <div className="match-decision-metrics">
-              <div><span>Market</span><strong>{displayedDecision.marketId.replaceAll("_", " ")}</strong></div>
-              <div><span>Selection</span><strong>{displayedDecision.label}</strong></div>
-              <div><span>Odds</span><strong>{displayedDecision.odds.toFixed(2)}</strong></div>
-              <div><span>Model chance</span><strong>{formatPercent(displayedDecision.modelProbability)}</strong></div>
-              <div><span>Bookmaker fair chance</span><strong>{formatPercent(displayedDecision.noVigImpliedProbability)}</strong></div>
-              <div><span>Edge</span><strong>{formatSignedPercent(displayedDecision.edge)}</strong></div>
-              <div><span>Confidence</span><strong><ConfidenceBadge level={canonical.confidence} /></strong></div>
-              <div><span>Risk</span><strong><RiskBadge level={canonical.risk} /></strong></div>
-            </div>
+            <>
+              <p className="match-decision-selection"><span>{displayedDecision.marketId.replaceAll("_", " ")}</span><strong>{displayedDecision.label}</strong></p>
+              <div className="match-decision-primary">
+                <div><span>Current odds</span><strong>{displayedDecision.odds.toFixed(2)}</strong></div>
+                <div><span>Model chance</span><strong>{formatPercent(displayedDecision.modelProbability)}</strong></div>
+                <div><span>Fair market chance</span><strong>{formatPercent(displayedDecision.noVigImpliedProbability)}</strong></div>
+                <div className={displayedDecision.edge > 0 ? "positive" : "negative"}><span>Model edge</span><strong>{formatSignedPercent(displayedDecision.edge)}</strong></div>
+              </div>
+              <div className="match-decision-context">
+                <div><span>Confidence</span><ConfidenceBadge level={canonical.confidence} /></div>
+                <div><span>Risk</span><RiskBadge level={canonical.risk} /></div>
+                <div><span>Decision clock</span><strong>{new Date(canonical.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</strong></div>
+              </div>
+            </>
           ) : <p className="muted">{canonical.noPickReason ?? "No clear value found."}</p>}
           <div className="match-risk-list"><strong>Key risks</strong>{publicRisks.length ? <ul>{publicRisks.map((risk) => <li key={risk}>{risk}</li>)}</ul> : <p className="muted small">No extra blocker is attached to the current public decision. Match and price uncertainty still applies.</p>}</div>
         </div>
@@ -189,14 +193,17 @@ export default async function MatchDetailPage({ params }: PageProps) {
 
       <section className="detail-grid">
         <div className="match-list">
-          <div className="panel">
+          <div className="panel probability-panel">
             <h2>Probability comparison</h2>
-            <div className="grid-2" style={{ marginTop: 12 }}>
-              <ProbabilityBar label={match.homeTeam.name} value={winner?.probabilities.home ?? 0} />
-              {match.sport === "football" ? <ProbabilityBar label="Draw" value={winner?.probabilities.draw ?? 0} /> : null}
-              <ProbabilityBar label={match.awayTeam.name} value={winner?.probabilities.away ?? 0} />
-              <ProbabilityBar label="Data quality" value={match.dataQualityScore} />
-            </div>
+            <p className="muted small">The full bar is 100% of the model&apos;s 1X2 distribution. Evidence quality is shown separately so confidence is not confused with probability.</p>
+            <ProbabilityDistribution
+              selections={[
+                { id: "home", label: match.homeTeam.name, value: winner?.probabilities.home ?? 0 },
+                ...(match.sport === "football" ? [{ id: "draw" as const, label: "Draw", value: winner?.probabilities.draw ?? 0 }] : []),
+                { id: "away", label: match.awayTeam.name, value: winner?.probabilities.away ?? 0 }
+              ]}
+              dataQuality={match.dataQualityScore}
+            />
           </div>
 
           <div className="panel">
