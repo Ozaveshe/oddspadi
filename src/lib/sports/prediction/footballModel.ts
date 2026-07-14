@@ -3,6 +3,7 @@ import { clampProbability } from "./odds";
 import { applyDixonColesAdjustment, buildScoreMatrix, probabilityFromScoreMatrix, topScorelines } from "./poisson";
 import { isFreshProviderContextSignal } from "./contextSignalPolicy";
 import { homeAdvantageForLeague } from "@/lib/sports/footballLeagues";
+import { runtimeModelKey } from "./modelIdentity";
 
 export function recencyWeightedFormScore(results: Array<"W" | "D" | "L">, decay = 0.82): number {
   if (!results.length) return 0;
@@ -250,7 +251,7 @@ export function modelFootballMatch(match: Match): { markets: PredictionMarket[];
   const btts = probabilityFromScoreMatrix(scoreMatrix, (cell) => cell.homeGoals > 0 && cell.awayGoals > 0);
 
   const diagnostics: FootballModelDiagnostics = {
-    modelVersion: "football-poisson-v2",
+    modelVersion: runtimeModelKey("football"),
     expectedScoreLabel: liveProjection
       ? `Live projection ${match.homeTeam.name} ${expectedGoals.home.toFixed(2)} - ${match.awayTeam.name} ${expectedGoals.away.toFixed(
           2

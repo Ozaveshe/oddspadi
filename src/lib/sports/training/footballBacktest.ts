@@ -1,8 +1,9 @@
 import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine";
 import { buildScoreMatrix, probabilityFromScoreMatrix } from "@/lib/sports/prediction/poisson";
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "@/lib/sports/training/probabilityCalibration";
+import { benchmarkBacktestModelKey } from "@/lib/sports/prediction/modelIdentity";
 
-export const FOOTBALL_BACKTEST_MODEL_KEY = "football-poisson-elo-v1";
+export const FOOTBALL_BACKTEST_MODEL_KEY = benchmarkBacktestModelKey("football");
 
 type FootballOutcome = "home" | "draw" | "away";
 type BacktestConfidence = "low" | "medium" | "high";

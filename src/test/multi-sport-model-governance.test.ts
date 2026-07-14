@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildMultiSportCorpusPlan, type TrainingCorpusSport } from "@/lib/sports/training/multiSportCorpusPlan";
 import { buildMultiSportModelGovernance } from "@/lib/sports/training/multiSportModelGovernance";
 import type { StoredBacktestRun, TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import { runtimeModelIdentityReceipt, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 
 const ZERO_COUNTS: TrainingDataSnapshot["counts"] = {
   fixtures: 0,
@@ -37,7 +38,7 @@ function backtest(sport: TrainingCorpusSport, overrides: Partial<StoredBacktestR
   return {
     id: `bt-${sport}`,
     sport,
-    modelKey: `${sport}-model`,
+    modelKey: runtimeModelKey(sport),
     engineVersion: "test",
     status: "completed",
     dataSource: "supabase:real-only",
@@ -54,6 +55,7 @@ function backtest(sport: TrainingCorpusSport, overrides: Partial<StoredBacktestR
     calibrationError: 0.08,
     calibrationBuckets: [],
     learnedWeights: {},
+    config: { modelIdentity: runtimeModelIdentityReceipt(sport) },
     notes: [],
     createdAt: "2026-07-10T10:00:00.000Z",
     ...overrides

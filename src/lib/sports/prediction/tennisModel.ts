@@ -1,5 +1,6 @@
 import type { FootballModelDiagnostics, Match, MatchContextSignal, PredictionMarket, RiskLevel } from "@/lib/sports/types";
 import { clampProbability } from "./odds";
+import { runtimeModelKey } from "./modelIdentity";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -150,7 +151,7 @@ export function modelTennisMatch(match: Match): { markets: PredictionMarket[]; d
 
   return {
     diagnostics: {
-      modelVersion: "tennis-surface-elo-v3",
+      modelVersion: runtimeModelKey("tennis"),
       scoreUnit: "sets",
       expectedScoreLabel: `${match.homeTeam.name} ${expectedSetsOne.toFixed(2)} - ${match.awayTeam.name} ${expectedSetsTwo.toFixed(2)} expected sets`,
       topOutcomeLabel: `Surface-adjusted win probability ${Math.round(playerOneWin * 100)}%-${Math.round(playerTwoWin * 100)}%; projected games ${expectedGames.toFixed(1)}.`,

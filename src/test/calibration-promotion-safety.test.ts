@@ -6,6 +6,7 @@ import { applyLearnedProbabilityCalibration } from "@/lib/sports/prediction/lear
 import { classifyPredictionOutcomeTransition, isPredictionOutcomeIdempotencyConflict } from "@/lib/sports/prediction/decisionOutcomes";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
 import type { DecisionLearningProfile, PredictionMarket } from "@/lib/sports/types";
+import { runtimeModelIdentityReceipt } from "@/lib/sports/prediction/modelIdentity";
 
 function outcome(id: string, decisionRunId: string): OutcomeRow {
   return {
@@ -81,6 +82,7 @@ function readySnapshot(): TrainingDataSnapshot {
         { minProbability: 0.5, maxProbability: 0.8, sampleSize: 700, averageProbability: 0.62, observedRate: 0.63, calibrationError: 0.01 }
       ],
       learnedWeights: { minimumEdge: 0.03, valueEdgeWeight: 0.4, dataQualityWeight: 0.2 },
+      config: { modelIdentity: runtimeModelIdentityReceipt("football") },
       notes: []
     },
     readiness: { readyForTraining: true, minimumRecommendedFixtures: 1000, detail: "ready" }
@@ -164,6 +166,31 @@ describe("calibration promotion safety", () => {
     expect(active.calibrationPromotion).toMatchObject({ id: "promotion-1", candidateId: "candidate-1" });
     expect(mismatched.active).toBe(false);
     expect(mismatched.reason).toContain("model-bound calibration promotion");
+  });
+
+  it("keeps benchmark and receipt-free runtime-key backtests out of live learning", () => {
+    const benchmark = readySnapshot();
+    benchmark.latestBacktest = {
+      ...benchmark.latestBacktest!,
+      modelKey: "football-poisson-elo-v1",
+      config: {}
+    };
+    const unverifiedRuntimeKey = readySnapshot();
+    unverifiedRuntimeKey.latestBacktest = { ...unverifiedRuntimeKey.latestBacktest!, config: {} };
+
+    const benchmarkProfile = buildDecisionLearningProfileFromSnapshot(benchmark, {
+      activePromotion: promotion("football-poisson-elo-v1"),
+      requireDurablePromotion: true
+    });
+    const unverifiedProfile = buildDecisionLearningProfileFromSnapshot(unverifiedRuntimeKey, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(benchmarkProfile.active).toBe(false);
+    expect(benchmarkProfile.reason).toContain("benchmark model");
+    expect(unverifiedProfile.active).toBe(false);
+    expect(unverifiedProfile.reason).toContain("without a matching execution and feature-contract receipt");
   });
 
   it("allows only pending-to-final settlement and never rewrites a final label", () => {

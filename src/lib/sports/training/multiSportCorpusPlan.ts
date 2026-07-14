@@ -1,6 +1,7 @@
 import { ODDSPADI_SUPABASE_PROJECT_REF, getSupabaseRuntimeStatus } from "@/lib/supabase/server";
 import { hasConfiguredEnv } from "@/lib/env";
 import type { Sport } from "@/lib/sports/types";
+import { decisionModelIdentity } from "@/lib/sports/prediction/modelIdentity";
 import { decisionSiteOrigin } from "@/lib/sports/prediction/decisionUrls";
 import { BASKETBALL_BACKTEST_MODEL_KEY } from "./basketballBacktest";
 import { buildTenYearFootballCorpusBackfillPlan, type CorpusLeagueTarget } from "./corpusBackfillPlan";
@@ -46,6 +47,8 @@ export type TrainingCorpusSportPlan = {
   adapterStatus: TrainingAdapterStatus;
   backtestRunnerStatus: TrainingBacktestRunnerStatus;
   backtestModelKey: string | null;
+  runtimeModelKey: string;
+  runtimeFeatureContractVersion: string;
   adapter: string;
   seasonFrom: number;
   seasonTo: number;
@@ -256,6 +259,7 @@ function mapFootballTargets(targets: CorpusLeagueTarget[]): TrainingCorpusTarget
 }
 
 function footballPlan(options: Required<Pick<MultiSportCorpusPlanOptions, "seasonFrom" | "seasonTo">> & MultiSportCorpusPlanOptions): TrainingCorpusSportPlan {
+  const identity = decisionModelIdentity("football");
   const football = buildTenYearFootballCorpusBackfillPlan({
     env: options.env,
     baseUrl: options.baseUrl,
@@ -280,6 +284,8 @@ function footballPlan(options: Required<Pick<MultiSportCorpusPlanOptions, "seaso
     adapterStatus: "implemented",
     backtestRunnerStatus: "implemented",
     backtestModelKey: FOOTBALL_BACKTEST_MODEL_KEY,
+    runtimeModelKey: identity.runtimeModelKey,
+    runtimeFeatureContractVersion: identity.featureContractVersion,
     adapter: "API-Football fixtures/context plus The Odds API historical odds",
     seasonFrom: football.seasonFrom,
     seasonTo: football.seasonTo,
@@ -303,8 +309,14 @@ function footballPlan(options: Required<Pick<MultiSportCorpusPlanOptions, "seaso
     signalCoverage: football.signalCoverage,
     firstDryRunCommand,
     blockers: football.blockers,
-    warnings: football.warnings,
-    nextSteps: football.nextSteps
+    warnings: unique([
+      ...football.warnings,
+      `${FOOTBALL_BACKTEST_MODEL_KEY} is a benchmark evaluator and cannot authorize ${identity.runtimeModelKey}.`
+    ]),
+    nextSteps: unique([
+      ...football.nextSteps,
+      `Replay the holdout through ${identity.runtimeModelKey} with feature contract ${identity.featureContractVersion} before promotion review.`
+    ])
   };
 }
 
@@ -399,6 +411,7 @@ function plannedSportPlan({
   modelFeatures: string[];
   signalCoverage: TrainingCorpusSignal[];
 }): TrainingCorpusSportPlan {
+  const identity = decisionModelIdentity(sport);
   const seasons = seasonsFromRange(seasonFrom, seasonTo);
   const missingEnvKeys = missingFromGroups(env, requiredEnvGroups);
   const blockers = unique([...commonBlockers(env)]);
@@ -410,6 +423,8 @@ function plannedSportPlan({
     adapterStatus: "implemented",
     backtestRunnerStatus: "implemented",
     backtestModelKey,
+    runtimeModelKey: identity.runtimeModelKey,
+    runtimeFeatureContractVersion: identity.featureContractVersion,
     adapter,
     seasonFrom,
     seasonTo,
@@ -431,7 +446,7 @@ function plannedSportPlan({
     nextSteps: [
       `Run the first ${sport} dry-run adapter and inspect normalized fixture, feature, odds, and context counts.`,
       "Only allow dryRun=0 after Supabase project proof, schema checks, provider quotas, and normalized dry-run counts pass.",
-      `Connect stored ${sport} rows to ${backtestModelKey} before learned guardrails can affect live ${sport} decisions.`
+      `Replay stored ${sport} rows through ${identity.runtimeModelKey} with feature contract ${identity.featureContractVersion}; ${backtestModelKey} remains benchmark-only.`
     ]
   };
 }

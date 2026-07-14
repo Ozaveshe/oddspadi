@@ -1,7 +1,8 @@
 import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine";
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "@/lib/sports/training/probabilityCalibration";
+import { benchmarkBacktestModelKey } from "@/lib/sports/prediction/modelIdentity";
 
-export const TENNIS_BACKTEST_MODEL_KEY = "tennis-surface-elo-match-winner-v1";
+export const TENNIS_BACKTEST_MODEL_KEY = benchmarkBacktestModelKey("tennis");
 
 type TennisOutcome = "home" | "away";
 type TennisSurface = "hard" | "clay" | "grass" | "indoor" | "unknown";

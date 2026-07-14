@@ -1,12 +1,17 @@
 import type { MultiSportCorpusPlan, TrainingCorpusSport, TrainingCorpusSportPlan } from "@/lib/sports/training/multiSportCorpusPlan";
 import type { StoredBacktestRun, TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import {
+  decisionModelIdentity,
+  historicalModelCompatibility,
+  type HistoricalModelCompatibility
+} from "@/lib/sports/prediction/modelIdentity";
 
 export type MultiSportModelGovernanceStatus = "shadow-review-ready" | "partial-models-ready" | "waiting-provider-data" | "blocked-storage";
 export type MultiSportModelGovernanceSportStatus = "shadow-eligible" | "backtest-ready" | "model-ready-data-waiting" | "waiting-provider-env" | "blocked-storage";
 export type MultiSportModelGovernanceGateStatus = "pass" | "watch" | "block";
 
 export type MultiSportModelGovernanceGate = {
-  id: "model-implemented" | "provider-env" | "stored-data" | "odds-history" | "feature-quality" | "backtest" | "calibration" | "promotion-lock";
+  id: "model-implemented" | "model-parity" | "provider-env" | "stored-data" | "odds-history" | "feature-quality" | "backtest" | "calibration" | "promotion-lock";
   label: string;
   status: MultiSportModelGovernanceGateStatus;
   evidence: string;
@@ -17,6 +22,9 @@ export type MultiSportModelGovernanceSport = {
   sport: TrainingCorpusSport;
   status: MultiSportModelGovernanceSportStatus;
   modelKey: string | null;
+  runtimeModelKey: string;
+  benchmarkBacktestModelKey: string;
+  modelCompatibility: HistoricalModelCompatibility;
   modelFamily: string;
   targetCompetitions: string[];
   requiredFeatures: string[];
@@ -34,6 +42,8 @@ export type MultiSportModelGovernanceSport = {
   };
   latestBacktest: {
     present: boolean;
+    modelKey: string | null;
+    compatibility: HistoricalModelCompatibility;
     sampleSize: number;
     pickCount: number;
     brierScore: number | null;
@@ -118,9 +128,11 @@ function modelFamily(sport: TrainingCorpusSport): string {
   return "Player Elo, surface rating, recent form, head-to-head, fatigue/load, tournament round, injury/news context";
 }
 
-function latest(backtest: StoredBacktestRun | null): MultiSportModelGovernanceSport["latestBacktest"] {
+function latest(sport: TrainingCorpusSport, backtest: StoredBacktestRun | null): MultiSportModelGovernanceSport["latestBacktest"] {
   return {
     present: Boolean(backtest),
+    modelKey: backtest?.modelKey ?? null,
+    compatibility: historicalModelCompatibility({ sport, evidenceModelKey: backtest?.modelKey, config: backtest?.config }),
     sampleSize: backtest?.sampleSize ?? 0,
     pickCount: backtest?.pickCount ?? 0,
     brierScore: backtest?.brierScore ?? null,
@@ -157,6 +169,8 @@ function gatesFor({
   const storedProviderEvidenceReady = storageReady && enoughFixtures && enoughOdds && enoughCompleteFeatures && backtest.present;
   const enoughBacktest = backtest.sampleSize >= minimum.backtestSample && backtest.present;
   const calibrationPass = backtest.calibrationError !== null && backtest.calibrationError <= minimum.maxCalibrationError;
+  const identity = decisionModelIdentity(plan.sport);
+  const exactRuntimeParity = backtest.compatibility === "exact-runtime-parity";
 
   return [
     gate({
@@ -165,6 +179,15 @@ function gatesFor({
       status: plan.backtestRunnerStatus === "implemented" && plan.backtestModelKey ? "pass" : "block",
       evidence: `${plan.adapter}; model ${plan.backtestModelKey ?? "missing"}; runner ${plan.backtestRunnerStatus}.`,
       requiredAction: "Keep sport-specific model and backtest runner implemented before collecting promotion evidence."
+    }),
+    gate({
+      id: "model-parity",
+      label: "Runtime model parity",
+      status: exactRuntimeParity ? "pass" : "block",
+      evidence: backtest.present
+        ? `Runtime ${identity.runtimeModelKey}; stored backtest ${backtest.modelKey ?? "unversioned"}; compatibility ${backtest.compatibility}.`
+        : `Runtime ${identity.runtimeModelKey}; no backtest execution receipt is stored.`,
+      requiredAction: `Replay holdout fixtures through ${identity.runtimeEntrypoint} with feature contract ${identity.featureContractVersion}; a matching model-key string alone is not parity proof.`
     }),
     gate({
       id: "provider-env",
@@ -248,13 +271,17 @@ function sportProofUrl(sport: TrainingCorpusSport): string {
 }
 
 function buildSport(plan: TrainingCorpusSportPlan, snapshot: TrainingDataSnapshot): MultiSportModelGovernanceSport {
-  const backtest = latest(snapshot.latestBacktest);
+  const identity = decisionModelIdentity(plan.sport);
+  const backtest = latest(plan.sport, snapshot.latestBacktest);
   const gates = gatesFor({ plan, snapshot, backtest });
   const status = statusFor(gates, plan, snapshot);
   return {
     sport: plan.sport,
     status,
     modelKey: plan.backtestModelKey,
+    runtimeModelKey: identity.runtimeModelKey,
+    benchmarkBacktestModelKey: identity.benchmarkBacktestModelKey,
+    modelCompatibility: backtest.compatibility,
     modelFamily: modelFamily(plan.sport),
     targetCompetitions: plan.targetCompetitions.map((target) => target.name),
     requiredFeatures: plan.modelFeatures,

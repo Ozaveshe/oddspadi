@@ -1,6 +1,7 @@
 import { getPublicPredictionHistory } from "@/lib/sports/prediction/history";
 import { getDailyTipsProduct } from "@/lib/sports/tips/product";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { historicalModelCompatibility, isDecisionModelSport, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 import { readSupabaseTrainingCorpusCensus } from "@/lib/sports/training/supabaseTrainingCorpusCensus";
 import {
   calculateAccuracy,
@@ -113,7 +114,7 @@ async function getHistoricalEngineEvidence() {
       census,
       latestBacktests: [],
       models: [],
-      learningPipeline: { calibrationRuns: 0, promotionCandidates: 0, reviewReadyCandidates: 0, approvedPromotions: 0 },
+      learningPipeline: { runtimeParitySports: 0, calibrationRuns: 0, promotionCandidates: 0, reviewReadyCandidates: 0, approvedPromotions: 0 },
       playerAvailabilitySnapshots: 0,
       lineupSnapshots: 0,
       playerMatchPerformances: 0,
@@ -127,7 +128,7 @@ async function getHistoricalEngineEvidence() {
   const [backtests, models, calibrationRuns, calibrationCandidates, calibrationPromotions, availability, lineups, playerPerformances] = await Promise.all([
     client
       .from("op_backtest_runs")
-      .select("sport,model_key,engine_version,status,data_source,sample_size,test_size,pick_count,brier_score,log_loss,yield,closing_line_value,calibration_error,created_at")
+      .select("sport,model_key,engine_version,status,data_source,sample_size,test_size,pick_count,brier_score,log_loss,yield,closing_line_value,calibration_error,config,created_at")
       .eq("status", "completed")
       .order("created_at", { ascending: false })
       .limit(30),
@@ -164,25 +165,41 @@ async function getHistoricalEngineEvidence() {
     const expiresAt = typeof row.expires_at === "string" ? Date.parse(row.expires_at) : Number.NaN;
     return !Number.isFinite(expiresAt) || expiresAt > now;
   }).length;
+  const runtimeParitySports = [...latestBySport.values()].filter((row) => {
+    const sport = String(row.sport ?? "");
+    return isDecisionModelSport(sport) && historicalModelCompatibility({
+      sport,
+      evidenceModelKey: String(row.model_key ?? ""),
+      config: record(row.config)
+    }) === "exact-runtime-parity";
+  }).length;
 
   return {
     source: errors.length ? "degraded" as const : "supabase" as const,
     census,
-    latestBacktests: [...latestBySport.values()].map((row) => ({
-      sport: String(row.sport ?? "unknown"),
-      modelKey: String(row.model_key ?? "unknown"),
-      engineVersion: String(row.engine_version ?? "unknown"),
-      dataSource: String(row.data_source ?? "unknown"),
-      sampleSize: finiteNumber(row.sample_size) ?? 0,
-      testSize: finiteNumber(row.test_size) ?? 0,
-      pickCount: finiteNumber(row.pick_count) ?? 0,
-      brierScore: finiteNumber(row.brier_score),
-      logLoss: finiteNumber(row.log_loss),
-      yield: finiteNumber(row.yield),
-      closingLineValue: finiteNumber(row.closing_line_value),
-      calibrationError: finiteNumber(row.calibration_error),
-      createdAt: String(row.created_at ?? "")
-    })),
+    latestBacktests: [...latestBySport.values()].map((row) => {
+      const sport = String(row.sport ?? "unknown");
+      const compatibility = isDecisionModelSport(sport)
+        ? historicalModelCompatibility({ sport, evidenceModelKey: String(row.model_key ?? ""), config: record(row.config) })
+        : "incompatible" as const;
+      return {
+        sport,
+        modelKey: String(row.model_key ?? "unknown"),
+        runtimeModelKey: isDecisionModelSport(sport) ? runtimeModelKey(sport) : null,
+        modelCompatibility: compatibility,
+        engineVersion: String(row.engine_version ?? "unknown"),
+        dataSource: String(row.data_source ?? "unknown"),
+        sampleSize: finiteNumber(row.sample_size) ?? 0,
+        testSize: finiteNumber(row.test_size) ?? 0,
+        pickCount: finiteNumber(row.pick_count) ?? 0,
+        brierScore: finiteNumber(row.brier_score),
+        logLoss: finiteNumber(row.log_loss),
+        yield: finiteNumber(row.yield),
+        closingLineValue: finiteNumber(row.closing_line_value),
+        calibrationError: finiteNumber(row.calibration_error),
+        createdAt: String(row.created_at ?? "")
+      };
+    }),
     models: ((models.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
       sport: String(row.sport ?? "unknown"),
       modelKey: String(row.model_key ?? "unknown"),
@@ -191,6 +208,7 @@ async function getHistoricalEngineEvidence() {
       updatedAt: String(row.updated_at ?? "")
     })),
     learningPipeline: {
+      runtimeParitySports,
       calibrationRuns: calibrationRuns.count ?? 0,
       promotionCandidates: calibrationCandidates.data?.length ?? 0,
       reviewReadyCandidates,
@@ -201,6 +219,9 @@ async function getHistoricalEngineEvidence() {
     playerMatchPerformances: playerPerformances.count ?? 0,
     limitations: [
       "Backtests measure historical behaviour; they do not count as settled public-pick performance.",
+      ...(runtimeParitySports < 3
+        ? [`${runtimeParitySports}/3 sports have exact runtime entrypoint and feature-contract parity; benchmark metrics cannot authorize live model adjustments.`]
+        : []),
       (playerPerformances.count ?? 0) > 0
         ? "Player match-performance facts are available, but coverage and chronological sample depth must pass promotion gates before the signal receives material weight."
         : "No player match-performance facts are stored yet; player-form weighting remains inactive rather than inferred.",

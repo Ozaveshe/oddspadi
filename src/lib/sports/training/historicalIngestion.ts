@@ -1,5 +1,6 @@
 import { getSupabaseRuntimeStatus, getSupabaseServerClient } from "@/lib/supabase/server";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
+import { benchmarkBacktestModelKey } from "@/lib/sports/prediction/modelIdentity";
 import type { Match, OddsMarket, Sport } from "@/lib/sports/types";
 
 type IngestStatus = "stored" | "dry-run" | "not-configured" | "failed";
@@ -270,9 +271,7 @@ function isHistoricalTrainingSport(value: unknown): value is HistoricalTrainingS
 }
 
 function modelKeyForSport(sport: HistoricalTrainingSport): string {
-  if (sport === "basketball") return "basketball-efficiency-moneyline-v1";
-  if (sport === "tennis") return "tennis-surface-elo-match-winner-v1";
-  return "football-poisson-elo-v1";
+  return benchmarkBacktestModelKey(sport);
 }
 
 function isValidIsoDate(value: string): boolean {

@@ -474,6 +474,7 @@ Case memory answers: "Does this decision look like recent stored decisions, and 
 The new training layer is built around:
 
 - `src/lib/sports/training/footballBacktest.ts`, `basketballBacktest.ts`, and `tennisBacktest.ts` - pure sport-specific backtest engines with no-vig bookmaker implied probability, value-edge picks, Brier score, log loss, ROI, yield, CLV, and learned weights.
+- `src/lib/sports/prediction/modelIdentity.ts` - canonical runtime-versus-benchmark model identities. The existing historical runners are benchmark evaluators, not runtime-parity proof. A future runtime-key backtest must also persist the exact runtime entrypoint and feature-contract receipt; matching a model-key string alone cannot unlock learning.
 - `src/lib/sports/training/trainingRepository.ts` - Supabase reader/writer for normalized historical fixtures, features, odds, and stored backtest runs.
 - `src/lib/sports/training/historicalIngestion.ts` - normalized provider ingestion for leagues, teams, fixtures, team features, odds snapshots, standings snapshots, player availability, lineups, weather snapshots, event snapshots, news signals, feature snapshots, raw payload archive, and ingestion-run audit.
 - `src/lib/sports/training/providerSync.ts` - provider adapters for API-Football fixture history, API-Football event/context archives, API-Basketball game history, API-Tennis event history, NewsAPI article archives, OpenWeather forecast snapshots, and The Odds API historical h2h odds snapshots.

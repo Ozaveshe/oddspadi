@@ -121,10 +121,11 @@ export default async function EnginePerformancePage() {
         </div>
         <ol className="learning-pipeline" aria-label="Historical learning and promotion stages">
           <li data-state={evidence.census.totals.finishedFixtures ? "ready" : "waiting"}><span>01</span><strong>{count(evidence.census.totals.finishedFixtures)}</strong><h4>Finished fixtures</h4><p>Chronological results and provider facts.</p></li>
-          <li data-state={evidence.census.totals.completedBacktests ? "ready" : "waiting"}><span>02</span><strong>{count(evidence.census.totals.completedBacktests)}</strong><h4>Backtest runs</h4><p>Walk-forward holdouts with proper scoring.</p></li>
-          <li data-state={learning.calibrationRuns ? "ready" : "waiting"}><span>03</span><strong>{count(learning.calibrationRuns)}</strong><h4>Calibration runs</h4><p>Settled live decisions grouped by model version.</p></li>
-          <li data-state={learning.reviewReadyCandidates ? "ready" : "waiting"}><span>04</span><strong>{learning.reviewReadyCandidates}/{learning.promotionCandidates}</strong><h4>Review-ready</h4><p>Candidates passing sample, skill, error and CLV gates.</p></li>
-          <li data-state={learning.approvedPromotions ? "ready" : "waiting"}><span>05</span><strong>{learning.approvedPromotions}</strong><h4>Approved promotions</h4><p>Operator-approved, model-bound live adjustments.</p></li>
+          <li data-state={evidence.census.totals.completedBacktests ? "ready" : "waiting"}><span>02</span><strong>{count(evidence.census.totals.completedBacktests)}</strong><h4>Benchmark backtests</h4><p>Walk-forward holdouts, kept separate from runtime authority.</p></li>
+          <li data-state={learning.runtimeParitySports === 3 ? "ready" : "waiting"}><span>03</span><strong>{learning.runtimeParitySports}/3</strong><h4>Runtime parity</h4><p>Exact model entrypoint and feature-contract receipts.</p></li>
+          <li data-state={learning.calibrationRuns ? "ready" : "waiting"}><span>04</span><strong>{count(learning.calibrationRuns)}</strong><h4>Calibration runs</h4><p>Settled live decisions grouped by model version.</p></li>
+          <li data-state={learning.reviewReadyCandidates ? "ready" : "waiting"}><span>05</span><strong>{learning.reviewReadyCandidates}/{learning.promotionCandidates}</strong><h4>Review-ready</h4><p>Candidates passing sample, skill, error and CLV gates.</p></li>
+          <li data-state={learning.approvedPromotions ? "ready" : "waiting"}><span>06</span><strong>{learning.approvedPromotions}</strong><h4>Approved promotions</h4><p>Operator-approved, model-bound live adjustments.</p></li>
         </ol>
 
         <div className="evidence-sport-grid">
@@ -150,7 +151,7 @@ export default async function EnginePerformancePage() {
               <table className="data-table performance-table backtest-table">
                 <thead><tr><th>Sport</th><th>Test sample</th><th>Picks</th><th>Brier</th><th>Log loss</th><th>Yield</th><th>CLV</th></tr></thead>
                 <tbody>{evidence.latestBacktests.map((row) => <tr key={row.sport}>
-                  <td><strong>{row.sport}</strong><small>{row.modelKey}</small></td>
+                  <td><strong>{row.sport}</strong><small>{row.modelKey}</small><small>runtime: {row.runtimeModelKey ?? "not registered"}</small><small>{row.modelCompatibility}</small></td>
                   <td>{count(row.testSize)}</td><td>{count(row.pickCount)}</td><td>{decimal(row.brierScore)}</td><td>{decimal(row.logLoss)}</td>
                   <td className={row.yield !== null && row.yield < 0 ? "negative-number" : row.yield !== null && row.yield > 0 ? "positive-number" : undefined}>{signedPercent(row.yield)}</td>
                   <td>{signedPercent(row.closingLineValue, 2)}</td>

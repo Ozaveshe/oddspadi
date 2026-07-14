@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { confidenceFromEdgeAndProbability } from "@/lib/sports/prediction/confidence";
+import { runtimeModelIdentityReceipt, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 import { decisionCandidatePick } from "@/lib/sports/prediction/decisionCandidatePick";
 import { computeDecisionCalibrationMetrics } from "@/lib/sports/prediction/decisionCalibration";
 import { modelFootballMatch, predictFootballMatch } from "@/lib/sports/prediction/footballModel";
@@ -13580,7 +13581,7 @@ describe("prediction utilities", () => {
     expect(candidates.candidates[0].learnedWeights.map((weight) => weight.key)).toEqual(
       expect.arrayContaining(["minimumEdge", "valueEdgeWeight", "dataQualityWeight", "marketAdjustmentWeight", "homeAdvantageElo"])
     );
-    expect(candidates.candidates[0].promotionBlockers).toHaveLength(0);
+    expect(candidates.candidates[0].promotionBlockers).toEqual(expect.arrayContaining([expect.stringContaining("Runtime model parity")]));
     expect(candidates.controls.canUseLearnedWeights).toBe(false);
     expect(candidates.controls.canPromoteLearnedWeights).toBe(false);
 
@@ -13594,7 +13595,9 @@ describe("prediction utilities", () => {
       latestBacktest: snapshot.latestBacktest
         ? {
             ...snapshot.latestBacktest,
+            modelKey: runtimeModelKey("football"),
             config: {
+              modelIdentity: runtimeModelIdentityReceipt("football"),
               promotion: {
                 status: "approved",
                 scope: "live-guardrails",
@@ -21259,7 +21262,7 @@ describe("prediction utilities", () => {
           latestBacktest: {
             id: "bt-basketball",
             sport: "basketball",
-            modelKey: "basketball-efficiency-moneyline-v1",
+            modelKey: runtimeModelKey("basketball"),
             engineVersion: "test",
             status: "completed",
             dataSource: "historical",
@@ -21276,6 +21279,7 @@ describe("prediction utilities", () => {
             calibrationError: 0.08,
             calibrationBuckets: [],
             learnedWeights: {},
+            config: { modelIdentity: runtimeModelIdentityReceipt("basketball") },
             notes: [],
             createdAt: "2026-07-04T10:00:00.000Z"
           }

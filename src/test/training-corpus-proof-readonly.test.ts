@@ -37,6 +37,8 @@ describe("training corpus proof read-only storage containment", () => {
             adapterStatus: "implemented",
             backtestRunnerStatus: "implemented",
             backtestModelKey: "football-poisson-v2",
+            runtimeModelKey: "football-poisson-v2",
+            runtimeFeatureContractVersion: "football-runtime-features-v2",
             adapter: "api-football",
             seasonFrom: 2016,
             seasonTo: 2025,

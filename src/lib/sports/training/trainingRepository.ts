@@ -1,5 +1,6 @@
 import { getSupabaseRuntimeStatus, getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Sport } from "@/lib/sports/types";
+import { benchmarkModelIdentityReceipt } from "@/lib/sports/prediction/modelIdentity";
 import { strictTrainingFeatureJsonColumns } from "./featureQuality";
 import {
   BASKETBALL_BACKTEST_MODEL_KEY,
@@ -1227,7 +1228,10 @@ function backtestInsertPayload(result: HistoricalBacktestResult, includeDemo: bo
     market_breakdown: result.marketBreakdown,
     confidence_breakdown: result.confidenceBreakdown,
     learned_weights: result.learnedWeights,
-    config: result.config,
+    config: {
+      ...result.config,
+      modelIdentity: benchmarkModelIdentityReceipt(result.sport)
+    },
     notes: result.notes
   };
 }
@@ -1238,6 +1242,7 @@ function legacyBacktestInsertPayload(result: HistoricalBacktestResult, includeDe
   delete payload.calibration_buckets;
   payload.config = {
     ...(typeof result.config === "object" ? result.config : {}),
+    modelIdentity: benchmarkModelIdentityReceipt(result.sport),
     calibration: {
       expectedCalibrationError: result.calibrationError,
       buckets: result.calibrationBuckets

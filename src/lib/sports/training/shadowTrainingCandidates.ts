@@ -1,6 +1,7 @@
 import type { TrainingReadiness, TrainingReadinessSport, TrainingReadinessStatus } from "@/lib/sports/training/trainingReadiness";
 import type { StoredBacktestRun, TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
 import type { Sport } from "@/lib/sports/types";
+import { historicalModelCompatibility } from "@/lib/sports/prediction/modelIdentity";
 
 type CandidateSport = Extract<Sport, "football" | "basketball" | "tennis">;
 
@@ -181,6 +182,12 @@ function candidateGates({
   weights: ShadowLearnedWeight[];
   demoOnly: boolean;
 }): ShadowTrainingCandidateGate[] {
+  const sport = isCandidateSport(snapshot.sport) ? snapshot.sport : "football";
+  const compatibility = historicalModelCompatibility({
+    sport,
+    evidenceModelKey: backtest?.modelKey,
+    config: backtest?.config
+  });
   return [
     gate({
       id: "completed-backtest",
@@ -188,6 +195,16 @@ function candidateGates({
       status: backtest?.status === "completed" && !demoOnly ? "pass" : backtest ? "watch" : "block",
       detail: backtest ? `Backtest ${backtest.id} is ${backtest.status} from ${backtest.dataSource}.` : "No stored backtest exists.",
       requiredAction: backtest?.status === "completed" && !demoOnly ? null : "Run and store a completed non-demo backtest after the corpus is populated."
+    }),
+    gate({
+      id: "runtime-model-parity",
+      label: "Runtime model parity",
+      status: compatibility === "exact-runtime-parity" ? "pass" : "block",
+      detail: `Historical model compatibility is ${compatibility}; stored model ${backtest?.modelKey ?? "missing"}.`,
+      requiredAction:
+        compatibility === "exact-runtime-parity"
+          ? null
+          : "Replay the holdout through the registered runtime entrypoint and persist its exact feature-contract receipt."
     }),
     gate({
       id: "sample-size",

@@ -2,6 +2,7 @@ import type { DecisionFeatureMatrix, DecisionFeatureRow } from "@/lib/sports/pre
 import type { DecisionModelGovernance, DecisionModelGovernanceCheck } from "@/lib/sports/prediction/decisionModelGovernance";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
 import type { Prediction, Sport } from "@/lib/sports/types";
+import { runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 
 type ModelCardSport = Extract<Sport, "football" | "basketball" | "tennis">;
 
@@ -139,9 +140,7 @@ function sportLabel(sport: ModelCardSport): string {
 }
 
 function modelKey(sport: ModelCardSport): string {
-  if (sport === "basketball") return "basketball-efficiency-v3";
-  if (sport === "tennis") return "tennis-surface-elo-v3";
-  return "football-poisson-v2";
+  return runtimeModelKey(sport);
 }
 
 function formulasForSport(sport: ModelCardSport): DecisionModelCardFormula[] {

@@ -1,7 +1,8 @@
 import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine";
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "@/lib/sports/training/probabilityCalibration";
+import { benchmarkBacktestModelKey } from "@/lib/sports/prediction/modelIdentity";
 
-export const BASKETBALL_BACKTEST_MODEL_KEY = "basketball-efficiency-moneyline-v1";
+export const BASKETBALL_BACKTEST_MODEL_KEY = benchmarkBacktestModelKey("basketball");
 
 type BasketballOutcome = "home" | "away";
 type BacktestConfidence = "low" | "medium" | "high";

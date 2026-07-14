@@ -1,5 +1,6 @@
 import type { FootballModelDiagnostics, Match, MatchContextSignal, PredictionMarket, RiskLevel } from "@/lib/sports/types";
 import { clampProbability } from "./odds";
+import { runtimeModelKey } from "./modelIdentity";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -195,7 +196,7 @@ export function modelBasketballMatch(match: Match): { markets: PredictionMarket[
 
   return {
     diagnostics: {
-      modelVersion: "basketball-efficiency-v3",
+      modelVersion: runtimeModelKey("basketball"),
       scoreUnit: "points",
       expectedScoreLabel: `${match.homeTeam.name} ${homePoints.toFixed(1)} - ${match.awayTeam.name} ${awayPoints.toFixed(1)} projected points`,
       topOutcomeLabel: `Projected margin ${expectedMargin.toFixed(1)}; pace ${pace.toFixed(1)} possessions.`,

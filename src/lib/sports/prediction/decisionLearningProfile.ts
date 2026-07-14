@@ -1,6 +1,7 @@
 import type { DecisionLearningProfile, Sport } from "@/lib/sports/types";
 import { getTrainingDataSnapshot, type StoredBacktestRun, type TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
 import { readActiveCalibrationPromotion, type ActiveCalibrationPromotion } from "./decisionCalibrationPromotion";
+import { historicalModelCompatibility, isDecisionModelSport } from "./modelIdentity";
 
 function numberFromWeight(weights: Record<string, unknown>, key: string): number | null {
   const value = weights[key];
@@ -98,6 +99,18 @@ function hasExplicitLivePromotion(backtest: StoredBacktestRun | null): boolean {
 function liveMetricBlockers(snapshot: TrainingDataSnapshot, backtest: StoredBacktestRun | null): string[] {
   if (!backtest) return ["no completed backtest"];
   const blockers: string[] = [];
+  if (!isDecisionModelSport(snapshot.sport)) {
+    blockers.push(`sport ${snapshot.sport} has no governed runtime model identity`);
+  } else {
+    const compatibility = historicalModelCompatibility({
+      sport: snapshot.sport,
+      evidenceModelKey: backtest.modelKey,
+      config: backtest.config
+    });
+    if (compatibility === "benchmark-only") blockers.push("backtest evaluates a benchmark model, not the live runtime model");
+    if (compatibility === "unverified-runtime-key") blockers.push("backtest uses the runtime model key without a matching execution and feature-contract receipt");
+    if (compatibility === "incompatible") blockers.push("backtest model identity is incompatible with the live runtime model");
+  }
   if (backtest.status !== "completed") blockers.push("backtest is not completed");
   if (backtest.sampleSize < snapshot.readiness.minimumRecommendedFixtures) blockers.push("sample is below the minimum recommendation");
   if (backtest.brierScore === null || backtest.logLoss === null) blockers.push("proper scoring metrics are missing");
