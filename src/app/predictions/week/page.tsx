@@ -31,7 +31,9 @@ export default async function WeeklyPredictionsPage() {
       </div>
       <ProviderRunStrip slate={product.slate} />
       <WeeklySlateSections product={product} />
-      <TipsSharePreview formats={[{ id: "weekly-radar", label: "Weekly Radar", text: formatWeeklyRadarPost(product) }]} />
+      {product.summary.fixturesFound > 0 ? (
+        <TipsSharePreview formats={[{ id: "weekly-radar", label: "Weekly Radar", text: formatWeeklyRadarPost(product) }]} />
+      ) : null}
       <PredictionDisclaimer />
     </main>
   );

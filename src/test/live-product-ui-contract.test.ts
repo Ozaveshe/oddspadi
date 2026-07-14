@@ -34,6 +34,17 @@ describe("live OddsPadi product UI contract", () => {
     expect(slate).toContain("Safer Leans");
     expect(slate).toContain("Watchlist");
     expect(slate).toContain("No-Pick Matches");
+    expect(slate).toContain("if (!product.sections.schedule.length)");
+    expect(slate).toContain("Nothing real to analyse yet");
+    expect(slate).toContain("0 provider rows");
+    expect(slate).toContain("Public decision</dt><dd>Withheld");
+    expect(slate).toContain("Check the weekly radar");
+    expect(slate).toContain("const hasProviderFixtures = product.days.some");
+    expect(slate).toContain("No real fixtures across the weekly window");
+    expect(slate).toContain("0 generated");
+    expect(slate).toContain("Social previews remain hidden");
+    const weekly = source("src/app/predictions/week/page.tsx");
+    expect(weekly).toContain("product.summary.fixturesFound > 0");
   });
 
   it("shows leans, watchlist, and no-pick reasons on the empty value-picks state", () => {

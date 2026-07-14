@@ -139,6 +139,35 @@ function SlateSection({ title, eyebrow, rows, empty, asOf, compact = false }: { 
 
 export function DailyTipsSections({ product }: { product: DailyTipsProduct }) {
   const dayLabel = product.day === "today" ? "Today" : "Tomorrow";
+  if (!product.sections.schedule.length) {
+    return (
+      <section className="section intelligence-empty-slate" aria-labelledby="empty-slate-title">
+        <div className="intelligence-empty-copy">
+          <span className="section-kicker">No synthetic fill</span>
+          <h2 id="empty-slate-title">Nothing real to analyse yet</h2>
+          <p>
+            The provider returned no fixtures for {product.day}. OddsPadi has withheld every prediction instead of
+            filling the page with sample matches or invented prices.
+          </p>
+          <div className="intelligence-empty-actions">
+            <Link className="button primary" href="/predictions/week">Check the weekly radar</Link>
+            <Link className="button" href="/predictions/history">Review settled results</Link>
+          </div>
+        </div>
+        <div>
+          <dl className="intelligence-empty-ledger">
+            <div><dt>Fixtures</dt><dd>0 provider rows</dd></div>
+            <div><dt>Verified odds</dt><dd>0 snapshots</dd></div>
+            <div><dt>Public decision</dt><dd>Withheld</dd></div>
+          </dl>
+          <p className="small muted intelligence-empty-next">
+            The next provider run will rebuild this slate. Until then, the weekly radar and results ledger remain
+            available without implying that today&apos;s feed is healthy.
+          </p>
+        </div>
+      </section>
+    );
+  }
   return (
     <>
       <SlateSection title={`${dayLabel}'s Full Schedule`} eyebrow="Every provider-backed fixture" rows={product.sections.schedule} empty={`No provider-backed fixtures are available for ${product.day}`} asOf={product.generatedAt} compact />
@@ -163,6 +192,38 @@ function weeklyDayLabel(date: string, firstDate: string): string {
 }
 
 export function WeeklySlateSections({ product }: { product: WeeklyTipsProduct }) {
+  const hasProviderFixtures = product.days.some((group) => group.fixtures.length > 0);
+  if (!hasProviderFixtures) {
+    const firstDate = product.days[0]?.date ?? product.slate.range.from;
+    const lastDate = product.days.at(-1)?.date ?? product.slate.range.to;
+    return (
+      <section className="section intelligence-empty-slate" aria-labelledby="empty-week-title">
+        <div className="intelligence-empty-copy">
+          <span className="section-kicker">Seven-day feed unavailable</span>
+          <h2 id="empty-week-title">No real fixtures across the weekly window</h2>
+          <p>
+            The provider returned no fixtures from {firstDate} through {lastDate}. The calendar is not padded with
+            sample matches, and no preliminary decision is created without a real fixture.
+          </p>
+          <div className="intelligence-empty-actions">
+            <Link className="button primary" href="/predictions/today">Return to today&apos;s tips</Link>
+            <Link className="button" href="/predictions/history">Review settled results</Link>
+          </div>
+        </div>
+        <div>
+          <dl className="intelligence-empty-ledger">
+            <div><dt>Date window</dt><dd>{firstDate} to {lastDate}</dd></div>
+            <div><dt>Fixtures</dt><dd>0 provider rows</dd></div>
+            <div><dt>Decisions</dt><dd>0 generated</dd></div>
+          </dl>
+          <p className="small muted intelligence-empty-next">
+            The next scheduled provider run will rebuild all seven dates. Social previews remain hidden until this
+            window contains at least one real fixture.
+          </p>
+        </div>
+      </section>
+    );
+  }
   return (
     <div className="weekly-rundown">
       {product.days.map((group) => (
