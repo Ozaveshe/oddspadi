@@ -100,12 +100,12 @@
   --blue-soft: rgba(116, 180, 255, 0.13);
 
   /* Tinted shadows — carry the green-black hue, never pure black */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-soft: 0 12px 30px -16px rgba(1, 18, 10, 0.7);
-  --shadow: 0 22px 48px -22px rgba(1, 20, 11, 0.78);
-  --shadow-lg: 0 40px 80px -30px rgba(0, 24, 12, 0.85);
-  --glow-green: 0 18px 46px -18px rgba(38, 224, 125, 0.4);
-  --glow-gold: 0 18px 46px -18px rgba(255, 194, 75, 0.35);
+  --shadow-sm: 0 2px 5px rgba(7, 94, 51, 0.1);
+  --shadow-soft: 0 14px 32px -22px rgba(7, 94, 51, 0.28);
+  --shadow: 0 22px 48px -28px rgba(7, 94, 51, 0.36);
+  --shadow-lg: 0 38px 76px -36px rgba(7, 94, 51, 0.42);
+  --glow-green: 0 16px 34px -22px rgba(8, 116, 62, 0.34);
+  --glow-gold: 0 16px 34px -22px rgba(191, 122, 0, 0.28);
 
   --radius-xl: 24px;
   --radius-lg: 18px;
@@ -689,10 +689,7 @@ p {
 
 .hero h1 .accent,
 .page-heading h1 .accent {
-  background: linear-gradient(96deg, var(--green) 8%, #9ff0c0 50%, var(--gold) 104%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--green);
 }
 
 .hero p,
@@ -811,10 +808,10 @@ p {
   justify-content: center;
   gap: 9px;
   min-height: 46px;
-  border-radius: 999px;
+  border-radius: 10px;
   padding: 11px 22px;
   border: 1px solid var(--border-strong);
-  background: linear-gradient(180deg, var(--surface-3), var(--surface-2));
+  background: var(--surface-2);
   color: var(--text);
   font-weight: 700;
   font-size: 14.5px;
@@ -836,21 +833,23 @@ p {
 }
 
 .button.primary {
-  border-color: transparent;
-  background: linear-gradient(180deg, #45ec93, #12b866);
+  border-color: var(--green-strong);
+  background: var(--green-strong);
   color: var(--green-ink);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), var(--glow-green);
+  box-shadow: var(--shadow-sm);
 }
 
 .button.primary:hover {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 24px 56px -16px rgba(38, 224, 125, 0.55);
+  border-color: var(--green-deep);
+  background: var(--green-deep);
+  box-shadow: var(--shadow);
 }
 
 .button.gold {
-  border-color: transparent;
-  background: linear-gradient(180deg, #ffd881, #f0a41c);
+  border-color: #d28a00;
+  background: var(--gold);
   color: #2b1d02;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), var(--glow-gold);
+  box-shadow: var(--shadow-sm);
 }
 
 .button.small-btn {
@@ -2923,7 +2922,10 @@ a.score-row:active,
 .home-today-best .section-kicker { color: #9de4b8; }
 .home-today-best .intelligence-card,.home-today-best .empty-state { background: #fff; color: var(--text); }
 .home-today-best .intelligence-card-topline,.home-today-best .intelligence-matchline small { color: var(--muted); }
-.home-today-best .button { border-color: rgba(255,255,255,.35); color: white; }
+.home-today-best > .section-title .button { border-color: rgba(255,255,255,.42); background: rgba(255,255,255,.08); color: white; }
+.home-today-best > .section-title .button:hover { border-color: rgba(255,255,255,.68); background: rgba(255,255,255,.15); }
+.home-today-best .empty-state .button { border-color: var(--border-strong); background: var(--surface-2); color: var(--text); }
+.home-today-best .empty-state .button:hover { border-color: var(--green-line); background: var(--green-soft); color: var(--green-deep); }
 .home-tips-preview .intelligence-card:first-child { grid-column: span 2; }
 .home-results-summary { border-left: 5px solid var(--green); padding-left: clamp(18px, 4vw, 38px); }
 .home-results-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin-top: 22px; background: var(--border); }

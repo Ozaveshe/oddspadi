@@ -17,6 +17,17 @@ describe("live OddsPadi product UI contract", () => {
     expect(home).not.toMatch(/loading\.\.\.|loading forever|spinner/i);
   });
 
+  it("keeps the visual system editorial instead of glossy and preserves empty-state CTA contrast", () => {
+    const styles = source("src/app/globals.css");
+    expect(styles).toContain(".hero h1 .accent");
+    expect(styles).toContain("color: var(--green);");
+    expect(styles).not.toContain("linear-gradient(96deg, var(--green)");
+    expect(styles).toContain("border-radius: 10px;");
+    expect(styles).toContain("background: var(--green-strong);");
+    expect(styles).toContain(".home-today-best .empty-state .button");
+    expect(styles).toContain("background: var(--surface-2); color: var(--text);");
+  });
+
   it("keeps the daily tips surface useful even without a published value pick", () => {
     const slate = source("src/components/odds/IntelligenceSlate.tsx");
     expect(slate).toContain("'s Full Schedule");
