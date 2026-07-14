@@ -486,7 +486,7 @@ export async function observeHistoricalProviderStorageReceipt({
     locks: unique([
       "Historical provider storage receipt is capped by maxJobs, limit, maxEventFixtures, and maxContextFixtures.",
       "run=1 and x-oddspadi-admin-token are required before provider calls or writes execute.",
-      "dryRun=0 may delete and replace provider-scoped child rows for the returned fixture external IDs through the existing ingestion path.",
+      "dryRun=0 refreshes core fixture features and replaces only child datasets explicitly requested; omitted odds, events, and context evidence are preserved.",
       "Stored corpus rows do not unlock model training until settlement labels, feature-snapshot review, completed backtests, and promotion gates pass.",
       "No public picks, staking, learned weights, probability upgrades, or final-answer promotion can be triggered by this receipt."
     ])

@@ -1753,6 +1753,12 @@ function sportKeyForFootball(env: EnvMap): string {
   return env.ODDS_API_FOOTBALL_SPORT_KEY?.trim() || "soccer_epl";
 }
 
+// The Odds API publishes tennis as tournament-scoped sports. These legacy
+// generic keys have appeared in older environment templates but return 404;
+// treating them as authoritative disables active-key discovery and can mark
+// an otherwise healthy multi-sport pipeline as failed.
+const INVALID_GENERIC_TENNIS_SPORT_KEYS = new Set(["tennis_atp", "tennis_wta"]);
+
 function explicitOddsSportKeys(
   env: EnvMap,
   sport: Extract<Sport, "football" | "basketball" | "tennis">
@@ -1776,7 +1782,7 @@ function explicitOddsSportKeys(
       configured
         .split(",")
         .map((key) => key.trim())
-        .filter(Boolean)
+        .filter((key) => Boolean(key) && (sport !== "tennis" || !INVALID_GENERIC_TENNIS_SPORT_KEYS.has(key.toLowerCase())))
     )
   ).slice(0, 8);
 }

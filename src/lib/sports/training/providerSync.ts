@@ -1828,7 +1828,15 @@ async function syncApiFootballFixtures({
     provider: "api_football",
     sourceKind: "real",
     dryRun: request.dryRun ?? true,
-    fixtures: normalized
+    fixtures: normalized,
+    replaceChildDatasets: [
+      ...(request.includeEvents ? ["events" as const] : []),
+      ...(request.includeNews && newsApiKey ? ["news" as const] : []),
+      ...(includeStandings ? ["standings" as const] : []),
+      ...(includeAvailability ? ["availability" as const] : []),
+      ...(includeLineups ? ["lineups" as const] : []),
+      ...(includeWeather ? ["weather" as const] : [])
+    ]
   });
   const ingestionAccepted = ingestion.status === "stored" || ingestion.status === "dry-run";
   const playerPerformanceStorage: PlayerPerformanceStoreResult = includePlayerStats && ingestionAccepted
@@ -1936,7 +1944,8 @@ async function syncApiBasketballGames({
     sport: "basketball",
     sourceKind: "real",
     dryRun: request.dryRun ?? true,
-    fixtures: normalized
+    fixtures: normalized,
+    replaceChildDatasets: []
   });
 
   return {
@@ -2015,7 +2024,8 @@ async function syncApiTennisEvents({
     sport: "tennis",
     sourceKind: "real",
     dryRun: request.dryRun ?? true,
-    fixtures: normalized
+    fixtures: normalized,
+    replaceChildDatasets: []
   });
 
   const response = data as ApiTennisResponse;
@@ -2100,7 +2110,8 @@ async function syncTheOddsApiHistoricalOdds({
     sport,
     sourceKind: "real",
     dryRun: request.dryRun ?? true,
-    fixtures: normalized
+    fixtures: normalized,
+    replaceChildDatasets: ["odds"]
   });
 
   return {
@@ -2170,7 +2181,8 @@ async function syncTheOddsApiLiveOdds({
     sport,
     sourceKind: "real",
     dryRun: request.dryRun ?? true,
-    fixtures: normalized
+    fixtures: normalized,
+    replaceChildDatasets: ["odds"]
   });
 
   return {

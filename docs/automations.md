@@ -13,7 +13,7 @@ project `wncwtzqipnoqwmqlznqn`.
 | `multi-sport-decision-cycle-sweep` | `20 */2 * * *` | Basketball/tennis capture |
 | `sports-intelligence-sweep` | `25 */2 * * *` | Refreshes the canonical multi-sport intelligence pipeline and daily/weekly public slates |
 | `football-settlement-sweep` | `*/30 * * * *` | Grades finished football picks |
-| `football-corpus-refresh-sweep` | `40 3 * * *` | Idempotently stores the previous two complete UTC days of EPL fixtures, events, lineups, and finished-match player statistics |
+| `football-corpus-refresh-sweep` | `40 3 * * *` | Runs two independent EPL corpus lanes: refreshes the previous two complete UTC days with events/lineups/player statistics, then rotates through one bounded seven-day window of the most recently completed season to bootstrap historical player performances |
 | `multi-sport-settlement-sweep` | `50 * * * *` | Grades other sports |
 | `results-settlement-sweep` | `15 * * * *` | Settles the canonical public-pick ledger and records explicit pending/manual-review reasons |
 | `editorial-generation-sweep` | `35 5,11,17,23 * * *` | Regenerates News stories from ledger rows (OpenAI prose pass when `OPENAI_API_KEY` is set; deterministic fallback otherwise) |
@@ -24,6 +24,13 @@ All sweeps need `ODDSPADI_SITE_URL` + `ODDSPADI_ADMIN_TOKEN` in Netlify env or
 they 503; the workers additionally need `SUPABASE_URL` + `SUPABASE_SECRET_KEY`
 (or `SUPABASE_SERVICE_ROLE_KEY`). The editorial worker also reads
 `OPENAI_API_KEY` and optional `OPENAI_EDITORIAL_MODEL` (default `gpt-5-mini`).
+
+The football corpus worker uses `ODDSPADI_FOOTBALL_CORPUS_LEAGUE_ID` (default
+EPL `39`), `ODDSPADI_FOOTBALL_CORPUS_FIXTURE_LIMIT` (default `12`), and
+`ODDSPADI_FOOTBALL_PLAYER_HISTORY_FIXTURE_LIMIT` (default `20`, maximum `24`).
+Its response reports the recent and historical lanes separately. HTTP `207`
+means one lane completed while the other failed; treat that as degraded and
+inspect both receipts rather than marking the corpus healthy.
 
 ## Scripts (run from the repo root)
 

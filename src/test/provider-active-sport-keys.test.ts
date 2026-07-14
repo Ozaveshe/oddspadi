@@ -12,7 +12,12 @@ describe("The Odds API active sport discovery", () => {
   it("discovers tournament-scoped tennis keys instead of calling the invalid tennis_atp key", async () => {
     const calls: string[] = [];
     const provider = new ProviderBackedSportsDataProvider({
-      env: { NODE_ENV: "production", THE_ODDS_API_KEY: "odds-key" },
+      env: {
+        NODE_ENV: "production",
+        THE_ODDS_API_KEY: "odds-key",
+        // A legacy production value must not override active-key discovery.
+        ODDS_API_TENNIS_SPORT_KEY: "tennis_atp"
+      },
       now: () => new Date("2026-07-14T08:00:00.000Z"),
       fetchImpl: async (input) => {
         const url = String(input);

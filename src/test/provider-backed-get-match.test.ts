@@ -111,20 +111,20 @@ describe("provider-backed match detail retrieval", () => {
         THE_ODDS_API_KEY: "odds-key",
         ODDS_API_FOOTBALL_SPORT_KEY: "soccer_epl",
         ODDS_API_BASKETBALL_SPORT_KEY: "basketball_nba",
-        ODDS_API_TENNIS_SPORT_KEY: "tennis_atp"
+        ODDS_API_TENNIS_SPORT_KEY: "tennis_atp_wimbledon"
       },
       fallback,
       historicalTennisStrengthLoader: async () => new Map(),
       fetchImpl: async (input) => {
         const url = input.toString();
         calls.push(url);
-        if (!url.includes("/sports/tennis_atp/events/odds-event-701/odds")) {
+        if (!url.includes("/sports/tennis_atp_wimbledon/events/odds-event-701/odds")) {
           return new Response("not found", { status: 404 });
         }
         return new Response(
           JSON.stringify({
             id: "odds-event-701",
-            sport_key: "tennis_atp",
+            sport_key: "tennis_atp_wimbledon",
             sport_title: "ATP Tennis",
             commence_time: "2026-07-10T13:00:00Z",
             home_team: "Carlos Alcaraz",
@@ -161,7 +161,7 @@ describe("provider-backed match detail retrieval", () => {
     expect(calls.map((url) => new URL(url).pathname)).toEqual([
       "/v4/sports/soccer_epl/events/odds-event-701/odds",
       "/v4/sports/basketball_nba/events/odds-event-701/odds",
-      "/v4/sports/tennis_atp/events/odds-event-701/odds"
+      "/v4/sports/tennis_atp_wimbledon/events/odds-event-701/odds"
     ]);
     expect(fallback.getMatch).not.toHaveBeenCalled();
   });

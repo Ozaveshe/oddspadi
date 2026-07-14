@@ -419,7 +419,9 @@ export async function runHistoricalProviderBackfill({
     counts.standingsRows += result.ingestion?.counts.standingsRows ?? 0;
     counts.availabilityRows += result.ingestion?.counts.availabilityRows ?? 0;
     counts.lineupRows += result.ingestion?.counts.lineupRows ?? 0;
-    counts.playerPerformanceRows += result.playerPerformancesStored ?? (result.dryRun ? result.playerPerformancesNormalized ?? 0 : 0);
+    counts.playerPerformanceRows += result.dryRun
+      ? result.playerPerformancesNormalized ?? 0
+      : result.playerPerformancesStored ?? 0;
     counts.playerPerformanceRowsVerified += result.playerPerformancesVerified ?? 0;
     counts.weatherRows += result.ingestion?.counts.weatherRows ?? 0;
     counts.featureSnapshots += result.ingestion?.counts.featureSnapshots ?? 0;

@@ -11,6 +11,8 @@ type NewsSignalType = "injury" | "lineup" | "weather" | "transfer" | "sentiment"
 type AvailabilityStatus = "available" | "doubtful" | "injured" | "suspended" | "unknown";
 type LineupStatus = "predicted" | "confirmed" | "unavailable";
 type HistoricalTrainingSport = Extract<Sport, "football" | "basketball" | "tennis">;
+export type HistoricalChildDataset = "odds" | "events" | "news" | "standings" | "availability" | "lineups" | "weather";
+const HISTORICAL_CHILD_DATASETS: readonly HistoricalChildDataset[] = ["odds", "events", "news", "standings", "availability", "lineups", "weather"];
 
 export type HistoricalFootballTeamInput = {
   externalId: string;
@@ -161,6 +163,8 @@ export type HistoricalFootballIngestPayload = {
   sourceKind?: IngestSourceKind;
   dryRun?: boolean;
   fixtures?: HistoricalFootballFixtureInput[];
+  /** Child datasets to replace for these fixtures. Omit for a full legacy import; pass [] for a core-fixture-only refresh. */
+  replaceChildDatasets?: HistoricalChildDataset[];
 };
 
 export type HistoricalFootballIngestResult = {
@@ -481,8 +485,19 @@ export function parseHistoricalFootballIngestPayload(input: unknown): Historical
   const rawFixtures = Array.isArray(payload.fixtures) ? payload.fixtures : [];
   const errors: string[] = [];
   const fixtures: HistoricalFootballFixtureInput[] = [];
+  const replaceChildDatasets = payload.replaceChildDatasets === undefined
+    ? [...HISTORICAL_CHILD_DATASETS]
+    : Array.isArray(payload.replaceChildDatasets)
+      ? Array.from(new Set(payload.replaceChildDatasets))
+      : [];
 
   if (!rawFixtures.length) errors.push("fixtures must contain at least one fixture.");
+  if (payload.replaceChildDatasets !== undefined && !Array.isArray(payload.replaceChildDatasets)) {
+    errors.push("replaceChildDatasets must be an array when provided.");
+  }
+  for (const dataset of replaceChildDatasets) {
+    if (!HISTORICAL_CHILD_DATASETS.includes(dataset)) errors.push(`replaceChildDatasets contains unsupported dataset ${String(dataset)}.`);
+  }
 
   rawFixtures.forEach((fixture, index) => {
     const normalized = normalizeFixture({ ...fixture, sport: fixture.sport ?? sport }, index);
@@ -499,7 +514,8 @@ export function parseHistoricalFootballIngestPayload(input: unknown): Historical
     sport,
     sourceKind,
     dryRun: Boolean(payload.dryRun),
-    fixtures
+    fixtures,
+    replaceChildDatasets
   };
 }
 
@@ -1026,6 +1042,7 @@ export async function ingestHistoricalFootballFixtures(payload: HistoricalFootba
   }
 
   const fixtures = parsed.fixtures as NormalizedFixture[];
+  const replaceChildDatasets = new Set(parsed.replaceChildDatasets ?? HISTORICAL_CHILD_DATASETS);
   const safeProvider = parsed.provider ?? provider;
   const leagues = uniqueBy(fixtures.map((fixture) => fixture.league), (league) => league.externalId);
   const teams = uniqueBy(
@@ -1177,8 +1194,8 @@ export async function ingestHistoricalFootballFixtures(payload: HistoricalFootba
       if (fixtureIds.length) {
         await deleteByValuesInChunks(client, "op_fixture_team_features", "fixture_id", fixtureIds);
       }
-      await deleteByValuesInChunks(client, "op_odds_snapshots", "fixture_external_id", fixtureExternalIds, 250, (query) => query.eq("provider", safeProvider));
-      await deleteByValuesInChunks(
+      if (replaceChildDatasets.has("odds")) await deleteByValuesInChunks(client, "op_odds_snapshots", "fixture_external_id", fixtureExternalIds, 250, (query) => query.eq("provider", safeProvider));
+      if (replaceChildDatasets.has("events")) await deleteByValuesInChunks(
         client,
         "op_live_match_events",
         "fixture_external_id",
@@ -1186,7 +1203,7 @@ export async function ingestHistoricalFootballFixtures(payload: HistoricalFootba
         250,
         (query) => query.eq("sport", parsed.sport ?? sport).eq("provider", safeProvider)
       );
-      await deleteByValuesInChunks(
+      if (replaceChildDatasets.has("news")) await deleteByValuesInChunks(
         client,
         "op_news_signals",
         "fixture_external_id",
@@ -1194,7 +1211,7 @@ export async function ingestHistoricalFootballFixtures(payload: HistoricalFootba
         250,
         (query) => query.eq("sport", parsed.sport ?? sport).eq("provider", safeProvider)
       );
-      await deleteByValuesInChunks(
+      if (replaceChildDatasets.has("availability")) await deleteByValuesInChunks(
         client,
         "op_player_availability_snapshots",
         "fixture_external_id",
@@ -1202,7 +1219,7 @@ export async function ingestHistoricalFootballFixtures(payload: HistoricalFootba
         250,
         (query) => query.eq("sport", parsed.sport ?? sport).eq("provider", safeProvider)
       );
-      await deleteByValuesInChunks(
+      if (replaceChildDatasets.has("lineups")) await deleteByValuesInChunks(
         client,
         "op_lineup_snapshots",
         "fixture_external_id",
@@ -1210,7 +1227,7 @@ export async function ingestHistoricalFootballFixtures(payload: HistoricalFootba
         250,
         (query) => query.eq("sport", parsed.sport ?? sport).eq("provider", safeProvider)
       );
-      await deleteByValuesInChunks(
+      if (replaceChildDatasets.has("weather")) await deleteByValuesInChunks(
         client,
         "op_weather_snapshots",
         "fixture_external_id",
@@ -1237,7 +1254,7 @@ export async function ingestHistoricalFootballFixtures(payload: HistoricalFootba
     }
 
     const standingsRows = fixtures.flatMap((fixture) => standingsRowsForFixture(safeProvider, fixture));
-    if (standingsRows.length) {
+    if (replaceChildDatasets.has("standings") && standingsRows.length) {
       const leagueExternalIds = uniqueBy(standingsRows.map((row) => row.league_external_id), (value) => value);
       const snapshotTimes = uniqueBy(standingsRows.map((row) => row.snapshot_at), (value) => value);
       await client
@@ -1252,32 +1269,32 @@ export async function ingestHistoricalFootballFixtures(payload: HistoricalFootba
     }
 
     const oddsRows = marginAdjustedOddsRows(fixtures.flatMap((fixture) => oddsRowsForFixture(safeProvider, fixture)));
-    if (oddsRows.length) {
+    if (replaceChildDatasets.has("odds") && oddsRows.length) {
       await insertRowsInChunks(client, "op_odds_snapshots", oddsRows);
     }
 
     const eventRows = fixtures.flatMap((fixture) => eventRowsForFixture(safeProvider, fixture));
-    if (eventRows.length) {
+    if (replaceChildDatasets.has("events") && eventRows.length) {
       await insertRowsInChunks(client, "op_live_match_events", eventRows);
     }
 
     const newsRows = fixtures.flatMap((fixture) => newsRowsForFixture(safeProvider, fixture));
-    if (newsRows.length) {
+    if (replaceChildDatasets.has("news") && newsRows.length) {
       await insertRowsInChunks(client, "op_news_signals", newsRows);
     }
 
     const availabilityRows = fixtures.flatMap((fixture) => availabilityRowsForFixture(safeProvider, fixture));
-    if (availabilityRows.length) {
+    if (replaceChildDatasets.has("availability") && availabilityRows.length) {
       await insertRowsInChunks(client, "op_player_availability_snapshots", availabilityRows);
     }
 
     const lineupRows = fixtures.flatMap((fixture) => lineupRowsForFixture(safeProvider, fixture));
-    if (lineupRows.length) {
+    if (replaceChildDatasets.has("lineups") && lineupRows.length) {
       await insertRowsInChunks(client, "op_lineup_snapshots", lineupRows);
     }
 
     const weatherRows = fixtures.flatMap((fixture) => weatherRowsForFixture(safeProvider, fixture));
-    if (weatherRows.length) {
+    if (replaceChildDatasets.has("weather") && weatherRows.length) {
       await insertRowsInChunks(client, "op_weather_snapshots", weatherRows);
     }
 
