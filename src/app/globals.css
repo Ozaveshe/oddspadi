@@ -3021,6 +3021,9 @@ a.score-row:active,
 .match-risk-list { margin: 16px 0 0; color: var(--muted); }
 .match-decision-actions { display: flex; min-width: 170px; flex-direction: column; align-items: stretch; gap: 8px; }
 .match-decision-actions .button { justify-content: center; border-radius: 9px; }
+.slip-action-lock { display: grid; gap: 3px; max-width: 220px; padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid var(--blue); border-radius: 8px; background: var(--surface-2); color: var(--text); font-size: 13px; line-height: 1.35; }
+.slip-action-lock span { color: var(--muted); }
+.slip-action-lock.compact { display: inline-flex; width: fit-content; padding: 8px 10px; border-left-width: 3px; font-size: 12px; white-space: nowrap; }
 .match-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 
 .probability-panel > p { max-width: 68ch; margin: 8px 0 20px; }
