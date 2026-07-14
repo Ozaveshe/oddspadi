@@ -28,6 +28,7 @@ import {
   buildPlayerFormSignal,
   type PlayerMatchPerformance
 } from "@/lib/sports/training/playerPerformance";
+import { consolidateFootballRuntimeFixtures } from "@/lib/sports/training/footballRuntimeFixtureConsolidation";
 
 export type FootballRuntimeReplayConfig = {
   trainRatio?: number;
@@ -46,6 +47,9 @@ export type FootballRuntimeFeatureContract = {
   version: string;
   chronologyVersion: "football-provider-chronology-v3";
   sourceFixtures: number;
+  duplicateFixtureGroups: number;
+  duplicateSourceFixturesCollapsed: number;
+  conflictingDuplicateGroups: number;
   eligibleFixtures: number;
   rejectedFixtures: number;
   trainingEvaluatedFixtures: number;
@@ -56,6 +60,12 @@ export type FootballRuntimeFeatureContract = {
     xgFixtures: number;
     contextSignalFixtures: number;
     playerFormFixtures: number;
+    playerFormEligibleFixtures: number;
+    playerFormReadyFixtures: number;
+    playerFormTrainingEligibleFixtures: number;
+    playerFormTrainingReadyFixtures: number;
+    playerFormHoldoutEligibleFixtures: number;
+    playerFormHoldoutReadyFixtures: number;
     completeOddsFixtures: number;
   };
   rejectionReasons: Record<string, number>;
@@ -142,6 +152,28 @@ function completeWinnerOdds(fixture: HistoricalFootballFixtureInput): boolean {
       .map((quote) => quote.selection)
   );
   return selections.has("home") && selections.has("draw") && selections.has("away");
+}
+
+function supportsHistoricalPlayerStats(fixture: HistoricalFootballFixtureInput): boolean {
+  return cleanText(fixture.metadata?.provider).toLowerCase().replaceAll("-", "_") === "api_football";
+}
+
+function hasPlayerFormSignal(fixture: PreparedRuntimeFixture): boolean {
+  return Boolean(fixture.match.providerContextSignals?.some((signal) => signal.category === "player-form"));
+}
+
+function hasReadyPlayerFormSignal(fixture: PreparedRuntimeFixture): boolean {
+  return Boolean(fixture.match.providerContextSignals?.some((signal) =>
+    signal.category === "player-form" && (signal.quality === "acceptable" || signal.quality === "strong")
+  ));
+}
+
+function playerCoverage(fixtures: readonly PreparedRuntimeFixture[]): { eligible: number; ready: number } {
+  const eligible = fixtures.filter((fixture) => supportsHistoricalPlayerStats(fixture.source));
+  return {
+    eligible: eligible.length,
+    ready: eligible.filter(hasReadyPlayerFormSignal).length
+  };
 }
 
 function freshTimestamp(value: string | null | undefined, kickoffAt: string, maxAgeMinutes: number): boolean {
@@ -398,15 +430,21 @@ function runtimeNotes(
     contract.rejectedFixtures
       ? `${contract.rejectedFixtures} source fixture(s) were excluded by the fail-closed runtime feature contract.`
       : "Every source fixture satisfied the runtime feature contract.",
+    contract.duplicateSourceFixturesCollapsed
+      ? `${contract.duplicateSourceFixturesCollapsed} duplicate provider fixture record(s) across ${contract.duplicateFixtureGroups} real match group(s) were consolidated before chronology.`
+      : "No cross-provider duplicate fixture records were detected.",
+    contract.conflictingDuplicateGroups
+      ? `${contract.conflictingDuplicateGroups} duplicate match group(s) were rejected because providers disagreed on the final score.`
+      : "No duplicate provider records disagreed on final scores.",
     contract.optionalCoverage.xgFixtures === 0
       ? "Historical team-form xG is unavailable; the exact runtime entrypoint used its deterministic xG fallback."
       : `${contract.optionalCoverage.xgFixtures} eligible fixture(s) included historical team-form xG.`,
     contract.optionalCoverage.contextSignalFixtures === 0
       ? "No timestamped historical provider-context signals were attached; the runtime entrypoint used its deterministic context fallback."
       : `${contract.optionalCoverage.contextSignalFixtures} eligible fixture(s) included timestamped provider context.`,
-    contract.optionalCoverage.playerFormFixtures === 0
+    contract.optionalCoverage.playerFormReadyFixtures === 0
       ? "No leakage-safe historical player-form signals were available; player performance had zero influence on this replay."
-      : `${contract.optionalCoverage.playerFormFixtures} eligible fixture(s) included leakage-safe player-form evidence.`,
+      : `${contract.optionalCoverage.playerFormReadyFixtures}/${contract.optionalCoverage.playerFormEligibleFixtures} player-capable fixture(s) included acceptable or strong leakage-safe player-form evidence.`,
     summary.pickCount === 0 ? "No holdout picks cleared the configured value threshold." : ""
   ].filter(Boolean);
 }
@@ -417,8 +455,9 @@ export function runFootballRuntimeReplay(
   { playerPerformances = [] }: { playerPerformances?: readonly PlayerMatchPerformance[] } = {}
 ): FootballRuntimeReplayResult {
   const config = resolvedConfig(inputConfig);
+  const consolidation = consolidateFootballRuntimeFixtures(fixtures);
   // Stored strength/form fields without chronology proof are intentionally discarded.
-  const chronologyInputs = fixtures.map((fixture) => ({
+  const chronologyInputs = consolidation.fixtures.map((fixture) => ({
     ...fixture,
     homeFeatures: undefined,
     awayFeatures: undefined
@@ -431,7 +470,9 @@ export function runFootballRuntimeReplay(
     performancesByTeam.set(performance.teamExternalId, current);
   }
   const prepared: PreparedRuntimeFixture[] = [];
-  const rejections: FootballRuntimeReplayRejection[] = [];
+  const rejections: FootballRuntimeReplayRejection[] = consolidation.conflicts.flatMap((conflict) =>
+    conflict.fixtureExternalIds.map((fixtureExternalId) => ({ fixtureExternalId, reasons: [conflict.reason] }))
+  );
   for (const fixture of derived) {
     const playerFormSignal = buildPlayerFormSignal({
       fixtureExternalId: fixture.externalId,
@@ -453,6 +494,9 @@ export function runFootballRuntimeReplay(
     : 0;
   const training = prepared.slice(0, trainSize);
   const holdout = prepared.slice(trainSize);
+  const overallPlayerCoverage = playerCoverage(prepared);
+  const trainingPlayerCoverage = playerCoverage(training);
+  const holdoutPlayerCoverage = playerCoverage(holdout);
   const evaluationConfig = resolveFootballBacktestConfig({
     trainRatio: config.trainRatio,
     minEdge: config.minEdge,
@@ -516,6 +560,9 @@ export function runFootballRuntimeReplay(
     version: FEATURE_CONTRACT_VERSION,
     chronologyVersion: CHRONOLOGY_VERSION,
     sourceFixtures: fixtures.length,
+    duplicateFixtureGroups: consolidation.duplicateGroups,
+    duplicateSourceFixturesCollapsed: consolidation.duplicateSourceFixturesCollapsed,
+    conflictingDuplicateGroups: consolidation.conflicts.length,
     eligibleFixtures: prepared.length,
     rejectedFixtures: rejections.length,
     trainingEvaluatedFixtures: trainingResults.length,
@@ -528,7 +575,13 @@ export function runFootballRuntimeReplay(
         finite(fixture.match.awayForm.xgFor) && finite(fixture.match.awayForm.xgAgainst)
       ).length,
       contextSignalFixtures: prepared.filter((fixture) => (fixture.match.providerContextSignals?.length ?? 0) > 0).length,
-      playerFormFixtures: prepared.filter((fixture) => fixture.match.providerContextSignals?.some((signal) => signal.category === "player-form")).length,
+      playerFormFixtures: prepared.filter(hasPlayerFormSignal).length,
+      playerFormEligibleFixtures: overallPlayerCoverage.eligible,
+      playerFormReadyFixtures: overallPlayerCoverage.ready,
+      playerFormTrainingEligibleFixtures: trainingPlayerCoverage.eligible,
+      playerFormTrainingReadyFixtures: trainingPlayerCoverage.ready,
+      playerFormHoldoutEligibleFixtures: holdoutPlayerCoverage.eligible,
+      playerFormHoldoutReadyFixtures: holdoutPlayerCoverage.ready,
       completeOddsFixtures: prepared.filter((fixture) => completeWinnerOdds(fixture.source)).length
     },
     rejectionReasons: rejectionCounts(rejections)

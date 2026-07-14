@@ -261,6 +261,8 @@ export function buildDecisionLearningProfileFromSnapshot(
     closingLineValue: backtest?.closingLineValue ?? null,
     playerFormFixtures: runtimeEvidence.playerFormFixtures,
     playerFormCoverage: runtimeEvidence.playerFormCoverage,
+    playerFormTrainingCoverage: runtimeEvidence.playerFormTrainingCoverage,
+    playerFormHoldoutCoverage: runtimeEvidence.playerFormHoldoutCoverage,
     minimumPlayerFormCoverage: runtimeEvidence.minimumPlayerFormCoverage,
     calibrationBuckets: resolvedCalibrationBuckets,
     generatedAt: snapshot.generatedAt,

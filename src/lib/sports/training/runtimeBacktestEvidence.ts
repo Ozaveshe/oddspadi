@@ -15,6 +15,8 @@ export type RuntimeBacktestEvidence = {
   playerFormFixtures: number | null;
   eligibleFixtures: number | null;
   playerFormCoverage: number | null;
+  playerFormTrainingCoverage: number | null;
+  playerFormHoldoutCoverage: number | null;
   minimumPlayerFormCoverage: number | null;
   playerEvidenceReady: boolean;
 };
@@ -42,6 +44,8 @@ export function inspectRuntimeBacktestEvidence(
       playerFormFixtures: null,
       eligibleFixtures: null,
       playerFormCoverage: null,
+      playerFormTrainingCoverage: null,
+      playerFormHoldoutCoverage: null,
       minimumPlayerFormCoverage: sport === "football" ? MINIMUM_FOOTBALL_PLAYER_FORM_COVERAGE : null,
       playerEvidenceReady: sport !== "football"
     };
@@ -61,6 +65,8 @@ export function inspectRuntimeBacktestEvidence(
       playerFormFixtures: null,
       eligibleFixtures: null,
       playerFormCoverage: null,
+      playerFormTrainingCoverage: null,
+      playerFormHoldoutCoverage: null,
       minimumPlayerFormCoverage: null,
       playerEvidenceReady: true
     };
@@ -68,12 +74,30 @@ export function inspectRuntimeBacktestEvidence(
 
   const featureContract = record(backtest.config?.featureContract);
   const optionalCoverage = record(featureContract.optionalCoverage);
-  const eligibleFixtures = nonNegativeInteger(featureContract.eligibleFixtures);
-  const playerFormFixtures = nonNegativeInteger(optionalCoverage.playerFormFixtures);
-  const playerFormCoverage =
+  const eligibleFixtures = nonNegativeInteger(optionalCoverage.playerFormEligibleFixtures)
+    ?? nonNegativeInteger(featureContract.eligibleFixtures);
+  const playerFormFixtures = nonNegativeInteger(optionalCoverage.playerFormReadyFixtures)
+    ?? nonNegativeInteger(optionalCoverage.playerFormFixtures);
+  const overallCoverage =
     eligibleFixtures !== null && eligibleFixtures > 0 && playerFormFixtures !== null
       ? Math.min(1, playerFormFixtures / eligibleFixtures)
       : null;
+  const trainingEligible = nonNegativeInteger(optionalCoverage.playerFormTrainingEligibleFixtures);
+  const trainingReady = nonNegativeInteger(optionalCoverage.playerFormTrainingReadyFixtures);
+  const holdoutEligible = nonNegativeInteger(optionalCoverage.playerFormHoldoutEligibleFixtures);
+  const holdoutReady = nonNegativeInteger(optionalCoverage.playerFormHoldoutReadyFixtures);
+  const playerFormTrainingCoverage = trainingEligible !== null && trainingEligible > 0 && trainingReady !== null
+    ? Math.min(1, trainingReady / trainingEligible)
+    : null;
+  const playerFormHoldoutCoverage = holdoutEligible !== null && holdoutEligible > 0 && holdoutReady !== null
+    ? Math.min(1, holdoutReady / holdoutEligible)
+    : null;
+  const hasWindowCoverageReceipt = trainingEligible !== null && trainingReady !== null && holdoutEligible !== null && holdoutReady !== null;
+  const playerFormCoverage = hasWindowCoverageReceipt
+    ? playerFormTrainingCoverage !== null && playerFormHoldoutCoverage !== null
+      ? Math.min(playerFormTrainingCoverage, playerFormHoldoutCoverage)
+      : null
+    : overallCoverage;
 
   return {
     compatibility,
@@ -82,6 +106,8 @@ export function inspectRuntimeBacktestEvidence(
     playerFormFixtures,
     eligibleFixtures,
     playerFormCoverage,
+    playerFormTrainingCoverage,
+    playerFormHoldoutCoverage,
     minimumPlayerFormCoverage: MINIMUM_FOOTBALL_PLAYER_FORM_COVERAGE,
     playerEvidenceReady:
       playerFormCoverage !== null && playerFormCoverage >= MINIMUM_FOOTBALL_PLAYER_FORM_COVERAGE

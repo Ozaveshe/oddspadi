@@ -1426,6 +1426,8 @@ export interface DecisionLearningProfile {
   closingLineValue: number | null;
   playerFormFixtures?: number | null;
   playerFormCoverage?: number | null;
+  playerFormTrainingCoverage?: number | null;
+  playerFormHoldoutCoverage?: number | null;
   minimumPlayerFormCoverage?: number | null;
   calibrationBuckets?: Array<{
     minProbability: number;

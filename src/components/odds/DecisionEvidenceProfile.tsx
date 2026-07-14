@@ -139,10 +139,12 @@ export function DecisionEvidenceProfile({
                   : "Not established"}
               </dd>
             </div>
+            <div><dt>Training player form</dt><dd>{metric(profile?.playerFormTrainingCoverage, formatPercent)}</dd></div>
+            <div><dt>Holdout player form</dt><dd>{metric(profile?.playerFormHoldoutCoverage, formatPercent)}</dd></div>
           </dl>
           <p>{profile?.reason ?? "No governed historical calibration profile was attached to this decision."}</p>
           {calibration?.summary ? <p className="small muted">Live outcome calibration: {calibration.summary}</p> : null}
-          <p className="small muted">Normalized Brier averages squared probability error across the market outcomes; lower is better. Calibration error measures the weighted gap between forecast probability and observed frequency.</p>
+          <p className="small muted">Player-form coverage uses only provider-capable fixtures and requires acceptable or strong chronology-safe history in both training and holdout windows. Normalized Brier averages squared probability error across the market outcomes; lower is better. Calibration error measures the weighted gap between forecast probability and observed frequency.</p>
         </div>
       </div>
 

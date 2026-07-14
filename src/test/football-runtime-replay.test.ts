@@ -179,7 +179,51 @@ describe("football exact runtime replay", () => {
       result.results.find((row) => row.fixtureExternalId === "fixture:10")!.probabilities.home;
 
     expect(withPlayers.featureContract.optionalCoverage.playerFormFixtures).toBeGreaterThan(0);
+    expect(withPlayers.featureContract.optionalCoverage.playerFormReadyFixtures).toBeGreaterThan(0);
+    expect(withPlayers.featureContract.optionalCoverage.playerFormTrainingReadyFixtures).toBeGreaterThan(0);
+    expect(withPlayers.featureContract.optionalCoverage.playerFormHoldoutReadyFixtures).toBeGreaterThan(0);
     expect(withPlayers.notes.some((note) => note.includes("leakage-safe player-form evidence"))).toBe(true);
     expect(lastHomeProbability(withPlayers)).toBeGreaterThan(lastHomeProbability(baseline));
+  });
+
+  it("consolidates cross-provider copies before chronology and keeps the player-capable identity", () => {
+    const apiFixtures = history();
+    const csvDuplicates = apiFixtures.map((fixture) => ({
+      ...fixture,
+      externalId: `football-data:${fixture.externalId}`,
+      kickoffAt: `${fixture.kickoffAt.slice(0, 10)}T00:00:00.000Z`,
+      homeTeam: { ...fixture.homeTeam, externalId: `csv:${fixture.homeTeam.externalId}` },
+      awayTeam: { ...fixture.awayTeam, externalId: `csv:${fixture.awayTeam.externalId}` },
+      metadata: { provider: "football_data_csv" }
+    }));
+    const result = runFootballRuntimeReplay([...csvDuplicates, ...apiFixtures], { trainRatio: 0.5, minPriorMatches: 3 }, {
+      playerPerformances: playerPerformances()
+    });
+
+    expect(result.featureContract.sourceFixtures).toBe(20);
+    expect(result.featureContract.duplicateFixtureGroups).toBe(10);
+    expect(result.featureContract.duplicateSourceFixturesCollapsed).toBe(10);
+    expect(result.featureContract.conflictingDuplicateGroups).toBe(0);
+    expect(result.featureContract.eligibleFixtures).toBe(runFootballRuntimeReplay(apiFixtures, { trainRatio: 0.5, minPriorMatches: 3 }).featureContract.eligibleFixtures);
+    expect(result.results.every((row) => !row.fixtureExternalId.startsWith("football-data:"))).toBe(true);
+    expect(result.featureContract.optionalCoverage.playerFormFixtures).toBeGreaterThan(0);
+  });
+
+  it("fails closed when duplicate providers disagree on the final score", () => {
+    const fixtures = history();
+    const conflict = {
+      ...fixtures[9]!,
+      externalId: "football-data:conflicting-final",
+      kickoffAt: `${fixtures[9]!.kickoffAt.slice(0, 10)}T00:00:00.000Z`,
+      homeScore: (fixtures[9]!.homeScore ?? 0) + 1,
+      metadata: { provider: "football_data_csv" }
+    };
+    const result = runFootballRuntimeReplay([...fixtures, conflict], { trainRatio: 0.5, minPriorMatches: 3 });
+
+    expect(result.featureContract.duplicateFixtureGroups).toBe(1);
+    expect(result.featureContract.duplicateSourceFixturesCollapsed).toBe(0);
+    expect(result.featureContract.conflictingDuplicateGroups).toBe(1);
+    expect(result.rejections.filter((item) => item.reasons.includes("duplicate provider records disagree on the final score"))).toHaveLength(2);
+    expect(result.results.some((row) => row.fixtureExternalId === fixtures[9]!.externalId)).toBe(false);
   });
 });

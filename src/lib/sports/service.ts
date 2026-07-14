@@ -86,6 +86,8 @@ export function buildUnavailableLearningProfile(sport: LearningProfileSport, rea
     closingLineValue: null,
     playerFormFixtures: null,
     playerFormCoverage: null,
+    playerFormTrainingCoverage: null,
+    playerFormHoldoutCoverage: null,
     minimumPlayerFormCoverage: sport === "football" ? 0.6 : null,
     calibrationBuckets: [],
     generatedAt: new Date().toISOString(),

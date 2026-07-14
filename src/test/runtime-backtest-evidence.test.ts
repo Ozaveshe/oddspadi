@@ -77,4 +77,54 @@ describe("runtime backtest evidence", () => {
     expect(sparse.playerFormCoverage).toBeCloseTo(719 / 1200);
     expect(sparse.playerEvidenceReady).toBe(false);
   });
+
+  it("uses the weaker of training and holdout player coverage for new runtime receipts", () => {
+    const evidence = inspectRuntimeBacktestEvidence("football", run({
+      config: {
+        ...run().config,
+        featureContract: {
+          eligibleFixtures: 1200,
+          optionalCoverage: {
+            playerFormFixtures: 900,
+            playerFormEligibleFixtures: 1000,
+            playerFormReadyFixtures: 700,
+            playerFormTrainingEligibleFixtures: 700,
+            playerFormTrainingReadyFixtures: 560,
+            playerFormHoldoutEligibleFixtures: 300,
+            playerFormHoldoutReadyFixtures: 140
+          }
+        }
+      }
+    }));
+
+    expect(evidence.playerFormTrainingCoverage).toBe(0.8);
+    expect(evidence.playerFormHoldoutCoverage).toBeCloseTo(140 / 300);
+    expect(evidence.playerFormCoverage).toBeCloseTo(140 / 300);
+    expect(evidence.playerEvidenceReady).toBe(false);
+  });
+
+  it("does not fall back to aggregate coverage when a receipt has no player-capable holdout", () => {
+    const evidence = inspectRuntimeBacktestEvidence("football", run({
+      config: {
+        ...run().config,
+        featureContract: {
+          eligibleFixtures: 1200,
+          optionalCoverage: {
+            playerFormFixtures: 700,
+            playerFormEligibleFixtures: 700,
+            playerFormReadyFixtures: 700,
+            playerFormTrainingEligibleFixtures: 700,
+            playerFormTrainingReadyFixtures: 700,
+            playerFormHoldoutEligibleFixtures: 0,
+            playerFormHoldoutReadyFixtures: 0
+          }
+        }
+      }
+    }));
+
+    expect(evidence.playerFormTrainingCoverage).toBe(1);
+    expect(evidence.playerFormHoldoutCoverage).toBeNull();
+    expect(evidence.playerFormCoverage).toBeNull();
+    expect(evidence.playerEvidenceReady).toBe(false);
+  });
 });
