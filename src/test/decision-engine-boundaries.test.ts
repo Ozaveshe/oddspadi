@@ -4,6 +4,11 @@ import { buildDecisionBeliefState } from "@/lib/sports/prediction/decisionBelief
 import { buildDecisionEvidence } from "@/lib/sports/prediction/decisionEvidence";
 import { buildDecisionAttribution } from "@/lib/sports/prediction/decisionAttribution";
 import { selectBestPick } from "@/lib/sports/prediction/odds";
+import {
+  buildDecisionMarketMovement,
+  buildDecisionOddsIntelligence,
+  edgeAfterOddsMultiplier
+} from "@/lib/sports/prediction/decisionMarketIntelligence";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
 import { buildPrediction } from "@/lib/sports/service";
 import type {
@@ -102,7 +107,10 @@ describe("decision engine module boundaries", () => {
     expect(engine).toContain('import { buildDecisionAttribution } from "./decisionAttribution"');
     expect(engine).not.toContain("function buildDecisionEvidence(");
     expect(engine).not.toContain("function buildDecisionAttribution(");
-    expect(engine.split(/\r?\n/).length).toBeLessThan(5600);
+    expect(engine).toContain('from "./decisionMarketIntelligence"');
+    expect(engine).not.toContain("function buildDecisionOddsIntelligence(");
+    expect(engine).not.toContain("function buildDecisionMarketMovement(");
+    expect(engine.split(/\r?\n/).length).toBeLessThan(5200);
   });
 
   it("preserves evidence and attribution output across football, basketball, and tennis", async () => {
@@ -133,11 +141,52 @@ describe("decision engine module boundaries", () => {
         actionability: decision.actionability,
         reviewLoop: decision.reviewLoop
       });
+      const rebuiltOddsIntelligence = buildDecisionOddsIntelligence({ match: fixture, valueEdges: prediction.valueEdges });
 
       expect(rebuiltEvidence, `${sport} evidence`).toEqual(decision.evidence);
       expect(rebuiltAttribution, `${sport} attribution`).toEqual(decision.attribution);
+      expect(rebuiltOddsIntelligence, `${sport} odds intelligence`).toEqual(decision.oddsIntelligence);
       expect(rebuiltAttribution.valueScore).toBeGreaterThanOrEqual(0);
       expect(rebuiltAttribution.riskScore).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it("keeps price stress arithmetic explicit and fails closed without a priced candidate", () => {
+    const noMarket = buildDecisionMarketMovement({ bestPick: noValue, action: "avoid" });
+    expect(noMarket).toMatchObject({
+      status: "no-market",
+      currentOdds: null,
+      currentEdge: null,
+      maxShorteningBeforeNoValue: null,
+      nextAction: "Refresh bookmaker markets and rerun value-edge ranking."
+    });
+    expect(noMarket.alerts).toContain("No priced candidate is available; do not manufacture market movement intelligence.");
+
+    const priced = {
+      hasValue: true as const,
+      marketId: "match_winner" as const,
+      selectionId: "home",
+      label: "Home",
+      modelProbability: 0.6,
+      rawImpliedProbability: 0.5,
+      noVigImpliedProbability: 0.5 / 1.04,
+      impliedProbability: 0.5,
+      bookmakerMargin: 0.04,
+      edge: 0.6 - 0.5 / 1.04,
+      expectedValue: 0.2,
+      expectedRoi: 0.2,
+      odds: 2,
+      confidence: "high" as const,
+      risk: "medium" as const
+    };
+    const movement = buildDecisionMarketMovement({ bestPick: priced, action: "consider" });
+    const fivePercent = movement.scenarios.find((scenario) => scenario.id === "five-percent-shortening");
+
+    expect(edgeAfterOddsMultiplier(priced, 1)).toBeCloseTo(priced.edge, 10);
+    expect(movement.currentOdds).toBe(2);
+    expect(movement.fairOdds).toBeCloseTo(1 / 0.6, 10);
+    expect(movement.maxShorteningBeforeNoValue).toBeCloseTo(1 - (1 / 0.6) / 2, 10);
+    expect(fivePercent?.odds).toBeCloseTo(1.9, 10);
+    expect(fivePercent?.expectedValue).toBeCloseTo(0.14, 10);
   });
 });
