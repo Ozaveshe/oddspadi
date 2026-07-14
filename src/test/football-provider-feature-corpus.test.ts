@@ -10,6 +10,7 @@ import {
 import type { HistoricalFootballFixtureInput } from "@/lib/sports/training/historicalIngestion";
 
 function fixture(externalId: string, kickoffAt: string, season = "2025"): HistoricalFootballFixtureInput {
+  const observedAt = new Date(Date.parse(kickoffAt) - 6 * 60 * 60 * 1000).toISOString();
   return {
     sport: "football",
     externalId,
@@ -24,9 +25,9 @@ function fixture(externalId: string, kickoffAt: string, season = "2025"): Histor
     homeFeatures: { eloRating: 1580, attackStrength: 1.12, defenseStrength: 0.93, injuriesCount: 1 },
     awayFeatures: { eloRating: 1490, attackStrength: 0.98, defenseStrength: 1.07 },
     odds: [
-      { market: "match_winner", selection: "home", decimalOdds: 2.05, bookmaker: "provider-book" },
-      { market: "match_winner", selection: "draw", decimalOdds: 3.35, bookmaker: "provider-book" },
-      { market: "match_winner", selection: "away", decimalOdds: 3.9, bookmaker: "provider-book" }
+      { market: "match_winner", selection: "home", decimalOdds: 2.05, bookmaker: "provider-book", observedAt },
+      { market: "match_winner", selection: "draw", decimalOdds: 3.35, bookmaker: "provider-book", observedAt },
+      { market: "match_winner", selection: "away", decimalOdds: 3.9, bookmaker: "provider-book", observedAt }
     ],
     standings: [],
     availability: [{ teamExternalId: `${externalId}:home`, playerName: "Home Starter", status: "injured" }],

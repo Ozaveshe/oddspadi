@@ -23,6 +23,7 @@ function fixture({
   season?: string;
   odds?: boolean;
 }): HistoricalFootballFixtureInput {
+  const observedAt = new Date(Date.parse(kickoffAt) - 6 * 60 * 60 * 1000).toISOString();
   return {
     externalId: id,
     kickoffAt,
@@ -35,9 +36,9 @@ function fixture({
     awayScore,
     odds: odds
       ? [
-          { market: "match_winner", selection: "home", decimalOdds: 2.1, bookmaker: "test" },
-          { market: "match_winner", selection: "draw", decimalOdds: 3.4, bookmaker: "test" },
-          { market: "match_winner", selection: "away", decimalOdds: 3.6, bookmaker: "test" }
+          { market: "match_winner", selection: "home", decimalOdds: 2.1, bookmaker: "test", observedAt },
+          { market: "match_winner", selection: "draw", decimalOdds: 3.4, bookmaker: "test", observedAt },
+          { market: "match_winner", selection: "away", decimalOdds: 3.6, bookmaker: "test", observedAt }
         ]
       : []
   };

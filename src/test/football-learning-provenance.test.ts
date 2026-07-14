@@ -4,7 +4,7 @@ import {
   runFootballBacktest,
   type HistoricalFootballFixture
 } from "@/lib/sports/training/footballBacktest";
-import { auditLearnedWeightsProvenance } from "@/lib/sports/performance/report";
+import { auditBacktestOddsCoverage, auditLearnedWeightsProvenance } from "@/lib/sports/performance/report";
 
 function fixture(index: number, homeWon: boolean): HistoricalFootballFixture {
   const kickoffAt = new Date(Date.UTC(2024, 0, index + 1, 15)).toISOString();
@@ -33,12 +33,12 @@ function fixture(index: number, homeWon: boolean): HistoricalFootballFixture {
     homeRecentGoalsAgainst: 0.8,
     awayRecentGoalsAgainst: 1.7,
     odds: [
-      { market: "match_winner", selection: "home", decimalOdds: 2.6, observedAt },
-      { market: "match_winner", selection: "draw", decimalOdds: 3.5, observedAt },
-      { market: "match_winner", selection: "away", decimalOdds: 3.4, observedAt },
-      { market: "match_winner", selection: "home", decimalOdds: 2.4, isClosing: true, observedAt: closingAt },
-      { market: "match_winner", selection: "draw", decimalOdds: 3.4, isClosing: true, observedAt: closingAt },
-      { market: "match_winner", selection: "away", decimalOdds: 3.3, isClosing: true, observedAt: closingAt }
+      { market: "match_winner", selection: "home", decimalOdds: 2.6, bookmaker: "book-a", observedAt },
+      { market: "match_winner", selection: "draw", decimalOdds: 3.5, bookmaker: "book-a", observedAt },
+      { market: "match_winner", selection: "away", decimalOdds: 3.4, bookmaker: "book-a", observedAt },
+      { market: "match_winner", selection: "home", decimalOdds: 2.4, bookmaker: "book-a", isClosing: true, observedAt: closingAt },
+      { market: "match_winner", selection: "draw", decimalOdds: 3.4, bookmaker: "book-a", isClosing: true, observedAt: closingAt },
+      { market: "match_winner", selection: "away", decimalOdds: 3.3, bookmaker: "book-a", isClosing: true, observedAt: closingAt }
     ]
   };
 }
@@ -104,5 +104,35 @@ describe("football learned-weight chronology", () => {
     expect(valid).toMatchObject({ learnedWeightsSource: "training-window", learnedWeightsSampleSize: 700, learnedWeightsTrainingOnly: true });
     expect(overlapping.learnedWeightsTrainingOnly).toBe(false);
     expect(auditLearnedWeightsProvenance({}).learnedWeightsSource).toBe("unverified");
+  });
+
+  it("labels only internally coherent stored odds coverage as verified", () => {
+    const valid = auditBacktestOddsCoverage({
+      oddsCoverage: {
+        evaluatedFixtures: 200,
+        coherentDecisionFixtures: 160,
+        verifiedClosingFixtures: 120,
+        decisionOnlyFixtures: 40,
+        missingDecisionFixtures: 40
+      }
+    });
+    const impossible = auditBacktestOddsCoverage({
+      oddsCoverage: {
+        evaluatedFixtures: 20,
+        coherentDecisionFixtures: 21,
+        verifiedClosingFixtures: 19,
+        decisionOnlyFixtures: 0,
+        missingDecisionFixtures: 0
+      }
+    });
+
+    expect(valid).toMatchObject({
+      oddsCoverageVerified: true,
+      oddsEvaluatedFixtures: 200,
+      oddsCoherentDecisionFixtures: 160,
+      oddsVerifiedClosingFixtures: 120
+    });
+    expect(impossible.oddsCoverageVerified).toBe(false);
+    expect(auditBacktestOddsCoverage({}).oddsCoverageVerified).toBe(false);
   });
 });

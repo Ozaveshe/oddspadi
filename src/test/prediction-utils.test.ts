@@ -16146,12 +16146,12 @@ describe("prediction utilities", () => {
         homeSuspensionsCount: 0,
         awaySuspensionsCount: 1,
         odds: [
-          { market: "match_winner", selection: "home", decimalOdds: 2.45, observedAt: `2026-01-${String(index + 1).padStart(2, "0")}T08:00:00.000Z` },
-          { market: "match_winner", selection: "draw", decimalOdds: 3.45, observedAt: `2026-01-${String(index + 1).padStart(2, "0")}T08:00:00.000Z` },
-          { market: "match_winner", selection: "away", decimalOdds: 3.6, observedAt: `2026-01-${String(index + 1).padStart(2, "0")}T08:00:00.000Z` },
-          { market: "match_winner", selection: "home", decimalOdds: 2.3, isClosing: true, observedAt: `2026-01-${String(index + 1).padStart(2, "0")}T14:50:00.000Z` },
-          { market: "match_winner", selection: "draw", decimalOdds: 3.35, isClosing: true, observedAt: `2026-01-${String(index + 1).padStart(2, "0")}T14:50:00.000Z` },
-          { market: "match_winner", selection: "away", decimalOdds: 3.4, isClosing: true, observedAt: `2026-01-${String(index + 1).padStart(2, "0")}T14:50:00.000Z` }
+          { market: "match_winner", selection: "home", decimalOdds: 2.45, bookmaker: "book-a", observedAt: `2026-01-${String(index + 1).padStart(2, "0")}T08:00:00.000Z` },
+          { market: "match_winner", selection: "draw", decimalOdds: 3.45, bookmaker: "book-a", observedAt: `2026-01-${String(index + 1).padStart(2, "0")}T08:00:00.000Z` },
+          { market: "match_winner", selection: "away", decimalOdds: 3.6, bookmaker: "book-a", observedAt: `2026-01-${String(index + 1).padStart(2, "0")}T08:00:00.000Z` },
+          { market: "match_winner", selection: "home", decimalOdds: 2.3, bookmaker: "book-a", isClosing: true, observedAt: `2026-01-${String(index + 1).padStart(2, "0")}T14:50:00.000Z` },
+          { market: "match_winner", selection: "draw", decimalOdds: 3.35, bookmaker: "book-a", isClosing: true, observedAt: `2026-01-${String(index + 1).padStart(2, "0")}T14:50:00.000Z` },
+          { market: "match_winner", selection: "away", decimalOdds: 3.4, bookmaker: "book-a", isClosing: true, observedAt: `2026-01-${String(index + 1).padStart(2, "0")}T14:50:00.000Z` }
         ]
       };
     });
@@ -16171,6 +16171,16 @@ describe("prediction utilities", () => {
     expect(Object.keys(result.confidenceBreakdown).length).toBeGreaterThan(0);
     expect(result.calibrationError).not.toBeNull();
     expect(result.calibrationBuckets.reduce((sum, bucket) => sum + bucket.sampleSize, 0)).toBe(result.testSize * 3);
+    expect(result.oddsCoverage).toMatchObject({
+      evaluatedFixtures: result.testSize,
+      coherentDecisionFixtures: result.testSize,
+      verifiedClosingFixtures: result.testSize,
+      missingDecisionFixtures: 0
+    });
+    expect(result.results.every((fixture) => fixture.oddsEvidence.status === "ready")).toBe(true);
+    expect(result.results.flatMap((fixture) => fixture.pick ?? []).every((pick) =>
+      pick.bookmaker === "book-a" && pick.observedAt.endsWith("T08:00:00.000Z") && pick.closingObservedAt?.endsWith("T14:50:00.000Z")
+    )).toBe(true);
   });
 
   it("returns a no-data backtest result when no historical fixtures exist", () => {
@@ -21588,6 +21598,15 @@ describe("prediction utilities", () => {
         calibrationBuckets: [],
         marketBreakdown: {},
         confidenceBreakdown: {},
+        oddsCoverage: {
+          evaluatedFixtures: 24,
+          coherentDecisionFixtures: 20,
+          verifiedClosingFixtures: 16,
+          decisionOnlyFixtures: 4,
+          missingDecisionFixtures: 4,
+          rejectedQuotes: 0,
+          rejectedGroups: 4
+        },
         learnedWeights: {
           valueEdgeWeight: 1.01,
           dataQualityWeight: 0.2,
@@ -21729,6 +21748,15 @@ describe("prediction utilities", () => {
             calibrationBuckets: [],
             marketBreakdown: {},
             confidenceBreakdown: {},
+            oddsCoverage: {
+              evaluatedFixtures: 24,
+              coherentDecisionFixtures: 18,
+              verifiedClosingFixtures: 12,
+              decisionOnlyFixtures: 6,
+              missingDecisionFixtures: 6,
+              rejectedQuotes: 0,
+              rejectedGroups: 6
+            },
             learnedWeights: {
               valueEdgeWeight: 0.2648,
               dataQualityWeight: 0.21,
@@ -24661,12 +24689,12 @@ describe("prediction utilities", () => {
           homeFeatures: { eloRating: 1740, attackStrength: 1.25, defenseStrength: 1.18, recentFormPoints: 11, injuriesCount: 1 },
           awayFeatures: { eloRating: 1450, attackStrength: 0.85, defenseStrength: 0.82, recentFormPoints: 4, injuriesCount: 3 },
           odds: [
-            { market: "match_winner", selection: "home", decimalOdds: 1.7 },
-            { market: "match_winner", selection: "draw", decimalOdds: 4.1 },
-            { market: "match_winner", selection: "away", decimalOdds: 6.2 },
-            { market: "match_winner", selection: "home", decimalOdds: 1.58, isClosing: true },
-            { market: "match_winner", selection: "draw", decimalOdds: 4.2, isClosing: true },
-            { market: "match_winner", selection: "away", decimalOdds: 6.6, isClosing: true }
+            { market: "match_winner", selection: "home", decimalOdds: 1.7, bookmaker: "test-book", observedAt: "2025-05-01T10:00:00.000Z" },
+            { market: "match_winner", selection: "draw", decimalOdds: 4.1, bookmaker: "test-book", observedAt: "2025-05-01T10:00:00.000Z" },
+            { market: "match_winner", selection: "away", decimalOdds: 6.2, bookmaker: "test-book", observedAt: "2025-05-01T10:00:00.000Z" },
+            { market: "match_winner", selection: "home", decimalOdds: 1.58, bookmaker: "test-book", isClosing: true, observedAt: "2025-05-01T14:55:00.000Z" },
+            { market: "match_winner", selection: "draw", decimalOdds: 4.2, bookmaker: "test-book", isClosing: true, observedAt: "2025-05-01T14:55:00.000Z" },
+            { market: "match_winner", selection: "away", decimalOdds: 6.6, bookmaker: "test-book", isClosing: true, observedAt: "2025-05-01T14:55:00.000Z" }
           ],
           availability: [{ teamExternalId: "api-football:44", playerName: "Away Striker", status: "injured" }],
           lineups: [{ teamExternalId: "api-football:42", lineupStatus: "confirmed", players: [{ name: "Home Starter" }] }],

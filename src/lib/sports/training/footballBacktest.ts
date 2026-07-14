@@ -2,20 +2,18 @@ import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine"
 import { buildScoreMatrix, probabilityFromScoreMatrix } from "@/lib/sports/prediction/poisson";
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "@/lib/sports/training/probabilityCalibration";
 import { benchmarkBacktestModelKey } from "@/lib/sports/prediction/modelIdentity";
+import {
+  resolveHistoricalFootballOdds,
+  type HistoricalFootballOddsAudit,
+  type HistoricalFootballOddsQuote
+} from "@/lib/sports/training/historicalFootballOdds";
+
+export type { HistoricalFootballOddsQuote } from "@/lib/sports/training/historicalFootballOdds";
 
 export const FOOTBALL_BACKTEST_MODEL_KEY = benchmarkBacktestModelKey("football");
 
 export type FootballOutcome = "home" | "draw" | "away";
 export type BacktestConfidence = "low" | "medium" | "high";
-
-export type HistoricalFootballOddsQuote = {
-  market: "match_winner";
-  selection: FootballOutcome;
-  decimalOdds: number;
-  isClosing?: boolean;
-  observedAt?: string;
-  bookmaker?: string;
-};
 
 export type HistoricalFootballFixture = {
   fixtureExternalId: string;
@@ -64,6 +62,9 @@ export type FootballBacktestPick = {
   edge: number;
   odds: number;
   closingOdds: number | null;
+  bookmaker: string;
+  observedAt: string;
+  closingObservedAt: string | null;
   confidence: BacktestConfidence;
   won: boolean;
   unitReturn: number;
@@ -79,6 +80,17 @@ export type FootballBacktestFixtureResult = {
   brierScore: number;
   logLoss: number;
   pick: FootballBacktestPick | null;
+  oddsEvidence: HistoricalFootballOddsAudit;
+};
+
+export type FootballOddsCoverage = {
+  evaluatedFixtures: number;
+  coherentDecisionFixtures: number;
+  verifiedClosingFixtures: number;
+  decisionOnlyFixtures: number;
+  missingDecisionFixtures: number;
+  rejectedQuotes: number;
+  rejectedGroups: number;
 };
 
 export type FootballBacktestBreakdown = {
@@ -129,6 +141,7 @@ export type FootballBacktestResult = {
   calibrationBuckets: ProbabilityCalibrationBucket[];
   marketBreakdown: Record<string, FootballBacktestBreakdown>;
   confidenceBreakdown: Record<string, FootballBacktestBreakdown>;
+  oddsCoverage: FootballOddsCoverage;
   learnedWeights: {
     valueEdgeWeight: number;
     dataQualityWeight: number;
@@ -154,6 +167,7 @@ export type FootballEvaluationSummary = {
   calibrationBuckets: ProbabilityCalibrationBucket[];
   marketBreakdown: Record<string, FootballBacktestBreakdown>;
   confidenceBreakdown: Record<string, FootballBacktestBreakdown>;
+  oddsCoverage: FootballOddsCoverage;
 };
 
 export type FootballDecisionLearnedWeights = Omit<FootballBacktestResult["learnedWeights"], "homeAdvantageElo">;
@@ -163,6 +177,9 @@ type SelectionOdds = {
   odds: number;
   closingOdds: number | null;
   impliedProbability: number;
+  bookmaker: string;
+  observedAt: string;
+  closingObservedAt: string | null;
 };
 
 const DEFAULT_CONFIG: Required<FootballBacktestConfig> = {
@@ -299,36 +316,30 @@ function probabilitiesFromExpectedGoals(expectedGoals: { home: number; away: num
   };
 }
 
-function quoteTime(quote: HistoricalFootballOddsQuote): number {
-  return quote.observedAt ? new Date(quote.observedAt).getTime() : 0;
-}
+function winnerOdds(fixture: HistoricalFootballFixture): {
+  selections: Record<FootballOutcome, SelectionOdds> | null;
+  audit: HistoricalFootballOddsAudit;
+} {
+  const resolution = resolveHistoricalFootballOdds(fixture.odds, { kickoffAt: fixture.kickoffAt });
+  const decision = resolution.decisionSnapshot;
+  if (!decision) return { selections: null, audit: resolution.audit };
 
-function winnerOdds(odds: HistoricalFootballOddsQuote[]): Record<FootballOutcome, SelectionOdds> | null {
-  const selections: Partial<Record<FootballOutcome, { taken: HistoricalFootballOddsQuote; closing: HistoricalFootballOddsQuote | null }>> = {};
-
-  for (const selection of ["home", "draw", "away"] as const) {
-    const quotes = odds
-      .filter((quote) => quote.market === "match_winner" && quote.selection === selection && quote.decimalOdds > 1)
-      .sort((a, b) => quoteTime(a) - quoteTime(b));
-    if (!quotes.length) return null;
-    const taken = quotes.find((quote) => !quote.isClosing) ?? quotes[0];
-    const closing = [...quotes].reverse().find((quote) => quote.isClosing) ?? quotes[quotes.length - 1] ?? null;
-    selections[selection] = { taken, closing };
-  }
-
-  const rawImplied = (["home", "draw", "away"] as const).map((selection) => 1 / selections[selection]!.taken.decimalOdds);
-  const margin = rawImplied.reduce((sum, value) => sum + value, 0) || 1;
-
-  return Object.fromEntries(
-    (["home", "draw", "away"] as const).map((selection, index) => [
-      selection,
-      {
-        odds: selections[selection]!.taken.decimalOdds,
-        closingOdds: selections[selection]!.closing?.decimalOdds ?? null,
-        impliedProbability: rawImplied[index] / margin
-      }
-    ])
-  ) as Record<FootballOutcome, SelectionOdds>;
+  return {
+    selections: Object.fromEntries(
+      (["home", "draw", "away"] as const).map((selection) => [
+        selection,
+        {
+          odds: decision.odds[selection],
+          closingOdds: resolution.closingSnapshot?.odds[selection] ?? null,
+          impliedProbability: decision.noVigProbabilities[selection],
+          bookmaker: decision.bookmaker,
+          observedAt: decision.observedAt,
+          closingObservedAt: resolution.closingSnapshot?.observedAt ?? null
+        }
+      ])
+    ) as Record<FootballOutcome, SelectionOdds>,
+    audit: resolution.audit
+  };
 }
 
 function confidenceForPick(edge: number, probability: number, dataQuality: number): BacktestConfidence {
@@ -359,6 +370,9 @@ function selectBacktestPick(
         edge,
         odds: quote.odds,
         closingOdds: quote.closingOdds,
+        bookmaker: quote.bookmaker,
+        observedAt: quote.observedAt,
+        closingObservedAt: quote.closingObservedAt,
         confidence
       };
     })
@@ -444,6 +458,18 @@ function buildCalibration(results: FootballBacktestFixtureResult[]) {
   );
 }
 
+function buildOddsCoverage(results: FootballBacktestFixtureResult[]): FootballOddsCoverage {
+  return {
+    evaluatedFixtures: results.length,
+    coherentDecisionFixtures: results.filter((result) => result.oddsEvidence.status !== "no-coherent-decision").length,
+    verifiedClosingFixtures: results.filter((result) => result.oddsEvidence.status === "ready").length,
+    decisionOnlyFixtures: results.filter((result) => result.oddsEvidence.status === "decision-only").length,
+    missingDecisionFixtures: results.filter((result) => result.oddsEvidence.status === "no-coherent-decision").length,
+    rejectedQuotes: results.reduce((sum, result) => sum + result.oddsEvidence.rejectedQuotes, 0),
+    rejectedGroups: results.reduce((sum, result) => sum + result.oddsEvidence.rejectedGroups, 0)
+  };
+}
+
 /** Evaluate one probability vector using the shared odds, pick, and scoring policy. */
 export function evaluateFootballPrediction({
   fixture,
@@ -457,7 +483,7 @@ export function evaluateFootballPrediction({
   config: Required<FootballBacktestConfig>;
 }): FootballBacktestFixtureResult {
   const actual = actualOutcome(fixture.homeScore, fixture.awayScore);
-  const odds = winnerOdds(fixture.odds);
+  const odds = winnerOdds(fixture);
   return {
     fixtureExternalId: fixture.fixtureExternalId,
     kickoffAt: fixture.kickoffAt,
@@ -466,7 +492,8 @@ export function evaluateFootballPrediction({
     expectedGoals,
     brierScore: brierScore(probabilities, actual),
     logLoss: logLoss(probabilities, actual),
-    pick: odds ? selectBacktestPick(fixture, probabilities, odds, actual, config) : null
+    pick: odds.selections ? selectBacktestPick(fixture, probabilities, odds.selections, actual, config) : null,
+    oddsEvidence: odds.audit
   };
 }
 
@@ -476,6 +503,7 @@ export function summarizeFootballEvaluation(results: FootballBacktestFixtureResu
   const roiUnits = picks.reduce((sum, pick) => sum + pick.unitReturn, 0);
   const breakdowns = buildBreakdowns(results);
   const calibration = buildCalibration(results);
+  const oddsCoverage = buildOddsCoverage(results);
   return {
     pickCount: picks.length,
     roiUnits: roundMetric(roiUnits, 6) ?? 0,
@@ -490,7 +518,8 @@ export function summarizeFootballEvaluation(results: FootballBacktestFixtureResu
     calibrationError: calibration.expectedCalibrationError,
     calibrationBuckets: calibration.buckets,
     marketBreakdown: breakdowns.byMarket,
-    confidenceBreakdown: breakdowns.byConfidence
+    confidenceBreakdown: breakdowns.byConfidence,
+    oddsCoverage
   };
 }
 
@@ -541,7 +570,7 @@ export function buildFootballLearnedWeightsProvenance(
 function resultNotes(
   result: Pick<
     FootballBacktestResult,
-    "sampleSize" | "testSize" | "pickCount" | "closingLineValue" | "yield" | "learnedWeightsProvenance"
+    "sampleSize" | "testSize" | "pickCount" | "closingLineValue" | "yield" | "learnedWeightsProvenance" | "oddsCoverage"
   >
 ): string[] {
   return [
@@ -550,6 +579,12 @@ function resultNotes(
       : "Learned decision weights use conservative defaults because no chronological training fixture was available.",
     result.sampleSize < 200 ? "Historical sample is thin; import multiple seasons before trusting calibration." : "",
     result.testSize < 50 ? "Holdout set is small; backtest metrics are directional only." : "",
+    result.oddsCoverage.missingDecisionFixtures > 0
+      ? `${result.oddsCoverage.missingDecisionFixtures} holdout fixture(s) lack a coherent same-bookmaker, same-timestamp pre-match market and cannot produce a value pick.`
+      : "",
+    result.oddsCoverage.decisionOnlyFixtures > 0
+      ? `${result.oddsCoverage.decisionOnlyFixtures} holdout fixture(s) have decision odds but no later explicitly marked closing snapshot from the same bookmaker; CLV remains unavailable for those picks.`
+      : "",
     result.pickCount === 0 ? "No historical picks cleared the value-edge threshold." : "",
     result.closingLineValue === null ? "Closing-line value is unavailable until both taken and closing odds are stored." : "",
     result.yield !== null && result.yield < 0 ? "Backtest yield is negative; raise the minimum edge or discount this market." : ""
@@ -593,6 +628,15 @@ export function runFootballBacktest(
       calibrationBuckets: [],
       marketBreakdown: {},
       confidenceBreakdown: {},
+      oddsCoverage: {
+        evaluatedFixtures: 0,
+        coherentDecisionFixtures: 0,
+        verifiedClosingFixtures: 0,
+        decisionOnlyFixtures: 0,
+        missingDecisionFixtures: 0,
+        rejectedQuotes: 0,
+        rejectedGroups: 0
+      },
       learnedWeights: learnedWeights({
         pickCount: 0,
         yield: null,
@@ -676,6 +720,7 @@ export function runFootballBacktest(
     calibrationBuckets: summary.calibrationBuckets,
     marketBreakdown: summary.marketBreakdown,
     confidenceBreakdown: summary.confidenceBreakdown,
+    oddsCoverage: summary.oddsCoverage,
     learnedWeights: learnedWeights(learningResult),
     learnedWeightsProvenance: weightProvenance,
     config,

@@ -578,6 +578,7 @@ export function runFootballRuntimeReplay(
     calibrationBuckets: summary.calibrationBuckets,
     marketBreakdown: summary.marketBreakdown,
     confidenceBreakdown: summary.confidenceBreakdown,
+    oddsCoverage: summary.oddsCoverage,
     learnedWeights,
     learnedWeightsProvenance: weightProvenance,
     config,

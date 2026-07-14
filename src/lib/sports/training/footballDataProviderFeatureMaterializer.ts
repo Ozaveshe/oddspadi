@@ -1,6 +1,6 @@
-import { calculateBookmakerMargin, decimalOddsToImpliedProbability, removeBookmakerMargin } from "@/lib/sports/prediction/odds";
 import { buildScoreMatrix, probabilityFromScoreMatrix } from "@/lib/sports/prediction/poisson";
 import { deriveFootballChronologyFeatures } from "@/lib/sports/training/footballChronologyFeatures";
+import { resolveHistoricalFootballOdds } from "@/lib/sports/training/historicalFootballOdds";
 import type { HistoricalFootballFixtureInput } from "@/lib/sports/training/historicalIngestion";
 import { FOOTBALL_PROVIDER_RETEST_MODEL_KEY, type FootballDataProviderRetestFeatureRow } from "@/lib/sports/training/footballDataProviderRetestBridge";
 import type { FootballProviderCorpusSource } from "@/lib/sports/training/footballProviderFeatureCorpusRepository";
@@ -145,43 +145,22 @@ function completeOdds(
   probabilities: Record<Outcome, number>;
   margin: number;
 } | null {
-  const grouped = new Map<string, NonNullable<HistoricalFootballFixtureInput["odds"]>>();
-  for (const quote of fixture.odds ?? []) {
-    if (quote.market !== "match_winner" || quote.decimalOdds <= 1 || (closing ? !quote.isClosing : Boolean(quote.isClosing))) continue;
-    const observedAt = quote.observedAt ?? fixture.kickoffAt;
-    const key = `${quote.bookmaker ?? "unknown"}:${observedAt}`;
-    grouped.set(key, [...(grouped.get(key) ?? []), quote]);
-  }
-  const completeGroups = [...grouped.values()]
-    .map((group) => {
-      const quotes = (["home", "draw", "away"] as const).map((selection) => group.find((quote) => quote.selection === selection));
-      const observedAt = Date.parse(group[0]?.observedAt ?? fixture.kickoffAt);
-      return { quotes, observedAt };
-    })
-    .filter((group) => group.quotes.every(Boolean))
-    .sort((a, b) => a.observedAt - b.observedAt);
-  const quotes = completeGroups.at(closing ? -1 : 0)?.quotes;
-  if (!quotes) return null;
-  const odds = {
-    home: quotes[0]!.decimalOdds,
-    draw: quotes[1]!.decimalOdds,
-    away: quotes[2]!.decimalOdds
-  };
-  const raw = [odds.home, odds.draw, odds.away].map(decimalOddsToImpliedProbability);
-  const noVig = removeBookmakerMargin(raw);
+  const resolution = resolveHistoricalFootballOdds(fixture.odds ?? [], { kickoffAt: fixture.kickoffAt });
+  const snapshot = closing ? resolution.closingSnapshot : resolution.decisionSnapshot;
+  if (!snapshot) return null;
   return {
-    odds,
+    odds: snapshot.odds,
     probabilities: {
-      home: round(noVig[0]) ?? 0,
-      draw: round(noVig[1]) ?? 0,
-      away: round(noVig[2]) ?? 0
+      home: round(snapshot.noVigProbabilities.home) ?? 0,
+      draw: round(snapshot.noVigProbabilities.draw) ?? 0,
+      away: round(snapshot.noVigProbabilities.away) ?? 0
     },
-    margin: round(calculateBookmakerMargin(raw)) ?? 0
+    margin: round(snapshot.bookmakerMargin) ?? 0
   };
 }
 
 function latestMarketOdds(fixture: HistoricalFootballFixtureInput) {
-  return completeOdds(fixture, false) ?? completeOdds(fixture, true);
+  return completeOdds(fixture, false);
 }
 
 function modelProbabilities(fixture: HistoricalFootballFixtureInput): Record<Outcome, number> {

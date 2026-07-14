@@ -3238,6 +3238,7 @@ a.score-row:active,
 .evidence-sport-card dt { color: var(--muted); font: 750 9px/1 var(--font-mono); text-transform: uppercase; }
 .evidence-sport-card dd { margin: 0; font: 710 18px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .historical-proof-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, .55fr); gap: 16px; align-items: stretch; margin-top: 16px; }
+.historical-proof-grid > div { min-width: 0; }
 .historical-proof-grid > div > h3 { margin: 4px 0 14px; }
 .backtest-table { min-width: 720px; }
 .backtest-table td:first-child { display: grid; gap: 4px; }
@@ -3269,6 +3270,7 @@ a.score-row:active,
 .calibration-key i.actual { width: 4px; height: 18px; background: var(--green-deep); }
 
 .performance-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(24px, 5vw, 58px); align-items: start; }
+.performance-split > * { min-width: 0; }
 .performance-table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); }
 .performance-table { min-width: 620px; }
 .performance-table caption { padding: 12px 14px; background: var(--bg-soft); color: var(--muted); font-size: 11px; text-align: left; }
@@ -3292,14 +3294,15 @@ a.score-row:active,
   .learning-pipeline { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .learning-pipeline li:nth-child(3) { border-right: 0; }
   .learning-pipeline li:nth-child(n+4) { border-top: 1px solid var(--border); }
-  .historical-proof-grid { grid-template-columns: 1fr; }
+  .historical-proof-grid { grid-template-columns: minmax(0, 1fr); }
   .performance-health-strip > div:nth-child(3n) { border-right: 0; }
   .calibration-rung { grid-template-columns: 100px minmax(0, 1fr); }
   .calibration-rung dl { grid-column: 1 / -1; }
 }
 
 @media (max-width: 760px) {
-  .performance-hero,.performance-scorecard,.performance-split { grid-template-columns: 1fr; }
+  .performance-hero,.performance-scorecard { grid-template-columns: 1fr; }
+  .performance-split { grid-template-columns: minmax(0, 1fr); }
   .performance-verdict { margin-right: 14px; box-shadow: 14px 14px 0 var(--green-soft); }
   .performance-scorecard-lead { min-height: 280px; }
   .performance-health-strip,.performance-health-strip.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }

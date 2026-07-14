@@ -149,10 +149,11 @@ export default async function EnginePerformancePage() {
             <h3>Latest walk-forward backtests</h3>
             <div className="performance-table-wrap">
               <table className="data-table performance-table backtest-table">
-                <thead><tr><th>Sport</th><th>Weight source</th><th>Test sample</th><th>Picks</th><th>Brier</th><th>Log loss</th><th>Yield</th><th>CLV</th></tr></thead>
+                <thead><tr><th>Sport</th><th>Weight source</th><th>Odds evidence</th><th>Test sample</th><th>Picks</th><th>Brier</th><th>Log loss</th><th>Yield</th><th>CLV</th></tr></thead>
                 <tbody>{evidence.latestBacktests.map((row) => <tr key={row.sport}>
                   <td><strong>{row.sport}</strong><small>{row.modelKey}</small><small>runtime: {row.runtimeModelKey ?? "not registered"}</small><small>{row.modelCompatibility}</small></td>
                   <td><strong>{row.learnedWeightsTrainingOnly ? "training only" : "unverified"}</strong><small>{count(row.learnedWeightsSampleSize)} learning fixtures</small><small>{row.learnedWeightsSource}</small></td>
+                  <td><strong>{row.oddsCoverageVerified ? `${count(row.oddsCoherentDecisionFixtures)}/${count(row.oddsEvaluatedFixtures)} coherent` : "unverified"}</strong><small>{row.oddsCoverageVerified ? `${count(row.oddsVerifiedClosingFixtures)} verified close` : "legacy run or missing audit"}</small></td>
                   <td>{count(row.testSize)}</td><td>{count(row.pickCount)}</td><td>{decimal(row.brierScore)}</td><td>{decimal(row.logLoss)}</td>
                   <td className={row.yield !== null && row.yield < 0 ? "negative-number" : row.yield !== null && row.yield > 0 ? "positive-number" : undefined}>{signedPercent(row.yield)}</td>
                   <td>{signedPercent(row.closingLineValue, 2)}</td>

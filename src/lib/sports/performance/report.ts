@@ -118,6 +118,33 @@ export function auditLearnedWeightsProvenance(configValue: unknown) {
   };
 }
 
+export function auditBacktestOddsCoverage(configValue: unknown) {
+  const coverage = record(record(configValue).oddsCoverage);
+  const evaluatedFixtures = finiteNumber(coverage.evaluatedFixtures) ?? 0;
+  const coherentDecisionFixtures = finiteNumber(coverage.coherentDecisionFixtures) ?? 0;
+  const verifiedClosingFixtures = finiteNumber(coverage.verifiedClosingFixtures) ?? 0;
+  const decisionOnlyFixtures = finiteNumber(coverage.decisionOnlyFixtures) ?? 0;
+  const missingDecisionFixtures = finiteNumber(coverage.missingDecisionFixtures) ?? 0;
+  const counts = [
+    evaluatedFixtures,
+    coherentDecisionFixtures,
+    verifiedClosingFixtures,
+    decisionOnlyFixtures,
+    missingDecisionFixtures
+  ];
+  const verified =
+    evaluatedFixtures > 0 &&
+    counts.every((value) => Number.isInteger(value) && value >= 0) &&
+    coherentDecisionFixtures + missingDecisionFixtures === evaluatedFixtures &&
+    verifiedClosingFixtures + decisionOnlyFixtures === coherentDecisionFixtures;
+  return {
+    oddsEvaluatedFixtures: evaluatedFixtures,
+    oddsCoherentDecisionFixtures: coherentDecisionFixtures,
+    oddsVerifiedClosingFixtures: verifiedClosingFixtures,
+    oddsCoverageVerified: verified
+  };
+}
+
 async function getHistoricalEngineEvidence() {
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
   const census = await readSupabaseTrainingCorpusCensus({ origin }).catch((error: unknown) => ({
@@ -199,6 +226,7 @@ async function getHistoricalEngineEvidence() {
     latestBacktests: [...latestBySport.values()].map((row) => {
       const sport = String(row.sport ?? "unknown");
       const learningAudit = auditLearnedWeightsProvenance(row.config);
+      const oddsAudit = auditBacktestOddsCoverage(row.config);
       const compatibility = isDecisionModelSport(sport)
         ? historicalModelCompatibility({ sport, evidenceModelKey: String(row.model_key ?? ""), config: record(row.config) })
         : "incompatible" as const;
@@ -218,6 +246,7 @@ async function getHistoricalEngineEvidence() {
         closingLineValue: finiteNumber(row.closing_line_value),
         calibrationError: finiteNumber(row.calibration_error),
         ...learningAudit,
+        ...oddsAudit,
         createdAt: String(row.created_at ?? "")
       };
     }),

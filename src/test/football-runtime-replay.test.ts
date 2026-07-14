@@ -9,25 +9,29 @@ function history(lastScore: [number, number] = [2, 1]): HistoricalFootballFixtur
   const scores: Array<[number, number]> = [
     [2, 0], [1, 1], [0, 1], [3, 1], [1, 0], [2, 2], [0, 2], [2, 0], [1, 1], lastScore
   ];
-  return scores.map(([homeScore, awayScore], index) => ({
-    externalId: `fixture:${index + 1}`,
-    kickoffAt: new Date(Date.UTC(2025, 0, index + 1, 15)).toISOString(),
-    league: { externalId: "39", name: "Premier League", country: "England" },
-    season: "2025",
-    round: String(index + 1),
-    status: "finished",
-    homeTeam: { externalId: "team:a", name: "Alpha FC" },
-    awayTeam: { externalId: "team:b", name: "Beta FC" },
-    homeScore,
-    awayScore,
-    dataQuality: 0.86,
-    odds: [
-      { market: "match_winner", selection: "home", decimalOdds: 2.1, bookmaker: "test" },
-      { market: "match_winner", selection: "draw", decimalOdds: 3.3, bookmaker: "test" },
-      { market: "match_winner", selection: "away", decimalOdds: 3.7, bookmaker: "test" }
-    ],
-    metadata: { provider: "api_football" }
-  }));
+  return scores.map(([homeScore, awayScore], index) => {
+    const kickoffAt = new Date(Date.UTC(2025, 0, index + 1, 15)).toISOString();
+    const observedAt = new Date(Date.UTC(2025, 0, index + 1, 9)).toISOString();
+    return {
+      externalId: `fixture:${index + 1}`,
+      kickoffAt,
+      league: { externalId: "39", name: "Premier League", country: "England" },
+      season: "2025",
+      round: String(index + 1),
+      status: "finished",
+      homeTeam: { externalId: "team:a", name: "Alpha FC" },
+      awayTeam: { externalId: "team:b", name: "Beta FC" },
+      homeScore,
+      awayScore,
+      dataQuality: 0.86,
+      odds: [
+        { market: "match_winner", selection: "home", decimalOdds: 2.1, bookmaker: "test", observedAt },
+        { market: "match_winner", selection: "draw", decimalOdds: 3.3, bookmaker: "test", observedAt },
+        { market: "match_winner", selection: "away", decimalOdds: 3.7, bookmaker: "test", observedAt }
+      ],
+      metadata: { provider: "api_football" }
+    };
+  });
 }
 
 function playerPerformances(): PlayerMatchPerformance[] {

@@ -83,6 +83,9 @@ describe("live OddsPadi product UI contract", () => {
     expect(performance).toContain("Weight source");
     expect(performance).toContain('row.learnedWeightsTrainingOnly ? "training only" : "unverified"');
     expect(performance).toContain("learning fixtures");
+    expect(performance).toContain("Odds evidence");
+    expect(performance).toContain("verified close");
+    expect(performance).toContain("legacy run or missing audit");
   });
 
   it("provides a readable mobile market analysis instead of relying on the desktop table", () => {
