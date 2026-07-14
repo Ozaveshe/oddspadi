@@ -4,6 +4,7 @@ import { AgentReport, DecisionEnginePanel, ModelDiagnostics } from "@/components
 import { ConfidenceBadge, MatchStatusBadge, RiskBadge, ValueEdgeBadge } from "@/components/odds/Badges";
 import { FormGuide } from "@/components/odds/FormGuide";
 import { OddsTable } from "@/components/odds/OddsTable";
+import { OddsMovementChart } from "@/components/odds/OddsMovementChart";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { PredictionExplanation } from "@/components/odds/PredictionExplanation";
 import { LocalTime } from "@/components/odds/LocalTime";
@@ -66,7 +67,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
   const row = await getCachedMatchPrediction(matchId);
   if (!row) notFound();
 
-  const { match, prediction } = row;
+  const { match, prediction, oddsHistory } = row;
   const displayDecision = prediction.decision;
   const displayPrediction = prediction;
   const winner = prediction.markets.find((market) => market.marketId === "match_winner");
@@ -75,6 +76,8 @@ export default async function MatchDetailPage({ params }: PageProps) {
   const displayedDecision = publishedPick ?? canonical.bestLean ?? canonical.bestWatchlistCandidate;
   const hasValue = canonical.publicStatus === "value_pick" && publishedPick !== null;
   const bestEdge = displayedDecision?.edge ?? 0;
+  const historyMarket = displayedDecision?.marketId ?? "match_winner";
+  const historyMarketLabel = historyMarket.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const publicDecisionLabel = hasValue
     ? `Value Pick — ${publishedPick.label}`
     : canonical.publicStatus === "lean" && displayedDecision
@@ -219,13 +222,13 @@ export default async function MatchDetailPage({ params }: PageProps) {
             <OddsTable match={match} prediction={displayPrediction} />
           </div>
 
-          <div className="panel">
+          <div className="panel odds-history-panel">
             <h2>Odds movement and freshness</h2>
             <div className="metrics-grid results-metrics">
               <div className="metric"><span className="metric-label">Decision generated</span><span className="metric-value">{new Date(canonical.generatedAt).toLocaleString()}</span></div>
               <div className="metric"><span className="metric-label">Price expires</span><span className="metric-value">{canonical.expiresAt ? new Date(canonical.expiresAt).toLocaleString() : "Awaiting fresh odds"}</span></div>
             </div>
-            <p className="muted small">The table above shows the current provider snapshot. Historical line movement is shown only when verified snapshots are available; no movement is inferred from a single price.</p>
+            <OddsMovementChart history={oddsHistory} market={historyMarket} marketLabel={historyMarketLabel} />
           </div>
 
           <PredictionExplanation explanation={prediction.explanation} />

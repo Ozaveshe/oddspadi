@@ -68,6 +68,16 @@ describe("live OddsPadi product UI contract", () => {
     expect(evidence).toContain("decision.learningProfile");
   });
 
+  it("renders verified stored odds movement without inferring a trend from one price", () => {
+    const detail = source("src/app/predictions/[matchId]/page.tsx");
+    const chart = source("src/components/odds/OddsMovementChart.tsx");
+    expect(detail).toContain("OddsMovementChart");
+    expect(detail).toContain("oddsHistory");
+    expect(chart).toContain("Verified price tape");
+    expect(chart).toContain("Movement needs at least two verified capture times");
+    expect(chart).toContain("This is observed movement, not proof that the move is correct");
+  });
+
   it("provides a readable mobile market analysis instead of relying on the desktop table", () => {
     const markets = source("src/components/odds/OddsTable.tsx");
     expect(markets).toContain("market-table-desktop");

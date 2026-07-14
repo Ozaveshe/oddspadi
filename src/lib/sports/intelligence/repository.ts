@@ -7,6 +7,7 @@ import type {
   CanonicalDecision,
   CanonicalFixture,
   CanonicalOddsSnapshot,
+  FixtureOddsHistory,
   ProviderRunLog,
   ProviderRunStatus,
   SportsSlate
@@ -455,6 +456,107 @@ export async function readLatestDecisionSummary(
     .maybeSingle();
   if (error || !data) return null;
   return decisionSummaryFromRow(data as Record<string, unknown>);
+}
+
+const FIXTURE_ODDS_HISTORY_LIMIT = 600;
+
+export async function readFixtureOddsHistory(
+  fixtureExternalId: string,
+  client: SupabaseClient | null = getSupabaseServerClient()
+): Promise<FixtureOddsHistory> {
+  if (!client) {
+    return {
+      status: "unavailable",
+      snapshots: [],
+      rowsRead: 0,
+      truncated: false,
+      reason: "Stored odds history is unavailable because server-side Supabase reads are not configured."
+    };
+  }
+
+  try {
+    const { data, error } = await client
+      .from("op_odds_snapshots")
+      .select("id,fixture_external_id,provider,bookmaker,market,selection,decimal_odds,captured_at,source,is_live,expires_at,metadata")
+      .eq("fixture_external_id", fixtureExternalId)
+      .eq("is_live", false)
+      .order("captured_at", { ascending: false })
+      .limit(FIXTURE_ODDS_HISTORY_LIMIT + 1);
+    if (error) {
+      return {
+        status: "failed",
+        snapshots: [],
+        rowsRead: 0,
+        truncated: false,
+        reason: `Stored odds history read failed: ${error.message}`
+      };
+    }
+
+    const rows = ((data ?? []) as Array<Record<string, unknown>>).filter((row) => {
+      const metadata = record(row.metadata);
+      const provider = text(row.provider)?.toLowerCase() ?? "";
+      const capturedAt = text(row.captured_at);
+      const decimalOdds = number(row.decimal_odds);
+      return (
+        !provider.includes("mock") &&
+        metadata.sourceKind !== "demo" &&
+        metadata.sourceKind !== "mock" &&
+        Boolean(text(row.fixture_external_id)) &&
+        Boolean(text(row.market)) &&
+        Boolean(text(row.selection)) &&
+        Boolean(capturedAt && Number.isFinite(Date.parse(capturedAt))) &&
+        decimalOdds !== null &&
+        decimalOdds > 1
+      );
+    });
+    const truncated = rows.length > FIXTURE_ODDS_HISTORY_LIMIT;
+    const snapshots = rows
+      .slice(0, FIXTURE_ODDS_HISTORY_LIMIT)
+      .map((row): CanonicalOddsSnapshot => {
+        const metadata = record(row.metadata);
+        const provider = text(row.provider) ?? "unknown";
+        const capturedAt = text(row.captured_at) as string;
+        return {
+          oddsSnapshotId: text(row.id),
+          fixtureId: text(row.fixture_external_id) as string,
+          market: text(row.market) as string,
+          selection: text(row.selection) as string,
+          label: text(metadata.label) ?? text(row.selection) as string,
+          decimalOdds: number(row.decimal_odds) as number,
+          bookmaker: text(row.bookmaker) ?? provider,
+          provider,
+          capturedAt,
+          source: text(row.source) ?? provider,
+          isLive: false,
+          expiresAt: text(row.expires_at) ?? capturedAt
+        };
+      })
+      .sort((left, right) => Date.parse(left.capturedAt) - Date.parse(right.capturedAt));
+
+    return snapshots.length
+      ? {
+          status: "ready",
+          snapshots,
+          rowsRead: snapshots.length,
+          truncated,
+          reason: truncated ? `Showing the most recent ${FIXTURE_ODDS_HISTORY_LIMIT} verified pre-match snapshots.` : null
+        }
+      : {
+          status: "no-data",
+          snapshots: [],
+          rowsRead: 0,
+          truncated: false,
+          reason: "No verified pre-match odds snapshots are stored for this fixture yet."
+        };
+  } catch (error) {
+    return {
+      status: "failed",
+      snapshots: [],
+      rowsRead: 0,
+      truncated: false,
+      reason: `Stored odds history read failed: ${error instanceof Error ? error.message : "unknown error"}`
+    };
+  }
 }
 
 export async function readLatestProviderRun(jobTypes: string[], client: SupabaseClient | null = getSupabaseServerClient()): Promise<ProviderRunLog | null> {

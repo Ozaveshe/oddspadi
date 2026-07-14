@@ -35,6 +35,14 @@ export type CanonicalOddsSnapshot = {
   expiresAt: string;
 };
 
+export type FixtureOddsHistory = {
+  status: "ready" | "no-data" | "unavailable" | "failed";
+  snapshots: CanonicalOddsSnapshot[];
+  rowsRead: number;
+  truncated: boolean;
+  reason: string | null;
+};
+
 export type DecisionStatus =
   | "published_value_pick"
   | "published_lean"

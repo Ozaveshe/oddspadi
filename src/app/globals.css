@@ -3058,6 +3058,37 @@ a.score-row:active,
 .uncertainty-track i.level-medium { background: var(--amber); }
 .uncertainty-track i.level-high,.uncertainty-track i.level-critical { background: var(--red); }
 
+.odds-history-panel { overflow: hidden; }
+.odds-movement-chart { margin: 24px 0 0; padding-top: 22px; border-top: 1px solid var(--border-strong); }
+.odds-movement-chart figcaption { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; margin-bottom: 14px; }
+.odds-movement-chart figcaption div { display: grid; gap: 5px; }
+.odds-movement-chart figcaption strong { font: 760 clamp(18px, 2.3vw, 24px)/1.1 var(--font-display); text-transform: capitalize; }
+.odds-movement-chart figcaption > span { color: var(--muted); font: 750 10px/1.2 var(--font-mono); letter-spacing: .04em; text-transform: uppercase; }
+.odds-chart-scroll { overflow-x: auto; overscroll-behavior-inline: contain; }
+.odds-chart-scroll svg { display: block; width: 100%; min-width: 620px; }
+.odds-grid-line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 5; }
+.odds-axis-label { fill: var(--muted); font: 700 10px var(--font-mono); }
+.odds-series path { fill: none; stroke-width: 3; stroke-linecap: square; stroke-linejoin: bevel; vector-effect: non-scaling-stroke; }
+.odds-series circle { stroke: var(--surface); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.odds-series.series-0 path { stroke: var(--green-strong); }.odds-series.series-0 circle { fill: var(--green-strong); }
+.odds-series.series-1 path { stroke: var(--amber); }.odds-series.series-1 circle { fill: var(--amber); }
+.odds-series.series-2 path { stroke: var(--blue); }.odds-series.series-2 circle { fill: var(--blue); }
+.odds-movement-legend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 10px; border-block: 1px solid var(--border); }
+.odds-movement-legend > div { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; min-width: 0; padding: 13px 14px; border-right: 1px solid var(--border); }
+.odds-movement-legend > div:last-child { border-right: 0; }
+.odds-movement-legend i { width: 12px; height: 3px; margin-top: 5px; background: var(--green-strong); }
+.odds-movement-legend i.series-1 { background: var(--amber); }.odds-movement-legend i.series-2 { background: var(--blue); }
+.odds-movement-legend span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.odds-movement-legend strong { grid-column: 1 / 3; font-variant-numeric: tabular-nums; }
+.odds-movement-legend strong b { padding-inline: 4px; color: var(--muted); font: 700 9px/1 var(--font-mono); text-transform: uppercase; }
+.odds-movement-legend small { grid-column: 1 / 3; color: var(--muted); font-size: 10px; }
+.odds-movement-legend small.shortened { color: var(--green-strong); }.odds-movement-legend small.drifted { color: var(--red); }
+.odds-history-state { margin-top: 18px; padding: 15px 17px; border-left: 3px solid var(--border-strong); background: var(--surface-2); }
+.odds-history-state strong { display: block; margin-bottom: 4px; }
+.odds-history-state p { margin: 0; color: var(--muted); font-size: 12px; }
+.odds-history-state.state-failed { border-left-color: var(--red); }
+.odds-history-state.state-unavailable { border-left-color: var(--amber); }
+
 .market-mobile-list { display: none; }
 .market-mobile-card { display: grid; gap: 14px; padding: 16px 0; border-top: 1px solid var(--border-strong); }
 .market-mobile-card header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
@@ -3098,6 +3129,10 @@ a.score-row:active,
   .home-engine-strip > div:nth-child(2n) { border-right: 0; }
   .home-today-best { padding: 22px; }
   .home-results-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .odds-movement-chart figcaption { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .odds-movement-legend { grid-template-columns: 1fr; }
+  .odds-movement-legend > div { border-right: 0; border-bottom: 1px solid var(--border); }
+  .odds-movement-legend > div:last-child { border-bottom: 0; }
   .home-how ol { grid-template-columns: 1fr; }
   .home-how li { min-height: 0; }
   .engine-page-heading { padding-top: 24px; }

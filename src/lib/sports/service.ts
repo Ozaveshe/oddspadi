@@ -26,7 +26,7 @@ import {
   buildCanonicalDecision,
   oddsSnapshotsFromMatch
 } from "./prediction/canonicalDecision";
-import { readLatestDecisionSummary } from "./intelligence/repository";
+import { readFixtureOddsHistory, readLatestDecisionSummary } from "./intelligence/repository";
 import type { DecisionProbabilityRuntimeStages } from "./prediction/decisionProbabilityTrace";
 import {
   buildPredictionEvidenceHash,
@@ -364,17 +364,19 @@ export async function getMatchPrediction(matchId: string) {
   if (!match) return null;
   if (match.sport === "football") match.headToHead = (await sportsProvider.getFootballHeadToHead(match)) ?? undefined;
   if (match.sport === "football") { const slug = leagueSlugFromProviderId(match.league.id); if (slug) match.leagueTable = (await sportsProvider.getFootballLeagueTable(slug)) ?? undefined; }
-  const [learningProfile, caseMemoryBank] = await Promise.all([
+  const [learningProfile, caseMemoryBank, storedSummary, oddsHistory] = await Promise.all([
     getLearningProfileForSport(match.sport),
     getDecisionCaseMemoryBank({ sport: match.sport }).catch((error: unknown) =>
       buildUnavailableCaseMemoryBank(error instanceof Error ? error.message : "unknown error")
-    )
+    ),
+    readLatestDecisionSummary(match.id).catch(() => null),
+    readFixtureOddsHistory(match.id)
   ]);
   const freshPrediction = buildPrediction(match, { learningProfile, caseMemoryBank });
-  const storedSummary = await readLatestDecisionSummary(match.id).catch(() => null);
   const canonicalDecision = resolveCanonicalDecisionForMatchDetail({ freshPrediction, storedSummary });
   return {
     match,
+    oddsHistory,
     prediction: {
       ...freshPrediction,
       canonicalDecision,
