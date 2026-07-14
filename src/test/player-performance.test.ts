@@ -162,6 +162,7 @@ describe("player performance corpus", () => {
     expect(result.playerPerformancesFetched).toBe(1);
     expect(result.playerPerformancesNormalized).toBe(1);
     expect(result.playerPerformancesStored).toBe(0);
+    expect(result.playerPerformancesVerified).toBe(0);
     expect(calls.filter((url) => url.includes("/fixtures/players"))).toHaveLength(1);
   });
 });

@@ -25,6 +25,7 @@ import {
   type FootballRuntimeReplayResult
 } from "./footballRuntimeReplay";
 import type { HistoricalFootballFixtureInput } from "./historicalIngestion";
+import { readStoredPlayerMatchPerformancesForFixtureIds } from "./playerPerformance";
 import {
   TENNIS_BACKTEST_MODEL_KEY,
   runTennisBacktest,
@@ -1557,7 +1558,14 @@ export async function previewStoredFootballRuntimeReplay({
 } = {}): Promise<FootballRuntimeReplayResult | { error: string }> {
   const fixtures = await readHistoricalFootballRuntimeFixtures(limit, { includeDemo });
   if ("error" in fixtures) return fixtures;
-  return runFootballRuntimeReplay(fixtures, config);
+  const playerPerformances = await readStoredPlayerMatchPerformancesForFixtureIds(
+    fixtures.map((fixture) => fixture.externalId),
+    { includeDemo }
+  );
+  if (playerPerformances.status === "failed" || playerPerformances.status === "not-configured") {
+    return { error: playerPerformances.reason ?? "Player-performance corpus could not be read." };
+  }
+  return runFootballRuntimeReplay(fixtures, config, { playerPerformances: playerPerformances.rows });
 }
 
 export async function runAndStoreFootballRuntimeReplay({

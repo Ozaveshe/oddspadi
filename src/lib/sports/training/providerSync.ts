@@ -74,6 +74,7 @@ export type ProviderSyncResult = {
   playerPerformancesFetched?: number;
   playerPerformancesNormalized?: number;
   playerPerformancesStored?: number;
+  playerPerformancesVerified?: number;
   playerPerformancesErrors?: string[];
   weatherFetched?: number;
   weatherNormalized?: number;
@@ -1832,7 +1833,7 @@ async function syncApiFootballFixtures({
   const ingestionAccepted = ingestion.status === "stored" || ingestion.status === "dry-run";
   const playerPerformanceStorage: PlayerPerformanceStoreResult = includePlayerStats && ingestionAccepted
     ? await storePlayerMatchPerformances(playerPerformances, { dryRun: request.dryRun ?? true })
-    : { status: "dry-run", rowsReceived: 0, rowsWritten: 0, errors: [] };
+    : { status: "dry-run", rowsReceived: 0, rowsWritten: 0, rowsVerified: 0, errors: [] };
   if (includePlayerStats && playerPerformanceStorage.errors.length) {
     playerPerformancesErrors.push(...playerPerformanceStorage.errors);
   }
@@ -1868,6 +1869,7 @@ async function syncApiFootballFixtures({
     playerPerformancesFetched: includePlayerStats ? playerPerformancesFetched : undefined,
     playerPerformancesNormalized: includePlayerStats ? playerPerformancesNormalized : undefined,
     playerPerformancesStored: includePlayerStats ? playerPerformanceStorage.rowsWritten : undefined,
+    playerPerformancesVerified: includePlayerStats ? playerPerformanceStorage.rowsVerified : undefined,
     playerPerformancesErrors: includePlayerStats && playerPerformancesErrors.length ? playerPerformancesErrors : undefined,
     weatherFetched: includeWeather ? weatherFetched : undefined,
     weatherNormalized: includeWeather ? weatherNormalized : undefined,

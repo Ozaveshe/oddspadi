@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { historicalModelCompatibility } from "@/lib/sports/prediction/modelIdentity";
 import { footballRuntimeReplayIdentityReceipt, runFootballRuntimeReplay } from "@/lib/sports/training/footballRuntimeReplay";
 import type { HistoricalFootballFixtureInput } from "@/lib/sports/training/historicalIngestion";
+import type { PlayerMatchPerformance } from "@/lib/sports/training/playerPerformance";
 
 function history(lastScore: [number, number] = [2, 1]): HistoricalFootballFixtureInput[] {
   const scores: Array<[number, number]> = [
@@ -27,6 +28,44 @@ function history(lastScore: [number, number] = [2, 1]): HistoricalFootballFixtur
     ],
     metadata: { provider: "api_football" }
   }));
+}
+
+function playerPerformances(): PlayerMatchPerformance[] {
+  return Array.from({ length: 5 }, (_, matchIndex) =>
+    (["team:a", "team:b"] as const).flatMap((teamExternalId) =>
+      Array.from({ length: 11 }, (_, playerIndex) => ({
+        sport: "football" as const,
+        provider: "api_football",
+        sourceKind: "real" as const,
+        fixtureExternalId: `fixture:${matchIndex + 1}`,
+        fixtureKickoffAt: new Date(Date.UTC(2025, 0, matchIndex + 1, 15)).toISOString(),
+        teamExternalId,
+        playerExternalId: `${teamExternalId}:player:${playerIndex}`,
+        playerName: `${teamExternalId} Player ${playerIndex}`,
+        position: null,
+        shirtNumber: playerIndex + 1,
+        minutes: 90,
+        started: true,
+        captain: playerIndex === 0,
+        rating: teamExternalId === "team:a" ? 7.8 : 6.1,
+        goals: teamExternalId === "team:a" && playerIndex === 0 ? 1 : 0,
+        assists: teamExternalId === "team:a" && playerIndex === 1 ? 1 : 0,
+        shotsTotal: 0,
+        shotsOnTarget: 0,
+        passesTotal: 30,
+        keyPasses: 0,
+        passAccuracy: 80,
+        tackles: teamExternalId === "team:a" ? 2 : 1,
+        interceptions: 1,
+        saves: 0,
+        yellowCards: 0,
+        redCards: 0,
+        dataQuality: 0.9,
+        metrics: {},
+        observedAt: new Date(Date.UTC(2025, 0, matchIndex + 1, 18)).toISOString()
+      }))
+    )
+  ).flat();
 }
 
 describe("football exact runtime replay", () => {
@@ -116,5 +155,18 @@ describe("football exact runtime replay", () => {
     expect(fresh.featureContract.optionalCoverage.contextSignalFixtures).toBe(1);
     expect(homeProbability(fresh)).toBeLessThan(homeProbability(baseline));
     expect(homeProbability(stale)).toBe(homeProbability(baseline));
+  });
+
+  it("executes leakage-safe player-form evidence through the exact runtime entrypoint", () => {
+    const fixtures = history();
+    const config = { trainRatio: 0.5, minPriorMatches: 3 };
+    const baseline = runFootballRuntimeReplay(fixtures, config);
+    const withPlayers = runFootballRuntimeReplay(fixtures, config, { playerPerformances: playerPerformances() });
+    const lastHomeProbability = (result: ReturnType<typeof runFootballRuntimeReplay>) =>
+      result.results.find((row) => row.fixtureExternalId === "fixture:10")!.probabilities.home;
+
+    expect(withPlayers.featureContract.optionalCoverage.playerFormFixtures).toBeGreaterThan(0);
+    expect(withPlayers.notes.some((note) => note.includes("leakage-safe player-form evidence"))).toBe(true);
+    expect(lastHomeProbability(withPlayers)).toBeGreaterThan(lastHomeProbability(baseline));
   });
 });

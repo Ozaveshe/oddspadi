@@ -200,6 +200,7 @@ function emptyCounts(): HistoricalProviderBackfillResult["counts"] {
     availabilityRows: 0,
     lineupRows: 0,
     playerPerformanceRows: 0,
+    playerPerformanceRowsVerified: 0,
     weatherRows: 0,
     featureSnapshots: 0
   };

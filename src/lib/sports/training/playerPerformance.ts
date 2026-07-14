@@ -44,7 +44,22 @@ export type PlayerPerformanceStoreResult = {
   status: "stored" | "dry-run" | "not-configured" | "failed";
   rowsReceived: number;
   rowsWritten: number;
+  rowsVerified: number;
   errors: string[];
+};
+
+export type PlayerPerformanceReadResult = {
+  status: "ready" | "no-data" | "not-configured" | "failed";
+  rows: PlayerMatchPerformance[];
+  rowsRead: number;
+  reason?: string;
+};
+
+export type PlayerFormSignalLoadResult = {
+  status: PlayerPerformanceReadResult["status"];
+  signals: Map<string, MatchContextSignal[]>;
+  rowsRead: number;
+  reason?: string;
 };
 
 type StoredPlayerPerformanceRow = {
@@ -94,7 +109,7 @@ type TeamPlayerForm = {
 
 const PLAYER_FORM_MATCH_WINDOW = 5;
 const PLAYER_FORM_CACHE_MS = 5 * 60 * 1000;
-const cache = new Map<string, { expiresAt: number; signals: Map<string, MatchContextSignal[]> }>();
+const cache = new Map<string, { expiresAt: number; result: PlayerFormSignalLoadResult }>();
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -193,13 +208,13 @@ export async function storePlayerMatchPerformances(
   rows: PlayerMatchPerformance[],
   { dryRun = true }: { dryRun?: boolean } = {}
 ): Promise<PlayerPerformanceStoreResult> {
-  if (dryRun) return { status: "dry-run", rowsReceived: rows.length, rowsWritten: 0, errors: [] };
-  if (!rows.length) return { status: "stored", rowsReceived: 0, rowsWritten: 0, errors: [] };
+  if (dryRun) return { status: "dry-run", rowsReceived: rows.length, rowsWritten: 0, rowsVerified: 0, errors: [] };
+  if (!rows.length) return { status: "stored", rowsReceived: 0, rowsWritten: 0, rowsVerified: 0, errors: [] };
   const client = getSupabaseServerClient();
-  if (!client) return { status: "not-configured", rowsReceived: rows.length, rowsWritten: 0, errors: ["Supabase server writes are not configured."] };
+  if (!client) return { status: "not-configured", rowsReceived: rows.length, rowsWritten: 0, rowsVerified: 0, errors: ["Supabase server writes are not configured."] };
 
+  let written = 0;
   try {
-    let written = 0;
     for (const batch of chunks(rows.map(toStoredRow))) {
       const { error } = await client
         .from("op_player_match_performances")
@@ -207,13 +222,31 @@ export async function storePlayerMatchPerformances(
       if (error) throw new Error(error.message);
       written += batch.length;
     }
+    const expectedKeys = new Set(rows.map((row) => `${row.provider}|${row.fixtureExternalId}|${row.teamExternalId}|${row.playerExternalId}`));
+    const verifiedKeys = new Set<string>();
+    const fixtureIds = [...new Set(rows.map((row) => row.fixtureExternalId))];
+    for (const fixtureBatch of chunks(fixtureIds, 100)) {
+      const { data, error } = await client
+        .from("op_player_match_performances")
+        .select("provider,fixture_external_id,team_external_id,player_external_id")
+        .in("fixture_external_id", fixtureBatch);
+      if (error) throw new Error(`Player-performance readback failed: ${error.message}`);
+      for (const row of data ?? []) {
+        const key = `${row.provider}|${row.fixture_external_id}|${row.team_external_id}|${row.player_external_id}`;
+        if (expectedKeys.has(key)) verifiedKeys.add(key);
+      }
+    }
+    if (verifiedKeys.size !== expectedKeys.size) {
+      throw new Error(`Player-performance readback verified ${verifiedKeys.size} of ${expectedKeys.size} unique row(s).`);
+    }
     cache.clear();
-    return { status: "stored", rowsReceived: rows.length, rowsWritten: written, errors: [] };
+    return { status: "stored", rowsReceived: rows.length, rowsWritten: written, rowsVerified: verifiedKeys.size, errors: [] };
   } catch (error) {
     return {
       status: "failed",
       rowsReceived: rows.length,
-      rowsWritten: 0,
+      rowsWritten: written,
+      rowsVerified: 0,
       errors: [error instanceof Error ? error.message : "Player-performance storage failed."]
     };
   }
@@ -336,12 +369,18 @@ function cacheKey(fixtures: PlayerFormFixture[]): string {
 export async function loadPlayerFormSignalsForFixtures(
   fixtures: PlayerFormFixture[]
 ): Promise<Map<string, MatchContextSignal[]>> {
-  if (!fixtures.length) return new Map();
+  return (await loadPlayerFormSignalResultForFixtures(fixtures)).signals;
+}
+
+export async function loadPlayerFormSignalResultForFixtures(
+  fixtures: PlayerFormFixture[]
+): Promise<PlayerFormSignalLoadResult> {
+  if (!fixtures.length) return { status: "no-data", signals: new Map(), rowsRead: 0, reason: "No fixtures requested player-form evidence." };
   const key = cacheKey(fixtures);
   const cached = cache.get(key);
-  if (cached && cached.expiresAt > Date.now()) return cached.signals;
+  if (cached && cached.expiresAt > Date.now()) return cached.result;
   const client = getSupabaseServerClient();
-  if (!client) return new Map();
+  if (!client) return { status: "not-configured", signals: new Map(), rowsRead: 0, reason: "Supabase server reads are not configured." };
   const teamIds = [...new Set(fixtures.flatMap((fixture) => [fixture.homeTeam.externalId, fixture.awayTeam.externalId]))];
   const maxKickoff = fixtures.map((fixture) => fixture.kickoffAt).sort((a, b) => Date.parse(b) - Date.parse(a))[0];
   const storedRows: StoredPlayerPerformanceRow[] = [];
@@ -357,7 +396,7 @@ export async function loadPlayerFormSignalsForFixtures(
       .gt("minutes", 0)
       .order("fixture_kickoff_at", { ascending: false })
       .range(page * pageSize, (page + 1) * pageSize - 1);
-    if (error) return new Map();
+    if (error) return { status: "failed", signals: new Map(), rowsRead: storedRows.length, reason: `Player-performance read failed: ${error.message}` };
     const pageRows = (data ?? []) as StoredPlayerPerformanceRow[];
     storedRows.push(...pageRows);
     const teamFixtureCoverage = new Map<string, Set<string>>();
@@ -374,7 +413,44 @@ export async function loadPlayerFormSignalsForFixtures(
     const signal = buildPlayerFormSignal(fixture, rows);
     if (signal) signals.set(fixture.fixtureExternalId, [signal]);
   }
-  cache.set(key, { expiresAt: Date.now() + PLAYER_FORM_CACHE_MS, signals });
+  const result: PlayerFormSignalLoadResult = signals.size
+    ? { status: "ready", signals, rowsRead: rows.length }
+    : { status: "no-data", signals, rowsRead: rows.length, reason: rows.length ? "Stored player performances did not cover both teams before these kickoffs." : "No prior real player performances were stored for these teams." };
+  cache.set(key, { expiresAt: Date.now() + PLAYER_FORM_CACHE_MS, result });
   if (cache.size > 16) cache.delete(cache.keys().next().value as string);
-  return signals;
+  return result;
+}
+
+export async function readStoredPlayerMatchPerformancesForFixtureIds(
+  fixtureExternalIds: string[],
+  { includeDemo = false }: { includeDemo?: boolean } = {}
+): Promise<PlayerPerformanceReadResult> {
+  const ids = [...new Set(fixtureExternalIds.map(text).filter(Boolean))];
+  if (!ids.length) return { status: "no-data", rows: [], rowsRead: 0, reason: "No fixture ids were supplied." };
+  const client = getSupabaseServerClient();
+  if (!client) return { status: "not-configured", rows: [], rowsRead: 0, reason: "Supabase server reads are not configured." };
+  const storedRows: StoredPlayerPerformanceRow[] = [];
+  for (const fixtureBatch of chunks(ids, 100)) {
+    let page = 0;
+    while (true) {
+      let query = client
+        .from("op_player_match_performances")
+        .select("sport,provider,source_kind,fixture_external_id,fixture_kickoff_at,team_external_id,player_external_id,player_name,position,shirt_number,minutes,started,captain,rating,goals,assists,shots_total,shots_on_target,passes_total,key_passes,pass_accuracy,tackles,interceptions,saves,yellow_cards,red_cards,data_quality,metrics,observed_at")
+        .eq("sport", "football")
+        .in("fixture_external_id", fixtureBatch)
+        .order("fixture_kickoff_at", { ascending: true })
+        .range(page * 1_000, (page + 1) * 1_000 - 1);
+      if (!includeDemo) query = query.eq("source_kind", "real");
+      const { data, error } = await query;
+      if (error) return { status: "failed", rows: [], rowsRead: storedRows.length, reason: `Player-performance corpus read failed: ${error.message}` };
+      const pageRows = (data ?? []) as StoredPlayerPerformanceRow[];
+      storedRows.push(...pageRows);
+      if (pageRows.length < 1_000) break;
+      page += 1;
+    }
+  }
+  const rows = storedRows.map(fromStoredRow);
+  return rows.length
+    ? { status: "ready", rows, rowsRead: rows.length }
+    : { status: "no-data", rows, rowsRead: 0, reason: "No stored player performances matched the runtime fixture corpus." };
 }

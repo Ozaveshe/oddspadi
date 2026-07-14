@@ -3,6 +3,11 @@ import { modelFootballMatch } from "@/lib/sports/prediction/footballModel";
 import { footballModelRatingFromElo } from "@/lib/sports/prediction/historicalElo";
 import { decisionModelIdentity, runtimeModelIdentityReceipt, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 import { footballLeagueStrength } from "@/lib/sports/footballLeagues";
+import {
+  applyContextAdjustmentToMarkets,
+  buildMatchContextAdjustment,
+  coreModelContextCategories
+} from "@/lib/sports/prediction/contextAdjustment";
 import type { Match, MatchContextSignal } from "@/lib/sports/types";
 import {
   evaluateFootballPrediction,
@@ -17,6 +22,10 @@ import {
 } from "@/lib/sports/training/footballBacktest";
 import { deriveFootballChronologyFeatures } from "@/lib/sports/training/footballChronologyFeatures";
 import type { HistoricalFootballFeatureInput, HistoricalFootballFixtureInput } from "@/lib/sports/training/historicalIngestion";
+import {
+  buildPlayerFormSignal,
+  type PlayerMatchPerformance
+} from "@/lib/sports/training/playerPerformance";
 
 export type FootballRuntimeReplayConfig = {
   trainRatio?: number;
@@ -42,6 +51,7 @@ export type FootballRuntimeFeatureContract = {
   optionalCoverage: {
     xgFixtures: number;
     contextSignalFixtures: number;
+    playerFormFixtures: number;
     completeOddsFixtures: number;
   };
   rejectionReasons: Record<string, number>;
@@ -237,7 +247,8 @@ function featureReasons(
 
 function prepareFixture(
   fixture: HistoricalFootballFixtureInput,
-  config: Required<FootballRuntimeReplayConfig>
+  config: Required<FootballRuntimeReplayConfig>,
+  playerFormSignal: MatchContextSignal | null = null
 ): PreparedRuntimeFixture | FootballRuntimeReplayRejection {
   const reasons: string[] = [];
   if (fixture.status !== "finished") reasons.push("fixture is not finished");
@@ -259,7 +270,10 @@ function prepareFixture(
   const leagueCountry = cleanText(fixture.league.country);
   const leagueName = cleanText(fixture.league.name);
   const dataQuality = clamp(fixture.dataQuality!, 0, 1);
-  const providerContextSignals = historicalContextSignals(fixture);
+  const providerContextSignals = [
+    ...historicalContextSignals(fixture),
+    ...(playerFormSignal ? [playerFormSignal] : [])
+  ];
   const match: Match = {
     id: fixture.externalId,
     sport: "football",
@@ -372,7 +386,7 @@ function runtimeNotes(
   summary: ReturnType<typeof summarizeFootballEvaluation>
 ): string[] {
   return [
-    `Executed ${contract.entrypointInvocations} holdout fixture(s) through modelFootballMatch with ${contract.version}.`,
+    `Executed ${contract.entrypointInvocations} holdout fixture(s) through the football runtime model and residual context adjustment with ${contract.version}.`,
     contract.rejectedFixtures
       ? `${contract.rejectedFixtures} source fixture(s) were excluded by the fail-closed runtime feature contract.`
       : "Every source fixture satisfied the runtime feature contract.",
@@ -382,13 +396,17 @@ function runtimeNotes(
     contract.optionalCoverage.contextSignalFixtures === 0
       ? "No timestamped historical provider-context signals were attached; the runtime entrypoint used its deterministic context fallback."
       : `${contract.optionalCoverage.contextSignalFixtures} eligible fixture(s) included timestamped provider context.`,
+    contract.optionalCoverage.playerFormFixtures === 0
+      ? "No leakage-safe historical player-form signals were available; player performance had zero influence on this replay."
+      : `${contract.optionalCoverage.playerFormFixtures} eligible fixture(s) included leakage-safe player-form evidence.`,
     summary.pickCount === 0 ? "No holdout picks cleared the configured value threshold." : ""
   ].filter(Boolean);
 }
 
 export function runFootballRuntimeReplay(
   fixtures: readonly HistoricalFootballFixtureInput[],
-  inputConfig: FootballRuntimeReplayConfig = {}
+  inputConfig: FootballRuntimeReplayConfig = {},
+  { playerPerformances = [] }: { playerPerformances?: readonly PlayerMatchPerformance[] } = {}
 ): FootballRuntimeReplayResult {
   const config = resolvedConfig(inputConfig);
   // Stored strength/form fields without chronology proof are intentionally discarded.
@@ -398,10 +416,25 @@ export function runFootballRuntimeReplay(
     awayFeatures: undefined
   }));
   const derived = deriveFootballChronologyFeatures(chronologyInputs);
+  const performancesByTeam = new Map<string, PlayerMatchPerformance[]>();
+  for (const performance of playerPerformances) {
+    const current = performancesByTeam.get(performance.teamExternalId) ?? [];
+    current.push(performance);
+    performancesByTeam.set(performance.teamExternalId, current);
+  }
   const prepared: PreparedRuntimeFixture[] = [];
   const rejections: FootballRuntimeReplayRejection[] = [];
   for (const fixture of derived) {
-    const result = prepareFixture(fixture, config);
+    const playerFormSignal = buildPlayerFormSignal({
+      fixtureExternalId: fixture.externalId,
+      kickoffAt: fixture.kickoffAt,
+      homeTeam: fixture.homeTeam,
+      awayTeam: fixture.awayTeam
+    }, [
+      ...(performancesByTeam.get(fixture.homeTeam.externalId) ?? []),
+      ...(performancesByTeam.get(fixture.awayTeam.externalId) ?? [])
+    ]);
+    const result = prepareFixture(fixture, config, playerFormSignal);
     if ("reasons" in result) rejections.push(result);
     else prepared.push(result);
   }
@@ -419,9 +452,15 @@ export function runFootballRuntimeReplay(
   const results: FootballBacktestFixtureResult[] = [];
   let entrypointInvocations = 0;
   for (const fixture of holdout) {
-    const modeled = modelFootballMatch(fixture.match, { now: new Date(fixture.source.kickoffAt) });
+    const historicalClock = new Date(fixture.source.kickoffAt);
+    const modeled = modelFootballMatch(fixture.match, { now: historicalClock });
+    const contextAdjustment = buildMatchContextAdjustment(fixture.match, {
+      probabilityHandledCategories: coreModelContextCategories(fixture.match),
+      now: historicalClock
+    });
+    const runtimeMarkets = applyContextAdjustmentToMarkets(modeled.markets, contextAdjustment);
     entrypointInvocations += 1;
-    const market = modeled.markets.find((item) => item.marketId === "match_winner");
+    const market = runtimeMarkets.find((item) => item.marketId === "match_winner");
     const probabilities = market?.probabilities as Record<FootballOutcome, number> | undefined;
     if (!probabilities || !finite(probabilities.home) || !finite(probabilities.draw) || !finite(probabilities.away)) {
       rejections.push({ fixtureExternalId: fixture.source.externalId, reasons: ["runtime match-winner output invalid"] });
@@ -451,6 +490,7 @@ export function runFootballRuntimeReplay(
         finite(fixture.match.awayForm.xgFor) && finite(fixture.match.awayForm.xgAgainst)
       ).length,
       contextSignalFixtures: prepared.filter((fixture) => (fixture.match.providerContextSignals?.length ?? 0) > 0).length,
+      playerFormFixtures: prepared.filter((fixture) => fixture.match.providerContextSignals?.some((signal) => signal.category === "player-form")).length,
       completeOddsFixtures: prepared.filter((fixture) => completeWinnerOdds(fixture.source)).length
     },
     rejectionReasons: rejectionCounts(rejections)
@@ -466,7 +506,7 @@ export function runFootballRuntimeReplay(
   const windowEnd = prepared.at(-1)?.source.kickoffAt ?? null;
   const executionHash = stableHash({
     modelKey: RUNTIME_MODEL_KEY,
-    entrypoint: "modelFootballMatch",
+    entrypoint: "modelFootballMatch+buildMatchContextAdjustment",
     contract,
     fixtureIds: results.map((result) => result.fixtureExternalId),
     probabilityVectors: results.map((result) => result.probabilities)

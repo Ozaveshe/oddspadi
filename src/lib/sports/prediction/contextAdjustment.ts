@@ -186,9 +186,19 @@ function applySignalShift(acc: MatchContextAdjustment["probabilityShift"] & { to
   if (signalItem.impact === "tempo-down") acc.total -= magnitude;
 }
 
+export function coreModelContextCategories(match: Match): MatchContextSignal["category"][] {
+  if (!match.providerContextSignals?.length) return [];
+  if (match.sport === "basketball") return ["rest", "injury", "suspension", "lineup", "news"];
+  if (match.sport === "tennis") return ["surface", "injury", "news", "rest"];
+  return ["injury", "suspension", "lineup", "weather", "news"];
+}
+
 export function buildMatchContextAdjustment(
   match: Match,
-  { probabilityHandledCategories = [] }: { probabilityHandledCategories?: MatchContextSignal["category"][] } = {}
+  {
+    probabilityHandledCategories = [],
+    now = new Date()
+  }: { probabilityHandledCategories?: MatchContextSignal["category"][]; now?: Date } = {}
 ): MatchContextAdjustment {
   const seed = seedFromText(match.id);
   const providerSignals = match.providerContextSignals ?? [];
@@ -207,7 +217,7 @@ export function buildMatchContextAdjustment(
 
   const providerMatch = match.dataSource?.kind === "provider";
   const usableSignals = providerMatch
-    ? signals.filter((item) => isFreshProviderContextSignal(item, { requireTimestamp: true }))
+    ? signals.filter((item) => isFreshProviderContextSignal(item, { requireTimestamp: true, now }))
     : signals;
   const requirementSignals = providerMatch
     ? usableSignals

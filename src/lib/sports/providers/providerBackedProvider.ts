@@ -22,8 +22,9 @@ import type { HeadToHeadSummary, Match, MatchContextSignal, MatchStatus, OddsMar
 import { currentFootballSeason, leagueBySlug, type LeagueTable } from "@/lib/sports/leagueStandings";
 import { configuredPredictionLeagueIds, footballLeaguePriority, footballLeagueStrength } from "@/lib/sports/footballLeagues";
 import {
-  loadPlayerFormSignalsForFixtures,
-  type PlayerFormFixture
+  loadPlayerFormSignalResultForFixtures,
+  type PlayerFormFixture,
+  type PlayerFormSignalLoadResult
 } from "@/lib/sports/training/playerPerformance";
 
 type EnvMap = Record<string, string | undefined>;
@@ -2050,13 +2051,22 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
         awayTeam: { externalId: `api-football:${safeId(fixture.teams?.away?.id, slug(awayName) || "away")}`, name: awayName }
       } satisfies PlayerFormFixture];
     });
-    const [oddsEvents, contextByFixture, recentFormByTeam, historicalRatings, playerFormByFixture] = await Promise.all([
+    const playerFormLoad: Promise<PlayerFormSignalLoadResult> = this.options.playerFormSignalsLoader
+      ? this.options.playerFormSignalsLoader(playerFormFixtures).then((signals) => ({
+          status: signals.size ? "ready" : "no-data",
+          signals,
+          rowsRead: 0,
+          reason: signals.size ? undefined : "The configured player-form loader returned no signals."
+        }))
+      : loadPlayerFormSignalResultForFixtures(playerFormFixtures);
+    const [oddsEvents, contextByFixture, recentFormByTeam, historicalRatings, playerFormResult] = await Promise.all([
       this.getCurrentOddsEvents(date, "football"),
       this.getFootballContextByFixture(enrichmentFixtures),
       this.getRecentFootballFormByTeam(enrichmentFixtures),
       this.getHistoricalFootballRatings(),
-      (this.options.playerFormSignalsLoader ?? loadPlayerFormSignalsForFixtures)(playerFormFixtures)
+      playerFormLoad
     ]);
+    const playerFormByFixture = playerFormResult.signals;
     const oddsByEvent = oddsMarketsByEvent(oddsEvents, "football");
     const oddsBackedMatches = oddsBackedFootballFixturesFromEvents(date, oddsEvents, historicalRatings);
     const oddsBackedByEvent = matchesByEventKey(oddsBackedMatches);
@@ -2173,7 +2183,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
               ...(hasProviderForm ? [] : ["Recent provider form was unavailable, so deterministic team-form proxies were used."]),
               ...(playerFormByFixture.has(`api-football:${String(fixture.fixture?.id ?? "")}`)
                 ? ["Recent player form uses only stored match performances from fixtures completed before this kickoff."]
-                : ["Chronological player-performance form was unavailable for one or both teams."])
+                : [`Chronological player-performance form unavailable (${playerFormResult.status}): ${playerFormResult.reason ?? "one or both teams lack prior coverage"}`])
             ]
           }
         } satisfies Match

@@ -8,7 +8,7 @@ import { modelTennisMatch } from "./prediction/tennisModel";
 import { explainPrediction } from "./prediction/explainer";
 import { confidenceRank } from "./prediction/format";
 import { buildPredictionAgentReport } from "./prediction/agent";
-import { applyContextAdjustmentToDiagnostics, applyContextAdjustmentToMarkets, buildMatchContextAdjustment } from "./prediction/contextAdjustment";
+import { applyContextAdjustmentToDiagnostics, applyContextAdjustmentToMarkets, buildMatchContextAdjustment, coreModelContextCategories } from "./prediction/contextAdjustment";
 import { buildDecisionEngineReport, DECISION_ENGINE_VERSION } from "./prediction/decisionEngine";
 import { getDecisionLearningProfile } from "./prediction/decisionLearningProfile";
 import { getDecisionCaseMemoryBank } from "./prediction/decisionMemory";
@@ -122,13 +122,6 @@ export function scopeLearningProfileToRuntime(
     reason: `Promoted learning profile is incompatible with this runtime: ${mismatches.join("; ")}.`,
     notes: [...profile.notes, "Learned probability calibration, edge thresholds, and factor weights are disabled for this prediction."]
   };
-}
-
-function coreModelContextCategories(match: Match): Array<NonNullable<Match["providerContextSignals"]>[number]["category"]> {
-  if (!match.providerContextSignals?.length) return [];
-  if (match.sport === "basketball") return ["rest", "injury", "suspension", "lineup", "news"];
-  if (match.sport === "tennis") return ["surface", "injury", "news", "rest"];
-  return ["injury", "suspension", "lineup", "weather", "news"];
 }
 
 export function decisionAllowsPublicPick(decision: Prediction["decision"]): boolean {

@@ -58,6 +58,7 @@ function backfillResult(status: HistoricalProviderBackfillResult["status"], dryR
       availabilityRows: 18,
       lineupRows: 4,
       playerPerformanceRows: 28,
+      playerPerformanceRowsVerified: dryRun ? 0 : 28,
       weatherRows: 0,
       featureSnapshots: 5
     },

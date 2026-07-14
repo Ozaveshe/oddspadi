@@ -81,6 +81,7 @@ export type HistoricalProviderBackfillResult = {
     availabilityRows: number;
     lineupRows: number;
     playerPerformanceRows: number;
+    playerPerformanceRowsVerified: number;
     weatherRows: number;
     featureSnapshots: number;
   };
@@ -355,6 +356,7 @@ function emptyCounts(): HistoricalProviderBackfillResult["counts"] {
     availabilityRows: 0,
     lineupRows: 0,
     playerPerformanceRows: 0,
+    playerPerformanceRowsVerified: 0,
     weatherRows: 0,
     featureSnapshots: 0
   };
@@ -418,6 +420,7 @@ export async function runHistoricalProviderBackfill({
     counts.availabilityRows += result.ingestion?.counts.availabilityRows ?? 0;
     counts.lineupRows += result.ingestion?.counts.lineupRows ?? 0;
     counts.playerPerformanceRows += result.playerPerformancesStored ?? (result.dryRun ? result.playerPerformancesNormalized ?? 0 : 0);
+    counts.playerPerformanceRowsVerified += result.playerPerformancesVerified ?? 0;
     counts.weatherRows += result.ingestion?.counts.weatherRows ?? 0;
     counts.featureSnapshots += result.ingestion?.counts.featureSnapshots ?? 0;
 
