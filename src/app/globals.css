@@ -3247,6 +3247,7 @@ a.score-row:active,
 .performance-verdict { display: grid; gap: 10px; padding: 26px; border: 1px solid var(--border); border-top: 6px solid var(--green); border-radius: 8px 38px 8px 8px; background: var(--surface); box-shadow: 18px 18px 0 var(--green-soft); }
 .performance-verdict.verdict-needs-attention { border-top-color: var(--red); box-shadow: 18px 18px 0 color-mix(in srgb, var(--red) 12%, white); }
 .performance-verdict.verdict-early-evidence { border-top-color: var(--amber); box-shadow: 18px 18px 0 color-mix(in srgb, var(--amber) 16%, white); }
+.performance-verdict.verdict-unavailable { border-top-color: var(--faint); box-shadow: 18px 18px 0 var(--surface-2); }
 .performance-verdict > span { color: var(--muted); font: 800 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
 .performance-verdict > strong { font: 760 clamp(34px, 5vw, 54px)/.95 var(--font-display); }
 .performance-verdict p { margin: 0; color: var(--muted); }
@@ -3271,6 +3272,11 @@ a.score-row:active,
 .performance-scorecard-grid > div { display: grid; align-content: end; gap: 7px; min-height: 120px; padding: 22px; background: var(--surface); }
 .performance-scorecard-grid span { color: var(--muted); font: 770 10px/1.2 var(--font-mono); text-transform: uppercase; }
 .performance-scorecard-grid strong { font: 750 clamp(20px, 3vw, 30px)/1 var(--font-display); }
+.performance-metrics-withheld { display: flex; min-height: 330px; flex-direction: column; justify-content: center; padding: clamp(28px, 6vw, 64px); background: var(--surface); }
+.performance-metrics-withheld > span { color: var(--muted); font: 780 10px/1 var(--font-mono); letter-spacing: .065em; text-transform: uppercase; }
+.performance-metrics-withheld h3 { max-width: 520px; margin: 15px 0 12px; font-size: clamp(30px, 4.5vw, 52px); letter-spacing: -.045em; }
+.performance-metrics-withheld p { max-width: 620px; margin: 0 0 24px; color: var(--muted); }
+.performance-metrics-withheld .inline-link { align-self: flex-start; }
 .positive-number { color: var(--green-strong); }
 .negative-number { color: var(--red); }
 
@@ -3323,6 +3329,10 @@ a.score-row:active,
 .model-governance-card ul { display: grid; gap: 9px; margin: auto 0 0; padding: 24px 0 0 18px; color: rgba(255,255,255,.68); font-size: 11px; }
 
 .performance-intro { max-width: 690px; color: var(--muted); }
+.performance-evidence-unavailable { display: grid; grid-template-columns: minmax(100px, .25fr) minmax(0, 1fr); gap: clamp(22px, 5vw, 64px); align-items: start; margin-top: 30px; padding: 28px 0 34px; border-block: 1px solid var(--border-strong); }
+.performance-evidence-unavailable > span { color: var(--red); font: 780 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.performance-evidence-unavailable h3 { margin: 0 0 8px; font-size: clamp(23px, 3vw, 34px); letter-spacing: -.03em; }
+.performance-evidence-unavailable p { max-width: 720px; margin: 0; color: var(--muted); }
 .calibration-ladder { display: grid; gap: 0; margin-top: 30px; border-top: 1px solid var(--border); }
 .calibration-rung { display: grid; grid-template-columns: 115px minmax(220px, 1fr) minmax(320px, .9fr); gap: 24px; align-items: center; min-height: 100px; padding: 18px 0; border-bottom: 1px solid var(--border); }
 .calibration-rung > div:first-child { display: grid; gap: 4px; }
@@ -3358,6 +3368,13 @@ a.score-row:active,
 .performance-warning h3 { margin: 0 0 5px; font-size: 16px; }
 .performance-warning p { margin: 0; color: var(--muted); font-size: 13px; }
 .performance-methodology { margin-top: 18px; }
+.performance-breakdowns-withheld > p { max-width: 760px; color: var(--muted); }
+.performance-breakdowns-withheld dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 30px 0 0; border-block: 1px solid var(--border-strong); }
+.performance-breakdowns-withheld dl div { min-width: 0; padding: 21px 18px; border-right: 1px solid var(--border); }
+.performance-breakdowns-withheld dl div:first-child { padding-left: 0; }
+.performance-breakdowns-withheld dl div:last-child { border-right: 0; }
+.performance-breakdowns-withheld dt { color: var(--muted); font: 760 9px/1.35 var(--font-mono); letter-spacing: .055em; text-transform: uppercase; }
+.performance-breakdowns-withheld dd { margin: 8px 0 0; font: 750 clamp(18px, 2.4vw, 25px)/1 var(--font-display); }
 
 @media (max-width: 1000px) {
   .performance-health-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -3376,12 +3393,16 @@ a.score-row:active,
   .performance-hero,.performance-scorecard { grid-template-columns: 1fr; }
   .performance-split { grid-template-columns: minmax(0, 1fr); }
   .performance-verdict { margin-right: 14px; box-shadow: 14px 14px 0 var(--green-soft); }
+  .performance-verdict.verdict-unavailable { box-shadow: 14px 14px 0 var(--surface-2); }
   .performance-scorecard-lead { min-height: 280px; }
   .performance-health-strip,.performance-health-strip.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .performance-health-strip > div,.performance-health-strip > div:first-child { padding: 14px 10px; }
   .performance-health-strip > div:nth-child(3n) { border-right: 1px solid var(--border); }
   .performance-health-strip > div:nth-child(2n) { border-right: 0; }
   .performance-warning-list { grid-template-columns: 1fr; }
+  .performance-breakdowns-withheld dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .performance-breakdowns-withheld dl div:nth-child(2) { border-right: 0; }
+  .performance-breakdowns-withheld dl div:nth-child(n+3) { border-top: 1px solid var(--border); }
   .learning-pipeline-heading { display: grid; align-items: start; }
   .evidence-sport-grid { grid-template-columns: 1fr; }
   .model-governance-card { min-height: 360px; }
@@ -3391,6 +3412,10 @@ a.score-row:active,
   .performance-hero h1 { font-size: clamp(42px, 14vw, 60px); }
   .performance-scorecard-grid { grid-template-columns: 1fr; }
   .performance-scorecard-grid > div { min-height: 94px; }
+  .performance-evidence-unavailable { grid-template-columns: 1fr; gap: 14px; }
+  .performance-breakdowns-withheld dl { grid-template-columns: 1fr; }
+  .performance-breakdowns-withheld dl div,.performance-breakdowns-withheld dl div:first-child { padding: 17px 0; border-top: 1px solid var(--border); border-right: 0; }
+  .performance-breakdowns-withheld dl div:first-child { border-top: 0; }
   .calibration-rung { grid-template-columns: 1fr; gap: 13px; }
   .calibration-rung dl { grid-column: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .evidence-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); }

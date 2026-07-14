@@ -8,7 +8,7 @@ import {
   calculateSettlementHealth,
   settledPublicPicks
 } from "@/lib/sports/performance/analytics";
-import { buildEnginePerformanceWarnings } from "@/lib/sports/performance/report";
+import { buildEnginePerformanceVerdict, buildEnginePerformanceWarnings } from "@/lib/sports/performance/report";
 import type { PublicPredictionHistoryItem } from "@/lib/sports/prediction/history";
 
 function pick(overrides: Partial<PublicPredictionHistoryItem> = {}): PublicPredictionHistoryItem {
@@ -109,6 +109,28 @@ describe("engine performance analytics", () => {
     const warnings = buildEnginePerformanceWarnings({ settledCount: 1, settlement, providerStatus: "completed", providerGapCount: 0, roi: 0.1, calibration: [], publicPickCount: 4, qualityCoverage: 4 });
     expect(settlement.pendingRatio).toBe(0.75);
     expect(warnings).toEqual(expect.arrayContaining([expect.objectContaining({ id: "settlement-backlog", severity: "action" })]));
+  });
+
+  it("withholds performance claims when the public ledger is unavailable", () => {
+    const settlement = calculateSettlementHealth([]);
+    const warnings = buildEnginePerformanceWarnings({
+      settledCount: 0,
+      settlement,
+      providerStatus: "empty",
+      providerGapCount: 0,
+      roi: null,
+      calibration: [],
+      publicPickCount: 0,
+      qualityCoverage: 0,
+      ledgerAvailable: false
+    });
+
+    expect(warnings).toEqual(expect.arrayContaining([expect.objectContaining({ id: "ledger-unavailable", severity: "action" })]));
+    expect(warnings).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: "small-sample" })]));
+    expect(buildEnginePerformanceVerdict({ ledgerAvailable: false, settledCount: 0, blockingWarnings: 1 })).toMatchObject({
+      status: "unavailable",
+      label: "Evidence unavailable"
+    });
   });
 
   it("ships a transparent dashboard and JSON/CSV export routes", () => {

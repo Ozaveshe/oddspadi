@@ -60,6 +60,7 @@ export default async function EnginePerformancePage() {
   const performance = report.publicPerformance;
   const evidence = report.historicalEvidence;
   const sourceUnavailable = report.source === "unavailable";
+  const historicalEvidenceUnavailable = evidence.source === "unavailable";
   const activeModels = evidence.models.filter((model) => model.active).length;
   const learning = evidence.learningPipeline;
 
@@ -84,12 +85,12 @@ export default async function EnginePerformancePage() {
         </aside>
       </header>
 
-      {sourceUnavailable ? <div className="notice warning"><strong>Public ledger unavailable.</strong> {report.sourceReason} No internal outcomes are substituted.</div> : null}
+      {sourceUnavailable ? <div className="notice warning"><strong>Public outcome evidence unavailable.</strong> {report.sourceReason} Accuracy, ROI, calibration and CLV are withheld; zero is not substituted for missing evidence.</div> : null}
 
       <section className="section" aria-labelledby="engine-health-heading">
         <div className="section-title"><div><span className="section-kicker">01 / Engine Health</span><h2 id="engine-health-heading">Is the daily system operating?</h2></div><span className={`badge ${report.engineHealth.providerHealth === "completed" ? "positive" : "scheduled"}`}>{report.engineHealth.providerHealth}</span></div>
         <div className="performance-health-strip">
-          <div><span>Latest run</span><strong>{report.engineHealth.latestRunTime ? new Date(report.engineHealth.latestRunTime).toLocaleString() : "No completed run"}</strong></div>
+          <div><span>Latest provider attempt</span><strong>{report.engineHealth.latestRunTime ? new Date(report.engineHealth.latestRunTime).toLocaleString() : "No recorded attempt"}</strong></div>
           <div><span>Fixtures analysed</span><strong>{report.engineHealth.fixturesAnalysed}</strong></div>
           <div><span>Decisions generated</span><strong>{report.engineHealth.decisionsGenerated}</strong></div>
           <div><span>Public picks today</span><strong>{report.engineHealth.publicPicksPublished}</strong></div>
@@ -105,6 +106,15 @@ export default async function EnginePerformancePage() {
           <span className={`badge ${evidence.source === "supabase" ? "positive" : "scheduled"}`}>{evidence.census.status.replaceAll("-", " ")}</span>
         </div>
         <p className="performance-intro">{evidence.census.summary}</p>
+        {historicalEvidenceUnavailable ? (
+          <div className="performance-evidence-unavailable" role="status">
+            <span>Not read</span>
+            <div>
+              <h3>Historical counts are unavailable in this runtime</h3>
+              <p>The repository connection is missing, so corpus totals, player history, backtests and promotion gates are hidden instead of displayed as zero.</p>
+            </div>
+          </div>
+        ) : <>
         <div className="evidence-ledger" aria-label="Historical data counts">
           <div><span>Finished fixtures</span><strong>{count(evidence.census.totals.finishedFixtures)}</strong></div>
           <div><span>Odds snapshots</span><strong>{count(evidence.census.totals.oddsSnapshots)}</strong></div>
@@ -169,16 +179,22 @@ export default async function EnginePerformancePage() {
             <ul>{evidence.limitations.map((item) => <li key={item}>{item}</li>)}</ul>
           </aside>
         </div>
+        </>}
       </section>
 
       <section className="section performance-scorecard" aria-labelledby="public-performance-heading">
         <div className="performance-scorecard-lead">
           <span className="section-kicker">03 / Public Pick Performance</span>
           <h2 id="public-performance-heading">What happened after publication?</h2>
-          <strong>{percent(performance.accuracy)}</strong>
-          <span>accuracy across {performance.wins + performance.losses} resolved win/loss picks</span>
+          <strong>{sourceUnavailable ? "Withheld" : percent(performance.accuracy)}</strong>
+          <span>{sourceUnavailable ? "No public outcome metric is inferred from an unreadable ledger" : `accuracy across ${performance.wins + performance.losses} resolved win/loss picks`}</span>
         </div>
-        <div className="performance-scorecard-grid">
+        {sourceUnavailable ? <div className="performance-metrics-withheld" role="status">
+          <span>Outcome ledger not read</span>
+          <h3>No false zeroes</h3>
+          <p>Settled picks, wins, losses, ROI, odds, edge, Brier score and simulated profit will return only after the canonical public ledger is readable.</p>
+          <Link className="inline-link" href="/predictions/history">Inspect ledger availability</Link>
+        </div> : <div className="performance-scorecard-grid">
           <div><span>Settled picks</span><strong>{performance.settledPicks}</strong></div>
           <div><span>Wins / losses</span><strong>{performance.wins} / {performance.losses}</strong></div>
           <div><span>Push / void</span><strong>{performance.pushes} / {performance.voids}</strong></div>
@@ -187,13 +203,17 @@ export default async function EnginePerformancePage() {
           <div><span>Average edge</span><strong>{signedPercent(performance.averageEdge)}</strong></div>
           <div><span>Binary Brier score</span><strong>{decimal(performance.brierScore)}</strong></div>
           <div><span>Simulated profit</span><strong>{performance.roiSimulation.profit >= 0 ? "+" : ""}{performance.roiSimulation.profit.toFixed(2)} units</strong></div>
-        </div>
+        </div>}
       </section>
 
       <section className="section" aria-labelledby="calibration-heading">
         <div className="section-title"><div><span className="section-kicker">04 / Calibration</span><h2 id="calibration-heading">Confidence versus reality</h2></div><span className="muted small">A small gap is better</span></div>
-        <p className="performance-intro">Each rung compares the model&apos;s average published chance with the actual win rate. Empty buckets remain visible instead of borrowing evidence from another range.</p>
-        <div className="calibration-ladder">
+        {sourceUnavailable ? <div className="performance-evidence-unavailable" role="status">
+          <span>Withheld</span>
+          <div><h3>Calibration needs real settled outcomes</h3><p>The probability ladder is not drawn because the outcome ledger could not be read. An empty repository and an unavailable repository are different states.</p></div>
+        </div> : <>
+          <p className="performance-intro">Each rung compares the model&apos;s average published chance with the actual win rate. Empty buckets remain visible instead of borrowing evidence from another range.</p>
+          <div className="calibration-ladder">
           {report.calibration.map((bucket) => {
             const expected = bucket.averageProbability === null ? 0 : bucket.averageProbability * 100;
             const actual = bucket.actualWinRate === null ? 0 : bucket.actualWinRate * 100;
@@ -206,10 +226,21 @@ export default async function EnginePerformancePage() {
               <dl><div><dt>Wins</dt><dd>{bucket.wins}</dd></div><div><dt>Expected wins</dt><dd>{bucket.expectedWins.toFixed(1)}</dd></div><div><dt>Actual rate</dt><dd>{percent(bucket.actualWinRate)}</dd></div><div><dt>Gap</dt><dd>{signedPercent(bucket.calibrationGap)}</dd></div></dl>
             </article>;
           })}
-        </div>
-        <div className="calibration-key"><span><i className="expected" /> Model chance</span><span><i className="actual" /> Actual win rate</span></div>
+          </div>
+          <div className="calibration-key"><span><i className="expected" /> Model chance</span><span><i className="actual" /> Actual win rate</span></div>
+        </>}
       </section>
 
+      {sourceUnavailable ? <section className="section performance-breakdowns-withheld" aria-labelledby="breakdowns-withheld-heading">
+        <div className="section-title"><div><span className="section-kicker">05-09 / Outcome breakdowns</span><h2 id="breakdowns-withheld-heading">No breakdown without a ledger</h2></div><span className="badge scheduled">unavailable</span></div>
+        <p>Sport, league, market, confidence, data-quality and closing-line tables are omitted because their source could not be read. This prevents a grid of zeroes from looking like measured performance.</p>
+        <dl>
+          <div><dt>Sport and league</dt><dd>Withheld</dd></div>
+          <div><dt>Market performance</dt><dd>Withheld</dd></div>
+          <div><dt>Confidence and data quality</dt><dd>Withheld</dd></div>
+          <div><dt>Closing-line value</dt><dd>Withheld</dd></div>
+        </dl>
+      </section> : <>
       <section className="section performance-split" aria-label="Performance by sport and league">
         <div><div className="section-title"><div><span className="section-kicker">05 / Sport performance</span><h2>By sport</h2></div></div><PerformanceTable caption="Settled public-pick performance by sport" rows={report.sports} /></div>
         <div><div className="section-title"><div><span className="section-kicker">League view</span><h2>By league</h2></div></div>{report.leagues.length ? <PerformanceTable caption="Settled public-pick performance by league" rows={report.leagues.slice(0, 12)} /> : <div className="empty-state compact"><h3>No settled league sample</h3><p className="muted">League rows will appear after public picks settle.</p></div>}</div>
@@ -237,6 +268,7 @@ export default async function EnginePerformancePage() {
           <div className="performance-table-wrap"><table className="data-table performance-table"><caption>Recent picks with verified closing odds</caption><thead><tr><th>Match</th><th>Opening</th><th>Published</th><th>Closing</th><th>CLV</th></tr></thead><tbody>{report.closingLineValue.rows.slice(0, 10).map((row) => <tr key={row.id}><td><strong>{row.match}</strong><br/><span className="muted small">{row.market.replaceAll("_", " ")}</span></td><td>{row.openingOdds?.toFixed(2) ?? "Not stored"}</td><td>{row.publishedOdds.toFixed(2)}</td><td>{row.closingOdds.toFixed(2)}</td><td className={row.value < 0 ? "negative-number" : row.value > 0 ? "positive-number" : undefined}>{signedPercent(row.value)}</td></tr>)}</tbody></table></div>
         </> : <div className="empty-state"><h3>Closing odds are not available yet</h3><p className="muted">Published prices remain visible. CLV will appear only after a verified pre-kickoff closing snapshot is stored; no closing price is inferred.</p></div>}
       </section>
+      </>}
 
       <section className="section" aria-labelledby="warnings-heading">
         <div className="section-title"><div><span className="section-kicker">10 / Warnings</span><h2 id="warnings-heading">What could make these numbers misleading?</h2></div><span className="badge scheduled">{report.warnings.length}</span></div>
