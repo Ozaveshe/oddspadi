@@ -79,7 +79,7 @@ describe("live feature storage REST conflict fallback", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -87,7 +87,7 @@ describe("live feature storage REST conflict fallback", () => {
     });
 
     expect(calls.upsert).toHaveBeenCalledTimes(1);
-    expect(calls.select).toHaveBeenCalledTimes(1);
+    expect(calls.select).toHaveBeenCalledTimes(2);
     expect(calls.insert).toHaveBeenCalledTimes(1);
     expect(calls.update).not.toHaveBeenCalled();
     expect(receipt.status).toBe("stored");

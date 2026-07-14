@@ -5904,7 +5904,7 @@ describe("prediction utilities", () => {
     expect(prediction.decision.toolExecution.attempts.find((attempt) => attempt.taskId === "openai-review")?.status).toBe("skipped");
     expect(prediction.decision.toolExecution.publicLog.length).toBeGreaterThan(0);
     expect(prediction.decision.publicReasoningSteps.join(" ")).toContain("tool execution");
-    expect(["publishable", "monitor-only", "needs-rerun", "blocked"]).toContain(prediction.decision.controlPolicy.status);
+    expect(["sb_publishable_test_public_key", "monitor-only", "needs-rerun", "blocked"]).toContain(prediction.decision.controlPolicy.status);
     expect(["public-candidate", "watchlist-only", "internal-only"]).toContain(prediction.decision.controlPolicy.visibility);
     expect(prediction.decision.controlPolicy.persistAllowed).toBe(
       prediction.decision.controlPolicy.safeToDisplay &&
@@ -9304,8 +9304,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn"
     };
     const readiness = buildDecisionEngineReadiness(env);
@@ -9395,8 +9395,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       API_FOOTBALL_KEY: "football-provider-secret",
       THE_ODDS_API_KEY: "odds-provider-secret"
@@ -11211,7 +11211,7 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
       ODDSPADI_ADMIN_TOKEN: "admin-token",
       API_FOOTBALL_KEY: "api-football"
     };
@@ -11303,7 +11303,7 @@ describe("prediction utilities", () => {
       env: {
         ...bootstrapEnv,
         NEXT_PUBLIC_SITE_URL: "https://oddspadi.com",
-        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable",
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
         THE_ODDS_API_KEY: "odds"
       },
       workspaceRoot: process.cwd()
@@ -11597,7 +11597,7 @@ describe("prediction utilities", () => {
       env: {
         ...bootstrapEnv,
         NEXT_PUBLIC_SITE_URL: "https://oddspadi.com",
-        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable",
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
         THE_ODDS_API_KEY: "odds"
       }
     });
@@ -13862,8 +13862,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wrongprojectref",
       SUPABASE_URL: "https://wrongprojectref.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wrongprojectref.supabase.co",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key"
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key"
     });
 
     expect(readiness.supabase.status).toBe("blocked");
@@ -13954,8 +13954,8 @@ describe("prediction utilities", () => {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
         NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
         ODDSPADI_SUPABASE_MCP_PROJECT_REF: "zpclagtgczsygrgztlts"
       },
       observedMcpProjectUrl: "https://zpclagtgczsygrgztlts.supabase.co",
@@ -13976,8 +13976,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn"
     };
     const readiness = buildDecisionEngineReadiness(env);
@@ -14014,8 +14014,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn"
     };
     const readiness = buildDecisionEngineReadiness(env);
@@ -14061,8 +14061,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn"
     };
     const readiness = buildDecisionEngineReadiness(env);
@@ -14181,8 +14181,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn"
     };
     const readiness = buildDecisionEngineReadiness(env);
@@ -14208,8 +14208,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key"
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key"
     };
     const readiness = buildDecisionEngineReadiness(env);
     readiness.supabase.schema = {
@@ -14246,8 +14246,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key"
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key"
     };
     const readiness = buildDecisionEngineReadiness(env);
     readiness.supabase.schema = {
@@ -14296,8 +14296,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key"
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key"
     };
     const readiness = buildDecisionEngineReadiness(env);
     readiness.supabase.schema = {
@@ -14352,7 +14352,7 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
       SUPABASE_SERVICE_ROLE_KEY: "bad-key"
     };
     const readiness = buildDecisionEngineReadiness(env);
@@ -14401,8 +14401,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn"
     };
     const readiness = buildDecisionEngineReadiness(env);
@@ -14451,8 +14451,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn"
     };
     const context = await buildDecisionLaunchContext({
@@ -14527,8 +14527,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn"
     };
     const readiness = buildDecisionEngineReadiness(env);
@@ -14573,8 +14573,8 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test_public_key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn"
     };
     const readiness = buildDecisionEngineReadiness(env);
@@ -14626,7 +14626,7 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      SUPABASE_SERVICE_ROLE_KEY: "stale-service-role",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_rejected_test_server_key",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       ODDSPADI_ADMIN_TOKEN: "admin-token",
       API_FOOTBALL_KEY: "football-key",
@@ -14689,7 +14689,7 @@ describe("prediction utilities", () => {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
       NEXT_PUBLIC_SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
       ODDSPADI_ADMIN_TOKEN: "admin-token",
       API_FOOTBALL_KEY: "football-key",
       API_BASKETBALL_KEY: "basketball-key",
@@ -20023,7 +20023,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token",
         API_FOOTBALL_KEY: "football-key",
         THE_ODDS_API_KEY: "odds-key",
@@ -21001,7 +21001,7 @@ describe("prediction utilities", () => {
     const env = {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       ODDSPADI_ADMIN_TOKEN: "admin-token",
       API_FOOTBALL_KEY: "football-key",
@@ -21053,7 +21053,7 @@ describe("prediction utilities", () => {
     const env = {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
       ODDSPADI_SUPABASE_MCP_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       ODDSPADI_ADMIN_TOKEN: "admin-token",
       API_FOOTBALL_KEY: "football-key",
@@ -21148,7 +21148,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token",
         API_FOOTBALL_KEY: "football-key",
         API_BASKETBALL_KEY: "basketball-key",
@@ -21205,7 +21205,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token",
         API_FOOTBALL_KEY: "football-key",
         API_BASKETBALL_KEY: "basketball-key",
@@ -21347,7 +21347,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token",
         API_FOOTBALL_KEY: "football-key",
         API_BASKETBALL_KEY: "basketball-key",
@@ -22928,7 +22928,7 @@ describe("prediction utilities", () => {
     const env = {
       SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
       SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-      SUPABASE_SERVICE_ROLE_KEY: "service-role",
+      SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
       ODDSPADI_ADMIN_TOKEN: "admin-token",
       API_FOOTBALL_KEY: "football-key",
       API_BASKETBALL_KEY: "basketball-key",
@@ -24791,7 +24791,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
-        SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
         ODDSPADI_ADMIN_TOKEN: "test-admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -26027,7 +26027,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -26107,7 +26107,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -26203,7 +26203,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -26282,7 +26282,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -26428,7 +26428,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -26514,7 +26514,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -26657,7 +26657,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -26847,7 +26847,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -27049,7 +27049,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -27311,7 +27311,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -27552,7 +27552,7 @@ describe("prediction utilities", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",

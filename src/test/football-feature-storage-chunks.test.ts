@@ -22,7 +22,7 @@ vi.mock("@supabase/supabase-js", () => ({
 const READY_ENV = {
   SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
   SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-  SUPABASE_SERVICE_ROLE_KEY: "test-service-role",
+  SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
   ODDSPADI_ADMIN_TOKEN: "admin-token"
 };
 

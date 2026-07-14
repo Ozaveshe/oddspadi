@@ -106,7 +106,7 @@ describe("multi-sport model governance", () => {
       env: {
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "service-role",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role",
         ODDSPADI_ADMIN_TOKEN: "admin-token",
         API_FOOTBALL_KEY: "football-key",
         THE_ODDS_API_KEY: "odds-key"

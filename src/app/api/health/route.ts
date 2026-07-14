@@ -1,4 +1,5 @@
 import { isConfiguredSecretValue } from "@/lib/env";
+import { getSupabaseRuntimeStatus } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,12 +16,13 @@ function anyConfigured(...keys: string[]): boolean {
  * quick config check that the archived ops console used to provide.
  */
 export function GET(request: Request) {
+  const supabaseRuntime = getSupabaseRuntimeStatus();
   const providers = {
     apiFootball: anyConfigured("API_FOOTBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"),
     apiBasketball: anyConfigured("API_BASKETBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"),
     apiTennis: anyConfigured("API_TENNIS_KEY", "SPORTS_API_KEY"),
     theOddsApi: anyConfigured("THE_ODDS_API_KEY", "ODDS_API_KEY"),
-    supabase: anyConfigured("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY"),
+    supabase: supabaseRuntime.serverWriteReady,
     openai: anyConfigured("OPENAI_API_KEY")
   };
 

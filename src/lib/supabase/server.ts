@@ -81,7 +81,12 @@ function decodeJwtPayload(value: string): { role: string | null; ref: string | n
 
 function isPlaceholderKey(value: string): boolean {
   const lower = value.toLowerCase();
-  return !lower || lower.includes("paste_") || lower.includes("placeholder") || lower.includes("your_") || lower === "changeme";
+  return !lower ||
+    lower.includes("paste_") ||
+    lower.includes("placeholder") ||
+    lower.includes("your_") ||
+    lower === "changeme" ||
+    /^\*{8,}[a-z0-9]?$/.test(lower);
 }
 
 function profileApiKey(sourceEnvKey: string | null, value: string, expectedUse: "server" | "public"): SupabaseApiKeyProfile {
@@ -168,12 +173,43 @@ function profileApiKey(sourceEnvKey: string | null, value: string, expectedUse: 
     configured: true,
     sourceEnvKey,
     kind: "unknown",
-    serverSafe: expectedUse === "server",
-    browserSafe: expectedUse === "public",
+    serverSafe: false,
+    browserSafe: false,
     legacyJwtRole: null,
     legacyJwtProjectRef: null,
-    recommendation: "Unknown key shape. Verify it in Supabase Settings > API Keys before trusting storage or client reads."
+    recommendation:
+      expectedUse === "server"
+        ? "Unknown server key shape. Use an active sb_secret_ key or an OddsPadi-scoped legacy service_role JWT."
+        : "Unknown public key shape. Use an active sb_publishable_ key or an OddsPadi-scoped legacy anon JWT."
   };
+}
+
+type ServerKeyCandidate = {
+  key: string;
+  value: string;
+  profile: SupabaseApiKeyProfile;
+};
+
+function serverKeyProjectScoped(profile: SupabaseApiKeyProfile): boolean {
+  return !profile.legacyJwtProjectRef || profile.legacyJwtProjectRef === ODDSPADI_SUPABASE_PROJECT_REF;
+}
+
+function selectServerKey(env: EnvMap): { selected: ServerKeyCandidate | null; diagnostic: ServerKeyCandidate } {
+  const candidates = SERVER_SECRET_ENV_KEYS.flatMap((key) => {
+    const value = env[key]?.trim() ?? "";
+    return value ? [{ key, value, profile: profileApiKey(key, value, "server") }] : [];
+  });
+  const selected = candidates.find((candidate) =>
+    candidate.profile.configured && candidate.profile.serverSafe && serverKeyProjectScoped(candidate.profile)
+  ) ?? null;
+  const diagnostic = selected ??
+    candidates.find((candidate) => !["placeholder", "unknown", "missing"].includes(candidate.profile.kind)) ??
+    candidates[0] ?? {
+      key: SERVER_SECRET_ENV_KEYS[0],
+      value: "",
+      profile: profileApiKey(null, "", "server")
+    };
+  return { selected, diagnostic };
 }
 
 function hostFromUrl(value: string): string | null {
@@ -194,20 +230,18 @@ function projectRefFromUrl(value: string): string | null {
 export function getSupabaseRuntimeStatus(env: EnvMap = process.env): SupabaseRuntimeStatus {
   const url = readEnv(env, ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"]);
   const publishableKeySource = readEnvWithSource(env, PUBLIC_KEY_ENV_KEYS);
-  const serverKeySource = readEnvWithSource(env, SERVER_SECRET_ENV_KEYS);
+  const serverKeySelection = selectServerKey(env);
   const publishableKey = publishableKeySource.value;
-  const serviceRoleKey = serverKeySource.value;
   const publishableKeyProfile = profileApiKey(publishableKeySource.key, publishableKey, "public");
-  const serverKeyProfile = profileApiKey(serverKeySource.key, serviceRoleKey, "server");
+  const serverKeyProfile = serverKeySelection.diagnostic.profile;
   const projectRef = readEnv(env, ["SUPABASE_PROJECT_REF"]) || projectRefFromUrl(url);
   const urlProjectRef = projectRefFromUrl(url);
   const targetMatchesExpected = projectRef === ODDSPADI_SUPABASE_PROJECT_REF && urlProjectRef === ODDSPADI_SUPABASE_PROJECT_REF;
-  const serverKeyProjectScoped =
-    !serverKeyProfile.legacyJwtProjectRef || serverKeyProfile.legacyJwtProjectRef === ODDSPADI_SUPABASE_PROJECT_REF;
+  const selectedServerKeyProjectScoped = serverKeyProjectScoped(serverKeyProfile);
   const publicKeyProjectScoped =
     !publishableKeyProfile.legacyJwtProjectRef || publishableKeyProfile.legacyJwtProjectRef === ODDSPADI_SUPABASE_PROJECT_REF;
   const publishableKeyUsable = publishableKeyProfile.configured && publishableKeyProfile.browserSafe && publicKeyProjectScoped;
-  const serverKeyUsable = serverKeyProfile.configured && serverKeyProfile.serverSafe && serverKeyProjectScoped;
+  const serverKeyUsable = Boolean(serverKeySelection.selected);
 
   return {
     urlConfigured: Boolean(url),
@@ -224,7 +258,7 @@ export function getSupabaseRuntimeStatus(env: EnvMap = process.env): SupabaseRun
     targetMatchesExpected,
     missingServerEnv: [
       !url ? "SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL" : "",
-      !serverKeyProfile.configured || !serverKeyProfile.serverSafe || !serverKeyProjectScoped ? "SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY for the OddsPadi project" : "",
+      !serverKeyProfile.configured || !serverKeyProfile.serverSafe || !selectedServerKeyProjectScoped ? "SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY for the OddsPadi project" : "",
       url && !targetMatchesExpected ? `OddsPadi Supabase project ${ODDSPADI_SUPABASE_PROJECT_REF}` : ""
     ].filter(Boolean),
     missingPublicEnv: [
@@ -237,7 +271,8 @@ export function getSupabaseRuntimeStatus(env: EnvMap = process.env): SupabaseRun
 
 export function getSupabaseServerClient(env: EnvMap = process.env): SupabaseClient | null {
   const url = readEnv(env, ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"]);
-  const serviceRoleKey = readEnv(env, SERVER_SECRET_ENV_KEYS);
+  const serverKeySelection = selectServerKey(env);
+  const serviceRoleKey = serverKeySelection.selected?.value ?? "";
   const runtime = getSupabaseRuntimeStatus(env);
   if (!url || !serviceRoleKey || !runtime.serverWriteReady) return null;
 

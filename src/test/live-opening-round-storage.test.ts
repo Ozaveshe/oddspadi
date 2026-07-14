@@ -70,7 +70,7 @@ describe("football provider live opening-round storage receipt", () => {
         THE_ODDS_API_KEY: "odds-key",
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
@@ -122,7 +122,7 @@ describe("football provider live opening-round storage receipt", () => {
         THE_ODDS_API_KEY: "odds-key",
         SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
         SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co",
-        SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
+        SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_service_role_key",
         ODDSPADI_ADMIN_TOKEN: "admin-token"
       },
       origin: "http://127.0.0.1:3025",
