@@ -349,6 +349,11 @@ export interface DecisionMarketAnalysis extends ValueEdge {
 }
 
 export interface DecisionAuditSummary {
+  /** Provenance is optional only for legacy rows created before atomic match-detail snapshots. */
+  evidenceHash?: string;
+  summaryHash?: string;
+  modelVersion?: string;
+  engineVersion?: string;
   thresholdProfile: Sport;
   thresholds: DecisionThresholdConfig;
   marketsAnalysed: number;
@@ -396,6 +401,7 @@ export interface Prediction {
   matchId: string;
   sport: Sport;
   generatedAt: string;
+  evidenceHash: string;
   markets: PredictionMarket[];
   diagnostics: FootballModelDiagnostics;
   calibrationAdjustment?: LearnedProbabilityCalibrationAdjustment;

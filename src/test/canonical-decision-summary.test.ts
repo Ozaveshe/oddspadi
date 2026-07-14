@@ -6,7 +6,9 @@ import {
   oddsSnapshotsFromMatch
 } from "@/lib/sports/prediction/canonicalDecision";
 import { toPredictionListRow } from "@/lib/sports/prediction/listRow";
+import { resolveCanonicalDecisionForMatchDetail } from "@/lib/sports/prediction/decisionSnapshotIdentity";
 import { buildSportsSlate, normalizeCanonicalFixture } from "@/lib/sports/intelligence/canonical";
+import { buildPrediction } from "@/lib/sports/service";
 import type { DecisionSummary, Match, Prediction, ValueEdge } from "@/lib/sports/types";
 
 const NOW = new Date("2026-07-13T12:05:00.000Z");
@@ -73,6 +75,7 @@ function prediction(match: Match, canonicalDecision: DecisionSummary): Predictio
     matchId: match.id,
     sport: match.sport,
     generatedAt: canonicalDecision.generatedAt,
+    evidenceHash: canonicalDecision.auditSummary.evidenceHash ?? "decision-evidence-v1:test",
     markets: [],
     diagnostics: { modelVersion: "canonical-test", dataQualityScore: match.dataQualityScore } as Prediction["diagnostics"],
     contextAdjustment: {} as Prediction["contextAdjustment"],
@@ -124,6 +127,53 @@ describe("canonical DecisionSummary", () => {
     const listRow = toPredictionListRow({ match, prediction: fullPrediction });
     expect(listRow.prediction.canonicalDecision).toEqual(fullPrediction.canonicalDecision);
     expect(listRow.prediction.bestPick).toEqual(bestPickFromCanonicalDecision(fullPrediction.canonicalDecision));
+  });
+
+  it("uses a stored match-detail headline only for the same evidence, model, and engine snapshot", async () => {
+    const match = await fixture();
+    const freshPrediction = buildPrediction(match);
+    const storedSummary = {
+      ...freshPrediction.canonicalDecision,
+      generatedAt: "2026-07-13T12:00:00.000Z"
+    };
+
+    expect(resolveCanonicalDecisionForMatchDetail({ freshPrediction, storedSummary })).toBe(storedSummary);
+
+    const incompatibleSummary = {
+      ...storedSummary,
+      auditSummary: {
+        ...storedSummary.auditSummary,
+        evidenceHash: "decision-evidence-v1:fnv1a-deadbeef"
+      }
+    };
+    expect(resolveCanonicalDecisionForMatchDetail({ freshPrediction, storedSummary: incompatibleSummary })).toBe(
+      freshPrediction.canonicalDecision
+    );
+
+    const tamperedSummary = {
+      ...storedSummary,
+      risk: storedSummary.risk === "high" ? "low" as const : "high" as const
+    };
+    expect(resolveCanonicalDecisionForMatchDetail({ freshPrediction, storedSummary: tamperedSummary })).toBe(
+      freshPrediction.canonicalDecision
+    );
+  });
+
+  it("rejects legacy stored summaries without atomic provenance", async () => {
+    const match = await fixture();
+    const freshPrediction = buildPrediction(match);
+    const legacySummary = {
+      ...freshPrediction.canonicalDecision,
+      auditSummary: { ...freshPrediction.canonicalDecision.auditSummary }
+    };
+    delete legacySummary.auditSummary.evidenceHash;
+    delete legacySummary.auditSummary.summaryHash;
+    delete legacySummary.auditSummary.modelVersion;
+    delete legacySummary.auditSummary.engineVersion;
+
+    expect(resolveCanonicalDecisionForMatchDetail({ freshPrediction, storedSummary: legacySummary })).toBe(
+      freshPrediction.canonicalDecision
+    );
   });
 
   it("places canonical value picks in the value-picks slate group", async () => {

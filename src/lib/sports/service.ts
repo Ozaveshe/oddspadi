@@ -28,6 +28,10 @@ import {
 } from "./prediction/canonicalDecision";
 import { readLatestDecisionSummary } from "./intelligence/repository";
 import type { DecisionProbabilityRuntimeStages } from "./prediction/decisionProbabilityTrace";
+import {
+  buildPredictionEvidenceHash,
+  resolveCanonicalDecisionForMatchDetail
+} from "./prediction/decisionSnapshotIdentity";
 
 export const sports: Array<{ id: Sport; label: string; active: boolean }> = [
   { id: "football", label: "Football", active: true },
@@ -206,11 +210,31 @@ export function buildPrediction(
     probabilityStages,
     publicHistoricalTrainingEvidence
   });
+  const evidenceHash = buildPredictionEvidenceHash({
+    match,
+    prediction: {
+      markets,
+      diagnostics,
+      calibrationAdjustment: learnedCalibration.adjustment,
+      contextAdjustment,
+      marketPriorAdjustment: marketPrior.adjustment,
+      valueEdges,
+      decision
+    }
+  });
   const generatedAt = new Date().toISOString();
   const canonicalDecision = buildCanonicalDecision(
     match,
     oddsSnapshotsFromMatch(match, new Date(generatedAt)),
-    { valueEdges, diagnostics, decision, generatedAt },
+    {
+      valueEdges,
+      diagnostics,
+      decision,
+      generatedAt,
+      evidenceHash,
+      modelVersion: diagnostics.modelVersion,
+      engineVersion: decision.engineVersion
+    },
     match.providerContextSignals ?? [],
     { now: new Date(generatedAt), allowMockFixtures: process.env.NODE_ENV !== "production" }
   );
@@ -223,6 +247,7 @@ export function buildPrediction(
     matchId: match.id,
     sport: match.sport,
     generatedAt,
+    evidenceHash,
     markets,
     diagnostics,
     calibrationAdjustment: learnedCalibration.adjustment,
@@ -347,7 +372,7 @@ export async function getMatchPrediction(matchId: string) {
   ]);
   const freshPrediction = buildPrediction(match, { learningProfile, caseMemoryBank });
   const storedSummary = await readLatestDecisionSummary(match.id).catch(() => null);
-  const canonicalDecision = storedSummary ?? freshPrediction.canonicalDecision;
+  const canonicalDecision = resolveCanonicalDecisionForMatchDetail({ freshPrediction, storedSummary });
   return {
     match,
     prediction: {

@@ -16,6 +16,7 @@ import type {
   ValueEdge
 } from "@/lib/sports/types";
 import { isRequiredProductionDataSignalBlocked } from "./contextSignalPolicy";
+import { withDecisionSummaryHash } from "./decisionSnapshotIdentity";
 
 const MINUTE_MS = 60_000;
 
@@ -68,6 +69,9 @@ export type DecisionOddsSnapshot = {
 export type CanonicalDecisionModelOutput = {
   valueEdges: ValueEdge[];
   diagnostics: Pick<FootballModelDiagnostics, "dataQualityScore">;
+  evidenceHash?: string;
+  modelVersion?: string;
+  engineVersion?: string;
   decision?: {
     action?: DecisionEngineReport["action"];
     calibration?: { action?: DecisionEngineReport["calibration"]["action"] };
@@ -352,7 +356,7 @@ export function buildCanonicalDecision(
     Boolean(bestPublishedPick) === analyses.some((analysis) => analysis.analysisStatus === "published_value_pick");
   const blockers = unique([...engineGate.blockers, ...analyses.flatMap((analysis) => analysis.blockers)]);
 
-  return {
+  return withDecisionSummaryHash({
     fixtureId: fixture.id,
     bestPublishedPick,
     bestLean,
@@ -368,6 +372,9 @@ export function buildCanonicalDecision(
     generatedAt,
     expiresAt: primary?.expiresAt ?? null,
     auditSummary: {
+      ...(modelOutput.evidenceHash ? { evidenceHash: modelOutput.evidenceHash } : {}),
+      ...(modelOutput.modelVersion ? { modelVersion: modelOutput.modelVersion } : {}),
+      ...(modelOutput.engineVersion ? { engineVersion: modelOutput.engineVersion } : {}),
       thresholdProfile: sport,
       thresholds,
       marketsAnalysed: new Set(analyses.map((analysis) => analysis.marketId)).size,
@@ -381,7 +388,7 @@ export function buildCanonicalDecision(
       blockers,
       publicInvariantPassed
     }
-  };
+  });
 }
 
 export function bestPickFromCanonicalDecision(summary: DecisionSummary): BestPickResult {
@@ -423,7 +430,7 @@ export function refreshCanonicalDecision(summary: DecisionSummary, now = new Dat
   const publicInvariantPassed =
     (publicStatus === "value_pick") === Boolean(bestPublishedPick) &&
     Boolean(bestPublishedPick) === analyses.some((analysis) => analysis.analysisStatus === "published_value_pick");
-  return {
+  return withDecisionSummaryHash({
     ...summary,
     bestPublishedPick,
     bestLean,
@@ -444,7 +451,7 @@ export function refreshCanonicalDecision(summary: DecisionSummary, now = new Dat
       blockers: unique([...summary.auditSummary.blockers, "odds snapshot is stale"]),
       publicInvariantPassed
     }
-  };
+  });
 }
 
 export function decisionSummaryLabel(summary: DecisionSummary): string {

@@ -140,7 +140,10 @@ export function buildCanonicalDecisionForPrediction(
       valueEdges: prediction.valueEdges,
       diagnostics: prediction.diagnostics,
       decision: prediction.decision,
-      generatedAt: prediction.generatedAt
+      generatedAt: prediction.generatedAt,
+      evidenceHash: prediction.evidenceHash,
+      modelVersion: prediction.diagnostics.modelVersion,
+      engineVersion: prediction.decision.engineVersion
     },
     match.providerContextSignals ?? [],
     { now, allowMockFixtures: !isProductionRuntime() }
