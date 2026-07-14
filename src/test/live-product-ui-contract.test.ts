@@ -12,6 +12,8 @@ describe("live OddsPadi product UI contract", () => {
     expect(home).toContain("home-engine-strip");
     expect(home).toContain("Daily Tips Preview");
     expect(home).toContain("<LiveTicker initial={liveBoard}");
+    expect(home).toContain("getDailyTipsProduct({ ensure: false })");
+    expect(home).toContain("getWeeklyTipsProduct({ ensure: false })");
     expect(home).not.toMatch(/loading\.\.\.|loading forever|spinner/i);
   });
 

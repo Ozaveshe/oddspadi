@@ -38,10 +38,10 @@ function weekdayLabel(date: string, firstDate: string): string {
 
 export default async function HomePage() {
   const [daily, weekly, yesterday, liveBoard] = await Promise.all([
-    withTimeout(getDailyTipsProduct(), 6_000, null),
-    withTimeout(getWeeklyTipsProduct(), 7_000, null),
-    withTimeout(getYesterdayResultsProduct(), 4_000, null),
-    withTimeout(fetchLiveScoreBoard(), 5_000, null)
+    withTimeout(getDailyTipsProduct({ ensure: false }), 2_500, null),
+    withTimeout(getWeeklyTipsProduct({ ensure: false }), 2_500, null),
+    withTimeout(getYesterdayResultsProduct(), 2_500, null),
+    withTimeout(fetchLiveScoreBoard(), 2_500, null)
   ]);
   const todayBest = daily?.sections.valuePicks[0] ?? daily?.sections.leans[0] ?? daily?.sections.watchlist[0] ?? null;
   const tipsPreview = daily
