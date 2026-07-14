@@ -239,7 +239,7 @@ export function getSupabaseServerClient(env: EnvMap = process.env): SupabaseClie
   const url = readEnv(env, ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"]);
   const serviceRoleKey = readEnv(env, SERVER_SECRET_ENV_KEYS);
   const runtime = getSupabaseRuntimeStatus(env);
-  if (!url || !serviceRoleKey || !runtime.targetMatchesExpected) return null;
+  if (!url || !serviceRoleKey || !runtime.serverWriteReady) return null;
 
   const cacheKey = `${url}:${serviceRoleKey}`;
   if (cachedClient?.cacheKey === cacheKey) return cachedClient.client;
