@@ -51,6 +51,7 @@ describe("live OddsPadi product UI contract", () => {
     expect(detail.indexOf("match-decision-hero")).toBeLessThan(detail.indexOf("Advanced engine audit"));
     expect(detail).toContain("match-decision-primary");
     expect(detail).toContain("ProbabilityDistribution");
+    expect(detail).toContain("CalibrationReliabilityBand");
     expect(detail).toContain("DecisionEvidenceProfile");
     expect(detail).toContain("Fair market chance");
     expect(detail).not.toContain("The short version");
@@ -66,6 +67,16 @@ describe("live OddsPadi product UI contract", () => {
     expect(evidence).toContain("Model and calibration provenance");
     expect(evidence).toContain("decision.probabilityTrace");
     expect(evidence).toContain("decision.learningProfile");
+  });
+
+  it("shows governed historical calibration without presenting diagnostic risk as statistical certainty", () => {
+    const detail = source("src/app/predictions/[matchId]/page.tsx");
+    const calibration = source("src/components/odds/CalibrationReliabilityBand.tsx");
+    expect(detail).toContain("displayDecision.beliefState.confidenceInterval");
+    expect(calibration).toContain("Historical calibration range");
+    expect(calibration).toContain("wilson-calibration-bucket");
+    expect(calibration).toContain("interval.detail");
+    expect(calibration).toContain("not a range of possible match outcomes or a guarantee");
   });
 
   it("renders verified stored odds movement without inferring a trend from one price", () => {

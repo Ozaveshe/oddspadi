@@ -3017,6 +3017,32 @@ a.score-row:active,
 .probability-quality-track { height: 7px; overflow: hidden; border-radius: 2px; background: var(--surface-3); }
 .probability-quality-track span { display: block; height: 100%; background: var(--green-strong); }
 
+.calibration-reliability-chart { margin: 24px 0 0; padding-top: 22px; border-top: 1px solid var(--border); }
+.calibration-reliability-chart figcaption { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.calibration-reliability-chart figcaption > div { display: grid; gap: 4px; }
+.calibration-reliability-chart figcaption strong { font: 760 18px/1.2 var(--font-display); }
+.calibration-eyebrow { color: var(--muted); font: 760 10px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.calibration-selection { margin: 14px 0 0; color: var(--muted); font-size: 12px; }
+.calibration-ruler { position: relative; height: 44px; margin: 28px 10px 0; border-bottom: 2px solid var(--border-strong); background-image: linear-gradient(90deg, transparent 24.8%, var(--border) 25%, transparent 25.2%, transparent 49.8%, var(--border) 50%, transparent 50.2%, transparent 74.8%, var(--border) 75%, transparent 75.2%); }
+.calibration-band { position: absolute; bottom: -7px; height: 12px; min-width: 3px; border: 1px solid color-mix(in srgb, var(--green-strong) 55%, var(--border)); border-radius: 2px; background: color-mix(in srgb, var(--green-strong) 28%, var(--surface)); }
+.calibration-marker { position: absolute; bottom: -10px; width: 0; height: 30px; }
+.calibration-marker i { position: absolute; left: -2px; bottom: 0; width: 4px; height: 30px; border-radius: 2px; background: var(--blue); }
+.calibration-marker b { position: absolute; left: 0; bottom: 33px; padding: 4px 6px; border-radius: 3px; background: var(--blue); color: white; font: 760 9px/1 var(--font-mono); transform: translateX(-50%); white-space: nowrap; }
+.calibration-marker.market i { background: var(--amber); }
+.calibration-marker.market b { bottom: 10px; background: var(--amber); color: var(--text); transform: translate(-50%, 100%); }
+.calibration-axis { display: flex; justify-content: space-between; margin: 8px 6px 0; color: var(--muted); font: 700 9px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.calibration-legend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 22px 0 0; }
+.calibration-legend div { padding-left: 9px; border-left: 2px solid var(--border-strong); }
+.calibration-legend div:first-child { border-left-color: var(--green-strong); }
+.calibration-legend div:nth-child(2) { border-left-color: var(--blue); }
+.calibration-legend div:nth-child(3) { border-left-color: var(--amber); }
+.calibration-legend dt { color: var(--muted); font-size: 10px; }
+.calibration-legend dd { margin: 4px 0 0; font: 760 15px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.calibration-method { max-width: 74ch; margin: 16px 0 0; color: var(--muted); font-size: 11px; }
+.calibration-unavailable { margin-top: 15px; padding: 14px 16px; border-left: 3px solid var(--amber); background: var(--surface-2); }
+.calibration-unavailable strong { font-size: 12px; }
+.calibration-unavailable p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+
 .decision-evidence-profile { padding: clamp(22px, 4vw, 30px); }
 .decision-evidence-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
 .decision-evidence-heading h2 { margin-top: 8px; }
@@ -3157,6 +3183,9 @@ a.score-row:active,
   .probability-distribution-track { height: 22px; }
   .probability-distribution figcaption { grid-template-columns: 1fr; gap: 18px; }
   .probability-distribution-legend dd { font-size: 20px; }
+  .calibration-reliability-chart figcaption { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .calibration-ruler { margin-top: 30px; }
+  .calibration-legend { grid-template-columns: 1fr; gap: 10px; }
   .decision-evidence-grid { grid-template-columns: 1fr; }
   .decision-evidence-grid + .decision-evidence-grid { gap: 26px; }
   .evidence-provenance { padding-left: 0; padding-top: 20px; border-left: 0; border-top: 1px solid var(--border); }

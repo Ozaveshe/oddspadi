@@ -9,6 +9,7 @@ import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { PredictionExplanation } from "@/components/odds/PredictionExplanation";
 import { LocalTime } from "@/components/odds/LocalTime";
 import { ProbabilityDistribution } from "@/components/odds/ProbabilityDistribution";
+import { CalibrationReliabilityBand } from "@/components/odds/CalibrationReliabilityBand";
 import { DecisionEvidenceProfile } from "@/components/odds/DecisionEvidenceProfile";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { CountryFlag } from "@/components/odds/CountryFlag";
@@ -207,6 +208,12 @@ export default async function MatchDetailPage({ params }: PageProps) {
                 { id: "away", label: match.awayTeam.name, value: winner?.probabilities.away ?? 0 }
               ]}
               dataQuality={match.dataQualityScore}
+            />
+            <CalibrationReliabilityBand
+              interval={displayDecision.beliefState.confidenceInterval}
+              modelProbability={displayedDecision?.modelProbability ?? null}
+              marketProbability={displayedDecision?.noVigImpliedProbability ?? null}
+              selectionLabel={displayedDecision?.label ?? null}
             />
           </div>
 
