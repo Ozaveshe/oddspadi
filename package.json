@@ -22,7 +22,8 @@
     "ops:warm": "node scripts/warm-caches.mjs",
     "ops:editorial": "node scripts/run-editorial-sweep.mjs",
     "ops:seed-feed": "node scripts/seed-community-posts.mjs",
-    "results:backfill": "node scripts/backfill-public-results.mjs"
+    "results:backfill": "node scripts/backfill-public-results.mjs",
+    "player-history:prepare": "vite-node --config scripts/vite-node.config.ts scripts/prepare-player-history.ts"
   },
   "engines": {
     "node": "22.x"
@@ -47,6 +48,7 @@
     "@types/react-dom": "^19.1.6",
     "@types/web-push": "^3.6.4",
     "typescript": "^5.8.3",
+    "vite-node": "3.2.4",
     "vitest": "^3.2.4"
   }
 }
