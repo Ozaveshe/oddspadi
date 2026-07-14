@@ -184,7 +184,7 @@ export function auditBacktestOddsCoverage(configValue: unknown) {
   };
 }
 
-async function getHistoricalEngineEvidence() {
+export async function getHistoricalEngineEvidence() {
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
   const census = await readSupabaseTrainingCorpusCensus({ origin }).catch((error: unknown) => ({
     status: "failed" as const,
@@ -322,7 +322,7 @@ async function getHistoricalEngineEvidence() {
 export async function getEnginePerformanceReport() {
   const [ledger, daily, historicalEvidence] = await Promise.all([
     getPublicPredictionHistory(),
-    getDailyTipsProduct(),
+    getDailyTipsProduct({ ensure: false }),
     getHistoricalEngineEvidence()
   ]);
   const publicRows = ledger.items.filter(isPublicPerformancePick);

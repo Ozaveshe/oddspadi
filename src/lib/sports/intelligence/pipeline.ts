@@ -410,6 +410,30 @@ export async function generateWeeklyPredictions({
   });
 }
 
+function buildReadOnlySlate({
+  scope,
+  dates,
+  now,
+  reason
+}: {
+  scope: SportsSlate["scope"];
+  dates: string[];
+  now: Date;
+  reason: string;
+}): SportsSlate {
+  return buildSportsSlate({
+    scope,
+    fixtures: [],
+    oddsByFixture: new Map(),
+    decisionsByFixture: new Map(),
+    decisionSummariesByFixture: new Map(),
+    range: { from: dates[0], to: dates.at(-1) ?? dates[0] },
+    providerStatus: "unavailable",
+    providerErrors: [reason],
+    generatedAt: now.toISOString()
+  });
+}
+
 export async function getDailySlate({ now = new Date(), ensure = true, dayOffset = 0 }: { now?: Date; ensure?: boolean; dayOffset?: number } = {}): Promise<SportsSlate> {
   const date = utcDateWindow(now, 1, dayOffset)[0];
   try {
@@ -420,8 +444,19 @@ export async function getDailySlate({ now = new Date(), ensure = true, dayOffset
       jobTypes: ["run-daily-engine", "refresh-odds"]
     });
     if (stored && (stored.summary.predictionsGenerated > 0 || !ensure)) return stored;
+    if (!ensure) return buildReadOnlySlate({
+      scope: "daily",
+      dates: [date],
+      now,
+      reason: "No stored daily engine run is available. This public read did not invoke live providers."
+    });
   } catch (error) {
-    if (!ensure) throw error;
+    if (!ensure) return buildReadOnlySlate({
+      scope: "daily",
+      dates: [date],
+      now,
+      reason: `The stored daily engine run could not be read: ${error instanceof Error ? error.message : "unknown repository error"}`
+    });
   }
   return (await runDailyEngine({ now, dayOffset, persist: getSupabaseRuntimeStatus().serverWriteReady })).slate;
 }
@@ -436,8 +471,19 @@ export async function getWeeklySlate({ now = new Date(), ensure = true }: { now?
       jobTypes: ["generate-weekly-predictions", "refresh-odds", "run-daily-engine"]
     });
     if (stored && (stored.summary.predictionsGenerated > 0 || !ensure)) return stored;
+    if (!ensure) return buildReadOnlySlate({
+      scope: "weekly",
+      dates,
+      now,
+      reason: "No stored weekly engine run is available. This public read did not invoke live providers."
+    });
   } catch (error) {
-    if (!ensure) throw error;
+    if (!ensure) return buildReadOnlySlate({
+      scope: "weekly",
+      dates,
+      now,
+      reason: `The stored weekly engine run could not be read: ${error instanceof Error ? error.message : "unknown repository error"}`
+    });
   }
   return (await generateWeeklyPredictions({ now, persist: getSupabaseRuntimeStatus().serverWriteReady })).slate;
 }

@@ -54,22 +54,24 @@ export function noPickExplanation(row: SlateFixture): string {
 
 export function ProviderRunStrip({ slate }: { slate: SportsSlate }) {
   const lastRun = slate.provider.lastRun;
+  const readable = slate.provider.status !== "unavailable" && slate.provider.status !== "failed";
+  const value = (number: number) => readable ? number : "—";
   return (
     <section className="engine-rundown" aria-label="Latest provider and engine run">
       <div className="engine-rundown-state">
         <span className={`badge ${slate.provider.status === "completed" ? "positive" : slate.provider.status === "partial" || slate.provider.status === "empty" ? "scheduled" : "no-value"}`}>
           {slate.provider.status}
         </span>
-        <div><strong>Provider health</strong><small>{slate.provider.providers.join(", ") || "No provider returned a slate"}</small></div>
+        <div><strong>Provider health</strong><small>{slate.provider.providers.join(", ") || (readable ? "No provider returned a slate" : "No stored provider response was read")}</small></div>
       </div>
       <dl>
-        <div><dt>Fixtures</dt><dd>{slate.summary.fixturesFound}</dd></div>
-        <div><dt>Analysed</dt><dd>{slate.summary.predictionsGenerated}</dd></div>
-        <div><dt>Odds used</dt><dd>{slate.summary.oddsSnapshotsUsed}</dd></div>
-        <div><dt>Value picks</dt><dd>{slate.summary.valuePicksPublished}</dd></div>
-        <div><dt>Leans</dt><dd>{slate.summary.leansPublished}</dd></div>
-        <div><dt>Watchlist</dt><dd>{slate.summary.watchlist}</dd></div>
-        <div><dt>Last run</dt><dd>{lastRun?.finishedAt ? new Date(lastRun.finishedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Not completed"}</dd></div>
+        <div><dt>Fixtures</dt><dd>{value(slate.summary.fixturesFound)}</dd></div>
+        <div><dt>Analysed</dt><dd>{value(slate.summary.predictionsGenerated)}</dd></div>
+        <div><dt>Odds used</dt><dd>{value(slate.summary.oddsSnapshotsUsed)}</dd></div>
+        <div><dt>Value picks</dt><dd>{value(slate.summary.valuePicksPublished)}</dd></div>
+        <div><dt>Leans</dt><dd>{value(slate.summary.leansPublished)}</dd></div>
+        <div><dt>Watchlist</dt><dd>{value(slate.summary.watchlist)}</dd></div>
+        <div><dt>Last run</dt><dd>{lastRun?.finishedAt ? new Date(lastRun.finishedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : readable ? "Not completed" : "Not read"}</dd></div>
       </dl>
       {slate.provider.errors.length ? <details><summary>{slate.provider.errors.length} provider or pipeline issue{slate.provider.errors.length === 1 ? "" : "s"}</summary><ul>{slate.provider.errors.map((error) => <li key={error}>{error}</li>)}</ul></details> : null}
     </section>

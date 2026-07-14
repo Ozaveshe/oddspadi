@@ -123,6 +123,9 @@ describe("live OddsPadi product UI contract", () => {
     const engine = source("src/app/predictions/decision-engine/page.tsx");
     expect(engine).toContain("engine-run-metrics");
     expect(engine).toContain("engine-empty-ledger");
+    expect(engine).toContain("Research-to-runtime authority");
+    expect(engine).toContain("Benchmark evidence is not runtime authority");
+    expect(engine).toContain("getDailyTipsProduct({ ensure: false })");
     expect(engine).toContain("Waiting for provider data");
     expect(engine).not.toContain("AI Decision Engine");
   });
