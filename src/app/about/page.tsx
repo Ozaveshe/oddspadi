@@ -37,7 +37,7 @@ export default function AboutPage() {
           <h2>What makes us different</h2>
           <p className="muted">
             Every stored pick lands on the public <Link className="inline-link" href="/predictions/history">results ledger</Link> —
-            wins, losses, pushes and voids. No deleted losses, no &ldquo;sure odds&rdquo;, no fake accuracy claims.
+            wins, losses, pushes and voids. No deleted losses, no manufactured certainty, no fake accuracy claims.
             Uncertainty stays visible on every card: confidence, risk and the reasoning behind each number.
           </p>
         </section>

@@ -21,7 +21,8 @@
     "ops:health": "node scripts/site-health.mjs",
     "ops:warm": "node scripts/warm-caches.mjs",
     "ops:editorial": "node scripts/run-editorial-sweep.mjs",
-    "ops:seed-feed": "node scripts/seed-community-posts.mjs"
+    "ops:seed-feed": "node scripts/seed-community-posts.mjs",
+    "results:backfill": "node scripts/backfill-public-results.mjs"
   },
   "engines": {
     "node": "22.x"

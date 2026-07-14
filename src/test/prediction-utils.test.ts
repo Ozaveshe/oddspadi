@@ -5773,7 +5773,8 @@ describe("prediction utilities", () => {
     const report = buildPredictionAgentReport(match, output.diagnostics, { hasValue: false, label: "No clear value found" }, []);
 
     expect(report.summary.toLowerCase()).not.toContain("guaranteed");
-    expect(report.cautions.join(" ").toLowerCase()).toContain("no prediction is guaranteed");
+    expect(report.cautions.join(" ").toLowerCase()).toContain("sports outcomes remain uncertain");
+    expect(report.cautions.join(" ").toLowerCase()).not.toContain("guaranteed");
   });
 
   it("builds a decision report with evidence and safer alternatives", async () => {
@@ -15272,7 +15273,9 @@ describe("prediction utilities", () => {
     const eventCall = calls.find((url) => url.includes("/events/event-markets/odds"));
 
     expect(new URL(baseCall!).searchParams.get("markets")).toBe("h2h,totals");
-    expect(new URL(eventCall!).searchParams.get("markets")).toBe("btts");
+    expect(new URL(eventCall!).searchParams.get("markets")).toBe(
+      "btts,alternate_totals,double_chance,draw_no_bet"
+    );
     expect(match.dataSource?.fixtureProvider).toBe("the-odds-api-events");
     expect(match.oddsMarkets.map((market) => market.id)).toEqual(
       expect.arrayContaining(["match_winner", "over_under_25", "both_teams_to_score"])
@@ -15925,7 +15928,7 @@ describe("prediction utilities", () => {
         selection: "home_cover",
         homeScore: 102,
         awayScore: 99,
-        line: 5.5,
+        line: -5.5,
         odds: 1.91
       },
       new Date("2026-07-02T00:00:00.000Z")

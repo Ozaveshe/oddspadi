@@ -7,7 +7,6 @@ import { modelFootballMatch } from "./prediction/footballModel";
 import { modelTennisMatch } from "./prediction/tennisModel";
 import { explainPrediction } from "./prediction/explainer";
 import { confidenceRank } from "./prediction/format";
-import { predictionHistory } from "./prediction/history";
 import { buildPredictionAgentReport } from "./prediction/agent";
 import { applyContextAdjustmentToDiagnostics, applyContextAdjustmentToMarkets, buildMatchContextAdjustment } from "./prediction/contextAdjustment";
 import { buildDecisionEngineReport, DECISION_ENGINE_VERSION } from "./prediction/decisionEngine";
@@ -22,6 +21,12 @@ import { buildFootballDataHistoricalLearningDossier } from "@/lib/sports/trainin
 import { buildPublicHistoricalTrainingEvidence, type PublicHistoricalTrainingEvidence } from "@/lib/sports/training/publicHistoricalTrainingEvidence";
 import { isRequiredProductionDataSignalBlocked } from "./prediction/contextSignalPolicy";
 import { leagueSlugFromProviderId } from "./leagueStandings";
+import {
+  bestPickFromCanonicalDecision,
+  buildCanonicalDecision,
+  oddsSnapshotsFromMatch
+} from "./prediction/canonicalDecision";
+import { readLatestDecisionSummary } from "./intelligence/repository";
 
 export const sports: Array<{ id: Sport; label: string; active: boolean }> = [
   { id: "football", label: "Football", active: true },
@@ -155,9 +160,15 @@ export function buildPrediction(
     marketPriorAdjustment: marketPrior.adjustment,
     publicHistoricalTrainingEvidence
   });
-  const bestPick: BestPickResult = decisionAllowsPublicPick(decision)
-    ? candidatePick
-    : { hasValue: false, label: "No clear value found" };
+  const generatedAt = new Date().toISOString();
+  const canonicalDecision = buildCanonicalDecision(
+    match,
+    oddsSnapshotsFromMatch(match, new Date(generatedAt)),
+    { valueEdges, diagnostics, decision, generatedAt },
+    match.providerContextSignals ?? [],
+    { now: new Date(generatedAt), allowMockFixtures: process.env.NODE_ENV !== "production" }
+  );
+  const bestPick: BestPickResult = bestPickFromCanonicalDecision(canonicalDecision);
   const selectedEdge = bestPick.hasValue ? bestPick : undefined;
   const explanation = explainPrediction(match, markets, selectedEdge);
   const agentReport = buildPredictionAgentReport(match, diagnostics, bestPick, valueEdges);
@@ -165,16 +176,17 @@ export function buildPrediction(
   return {
     matchId: match.id,
     sport: match.sport,
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     markets,
     diagnostics,
     calibrationAdjustment: learnedCalibration.adjustment,
     contextAdjustment,
     marketPriorAdjustment: marketPrior.adjustment,
     valueEdges,
+    canonicalDecision,
     bestPick,
-    confidence: bestPick.hasValue ? decision.confidence : "low",
-    risk: bestPick.hasValue ? decision.risk : "high",
+    confidence: canonicalDecision.confidence,
+    risk: canonicalDecision.risk,
     explanation,
     agentReport,
     decision
@@ -281,9 +293,18 @@ export async function getMatchPrediction(matchId: string) {
     getLearningProfileForSport(match.sport),
     getDecisionCaseMemoryBank({ sport: match.sport }).catch(() => undefined)
   ]);
+  const freshPrediction = buildPrediction(match, { learningProfile, caseMemoryBank });
+  const storedSummary = await readLatestDecisionSummary(match.id).catch(() => null);
+  const canonicalDecision = storedSummary ?? freshPrediction.canonicalDecision;
   return {
     match,
-    prediction: buildPrediction(match, { learningProfile, caseMemoryBank })
+    prediction: {
+      ...freshPrediction,
+      canonicalDecision,
+      bestPick: bestPickFromCanonicalDecision(canonicalDecision),
+      confidence: canonicalDecision.confidence,
+      risk: canonicalDecision.risk
+    }
   };
 }
 
@@ -310,20 +331,17 @@ export async function getValuePicks(
   return rows
     .filter(
       ({ prediction }) =>
-        decisionAllowsPublicPick(prediction.decision) &&
-        prediction.bestPick.hasValue &&
-        prediction.bestPick.edge > 0 &&
-        prediction.bestPick.expectedValue > 0 &&
-        prediction.confidence !== "low"
+        prediction.canonicalDecision.publicStatus === "value_pick" &&
+        prediction.canonicalDecision.bestPublishedPick !== null
     )
     .sort((a, b) => {
       const evDiff =
-        (b.prediction.bestPick.hasValue ? b.prediction.bestPick.expectedValue : 0) -
-        (a.prediction.bestPick.hasValue ? a.prediction.bestPick.expectedValue : 0);
+        (b.prediction.canonicalDecision.bestPublishedPick?.expectedValue ?? 0) -
+        (a.prediction.canonicalDecision.bestPublishedPick?.expectedValue ?? 0);
       if (evDiff !== 0) return evDiff;
       const edgeDiff =
-        (b.prediction.bestPick.hasValue ? b.prediction.bestPick.edge : 0) -
-        (a.prediction.bestPick.hasValue ? a.prediction.bestPick.edge : 0);
+        (b.prediction.canonicalDecision.bestPublishedPick?.edge ?? 0) -
+        (a.prediction.canonicalDecision.bestPublishedPick?.edge ?? 0);
       if (edgeDiff !== 0) return edgeDiff;
       const confidenceDiff = confidenceRank(b.prediction.confidence) - confidenceRank(a.prediction.confidence);
       if (confidenceDiff !== 0) return confidenceDiff;
@@ -340,10 +358,6 @@ function safeKickoffMs(iso: string): number {
 
 export async function getLiveScores(date = todayIsoDate(), sport: Sport = "football") {
   return sportsProvider.getLiveScores(date, sport);
-}
-
-export function getPredictionHistory() {
-  return predictionHistory;
 }
 
 export function uniqueLeagues(matches: Match[]) {

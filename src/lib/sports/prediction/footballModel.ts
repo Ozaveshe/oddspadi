@@ -359,11 +359,17 @@ export function modelFootballMatch(match: Match): { markets: PredictionMarket[];
       }
     },
     {
+      marketId: "over_under_15",
+      probabilities: {
+        over_15: over15,
+        under_15: clampProbability(1 - over15)
+      }
+    },
+    {
       marketId: "over_under_25",
       probabilities: {
         over_25: over25,
-        under_25: clampProbability(1 - over25),
-        over_15: over15
+        under_25: clampProbability(1 - over25)
       }
     },
     {
@@ -371,6 +377,21 @@ export function modelFootballMatch(match: Match): { markets: PredictionMarket[];
       probabilities: {
         yes: btts,
         no: clampProbability(1 - btts)
+      }
+    },
+    {
+      marketId: "double_chance",
+      probabilities: {
+        home_or_draw: clampProbability(normalizedHome + normalizedDraw),
+        home_or_away: clampProbability(normalizedHome + normalizedAway),
+        draw_or_away: clampProbability(normalizedDraw + normalizedAway)
+      }
+    },
+    {
+      marketId: "draw_no_bet",
+      probabilities: {
+        home: clampProbability(normalizedHome / Math.max(0.000001, normalizedHome + normalizedAway)),
+        away: clampProbability(normalizedAway / Math.max(0.000001, normalizedHome + normalizedAway))
       }
     }
   ]

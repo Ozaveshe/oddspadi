@@ -48,6 +48,6 @@ export function explainPrediction(
       ...(match.headToHead ? [`Recent H2H (${match.headToHead.meetings.length}): ${match.homeTeam.name} ${match.headToHead.homeWins} wins, ${match.headToHead.draws} draws, ${match.awayTeam.name} ${match.headToHead.awayWins} wins.`] : []),
       `Data quality score is ${formatPercent(match.dataQualityScore)}, so the output should be read as analysis only.`
     ],
-    disclaimer: "No prediction is guaranteed. Use OddsPadi as analysis, not certainty."
+    disclaimer: "Sports outcomes remain uncertain. Use OddsPadi as analysis, not certainty."
   };
 }

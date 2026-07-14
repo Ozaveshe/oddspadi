@@ -54,7 +54,7 @@ export type OutcomeSettlementPreview = {
   proofUrls: string[];
 };
 
-const TOTAL_MARKETS = new Set(["over_under_25", "total_points", "total_games"]);
+const TOTAL_MARKETS = new Set(["over_under_15", "over_under_25", "total_points", "total_games"]);
 const SPREAD_MARKETS = new Set(["spread", "set_handicap"]);
 
 function finiteNumber(value: unknown): number | null {
@@ -97,6 +97,29 @@ function gradeBothTeamsToScore(selection: string, homeScore: number, awayScore: 
   return null;
 }
 
+function gradeDoubleChance(selection: string, homeScore: number, awayScore: number): PredictionOutcomeResult | null {
+  const selected = normalize(selection);
+  const outcome = homeScore > awayScore ? "home" : awayScore > homeScore ? "away" : "draw";
+  const allowed: Record<string, Array<"home" | "draw" | "away">> = {
+    home_or_draw: ["home", "draw"],
+    home_draw: ["home", "draw"],
+    "1x": ["home", "draw"],
+    home_or_away: ["home", "away"],
+    "12": ["home", "away"],
+    draw_or_away: ["draw", "away"],
+    draw_away: ["draw", "away"],
+    x2: ["draw", "away"]
+  };
+  return allowed[selected] ? (allowed[selected].includes(outcome) ? "won" : "lost") : null;
+}
+
+function gradeDrawNoBet(selection: string, homeScore: number, awayScore: number): PredictionOutcomeResult | null {
+  const selected = normalize(selection);
+  if (selected !== "home" && selected !== "away") return null;
+  if (homeScore === awayScore) return "push";
+  return selected === (homeScore > awayScore ? "home" : "away") ? "won" : "lost";
+}
+
 function gradeTotal(selection: string, homeScore: number, awayScore: number, line: number | null): PredictionOutcomeResult | null {
   if (line === null) return null;
   const selected = normalize(selection);
@@ -111,16 +134,14 @@ function gradeTotal(selection: string, homeScore: number, awayScore: number, lin
 function gradeSpread(selection: string, homeScore: number, awayScore: number, line: number | null): PredictionOutcomeResult | null {
   if (line === null) return null;
   const selected = normalize(selection);
-  const margin = homeScore - awayScore;
-  const threshold = Math.abs(line);
-  if (selected.includes("home")) return winLossPush(margin > threshold, margin === threshold);
-  if (selected.includes("away")) return winLossPush(margin < threshold, margin === threshold);
+  const adjustedMargin = selected.includes("home") ? homeScore + line - awayScore : awayScore + line - homeScore;
+  if (selected.includes("home") || selected.includes("away")) return winLossPush(adjustedMargin > 0, adjustedMargin === 0);
   return null;
 }
 
 function gradeOutcome(input: OutcomeSettlementInput): { result: PredictionOutcomeResult | null; reasons: string[]; line: number | null } {
   const market = normalize(input.market);
-  const line = finiteNumber(input.line) ?? (market === "over_under_25" ? 2.5 : null);
+  const line = finiteNumber(input.line) ?? (market === "over_under_25" ? 2.5 : market === "over_under_15" ? 1.5 : null);
   const reasons: string[] = [];
   let result: PredictionOutcomeResult | null = null;
 
@@ -130,6 +151,12 @@ function gradeOutcome(input: OutcomeSettlementInput): { result: PredictionOutcom
   } else if (market === "both_teams_to_score") {
     result = gradeBothTeamsToScore(input.selection, input.homeScore, input.awayScore);
     reasons.push("BTTS is graded from whether both teams scored at least once.");
+  } else if (market === "double_chance") {
+    result = gradeDoubleChance(input.selection, input.homeScore, input.awayScore);
+    reasons.push("Double chance is graded from the final home/draw/away outcome.");
+  } else if (market === "draw_no_bet") {
+    result = gradeDrawNoBet(input.selection, input.homeScore, input.awayScore);
+    reasons.push("Draw no bet is graded as a push on a draw and win/loss otherwise.");
   } else if (TOTAL_MARKETS.has(market)) {
     result = gradeTotal(input.selection, input.homeScore, input.awayScore, line);
     reasons.push(line === null ? "Total market needs a line before grading." : `Total market is graded against line ${line}.`);

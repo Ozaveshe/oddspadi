@@ -1,6 +1,6 @@
 export type Sport = "football" | "basketball" | "tennis" | "cricket" | "rugby" | "handball";
 
-export type MatchStatus = "scheduled" | "live" | "finished";
+export type MatchStatus = "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "suspended";
 export type ConfidenceLevel = "low" | "medium" | "high";
 export type RiskLevel = "low" | "medium" | "high";
 export type PredictionResult = "pending" | "won" | "lost" | "push" | "void";
@@ -95,7 +95,17 @@ export interface OddsSelection {
 }
 
 export interface OddsMarket {
-  id: "match_winner" | "over_under_25" | "both_teams_to_score" | "spread" | "total_points" | "set_handicap" | "total_games";
+  id:
+    | "match_winner"
+    | "over_under_15"
+    | "over_under_25"
+    | "both_teams_to_score"
+    | "double_chance"
+    | "draw_no_bet"
+    | "spread"
+    | "total_points"
+    | "set_handicap"
+    | "total_games";
   name: string;
   selections: OddsSelection[];
   bookmaker?: {
@@ -129,11 +139,16 @@ export interface Match {
     kind: "mock" | "provider";
     fixtureProvider?: string;
     fixtureProviderId?: string;
+    season?: string;
+    round?: string;
     oddsProvider?: string;
     oddsProviderEventId?: string;
+    oddsCapturedAt?: string;
     formProvider?: string;
     strengthProvider?: string;
     fetchedAt?: string;
+    /** Provider-native lifecycle status used by settlement policy (for example retired or walkover). */
+    statusDetail?: string;
     notes?: string[];
   };
 }
@@ -283,6 +298,89 @@ export interface NoValuePick {
 
 export type BestPickResult = BestPick | NoValuePick;
 
+export type DecisionSummaryPublicStatus =
+  | "value_pick"
+  | "lean"
+  | "watchlist"
+  | "no_clear_value"
+  | "needs_data"
+  | "stale"
+  | "suspended";
+
+export type DecisionSummaryEngineStatus =
+  | "published"
+  | "lean"
+  | "watch"
+  | "no-pick"
+  | "needs-data"
+  | "stale"
+  | "suspended";
+
+export type DecisionMarketAnalysisStatus =
+  | "published_value_pick"
+  | "lean"
+  | "watchlist"
+  | "no_clear_value"
+  | "needs_data"
+  | "stale"
+  | "suspended";
+
+export interface DecisionThresholdConfig {
+  minimumValueEdge: number;
+  minimumExpectedValue: number;
+  minimumConfidenceForValuePick: ConfidenceLevel;
+  minimumDataQuality: number;
+  maximumOddsAgeMinutes: number;
+  minimumOdds: number;
+  maximumOdds: number;
+  minimumKickoffLeadMinutes: number;
+  maxMarketsPerFixture: number;
+}
+
+export interface DecisionMarketAnalysis extends ValueEdge {
+  analysisStatus: DecisionMarketAnalysisStatus;
+  oddsSnapshotId: string | null;
+  oddsCapturedAt: string | null;
+  expiresAt: string | null;
+  dataQuality: number;
+  evidenceQuality: EvidenceQuality;
+  publicationEligible: boolean;
+  blockers: string[];
+}
+
+export interface DecisionAuditSummary {
+  thresholdProfile: Sport;
+  thresholds: DecisionThresholdConfig;
+  marketsAnalysed: number;
+  publishedCandidates: number;
+  leanCandidates: number;
+  watchlistCandidates: number;
+  staleCandidates: number;
+  enginePublicationAllowed: boolean;
+  providerBacked: boolean;
+  contextSignalsSeen: number;
+  blockers: string[];
+  publicInvariantPassed: boolean;
+}
+
+export interface DecisionSummary {
+  fixtureId: string;
+  bestPublishedPick: DecisionMarketAnalysis | null;
+  bestLean: DecisionMarketAnalysis | null;
+  bestWatchlistCandidate: DecisionMarketAnalysis | null;
+  noPickReason: string | null;
+  allMarketAnalyses: DecisionMarketAnalysis[];
+  publicStatus: DecisionSummaryPublicStatus;
+  engineStatus: DecisionSummaryEngineStatus;
+  dataQuality: number;
+  evidenceQuality: EvidenceQuality;
+  confidence: ConfidenceLevel;
+  risk: RiskLevel;
+  generatedAt: string;
+  expiresAt: string | null;
+  auditSummary: DecisionAuditSummary;
+}
+
 export interface LearnedProbabilityCalibrationAdjustment {
   status: "applied" | "inactive" | "insufficient-evidence";
   source: string | null;
@@ -304,6 +402,7 @@ export interface Prediction {
   contextAdjustment: MatchContextAdjustment;
   marketPriorAdjustment: MarketPriorAdjustment;
   valueEdges: ValueEdge[];
+  canonicalDecision: DecisionSummary;
   bestPick: BestPickResult;
   confidence: ConfidenceLevel;
   risk: RiskLevel;

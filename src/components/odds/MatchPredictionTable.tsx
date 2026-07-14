@@ -26,6 +26,9 @@ export function MatchPredictionTable({ rows }: { rows: PredictionListRow[] }) {
         </thead>
         <tbody>
           {rows.map(({ match, prediction }) => {
+            const canonical = prediction.canonicalDecision;
+            const publishedPick = canonical.bestPublishedPick;
+            const displayedDecision = publishedPick ?? canonical.bestLean ?? canonical.bestWatchlistCandidate;
             const odds = match.oddsMarkets.find((market) => market.id === "match_winner")?.selections ?? [];
             const market = prediction.markets.find((item) => item.marketId === "match_winner");
             const modelText =
@@ -61,12 +64,18 @@ export function MatchPredictionTable({ rows }: { rows: PredictionListRow[] }) {
                 <td>{odds.map((selection) => formatOdds(selection.decimalOdds)).join(" / ")}</td>
                 <td>{modelText}</td>
                 <td>
-                  {prediction.bestPick.label}
+                  {publishedPick
+                    ? `Value Pick — ${publishedPick.label}`
+                    : canonical.publicStatus === "lean" && displayedDecision
+                      ? `Lean — ${displayedDecision.label}`
+                      : canonical.publicStatus === "watchlist" || canonical.publicStatus === "stale"
+                        ? "Watchlist — needs fresh odds/team news before publication."
+                        : canonical.noPickReason ?? "No clear value found."}
                   <br />
                   <ConfidenceBadge level={prediction.confidence} />
                 </td>
-                <td>{prediction.bestPick.hasValue ? formatSignedPercent(prediction.bestPick.edge) : "No clear value found"}</td>
-                <td>{prediction.bestPick.hasValue ? formatSignedPercent(prediction.bestPick.expectedValue) : "No positive EV"}</td>
+                <td>{displayedDecision ? formatSignedPercent(displayedDecision.edge) : "No clear value found"}</td>
+                <td>{displayedDecision ? formatSignedPercent(displayedDecision.expectedValue) : "No positive EV"}</td>
                 <td>
                   <RiskBadge level={prediction.risk} />
                 </td>

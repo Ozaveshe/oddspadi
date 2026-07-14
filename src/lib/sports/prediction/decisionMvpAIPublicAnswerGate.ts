@@ -155,7 +155,7 @@ export function buildDecisionMvpAIPublicAnswerGate({
     "Use the next proof API as evidence, not as a public pick."
   ], 6);
   const avoidedClaims = [
-    "No guaranteed outcome.",
+    "Outcomes remain uncertain.",
     "No hidden chain-of-thought.",
     "No unstored provider facts.",
     "No published pick or stake advice.",

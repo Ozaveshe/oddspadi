@@ -159,8 +159,8 @@ function rankRows(rows: PredictionRow[]): PredictionRow[] {
   return rows.slice().sort((left, right) => {
     const verdictDifference = verdictRank(right.prediction.decision.verdict) - verdictRank(left.prediction.decision.verdict);
     if (verdictDifference) return verdictDifference;
-    const rightEv = right.prediction.bestPick.hasValue ? right.prediction.bestPick.expectedValue : -1;
-    const leftEv = left.prediction.bestPick.hasValue ? left.prediction.bestPick.expectedValue : -1;
+    const rightEv = right.prediction.canonicalDecision.bestPublishedPick?.expectedValue ?? -1;
+    const leftEv = left.prediction.canonicalDecision.bestPublishedPick?.expectedValue ?? -1;
     if (rightEv !== leftEv) return rightEv - leftEv;
     if (right.prediction.decision.decisionScore !== left.prediction.decision.decisionScore) {
       return right.prediction.decision.decisionScore - left.prediction.decision.decisionScore;

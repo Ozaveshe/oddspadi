@@ -16,7 +16,7 @@ export type MatchSummary = Pick<
 
 export type PredictionSummary = Pick<
   Prediction,
-  "matchId" | "sport" | "generatedAt" | "markets" | "bestPick" | "confidence" | "risk"
+  "matchId" | "sport" | "generatedAt" | "markets" | "canonicalDecision" | "bestPick" | "confidence" | "risk"
 >;
 
 export type PredictionListRow = { match: MatchSummary; prediction: PredictionSummary };
@@ -41,6 +41,7 @@ export function toPredictionSummary(prediction: Prediction): PredictionSummary {
     sport: prediction.sport,
     generatedAt: prediction.generatedAt,
     markets: prediction.markets,
+    canonicalDecision: prediction.canonicalDecision,
     bestPick: prediction.bestPick,
     confidence: prediction.confidence,
     risk: prediction.risk

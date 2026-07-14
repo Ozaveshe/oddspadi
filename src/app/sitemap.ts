@@ -34,6 +34,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteUrl}/predictions/value-picks`, lastModified: now, changeFrequency: "hourly", priority: 0.8 },
     { url: `${siteUrl}/predictions/history`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
     { url: `${siteUrl}/predictions/decision-engine`, lastModified: now, changeFrequency: "daily", priority: 0.5 },
+    { url: `${siteUrl}/engine/performance`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
     { url: `${siteUrl}/predictions/bet-slip`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
     { url: `${siteUrl}/community`, lastModified: now, changeFrequency: "hourly", priority: 0.5 },
     { url: `${siteUrl}/forums`, lastModified: now, changeFrequency: "daily", priority: 0.5 },

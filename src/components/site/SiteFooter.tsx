@@ -23,6 +23,7 @@ const communityLinks = [
 
 const engineLinks = [
   { href: "/predictions/decision-engine", label: "AI decision engine" },
+  { href: "/engine/performance", label: "Engine performance" },
   { href: "/predictions/bet-slip", label: "Slip Check" },
   { href: "/predictions?sport=basketball", label: "Basketball" },
   { href: "/predictions?sport=tennis", label: "Tennis" }
@@ -73,7 +74,7 @@ export function SiteFooter() {
           <h2>Play responsibly</h2>
           <div className="footer-links">
             <span className="muted">
-              Predictions are informed opinions, never guarantees. Only stake what you can afford to lose.
+              Predictions are informed opinions and outcomes remain uncertain. Only stake what you can afford to lose.
             </span>
             <span className="muted">OddsPadi does not take bets or hold money.</span>
             <a href="https://www.begambleaware.org" rel="noopener noreferrer" target="_blank">
@@ -89,7 +90,7 @@ export function SiteFooter() {
       <div className="footer-bottom">
         <div className="footer-bottom-inner">
           <span>© {year} OddsPadi. Built with love for African football fans.</span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+          <span className="footer-responsible-note">
             <span className="age-pill" aria-label="18 plus only">
               18+
             </span>

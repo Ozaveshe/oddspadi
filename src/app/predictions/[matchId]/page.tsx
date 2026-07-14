@@ -10,6 +10,7 @@ import { LocalTime } from "@/components/odds/LocalTime";
 import { ProbabilityBar } from "@/components/odds/ProbabilityBar";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { CountryFlag } from "@/components/odds/CountryFlag";
+import { AddToSlipButton } from "@/components/odds/AddToSlipButton";
 import { formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import { getCachedMatchPrediction } from "@/lib/sports/prediction/cachedPublicReads";
 import { ShareBar } from "@/components/share/ShareBar";
@@ -68,16 +69,23 @@ export default async function MatchDetailPage({ params }: PageProps) {
   const displayDecision = prediction.decision;
   const displayPrediction = prediction;
   const winner = prediction.markets.find((market) => market.marketId === "match_winner");
-  const hasValue = prediction.bestPick.hasValue;
-  const bestEdge = hasValue ? prediction.bestPick.edge : 0;
-  const hasWinnerOdds = match.oddsMarkets.some((m) => m.id === "match_winner" && m.selections.length > 0);
-  const leanEntries: Array<[string, number]> = [
-    [match.homeTeam.name, winner?.probabilities.home ?? 0],
-    ...(match.sport === "football" ? ([["Draw", winner?.probabilities.draw ?? 0]] as Array<[string, number]>) : []),
-    [match.awayTeam.name, winner?.probabilities.away ?? 0]
-  ];
-  const [leanLabel, leanProb] = leanEntries.reduce((best, current) => (current[1] > best[1] ? current : best));
-  const winnerTitle = "Who wins? The model's view";
+  const canonical = prediction.canonicalDecision;
+  const publishedPick = canonical.bestPublishedPick;
+  const displayedDecision = publishedPick ?? canonical.bestLean ?? canonical.bestWatchlistCandidate;
+  const hasValue = canonical.publicStatus === "value_pick" && publishedPick !== null;
+  const bestEdge = displayedDecision?.edge ?? 0;
+  const publicDecisionLabel = hasValue
+    ? `Value Pick — ${publishedPick.label}`
+    : canonical.publicStatus === "lean" && displayedDecision
+      ? `Lean — ${displayedDecision.label}`
+      : canonical.publicStatus === "watchlist" || canonical.publicStatus === "stale"
+        ? "Watchlist — needs fresh odds/team news before publication."
+        : canonical.publicStatus === "needs_data"
+          ? "Needs data before publication."
+          : canonical.publicStatus === "suspended"
+            ? "Suspended — no new pre-match decision."
+            : "No clear value found.";
+  const publicRisks = [...new Set([...(displayedDecision?.blockers ?? []), ...canonical.auditSummary.blockers])].slice(0, 3);
   const leagueTableSlug = leagueSlugFromProviderId(match.league.id);
   const homeStanding = match.leagueTable?.rows.find((row) => row.teamId === match.homeTeam.id || row.teamName.toLowerCase() === match.homeTeam.name.toLowerCase());
   const awayStanding = match.leagueTable?.rows.find((row) => row.teamId === match.awayTeam.id || row.teamName.toLowerCase() === match.awayTeam.name.toLowerCase());
@@ -149,76 +157,40 @@ export default async function MatchDetailPage({ params }: PageProps) {
         )}
       </div>
 
-      <div className="feed-actions" style={{ marginTop: 0 }}>
+      <section className={`match-decision-hero status-${canonical.publicStatus}`} aria-labelledby="public-decision-title">
+        <div>
+          <span className={`badge ${hasValue ? "positive" : canonical.publicStatus === "lean" ? "medium" : canonical.publicStatus === "watchlist" || canonical.publicStatus === "stale" ? "scheduled" : "no-value"}`}>{canonical.publicStatus.replaceAll("_", " ")}</span>
+          <h2 id="public-decision-title">{publicDecisionLabel}</h2>
+          {displayedDecision ? (
+            <div className="match-decision-metrics">
+              <div><span>Market</span><strong>{displayedDecision.marketId.replaceAll("_", " ")}</strong></div>
+              <div><span>Selection</span><strong>{displayedDecision.label}</strong></div>
+              <div><span>Odds</span><strong>{displayedDecision.odds.toFixed(2)}</strong></div>
+              <div><span>Model chance</span><strong>{formatPercent(displayedDecision.modelProbability)}</strong></div>
+              <div><span>Bookmaker fair chance</span><strong>{formatPercent(displayedDecision.noVigImpliedProbability)}</strong></div>
+              <div><span>Edge</span><strong>{formatSignedPercent(displayedDecision.edge)}</strong></div>
+              <div><span>Confidence</span><strong><ConfidenceBadge level={canonical.confidence} /></strong></div>
+              <div><span>Risk</span><strong><RiskBadge level={canonical.risk} /></strong></div>
+            </div>
+          ) : <p className="muted">{canonical.noPickReason ?? "No clear value found."}</p>}
+          <div className="match-risk-list"><strong>Key risks</strong>{publicRisks.length ? <ul>{publicRisks.map((risk) => <li key={risk}>{risk}</li>)}</ul> : <p className="muted small">No extra blocker is attached to the current public decision. Match and price uncertainty still applies.</p>}</div>
+        </div>
+        <div className="match-decision-actions">
+          <AddToSlipButton match={match} prediction={prediction} />
+          <Link className="button" href={`/community?match=${encodeURIComponent(match.id)}&prompt=${encodeURIComponent(`My read on ${match.homeTeam.name} vs ${match.awayTeam.name}: `)}`}>Discuss match</Link>
+        </div>
+      </section>
+
+      <div className="match-detail-actions">
         <FollowTeamButton teamName={match.homeTeam.name} sport={match.sport} />
         <FollowTeamButton teamName={match.awayTeam.name} sport={match.sport} />
       </div>
-      <ShareBar
-        pageContext="match_prediction"
-        matchId={match.id}
-        sport={match.sport}
-        league={match.league.name}
-        title={`${match.homeTeam.name} vs ${match.awayTeam.name} analysis`}
-        text={`⚽ ${match.homeTeam.name} vs ${match.awayTeam.name} — OddsPadi’s analysis leans ${hasValue ? prediction.bestPick.label : leanLabel} (${Math.round((hasValue ? prediction.bestPick.modelProbability : leanProb) * 100)}%). Full analysis:`}
-        url={`/predictions/${encodeURIComponent(match.id)}`}
-      />
-      <Link className="discuss-match-cta" href={`/community?match=${encodeURIComponent(match.id)}&prompt=${encodeURIComponent(`My read on ${match.homeTeam.name} vs ${match.awayTeam.name}: `)}`}>💬 Discuss this match</Link>
+      <ShareBar pageContext="match_prediction" matchId={match.id} sport={match.sport} league={match.league.name} title={`${match.homeTeam.name} vs ${match.awayTeam.name} analysis`} text={`${match.homeTeam.name} vs ${match.awayTeam.name} — OddsPadi: ${publicDecisionLabel}${displayedDecision ? ` (${Math.round(displayedDecision.modelProbability * 100)}% model chance)` : ""}. Full analysis:`} url={`/predictions/${encodeURIComponent(match.id)}`} />
 
       <section className="detail-grid">
         <div className="match-list">
           <div className="panel">
-            <h2>The short version</h2>
-            <div className="metrics-grid" style={{ marginTop: 12 }}>
-              <div className="metric">
-                <span className="metric-label">Best pick</span>
-                <span className="metric-value">{hasValue ? prediction.bestPick.label : "No value bet"}</span>
-              </div>
-              <div className="metric">
-                <span className="metric-label">Model lean</span>
-                <span className="metric-value">
-                  {leanLabel} · {formatPercent(leanProb)}
-                </span>
-              </div>
-              <div className="metric">
-                <span className="metric-label">Value edge</span>
-                <span className="metric-value">
-                  {hasValue ? formatSignedPercent(prediction.bestPick.edge) : hasWinnerOdds ? "None found" : "Needs odds"}
-                </span>
-              </div>
-              <div className="metric">
-                <span className="metric-label">Expected value</span>
-                <span className="metric-value">
-                  {hasValue ? formatSignedPercent(prediction.bestPick.expectedValue) : hasWinnerOdds ? "Not positive" : "Needs odds"}
-                </span>
-              </div>
-              {hasValue ? (
-                <>
-                  <div className="metric">
-                    <span className="metric-label">Confidence</span>
-                    <span className="metric-value">
-                      <ConfidenceBadge level={prediction.confidence} />
-                    </span>
-                  </div>
-                  <div className="metric">
-                    <span className="metric-label">Risk</span>
-                    <span className="metric-value">
-                      <RiskBadge level={prediction.risk} />
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <div className="metric">
-                  <span className="metric-label">Value check</span>
-                  <span className="metric-value" style={{ fontSize: 13, fontWeight: 600 }}>
-                    {hasWinnerOdds ? "No edge at current odds" : "Odds pending"}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="panel">
-            <h2>{winnerTitle}</h2>
+            <h2>Probability comparison</h2>
             <div className="grid-2" style={{ marginTop: 12 }}>
               <ProbabilityBar label={match.homeTeam.name} value={winner?.probabilities.home ?? 0} />
               {match.sport === "football" ? <ProbabilityBar label="Draw" value={winner?.probabilities.draw ?? 0} /> : null}
@@ -228,23 +200,32 @@ export default async function MatchDetailPage({ params }: PageProps) {
           </div>
 
           <div className="panel">
-            <h2>Odds vs our numbers</h2>
+            <h2>Market analysis</h2>
             <p className="muted small">
               &ldquo;Value edge&rdquo; is our probability minus the bookmaker&apos;s fair probability (margin removed).
               Positive edge means the price is better than it should be. Current best edge:{" "}
-              {prediction.bestPick.hasValue ? formatSignedPercent(bestEdge) : "none found"}.
+              {displayedDecision ? formatSignedPercent(bestEdge) : "none found"}.
             </p>
             <OddsTable match={match} prediction={displayPrediction} />
+          </div>
+
+          <div className="panel">
+            <h2>Odds movement and freshness</h2>
+            <div className="metrics-grid results-metrics">
+              <div className="metric"><span className="metric-label">Decision generated</span><span className="metric-value">{new Date(canonical.generatedAt).toLocaleString()}</span></div>
+              <div className="metric"><span className="metric-label">Price expires</span><span className="metric-value">{canonical.expiresAt ? new Date(canonical.expiresAt).toLocaleString() : "Awaiting fresh odds"}</span></div>
+            </div>
+            <p className="muted small">The table above shows the current provider snapshot. Historical line movement is shown only when verified snapshots are available; no movement is inferred from a single price.</p>
           </div>
 
           <PredictionExplanation explanation={prediction.explanation} />
 
           <details className="fold">
-            <summary>🔬 Deep dive — full AI decision breakdown</summary>
+            <summary>Advanced engine audit</summary>
             <div className="fold-body">
               <p className="muted small" style={{ margin: 0 }}>
-                This is the engine&apos;s complete working: every check, every doubt, every guardrail. Perfect if you
-                like to see the maths behind the call.
+                Audit-only detail cannot override the canonical public decision above. Candidate markets below show
+                the engine&apos;s working, including blocked opportunities, but only the canonical status is publishable.
               </p>
               <DecisionEnginePanel decision={displayDecision} />
               <AgentReport report={prediction.agentReport} diagnostics={prediction.diagnostics} />

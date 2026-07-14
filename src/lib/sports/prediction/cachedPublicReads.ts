@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import type { Sport } from "@/lib/sports/types";
-import { getMatchPrediction, getPredictions, sportsProvider, uniqueCountries, uniqueLeagues } from "@/lib/sports/service";
+import { getMatchPrediction, getPredictions, uniqueCountries, uniqueLeagues } from "@/lib/sports/service";
 import { getPublicPredictionHistory } from "@/lib/sports/prediction/history";
 import { toPredictionListRow, type PredictionListRow } from "@/lib/sports/prediction/listRow";
 
@@ -19,17 +19,15 @@ export type PredictionsPageData = { leagues: string[]; countries: string[]; rows
  */
 const readPredictionsPageSnapshot = unstable_cache(
   async (date: string, sport: Sport): Promise<PredictionsPageData> => {
-    const [allMatches, rows] = await Promise.all([
-      sportsProvider.getFixtures(date, sport),
-      getPredictions({ date, sport, storageMode: "preview" })
-    ]);
+    const rows = await getPredictions({ date, sport, providerMode: "live", storageMode: "preview" });
+    const allMatches = rows.map((row) => row.match);
     return {
       leagues: uniqueLeagues(allMatches),
       countries: uniqueCountries(allMatches),
       rows: rows.map(toPredictionListRow)
     };
   },
-  ["predictions-page-snapshot-v1"],
+  ["predictions-page-snapshot-v2-canonical-decision"],
   { revalidate: 120 }
 );
 
@@ -78,6 +76,6 @@ export function getCachedMatchPrediction(matchId: string) {
 
 export const getCachedPublicPredictionHistory = unstable_cache(
   async () => getPublicPredictionHistory(),
-  ["public-prediction-history-v1"],
+  ["public-prediction-history-v2-public-picks"],
   { revalidate: 900 }
 );

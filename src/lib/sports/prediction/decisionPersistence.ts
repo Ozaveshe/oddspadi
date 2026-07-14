@@ -1,6 +1,5 @@
 import { getSupabaseRuntimeStatus, getSupabaseServerClient } from "@/lib/supabase/server";
 import { buildDecisionBrain } from "@/lib/sports/prediction/decisionBrain";
-import { decisionCandidatePick } from "@/lib/sports/prediction/decisionCandidatePick";
 import {
   buildDecisionEvidenceBundle,
   DECISION_EVIDENCE_BUNDLE_SCHEMA_VERSION,
@@ -165,6 +164,7 @@ export function buildDecisionRunInputHash({ match, prediction }: { match: Match;
       contextAdjustment: prediction.contextAdjustment,
       marketPriorAdjustment: prediction.marketPriorAdjustment,
       valueEdges: prediction.valueEdges,
+      canonicalDecision: stableDecisionValue(prediction.canonicalDecision),
       learningProfile: stableDecisionValue(prediction.decision.learningProfile ?? null),
       caseMemory: stableDecisionValue(prediction.decision.caseMemory ?? null),
       historicalDiscipline: stableDecisionValue(prediction.decision.historicalDiscipline)
@@ -255,8 +255,9 @@ function buildPersistedDecisionThinkingTrace({
   decision: DecisionEngineReport;
   brain: ReturnType<typeof buildDecisionBrain>;
 }): PersistedDecisionThinkingTrace {
-  const bestEdge = prediction.bestPick.hasValue ? prediction.bestPick.edge : decision.beliefState.probabilityEdge;
-  const bestExpectedValue = prediction.bestPick.hasValue ? prediction.bestPick.expectedValue : decision.beliefState.expectedValue;
+  const canonicalCandidate = prediction.canonicalDecision.bestPublishedPick ?? prediction.canonicalDecision.bestLean ?? prediction.canonicalDecision.bestWatchlistCandidate;
+  const bestEdge = canonicalCandidate?.edge ?? null;
+  const bestExpectedValue = canonicalCandidate?.expectedValue ?? null;
   const unresolvedDisagreements = decision.committee.unresolvedDisagreements.length;
   const contradictionConcerns = decision.contradictionChecks.filter((item) => item.status !== "clear").length;
   const blockedControlGates = decision.controlPolicy.gates.filter((item) => item.status === "block").length;
@@ -298,10 +299,10 @@ function buildPersistedDecisionThinkingTrace({
   const auditTrail: PersistedDecisionThinkingTrace["auditTrail"] = [
     {
       step: "Model-market edge",
-      outcome: bestEdge != null && bestEdge > 0 && bestExpectedValue != null && bestExpectedValue > 0 ? "supports" : prediction.bestPick.hasValue ? "questions" : "needs-evidence",
+      outcome: bestEdge != null && bestEdge > 0 && bestExpectedValue != null && bestExpectedValue > 0 ? "supports" : "needs-evidence",
       evidence: uniqueStrings(
         [
-          prediction.bestPick.hasValue ? prediction.bestPick.label : "No clear value found",
+          canonicalCandidate?.label ?? prediction.canonicalDecision.noPickReason ?? "No clear value found",
           bestEdge == null ? null : `edge:${bestEdge.toFixed(4)}`,
           bestExpectedValue == null ? null : `ev:${bestExpectedValue.toFixed(4)}`,
           decision.beliefState.summary
@@ -643,6 +644,7 @@ export function buildDecisionRunPayload({
     brain,
     thinkingTrace
   });
+  const canonicalCandidate = prediction.canonicalDecision.bestPublishedPick ?? prediction.canonicalDecision.bestLean ?? prediction.canonicalDecision.bestWatchlistCandidate;
 
   return {
     fixture_external_id: match.id,
@@ -654,7 +656,7 @@ export function buildDecisionRunPayload({
     confidence: decision.confidence,
     risk: decision.risk,
     decision_score: decision.decisionScore,
-    recommended_selection: decision.recommendedSelection,
+    recommended_selection: canonicalCandidate?.label ?? null,
     summary: decision.summary,
     health: decision.health,
     calibration: decision.calibration,
@@ -679,8 +681,9 @@ export function buildDecisionRunPayload({
       marketPriorAdjustment: prediction.marketPriorAdjustment,
       markets: prediction.markets,
       valueEdges: prediction.valueEdges,
+      canonicalDecision: prediction.canonicalDecision,
       bestPick: prediction.bestPick,
-      candidatePick: decisionCandidatePick(prediction),
+      candidatePick: prediction.canonicalDecision.bestPublishedPick,
       caseMemory: decision.caseMemory,
       beliefState: decision.beliefState,
       deliberation: decision.deliberation,

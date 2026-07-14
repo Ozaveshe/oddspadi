@@ -47,7 +47,7 @@ export function buildPredictionAgentReport(
 ): PredictionAgentReport {
   const strongestEdges = [...valueEdges].sort((a, b) => b.edge - a.edge).slice(0, 3);
   const cautions: string[] = [
-    "No prediction is guaranteed; this is statistical analysis only.",
+    "Sports outcomes remain uncertain; this is statistical analysis only.",
     "Do not treat positive edge as a requirement to place a bet."
   ];
 

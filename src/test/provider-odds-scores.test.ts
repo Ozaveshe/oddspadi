@@ -1,7 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProviderBackedSportsDataProvider } from "@/lib/sports/providers/providerBackedProvider";
 
 describe("The Odds API completed score bridge", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T12:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it.each([
     ["basketball", "basketball_nba_summer_league", "Miami Heat", "Milwaukee Bucks", 91, 84],
     ["tennis", "tennis_atp_wimbledon", "Jannik Sinner", "Novak Djokovic", 3, 1]

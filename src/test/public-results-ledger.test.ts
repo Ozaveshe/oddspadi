@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { getPublicPredictionHistory, publicHistoryItemFromOutcome, publicHistoryItemFromProjection } from "@/lib/sports/prediction/history";
+import { getPublicPredictionHistory, publicHistoryItemFromPublicPickRow } from "@/lib/sports/prediction/history";
+
+const row = {
+  id: "pick-1", fixture_id: "api-football:1", sport: "football", league: "NPFL", country: "Nigeria",
+  home_team: "Kano Pillars", away_team: "Enyimba", kickoff_at: "2026-07-12T18:00:00Z", market: "match_winner",
+  selection: "home", selection_label: "Kano Pillars", odds: "1.90", model_version: "football-v1", model_probability: "0.61",
+  implied_probability: "0.526", no_vig_probability: "0.51", value_edge: "0.10", expected_value: "0.159",
+  confidence: "medium", risk: "medium", published_at: "2026-07-12T10:00:00Z", status: "settled" as const,
+  settlement_status: "settled" as const, result: "won" as const, settlement_reason: "Final score 2-1.",
+  settled_at: "2026-07-12T20:00:00Z", closing_odds: "1.82", closing_line_value: "0.043956", created_at: "2026-07-12T10:00:00Z"
+};
 
 describe("public results ledger", () => {
   it("returns unavailable with no demo rows when storage is not configured", async () => {
@@ -9,26 +19,15 @@ describe("public results ledger", () => {
     expect(ledger.reason).toContain("not configured");
   });
 
-  it("maps stored multi-sport provenance into the public record", () => {
-    const item = publicHistoryItemFromOutcome({
-      id: "outcome-1", fixture_external_id: "the-odds-api:event-1", sport: "basketball", market: "match_winner",
-      selection: "home", model_probability: "0.61", value_edge: "0.08", odds: "1.90", result: "won", source: "settlement-worker",
-      settled_at: "2026-07-12T20:00:00Z", created_at: "2026-07-12T10:00:00Z",
-      metadata: { homeTeam: "Lagos Legends", awayTeam: "Kigali Kings", league: "BAL", country: "Africa", kickoffTime: "2026-07-12T18:00:00Z", finalAction: "consider", finalConfidence: "high", paperOnly: true, recommendedSelection: "Lagos Legends" }
-    });
-    expect(item).toMatchObject({ sport: "basketball", market: "match_winner", match: "Lagos Legends vs Kigali Kings", league: "BAL", result: "won", paperOnly: true, recordSource: "settlement-worker" });
+  it("maps an explicitly published public pick into the public record", () => {
+    const item = publicHistoryItemFromPublicPickRow(row);
+    expect(item).toMatchObject({ sport: "football", market: "match_winner", match: "Kano Pillars vs Enyimba", result: "won", recordSource: "public-pick-ledger" });
+    expect(item.closingLineValue).toBeCloseTo(0.043956);
   });
 
-  it("preserves void outcomes in the public projection ledger", () => {
-    const item = publicHistoryItemFromProjection({
-      id: "outcome-void", fixture_external_id: "the-odds-api:event-void", sport: "football", market: "match_winner",
-      selection: "home", recommended_selection: null, model_probability: "0.58", value_edge: "0.04", odds: "1.80", result: "void",
-      league: "NPFL", country: "Nigeria", home_team: "Kano Pillars", away_team: "Enyimba", kickoff_at: "2026-07-12T18:00:00Z",
-      engine_action: "consider", confidence: "medium", paper_only: true, record_source: "settlement-worker",
-      settled_at: "2026-07-12T20:00:00Z", created_at: "2026-07-12T10:00:00Z"
-    });
-
+  it("preserves void outcomes and their settlement reason", () => {
+    const item = publicHistoryItemFromPublicPickRow({ ...row, id: "pick-void", status: "void", settlement_status: "void", result: "void", settlement_reason: "Provider marked the match cancelled." });
     expect(item.result).toBe("void");
-    expect(item.market).toBe("match_winner");
+    expect(item.settlementReason).toContain("cancelled");
   });
 });

@@ -3,47 +3,45 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { AccountIcon, BallIcon, CommunityIcon, HistoryIcon, HomeIcon, LiveIcon, MoreIcon } from "./NavIcons";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browserClient";
+import { BallIcon, HistoryIcon, HomeIcon, LiveIcon, MoreIcon } from "./NavIcons";
 
 const desktopItems = [
   { href: "/", label: "Home" },
-  { href: "/live-scores", label: "Live Scores", live: true, prefetch: false },
+  { href: "/predictions/today", label: "Tips", prefetch: false },
   { href: "/predictions", label: "Predictions", prefetch: false },
-  { href: "/predictions/value-picks", label: "Value Picks", prefetch: false },
-  { href: "/predictions/decision-engine", label: "AI Engine", prefetch: false },
-  { href: "/community", label: "Community", prefetch: false },
+  { href: "/live-scores", label: "Live Scores", live: true, prefetch: false },
   { href: "/predictions/history", label: "Results" },
-  { href: "/season-outlooks", label: "Seasons" },
   { href: "/news", label: "News" },
-  { href: "/forums", label: "Forums", prefetch: false }
+  { href: "/predictions/decision-engine", label: "Engine", prefetch: false }
 ];
 
 const tabItems = [
   { href: "/", label: "Home", Icon: HomeIcon },
+  { href: "/predictions/today", label: "Tips", Icon: BallIcon, prefetch: false },
   { href: "/live-scores", label: "Live", Icon: LiveIcon, prefetch: false },
-  { href: "/predictions", label: "Predictions", Icon: BallIcon, prefetch: false },
-  { href: "/community", label: "Community", Icon: CommunityIcon, prefetch: false },
   { href: "/predictions/history", label: "Results", Icon: HistoryIcon }
 ];
 
 const moreSheetItems = [
+  { href: "/predictions/week", label: "Weekly" },
   { href: "/predictions/value-picks", label: "Value Picks" },
-  { href: "/predictions/decision-engine", label: "AI Engine" },
-  { href: "/predictions/bet-slip", label: "Slip Check" },
-  { href: "/season-outlooks", label: "Seasons" },
-  { href: "/news", label: "News" },
+  { href: "/predictions/league/premier-league/table", label: "Tables" },
   { href: "/forums", label: "Forums" },
-  { href: "/account", label: "Account" },
-  { href: "/about", label: "About OddsPadi" }
+  { href: "/news", label: "News" },
+  { href: "/predictions/decision-engine", label: "Engine" },
+  { href: "/predictions/bet-slip", label: "Slip Check" }
 ];
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
+  if (href === "/predictions/today") return pathname === "/tips" || pathname.startsWith("/predictions/today") || pathname.startsWith("/predictions/tomorrow");
   if (href === "/predictions") {
     return (
       pathname === "/predictions" ||
       (pathname.startsWith("/predictions/") &&
+        !pathname.startsWith("/predictions/today") &&
+        !pathname.startsWith("/predictions/tomorrow") &&
+        !pathname.startsWith("/predictions/week") &&
         !pathname.startsWith("/predictions/value-picks") &&
         !pathname.startsWith("/predictions/history") &&
         !pathname.startsWith("/predictions/decision-engine"))
@@ -52,34 +50,8 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-/** True once we know a Supabase session exists; null while unknown (first paint
- *  stays deterministic for SSR). */
-function useSignedIn(): boolean | null {
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
-  useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    if (!supabase) {
-      setSignedIn(false);
-      return;
-    }
-    let alive = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (alive) setSignedIn(Boolean(data.session));
-    });
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (alive) setSignedIn(Boolean(session));
-    });
-    return () => {
-      alive = false;
-      subscription.subscription.unsubscribe();
-    };
-  }, []);
-  return signedIn;
-}
-
 export function DesktopNavLinks() {
   const pathname = usePathname() ?? "/";
-  const signedIn = useSignedIn();
 
   return (
     <div className="nav-links">
@@ -94,9 +66,6 @@ export function DesktopNavLinks() {
           {item.live ? <span className="nav-live-dot" aria-hidden="true" /> : null}
         </Link>
       ))}
-      <Link href="/account" prefetch={false} aria-current={isActive(pathname, "/account") ? "page" : undefined}>
-        {signedIn ? "My account" : "Sign in"}
-      </Link>
     </div>
   );
 }
@@ -105,6 +74,7 @@ export function MobileTabBar() {
   const pathname = usePathname() ?? "/";
   const [moreOpen, setMoreOpen] = useState(false);
   const moreButtonRef = useRef<HTMLButtonElement | null>(null);
+  const moreSheetRef = useRef<HTMLDivElement | null>(null);
   const moreActive = moreSheetItems.some((item) => isActive(pathname, item.href));
 
   // Close the sheet whenever navigation happens.
@@ -114,10 +84,25 @@ export function MobileTabBar() {
 
   useEffect(() => {
     if (!moreOpen) return;
+    moreSheetRef.current?.querySelector<HTMLAnchorElement>("a")?.focus();
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setMoreOpen(false);
         moreButtonRef.current?.focus();
+        return;
+      }
+      if (event.key === "Tab") {
+        const focusable = Array.from(moreSheetRef.current?.querySelectorAll<HTMLElement>("a, button") ?? []);
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (!first || !last) return;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -128,7 +113,8 @@ export function MobileTabBar() {
     <>
       {moreOpen ? <div className="tabbar-sheet-backdrop" onClick={() => setMoreOpen(false)} aria-hidden="true" /> : null}
       {moreOpen ? (
-        <div className="tabbar-sheet" role="region" aria-label="More pages">
+        <div className="tabbar-sheet" id="mobile-more-menu" ref={moreSheetRef} role="dialog" aria-modal="true" aria-labelledby="mobile-more-title">
+          <div className="tabbar-sheet-header"><strong id="mobile-more-title">More from OddsPadi</strong><button type="button" onClick={() => { setMoreOpen(false); moreButtonRef.current?.focus(); }} aria-label="Close more menu">Close</button></div>
           {moreSheetItems.map((item) => (
             <Link
               href={item.href}
@@ -152,6 +138,7 @@ export function MobileTabBar() {
           className="tabbar-more"
           type="button"
           ref={moreButtonRef}
+          aria-controls="mobile-more-menu"
           aria-expanded={moreOpen}
           aria-current={!moreOpen && moreActive ? "true" : undefined}
           onClick={() => setMoreOpen((open) => !open)}

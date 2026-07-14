@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProviderBackedSportsDataProvider } from "@/lib/sports/providers/providerBackedProvider";
 
 const basketballEvent = {
@@ -39,6 +39,15 @@ const basketballEvent = {
 };
 
 describe("provider odds quota guard", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-13T12:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("uses The Odds API as a real basketball fixture source without an API-Basketball key", async () => {
     const calls: string[] = [];
     const provider = new ProviderBackedSportsDataProvider({

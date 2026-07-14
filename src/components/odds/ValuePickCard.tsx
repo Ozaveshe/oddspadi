@@ -9,8 +9,8 @@ import { AffiliateBookmakerLink } from "./AffiliateBookmakerLink";
 import { bookmakerDisplayName } from "@/lib/affiliate/bookmakerLinks";
 
 export function ValuePickCard({ match, prediction }: { match: MatchSummary; prediction: PredictionSummary }) {
-  const bestPick = prediction.bestPick;
-  if (!bestPick.hasValue) return null;
+  const bestPick = prediction.canonicalDecision.bestPublishedPick;
+  if (prediction.canonicalDecision.publicStatus !== "value_pick" || !bestPick) return null;
   const pricedMarket = match.oddsMarkets.find((market) => market.id === bestPick.marketId);
 
   return (

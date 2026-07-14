@@ -1,7 +1,13 @@
 import type { BestPickResult, Prediction } from "@/lib/sports/types";
+import { bestPickFromCanonicalDecision } from "./canonicalDecision";
 
-export function decisionCandidatePick(prediction: Pick<Prediction, "bestPick" | "decision">): BestPickResult {
-  if (prediction.bestPick.hasValue) return prediction.bestPick;
+/**
+ * Internal shadow-learning candidate. Public UI, public persistence, and the
+ * results ledger must use prediction.canonicalDecision instead.
+ */
+export function decisionCandidatePick(prediction: Pick<Prediction, "canonicalDecision" | "decision">): BestPickResult {
+  const published = bestPickFromCanonicalDecision(prediction.canonicalDecision);
+  if (published.hasValue) return published;
 
   const candidate = prediction.decision.oddsIntelligence.bestActionableSelection;
   if (!candidate || candidate.edge <= 0 || candidate.expectedValue <= 0) {

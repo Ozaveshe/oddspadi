@@ -2,13 +2,9 @@ import type { DecisionEngineReport, Match, Prediction, ValueEdge } from "@/lib/s
 import type { PredictionOutcomeInput } from "@/lib/sports/prediction/decisionOutcomes";
 
 function strongestEvaluationEdge(prediction: Prediction): ValueEdge | null {
-  const matchWinner = prediction.valueEdges.filter((edge) => edge.marketId === "match_winner");
-  const candidates = matchWinner.length ? matchWinner : prediction.valueEdges;
-  return candidates.slice().sort((left, right) => {
-    if (right.modelProbability !== left.modelProbability) return right.modelProbability - left.modelProbability;
-    if (right.expectedValue !== left.expectedValue) return right.expectedValue - left.expectedValue;
-    return left.selectionId.localeCompare(right.selectionId);
-  })[0] ?? null;
+  return prediction.canonicalDecision.bestPublishedPick ??
+    prediction.canonicalDecision.bestLean ??
+    prediction.canonicalDecision.bestWatchlistCandidate;
 }
 
 export function buildAutonomousPendingOutcome({
@@ -26,6 +22,13 @@ export function buildAutonomousPendingOutcome({
 }): PredictionOutcomeInput | null {
   const edge = strongestEvaluationEdge(prediction);
   if (!edge) return null;
+  const publicAction = prediction.canonicalDecision.publicStatus === "value_pick"
+    ? "consider"
+    : prediction.canonicalDecision.publicStatus === "lean" ||
+        prediction.canonicalDecision.publicStatus === "watchlist" ||
+        prediction.canonicalDecision.publicStatus === "stale"
+      ? "monitor"
+      : "avoid";
 
   return {
     decisionRunId,
@@ -54,13 +57,18 @@ export function buildAutonomousPendingOutcome({
       oddsProvider: match.dataSource?.oddsProvider ?? null,
       oddsProviderEventId: match.dataSource?.oddsProviderEventId ?? null,
       deterministicAction: prediction.decision.action,
-      finalAction: finalDecision.action,
-      finalVerdict: finalDecision.verdict,
-      finalConfidence: finalDecision.confidence,
-      finalRisk: finalDecision.risk,
-      recommendedSelection: finalDecision.recommendedSelection,
-      hadValuePick: prediction.bestPick.hasValue,
-      evaluationPolicy: prediction.bestPick.hasValue ? "selected-value-pick" : "highest-match-winner-probability"
+      finalAction: publicAction,
+      finalVerdict: prediction.canonicalDecision.publicStatus,
+      finalConfidence: prediction.canonicalDecision.confidence,
+      finalRisk: prediction.canonicalDecision.risk,
+      agentFinalAction: finalDecision.action,
+      agentFinalVerdict: finalDecision.verdict,
+      agentFinalConfidence: finalDecision.confidence,
+      agentFinalRisk: finalDecision.risk,
+      recommendedSelection: edge.label,
+      hadValuePick: prediction.canonicalDecision.publicStatus === "value_pick",
+      publicStatus: prediction.canonicalDecision.publicStatus,
+      evaluationPolicy: "canonical-decision-summary"
     }
   };
 }

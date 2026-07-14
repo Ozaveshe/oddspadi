@@ -1,158 +1,172 @@
 import type { Metadata } from "next";
-import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
-import { getHistorySummary } from "@/lib/sports/prediction/history";
-import { getCachedPublicPredictionHistory } from "@/lib/sports/prediction/cachedPublicReads";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { ShareBar } from "@/components/share/ShareBar";
+import { TipsSharePreview } from "@/components/odds/TipsSharePreview";
+import { getCachedPublicPredictionHistory } from "@/lib/sports/prediction/cachedPublicReads";
+import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
+import {
+  filterPublicPredictionHistory,
+  getHistorySummary,
+  getHistoryWindowSummaries
+} from "@/lib/sports/prediction/history";
+import { getYesterdayResultsProduct } from "@/lib/sports/tips/product";
+import { formatYesterdayResultsPost } from "@/lib/sports/tips/social";
 
-// Keep the route cache aligned with ODDSPADI_PUBLIC_HISTORY_CACHE_TTL_MS.
-export const revalidate = 900;
+export const revalidate = 300;
 
 export const metadata: Metadata = {
-  title: "Prediction Results & Accuracy — Wins and Losses",
-  description:
-    "OddsPadi shows every prediction result — wins and losses — with accuracy and a simple ROI simulation. Honest records, because trust is earned.",
+  title: "OddsPadi Results — Accuracy & Settlement",
+  description: "OddsPadi's public-pick ledger shows published picks only, with settlement reasons, wins, losses, ROI simulation, and provider status.",
   alternates: { canonical: "/predictions/history" },
   openGraph: {
     title: "Prediction Results & Accuracy — OddsPadi",
-    description: "Every prediction result, wins and losses included. Honest records, because trust is earned.",
+    description: "Published public picks only, with every result and pending reason visible.",
     url: "/predictions/history",
     type: "website"
   }
 };
 
 type PageProps = { searchParams?: Promise<Record<string, string | string[] | undefined>> };
+const single = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
 
-function single(value: string | string[] | undefined) { return Array.isArray(value) ? value[0] : value; }
+function badgeClass(result: string, settlementStatus: string) {
+  if (result === "won") return "positive";
+  if (result === "lost") return "no-value";
+  if (settlementStatus === "needs_manual_review" || settlementStatus === "provider_missing") return "medium";
+  return "scheduled";
+}
 
 export default async function PredictionHistoryPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
-  const sport = single(params.sport) ?? "all";
-  const result = single(params.result) ?? "all";
-  const range = single(params.range) ?? "30";
-  const ledger = await getCachedPublicPredictionHistory();
-  const cutoff = range === "all" ? null : Date.now() - Number(range) * 86_400_000;
-  const history = ledger.items.filter(item =>
-    (sport === "all" || item.sport === sport) &&
-    (result === "all" || item.result === result) &&
-    (!cutoff || new Date(item.createdAt).getTime() >= cutoff)
-  );
+  const filters = {
+    sport: single(params.sport) ?? "all",
+    result: single(params.result) ?? "all",
+    range: single(params.range) ?? "30",
+    market: single(params.market) ?? "all",
+    publicStatus: single(params.publicStatus) ?? "all",
+    settlementStatus: single(params.settlementStatus) ?? "all",
+    confidence: single(params.confidence) ?? "all",
+    edge: (single(params.edge) ?? "all") as "all" | "positive" | "negative"
+  };
+  const [ledger, yesterday] = await Promise.all([getCachedPublicPredictionHistory(), getYesterdayResultsProduct()]);
+  const history = filterPublicPredictionHistory(ledger.items, filters);
   const summary = getHistorySummary(history);
-  const pending = history.filter(item => item.result === "pending").length;
-  const breakdown = (key: "league" | "market") => Array.from(history.reduce((groups, item) => { const label = key === "league" ? item.league ?? "Unlabelled league" : item.market || "Unlabelled market"; const rows = groups.get(label) ?? []; rows.push(item); groups.set(label, rows); return groups; }, new Map<string, typeof history>())).map(([label, items]) => ({ label, ...getHistorySummary(items) })).filter((row) => row.settled > 0).sort((a, b) => b.settled - a.settled);
-  const leagueBreakdown = breakdown("league");
-  const marketBreakdown = breakdown("market");
-  const datasetJsonLd = { "@context": "https://schema.org", "@type": "Dataset", name: "OddsPadi public prediction results ledger", description: "A complete public ledger of stored OddsPadi prediction outcomes, including wins and losses.", url: "https://oddspadi.com/predictions/history", temporalCoverage: history.length ? `${history.at(-1)?.date}/${history[0]?.date}` : undefined, dateModified: ledger.generatedAt, measurementTechnique: "One-unit simulation across every won and lost stored pick; pushes and voids remain visible but are excluded from accuracy and ROI.", variableMeasured: ["result", "model probability", "odds", "league", "market"] };
+  const windows = getHistoryWindowSummaries(ledger.items);
+  const markets = [...new Set(ledger.items.map((item) => item.market))].sort();
+  const settlementHealth = {
+    waiting: ledger.items.filter((item) => ["waiting_kickoff", "match_live"].includes(item.settlementStatus)).length,
+    provider: ledger.items.filter((item) => ["provider_missing", "awaiting_final_score"].includes(item.settlementStatus)).length,
+    market: ledger.items.filter((item) => item.settlementStatus === "awaiting_market_resolution").length,
+    review: ledger.items.filter((item) => item.settlementStatus === "needs_manual_review").length
+  };
+  const breakdown = (key: "league" | "market") => Array.from(history.reduce((groups, item) => {
+    const label = key === "league" ? item.league ?? "Unlabelled league" : item.market;
+    groups.set(label, [...(groups.get(label) ?? []), item]);
+    return groups;
+  }, new Map<string, typeof history>())).map(([label, items]) => ({ label, ...getHistorySummary(items) })).filter((row) => row.settled > 0).sort((a, b) => b.settled - a.settled);
+  const datasetJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Dataset",
+    name: "OddsPadi published public-pick results ledger",
+    description: "Provider-backed value picks that were actually published, including settlement state and results.",
+    url: "https://oddspadi.com/predictions/history",
+    dateModified: ledger.generatedAt,
+    measurementTechnique: "One-unit simulation across settled published public picks only; internal model runs are excluded.",
+    variableMeasured: ["result", "settlement status", "model probability", "odds", "value edge", "closing line value"]
+  };
 
-  return (
-    <main id="main" className="container">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetJsonLd) }} />
-      <div className="page-heading">
-        <h1>
-          Our results — <span className="accent">wins and losses</span>
-        </h1>
-        <p>
-          Anyone can screenshot their wins. We keep everything: every pick, every outcome, good or bad. Past results
-          never guarantee future ones — but they do show you how we&apos;re doing.
-        </p>
+  return <main id="main" className="container">
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetJsonLd) }} />
+    <div className="page-heading">
+      <h1>Public results — <span className="accent">published picks only</span></h1>
+      <p>Internal model runs, demos, watchlists, and negative-edge analyses never count toward this record. Every unresolved pick shows exactly what it is waiting for.</p>
+    </div>
+
+    <section className="results-proof-strip">
+      <div><span>Repository</span><strong>{ledger.source === "live" ? "Public ledger connected" : "Unavailable"}</strong></div>
+      <div><span>Public picks</span><strong>{summary.totalPublicPicks}</strong></div>
+      <div><span>Settled</span><strong>{summary.settled}</strong></div>
+      <div><span>Pending</span><strong>{summary.pending}</strong></div>
+      <div><span>Manual review</span><strong>{summary.manualReview}</strong></div>
+    </section>
+
+    <section className="results-window-grid section" aria-label="Results periods">
+      {windows.map((window) => <article className="panel" key={window.id}>
+        <span className="section-kicker">{window.label}</span>
+        <strong className="results-window-total">{window.summary.totalPublicPicks} pick{window.summary.totalPublicPicks === 1 ? "" : "s"}</strong>
+        <span className="small muted">{window.summary.settled} settled · {formatPercent(window.summary.accuracy)} accuracy</span>
+      </article>)}
+    </section>
+
+    <section className="grid-2 section" aria-label="Results scorecard">
+      <div className="panel">
+        <h2>Credibility scorecard</h2>
+        <div className="metrics-grid results-metrics">
+          <div className="metric"><span className="metric-label">Wins / losses</span><span className="metric-value">{summary.wins} / {summary.losses}</span></div>
+          <div className="metric"><span className="metric-label">Pushes / voids</span><span className="metric-value">{summary.pushes} / {summary.voids}</span></div>
+          <div className="metric"><span className="metric-label">Accuracy</span><span className="metric-value">{formatPercent(summary.accuracy)}</span></div>
+          <div className="metric"><span className="metric-label">ROI simulation</span><span className="metric-value">{formatSignedPercent(summary.roi)}</span></div>
+          <div className="metric"><span className="metric-label">Average odds</span><span className="metric-value">{summary.averageOdds ? formatOdds(summary.averageOdds) : "—"}</span></div>
+          <div className="metric"><span className="metric-label">Average CLV</span><span className="metric-value">{summary.averageClosingLineValue === null ? "Not available" : formatSignedPercent(summary.averageClosingLineValue)}</span></div>
+        </div>
       </div>
+      <div className="notice"><strong>What counts:</strong> only provider-backed canonical decisions that cleared the public value-pick threshold at publication. Accuracy uses wins and losses; pushes and voids remain visible but do not change accuracy.</div>
+    </section>
 
-      <section className="results-proof-strip">
-        <div><span>Repository</span><strong>{ledger.source === "live" ? "Connected" : "Unavailable"}</strong></div>
-        <div><span>Visible records</span><strong>{history.length}</strong></div>
-        <div><span>Awaiting settlement</span><strong>{pending}</strong></div>
-        <div><span>Generated</span><strong>{new Date(ledger.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</strong></div>
-      </section>
+    <section className="section" aria-labelledby="settlement-health-title">
+      <div className="section-title"><div><span className="section-kicker">Settlement health</span><h2 id="settlement-health-title">Why some results are still pending</h2></div></div>
+      <div className="results-proof-strip">
+        <div><span>Waiting / live</span><strong>{settlementHealth.waiting}</strong></div>
+        <div><span>Provider score gap</span><strong>{settlementHealth.provider}</strong></div>
+        <div><span>Market resolution</span><strong>{settlementHealth.market}</strong></div>
+        <div><span>Manual review</span><strong>{settlementHealth.review}</strong></div>
+      </div>
+      <details className="fold results-counting">
+        <summary>How results are counted</summary>
+        <div className="fold-body"><p>Only selections that were publicly published as value picks enter this ledger. Wins and losses determine accuracy. Pushes and voids stay visible but do not change it. Pending picks remain pending until a provider final score and the market&apos;s settlement rule can be verified.</p></div>
+      </details>
+    </section>
 
-      {leagueBreakdown.length || marketBreakdown.length ? <section className="grid-2 section" aria-label="Accuracy breakdowns">
-        {[{ title: "Accuracy by league", rows: leagueBreakdown }, { title: "Accuracy by market", rows: marketBreakdown }].map((group) => <div className="panel" key={group.title}><h2>{group.title}</h2>{group.rows.length ? <div className="breakdown-list">{group.rows.map((row) => <div key={row.label}><span>{row.label}</span><strong>{formatPercent(row.accuracy)} <small>({row.wins}–{row.losses})</small></strong></div>)}</div> : <p className="muted">No settled rows are labelled for this breakdown yet.</p>}</div>)}
-      </section> : null}
+    <ShareBar
+      pageContext="results_ledger"
+      title="OddsPadi public results ledger"
+      text={`Published record: ${formatPercent(summary.accuracy)} accuracy across ${summary.settled} settled public picks. Internal model runs are excluded:`}
+      url="/predictions/history"
+    />
 
-      <ShareBar
-        pageContext="results_ledger"
-        title="OddsPadi public results ledger"
-        text={`Our record: ${Math.round(summary.accuracy * 100)}% accuracy on ${summary.settled} settled picks. Every result stays visible — analysis, not guaranteed tips:`}
-        url="/predictions/history"
-      />
+    <form className="results-filters" method="get">
+      <label>Sport<select name="sport" defaultValue={filters.sport}><option value="all">All sports</option><option value="football">Football</option><option value="basketball">Basketball</option><option value="tennis">Tennis</option></select></label>
+      <label>Date range<select name="range" defaultValue={filters.range}><option value="1">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="all">All time</option></select></label>
+      <label>Result<select name="result" defaultValue={filters.result}><option value="all">All results</option><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="push">Push</option><option value="void">Void</option></select></label>
+      <label>Market<select name="market" defaultValue={filters.market}><option value="all">All markets</option>{markets.map((market) => <option value={market} key={market}>{market.replaceAll("_", " ")}</option>)}</select></label>
+      <label>Public status<select name="publicStatus" defaultValue={filters.publicStatus}><option value="all">All public states</option><option value="published">Published</option><option value="stale">Stale</option><option value="suspended">Suspended</option><option value="settled">Settled</option><option value="void">Void</option></select></label>
+      <label>Settlement<select name="settlementStatus" defaultValue={filters.settlementStatus}><option value="all">All settlement states</option><option value="waiting_kickoff">Waiting kickoff</option><option value="match_live">Match live</option><option value="awaiting_final_score">Final score pending</option><option value="awaiting_market_resolution">Market resolution pending</option><option value="provider_missing">Provider missing</option><option value="needs_manual_review">Manual review</option><option value="settled">Settled</option><option value="void">Void</option></select></label>
+      <label>Confidence<select name="confidence" defaultValue={filters.confidence}><option value="all">All confidence</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+      <label>Edge<select name="edge" defaultValue={filters.edge}><option value="all">All edges</option><option value="positive">Positive only</option><option value="negative">Negative only</option></select></label>
+      <button className="button primary" type="submit">Apply filters</button>
+    </form>
 
-      <form className="results-filters" method="get">
-        <label>Sport<select name="sport" defaultValue={sport}><option value="all">All sports</option><option value="football">Football</option><option value="basketball">Basketball</option><option value="tennis">Tennis</option></select></label>
-        <label>Outcome<select name="result" defaultValue={result}><option value="all">All outcomes</option><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="push">Push</option><option value="void">Void</option></select></label>
-        <label>Period<select name="range" defaultValue={range}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="all">All stored</option></select></label>
-        <button className="button primary" type="submit">Apply filters</button>
-      </form>
+    <TipsSharePreview formats={[{ id: "yesterday-results", label: "Yesterday's Results", text: formatYesterdayResultsPost(yesterday) }]} />
 
-      <section className="grid-2 section">
-        <div className="panel">
-          <h2>The scoreboard so far</h2>
-          <div className="metrics-grid" style={{ marginTop: 12 }}>
-            <div className="metric">
-              <span className="metric-label">Settled picks</span>
-              <span className="metric-value">{summary.settled}</span>
-            </div>
-            <div className="metric">
-              <span className="metric-label">Wins / losses</span>
-              <span className="metric-value">
-                {summary.wins} / {summary.losses}
-              </span>
-            </div>
-            <div className="metric">
-              <span className="metric-label">Accuracy</span>
-              <span className="metric-value">{formatPercent(summary.accuracy)}</span>
-            </div>
-            <div className="metric">
-              <span className="metric-label">ROI simulation</span>
-              <span className="metric-value">{formatSignedPercent(summary.roi)}</span>
-            </div>
-          </div>
-        </div>
-        <div className="notice">
-          <strong>How to read ROI:</strong> we simulate placing one unit on every settled pick. It&apos;s a simple
-          honesty check on our value maths — not financial advice, and not a promise of future returns.
-        </div>
-      </section>
+    {breakdown("league").length || breakdown("market").length ? <section className="grid-2 section" aria-label="Accuracy breakdowns">
+      {[{ title: "Accuracy by league", rows: breakdown("league") }, { title: "Accuracy by market", rows: breakdown("market") }].map((group) => <div className="panel" key={group.title}><h2>{group.title}</h2><div className="breakdown-list">{group.rows.map((row) => <div key={row.label}><span>{row.label}</span><strong>{formatPercent(row.accuracy)} <small>({row.wins}–{row.losses})</small></strong></div>)}</div></div>)}
+    </section> : null}
 
-      <p className="live-meta-row">
-        <span className={`badge ${ledger.source === "live" ? "positive" : "no-value"}`}>
-          {ledger.source === "live" ? "Live results ledger" : "Results unavailable"}
-        </span>
-        {ledger.source === "live" ? "Latest stored picks and settlement outcomes from the OddsPadi engine." : ledger.reason}
-      </p>
+    <p className="live-meta-row"><span className={`badge ${ledger.source === "live" ? "positive" : "no-value"}`}>{ledger.source === "live" ? "Published-pick ledger" : "Results unavailable"}</span>{ledger.source === "live" ? `Updated ${new Date(ledger.generatedAt).toLocaleString()}.` : ledger.reason}</p>
 
-      {ledger.source === "unavailable" ? <div className="empty-state"><div className="empty-emoji">📒</div><h2>We can&apos;t read the results ledger</h2><p className="muted">No preview wins are substituted. The daily results automation will retry the repository and report the configuration fault.</p></div> : history.length ? <div className="table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th scope="col">Date</th>
-              <th scope="col">Sport</th>
-              <th scope="col">Match</th>
-              <th scope="col">Pick</th>
-              <th scope="col">Odds</th>
-              <th scope="col">Model</th>
-              <th scope="col">Edge</th>
-              <th scope="col">Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {history.map((item) => (
-              <tr key={item.id}>
-                <td>{item.date}</td>
-                <td><span className="badge scheduled">{item.sport}</span></td>
-                <td><strong>{item.match}</strong>{item.league ? <><br/><span className="small muted result-league-line">{item.country ? <CountryFlag country={item.country} size={15} /> : null}{item.league}{item.country ? ` · ${item.country}` : ""}</span></> : null}</td>
-                <td>{item.pick}</td>
-                <td>{formatOdds(item.odds)}</td>
-                <td>{formatPercent(item.modelProbability)}</td>
-                <td>{formatSignedPercent(item.edge)}</td>
-                <td>
-                  <span className={`badge ${item.result === "won" ? "positive" : item.result === "lost" ? "no-value" : "scheduled"}`}>
-                    {item.result}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div> : <div className="empty-state"><div className="empty-emoji">🔎</div><h2>No stored picks match these filters</h2><p className="muted">Try a wider period or another sport. The page does not fill gaps with sample results.</p></div>}
-    </main>
-  );
+    {ledger.source === "unavailable" ? <div className="empty-state"><div className="empty-emoji">📒</div><h2>We can&apos;t read the public ledger</h2><p className="muted">No internal, preview, or demo results are substituted. Settlement automation will retry the repository.</p></div> : history.length ? <div className="table-wrap">
+      <table className="data-table results-ledger-table">
+        <thead><tr><th>Date</th><th>Sport</th><th>Match</th><th>Published pick</th><th>Odds</th><th>Edge / EV</th><th>Status</th></tr></thead>
+        <tbody>{history.map((item) => <tr key={item.id}>
+          <td>{item.date}</td>
+          <td><span className="badge scheduled">{item.sport}</span></td>
+          <td><strong>{item.match}</strong>{item.league ? <><br/><span className="small muted result-league-line">{item.country ? <CountryFlag country={item.country} size={15} /> : null}{item.league}{item.country ? ` · ${item.country}` : ""}</span></> : null}</td>
+          <td>{item.pick}<br/><span className="small muted">{item.market.replaceAll("_", " ")} · {item.confidence} confidence</span></td>
+          <td>{formatOdds(item.odds)}{item.closingOdds ? <><br/><span className="small muted">Close {formatOdds(item.closingOdds)}</span></> : null}</td>
+          <td>{formatSignedPercent(item.edge)}<br/><span className="small muted">EV {formatSignedPercent(item.expectedValue)}</span></td>
+          <td><span className={`badge ${badgeClass(item.result, item.settlementStatus)}`}>{item.result === "pending" ? item.pendingReasonLabel ?? "Pending" : item.result}</span>{item.result === "pending" ? <p className="small muted settlement-reason">{item.settlementReason}</p> : item.settledAt ? <p className="small muted settlement-reason">Settled {new Date(item.settledAt).toLocaleString()}</p> : null}</td>
+        </tr>)}</tbody>
+      </table>
+    </div> : <div className="empty-state"><div className="empty-emoji">🔎</div><h2>No published picks match these filters</h2><p className="muted">This is an honest empty state. Internal runs and demo outcomes are not used to fill the ledger.</p></div>}
+  </main>;
 }

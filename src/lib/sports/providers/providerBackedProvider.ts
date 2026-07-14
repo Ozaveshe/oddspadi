@@ -238,7 +238,7 @@ type OddsApiHistoricalResponse = {
 };
 
 type ProviderRuntimeStatus = {
-  runtimeProvider: "providerBackedSportsDataProvider" | "mockSportsDataProvider";
+  runtimeProvider: "providerBackedSportsDataProvider" | "mockSportsDataProvider" | "unavailable";
   liveRuntimeBacked: boolean;
   sportsApiConfigured: boolean;
   oddsApiConfigured: boolean;
@@ -581,9 +581,12 @@ function matchStatus(shortStatus: string | undefined): MatchStatus {
   const status = shortStatus ?? "";
   // Concluded — full time, extra time, penalties, plus technical outcomes
   // (awarded, walkover, abandoned) which are all done, not upcoming.
-  if (["FT", "AET", "PEN", "AWD", "WO", "ABD"].includes(status)) return "finished";
+  if (["FT", "AET", "PEN", "AWD", "WO"].includes(status)) return "finished";
   // In play — including suspended/interrupted matches that are still active.
-  if (["1H", "HT", "2H", "ET", "BT", "P", "LIVE", "INT", "SUSP"].includes(status)) return "live";
+  if (["CANC", "ABD"].includes(status)) return "cancelled";
+  if (status === "PST") return "postponed";
+  if (status === "SUSP") return "suspended";
+  if (["1H", "HT", "2H", "ET", "BT", "P", "LIVE", "INT"].includes(status)) return "live";
   // NS, TBD, PST, CANC and anything unknown remain scheduled.
   return "scheduled";
 }
@@ -591,6 +594,9 @@ function matchStatus(shortStatus: string | undefined): MatchStatus {
 function basketballStatus(status: ApiBasketballGame["status"]): MatchStatus {
   const text = typeof status === "string" ? status : `${status?.short ?? ""} ${status?.long ?? ""}`;
   const normalized = text.toLowerCase();
+  if (["cancelled", "canceled", "abandoned"].some((term) => normalized.includes(term))) return "cancelled";
+  if (["postponed", "rescheduled"].some((term) => normalized.includes(term))) return "postponed";
+  if (["suspended", "interrupted"].some((term) => normalized.includes(term))) return "suspended";
   if (["ft", "aot", "after over time", "finished", "game finished", "ended"].some((term) => normalized.includes(term))) return "finished";
   if (["q1", "q2", "q3", "q4", "ot", "live", "halftime", "in play"].some((term) => normalized.includes(term))) return "live";
   return "scheduled";
@@ -598,6 +604,9 @@ function basketballStatus(status: ApiBasketballGame["status"]): MatchStatus {
 
 function tennisStatus(status: string | undefined): MatchStatus {
   const normalized = cleanText(status).toLowerCase();
+  if (["cancelled", "canceled", "abandoned"].some((term) => normalized.includes(term))) return "cancelled";
+  if (["postponed", "rescheduled"].some((term) => normalized.includes(term))) return "postponed";
+  if (["suspended", "interrupted"].some((term) => normalized.includes(term))) return "suspended";
   if (["finished", "complete", "ended", "retired", "walkover"].some((term) => normalized.includes(term))) return "finished";
   if (["live", "set", "game", "in progress"].some((term) => normalized.includes(term))) return "live";
   return "scheduled";
@@ -852,6 +861,20 @@ type CoherentOddsQuote = {
   bookmaker?: OddsMarket["bookmaker"];
 };
 
+export type SportsProviderIssue = {
+  occurredAt: string;
+  provider: string;
+  path: string;
+  reason: string;
+};
+
+const recentProviderIssues: SportsProviderIssue[] = [];
+
+export function getRecentSportsProviderIssues(since?: string): SportsProviderIssue[] {
+  const sinceMs = since ? new Date(since).getTime() : Number.NEGATIVE_INFINITY;
+  return recentProviderIssues.filter((issue) => new Date(issue.occurredAt).getTime() >= sinceMs).map((issue) => ({ ...issue }));
+}
+
 function oddsBookmaker(bookmaker: OddsApiBookmaker): OddsMarket["bookmaker"] | undefined {
   const id = cleanText(bookmaker.key);
   const name = cleanText(bookmaker.title);
@@ -886,6 +909,18 @@ function consensusPointQuote(quotes: CoherentOddsQuote[]): CoherentOddsQuote | n
     return quoteQuality(a[0]) - quoteQuality(b[0]);
   })[0];
   return leadingGroup ? bestCoherentQuote(leadingGroup) : null;
+}
+
+function doubleChanceSelection(outcomeName: string | undefined, homeName: string, awayName: string): "home_or_draw" | "home_or_away" | "draw_or_away" | null {
+  const raw = cleanText(outcomeName).toLowerCase();
+  const normalized = normalizedTeamName(raw);
+  const hasDraw = /draw|tie/.test(raw);
+  const hasHome = /\bhome\b/.test(raw) || teamAliasKeys(homeName).some((alias) => normalized.includes(alias));
+  const hasAway = /\baway\b/.test(raw) || teamAliasKeys(awayName).some((alias) => normalized.includes(alias));
+  if (hasHome && hasDraw) return "home_or_draw";
+  if (hasHome && hasAway) return "home_or_away";
+  if (hasDraw && hasAway) return "draw_or_away";
+  return null;
 }
 
 function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "football" | "basketball" | "tennis"> = "football"): OddsMarket[] {
@@ -994,12 +1029,12 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
             bookmaker: oddsBookmaker(bookmaker),
             selections: [
               {
-                id: sport === "football" ? "over_25" : "over",
+                id: sport === "football" ? (overOutcome.point === 1.5 ? "over_15" : "over_25") : "over",
                 label: `Over ${overOutcome.point}`,
                 decimalOdds: overOutcome.price
               },
               {
-                id: sport === "football" ? "under_25" : "under",
+                id: sport === "football" ? (overOutcome.point === 1.5 ? "under_15" : "under_25") : "under",
                 label: `Under ${overOutcome.point}`,
                 decimalOdds: underOutcome.price
               }
@@ -1009,8 +1044,13 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
       });
     })
   );
-  const totalQuote = sport === "football" ? bestCoherentQuote(totalQuotes.filter((quote) => quote.point === 2.5)) : consensusPointQuote(totalQuotes);
-  if (totalQuote) {
+  const totalQuote = sport === "football" ? null : consensusPointQuote(totalQuotes);
+  if (sport === "football") {
+    const total15 = bestCoherentQuote(totalQuotes.filter((quote) => quote.point === 1.5));
+    const total25 = bestCoherentQuote(totalQuotes.filter((quote) => quote.point === 2.5));
+    if (total15) markets.push({ id: "over_under_15", name: "Goals over/under 1.5", selections: total15.selections, bookmaker: total15.bookmaker });
+    if (total25) markets.push({ id: "over_under_25", name: "Goals over/under 2.5", selections: total25.selections, bookmaker: total25.bookmaker });
+  } else if (totalQuote) {
     markets.push({
       id: sport === "tennis" ? "total_games" : sport === "basketball" ? "total_points" : "over_under_25",
       name: sport === "tennis" ? "Total games" : sport === "basketball" ? "Total points" : "Goals over/under",
@@ -1049,6 +1089,55 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
       selections: bttsQuote.selections,
       bookmaker: bttsQuote.bookmaker
     });
+  }
+
+  const doubleChanceQuote = bestCoherentQuote(
+    bookmakers.flatMap((bookmaker) =>
+      (bookmaker.markets ?? []).filter((market) => market.key === "double_chance").flatMap((market) => {
+        const prices = (market.outcomes ?? []).reduce<Partial<Record<"home_or_draw" | "home_or_away" | "draw_or_away", number>>>((acc, outcome) => {
+          const selection = doubleChanceSelection(outcome.name, homeName, awayName);
+          if (selection && typeof outcome.price === "number" && outcome.price > 1) acc[selection] = Math.max(acc[selection] ?? 0, outcome.price);
+          return acc;
+        }, {});
+        if (!prices.home_or_draw || !prices.home_or_away || !prices.draw_or_away) return [];
+        return [{
+          bookmaker: oddsBookmaker(bookmaker),
+          selections: [
+            { id: "home_or_draw", label: `${homeName} or draw`, decimalOdds: prices.home_or_draw },
+            { id: "home_or_away", label: `${homeName} or ${awayName}`, decimalOdds: prices.home_or_away },
+            { id: "draw_or_away", label: `Draw or ${awayName}`, decimalOdds: prices.draw_or_away }
+          ]
+        }];
+      })
+    )
+  );
+  if (sport === "football" && doubleChanceQuote) {
+    markets.push({ id: "double_chance", name: "Double chance", selections: doubleChanceQuote.selections, bookmaker: doubleChanceQuote.bookmaker });
+  }
+
+  const drawNoBetQuote = bestCoherentQuote(
+    bookmakers.flatMap((bookmaker) =>
+      (bookmaker.markets ?? []).filter((market) => market.key === "draw_no_bet").flatMap((market) => {
+        const prices = (market.outcomes ?? []).reduce<Partial<Record<"home" | "away", number>>>((acc, outcome) => {
+          const selection = outcomeSelection(outcome.name, homeName, awayName);
+          if ((selection === "home" || selection === "away") && typeof outcome.price === "number" && outcome.price > 1) {
+            acc[selection] = Math.max(acc[selection] ?? 0, outcome.price);
+          }
+          return acc;
+        }, {});
+        if (!prices.home || !prices.away) return [];
+        return [{
+          bookmaker: oddsBookmaker(bookmaker),
+          selections: [
+            { id: "home", label: homeName, decimalOdds: prices.home },
+            { id: "away", label: awayName, decimalOdds: prices.away }
+          ]
+        }];
+      })
+    )
+  );
+  if (sport === "football" && drawNoBetQuote) {
+    markets.push({ id: "draw_no_bet", name: "Draw no bet", selections: drawNoBetQuote.selections, bookmaker: drawNoBetQuote.bookmaker });
   }
 
   return markets;
@@ -1207,6 +1296,7 @@ function oddsBackedFootballFixturesFromEvents(
           fixtureProviderId: eventId,
           oddsProvider: "the-odds-api",
           oddsProviderEventId: eventId,
+          oddsCapturedAt: cleanText(event.last_update) || new Date().toISOString(),
           formProvider: "deterministic-provider-proxy",
           strengthProvider: combinedStrengthProvider(homeRating, awayRating),
           fetchedAt: new Date().toISOString(),
@@ -1314,6 +1404,7 @@ function oddsBackedBasketballFixturesFromEvents(
           fixtureProviderId: eventId,
           oddsProvider: "the-odds-api",
           oddsProviderEventId: eventId,
+          oddsCapturedAt: cleanText(event.last_update) || new Date().toISOString(),
           formProvider: homeRating.historical || awayRating.historical ? "supabase-basketball-historical-strength-v1" : undefined,
           strengthProvider: combinedHistoricalStrengthProvider(homeRating, awayRating),
           fetchedAt: new Date().toISOString(),
@@ -1396,6 +1487,7 @@ function oddsBackedTennisFixturesFromEvents(
           fixtureProviderId: eventId,
           oddsProvider: "the-odds-api",
           oddsProviderEventId: eventId,
+          oddsCapturedAt: cleanText(event.last_update) || new Date().toISOString(),
           formProvider: homeRating.historical || awayRating.historical ? "supabase-tennis-historical-strength-v1" : undefined,
           strengthProvider: combinedHistoricalStrengthProvider(homeRating, awayRating),
           fetchedAt: new Date().toISOString(),
@@ -1610,6 +1702,8 @@ function warnProviderIssue(url: URL, reason: string, response?: Response): void 
   const remaining = response?.headers.get("x-requests-remaining");
   const used = response?.headers.get("x-requests-used");
   const quota = remaining != null ? ` [requests-remaining=${remaining}${used != null ? `, used=${used}` : ""}]` : "";
+  recentProviderIssues.push({ occurredAt: new Date().toISOString(), provider: url.host, path: url.pathname, reason });
+  if (recentProviderIssues.length > 100) recentProviderIssues.splice(0, recentProviderIssues.length - 100);
   console.warn(`[sports-provider] ${url.host}${url.pathname} — ${reason}${quota}`);
 }
 
@@ -1687,6 +1781,16 @@ function defaultOddsRegionsForSport(sport: Extract<Sport, "football" | "basketba
   return "uk,eu";
 }
 
+const FOOTBALL_EVENT_MARKETS = new Set(["btts", "alternate_totals", "double_chance", "draw_no_bet"]);
+
+function configuredFootballEventMarkets(env: EnvMap): string {
+  return (env.ODDS_API_FOOTBALL_EVENT_MARKETS?.trim() || "btts,alternate_totals,double_chance,draw_no_bet")
+    .split(",")
+    .map((market) => market.trim().toLowerCase())
+    .filter((market) => FOOTBALL_EVENT_MARKETS.has(market))
+    .join(",");
+}
+
 function sportForOddsEvent(event: OddsApiEvent): Extract<Sport, "football" | "basketball" | "tennis"> {
   const sportKey = cleanText(event.sport_key).toLowerCase();
   if (sportKey.startsWith("basketball_")) return "basketball";
@@ -1748,14 +1852,41 @@ export function getSportsProviderRuntimeStatus(env: EnvMap = process.env): Provi
   const sportsApiConfigured = footballApiConfigured || basketballApiConfigured || tennisApiConfigured;
   const oddsApiConfigured = Boolean(firstEnv(env, ["THE_ODDS_API_KEY", "ODDS_API_KEY"]));
   const weatherApiConfigured = Boolean(firstEnv(env, ["WEATHER_API_KEY", "OPENWEATHER_API_KEY"]));
+  const liveRuntimeBacked = sportsApiConfigured || oddsApiConfigured;
+  const production = env.NODE_ENV === "production" || env.CONTEXT === "production";
   return {
-    runtimeProvider: sportsApiConfigured ? "providerBackedSportsDataProvider" : "mockSportsDataProvider",
-    liveRuntimeBacked: sportsApiConfigured,
+    runtimeProvider: liveRuntimeBacked ? "providerBackedSportsDataProvider" : production ? "unavailable" : "mockSportsDataProvider",
+    liveRuntimeBacked,
     sportsApiConfigured,
     oddsApiConfigured,
     weatherApiConfigured
   };
 }
+
+const unavailableSportsDataProvider: SportsDataProvider = {
+  async getFixtures() {
+    return [];
+  },
+  async getMatch() {
+    return null;
+  },
+  async getLiveScores() {
+    return [];
+  },
+  async getOdds() {
+    return [];
+  },
+  async getTeamForm(teamId) {
+    return {
+      teamId,
+      recentResults: [],
+      goalsFor: 0,
+      goalsAgainst: 0,
+      attackStrength: 0,
+      defenseStrength: 0
+    };
+  }
+};
 
 export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private readonly oddsEventsCache = new Map<string, OddsEventCacheEntry>();
@@ -1803,7 +1934,10 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   }
 
   private get fallback(): SportsDataProvider {
-    return this.options.fallback ?? mockSportsDataProvider;
+    if (this.options.fallback) return this.options.fallback;
+    return this.env.NODE_ENV === "production" || this.env.CONTEXT === "production"
+      ? unavailableSportsDataProvider
+      : mockSportsDataProvider;
   }
 
   async getFixtures(date: string, sport: Sport): Promise<Match[]> {
@@ -1950,11 +2084,15 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
             kind: "provider" as const,
             fixtureProvider: "api-football",
             fixtureProviderId: String(fixture.fixture?.id ?? "") || undefined,
+            season: String(fixture.league?.season ?? "") || undefined,
+            round: cleanText((fixture.league as { round?: unknown } | undefined)?.round) || undefined,
             oddsProvider: oddsMarkets.length ? "the-odds-api" : undefined,
             oddsProviderEventId: oddsMarkets.length ? oddsProviderEventId : undefined,
+            oddsCapturedAt: oddsMarkets.length ? cleanText(directOddsEvent?.last_update) || new Date().toISOString() : undefined,
             formProvider: hasProviderForm ? "api-football-recent-fixtures" : "deterministic-provider-proxy",
             strengthProvider: combinedStrengthProvider(homeRating, awayRating),
             fetchedAt: new Date().toISOString(),
+            statusDetail: cleanText(fixture.fixture?.status?.short) || undefined,
             notes: [
               ...(homeRating.historical || awayRating.historical
                 ? ["Team strength includes historical Elo learned from real football-data results stored in OddsPadi Supabase."]
@@ -2050,11 +2188,14 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
             kind: "provider" as const,
             fixtureProvider: "api-basketball",
             fixtureProviderId: String(game.id ?? "") || undefined,
+            season: String(game.league?.season ?? "") || undefined,
             oddsProvider: oddsMarkets.length ? "the-odds-api" : undefined,
             oddsProviderEventId: oddsMarkets.length ? cleanText(directOddsEvent?.id) || undefined : undefined,
+            oddsCapturedAt: oddsMarkets.length ? cleanText(directOddsEvent?.last_update) || new Date().toISOString() : undefined,
             formProvider: homeRating.historical || awayRating.historical ? "supabase-basketball-historical-strength-v1" : undefined,
             strengthProvider: combinedHistoricalStrengthProvider(homeRating, awayRating),
             fetchedAt: new Date().toISOString(),
+            statusDetail: typeof game.status === "string" ? game.status : `${game.status?.short ?? ""} ${game.status?.long ?? ""}`.trim() || undefined,
             notes: [
               "Live basketball fixtures are provider-backed.",
               ...(oddsMarkets.length ? ["Basketball moneyline/spread/total odds are provider-backed."] : ["No matching basketball odds snapshot was found."]),
@@ -2165,11 +2306,15 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
             kind: "provider" as const,
             fixtureProvider: "api-tennis",
             fixtureProviderId: eventId,
+            season: cleanText(event.tournament_season) || undefined,
+            round: cleanText(event.tournament_round) || undefined,
             oddsProvider: oddsMarkets.length ? "the-odds-api" : undefined,
             oddsProviderEventId: oddsMarkets.length ? cleanText(directOddsEvent?.id) || undefined : undefined,
+            oddsCapturedAt: oddsMarkets.length ? cleanText(directOddsEvent?.last_update) || new Date().toISOString() : undefined,
             formProvider: homeRating.historical || awayRating.historical ? "supabase-tennis-historical-strength-v1" : undefined,
             strengthProvider: combinedHistoricalStrengthProvider(homeRating, awayRating),
             fetchedAt: new Date().toISOString(),
+            statusDetail: cleanText(event.event_status) || undefined,
             notes: [
               "Live tennis fixtures are provider-backed.",
               ...(oddsMarkets.length ? ["Tennis match-winner and total-games odds are provider-backed where available."] : ["No matching tennis odds snapshot was found."]),
@@ -2257,8 +2402,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   }
 
   async getLiveScores(date: string, sport: Sport): Promise<Match[]> {
-    const matches = await this.getFixtures(date, sport);
-    return matches.filter((match) => match.status === "live" || match.status === "finished" || match.status === "scheduled");
+    return this.getFixtures(date, sport);
   }
 
   async getFootballHeadToHead(match: Match): Promise<HeadToHeadSummary | null> {
@@ -2378,7 +2522,10 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
         );
         endpoint.searchParams.set("apiKey", apiKey);
         endpoint.searchParams.set("regions", this.env.ODDS_API_REGIONS?.trim() || defaultOddsRegionsForSport(sport));
-        endpoint.searchParams.set("markets", sport === "football" ? "h2h,totals" : "h2h,spreads,totals");
+        endpoint.searchParams.set(
+          "markets",
+          sport === "football" ? ["h2h", "totals", configuredFootballEventMarkets(this.env)].filter(Boolean).join(",") : "h2h,spreads,totals"
+        );
         endpoint.searchParams.set("oddsFormat", "decimal");
         endpoint.searchParams.set("dateFormat", "iso");
         const event = (await this.limitedFetch(endpoint)) as OddsApiEvent | null;
@@ -2396,11 +2543,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     const sportKeys = configuredOddsSportKeys(this.env, sport);
     const regions = this.env.ODDS_API_REGIONS?.trim() || defaultOddsRegionsForSport(sport);
     const markets = sport === "football" ? "h2h,totals" : "h2h,spreads,totals";
-    const footballEventMarkets = (this.env.ODDS_API_FOOTBALL_EVENT_MARKETS?.trim() || "btts")
-      .split(",")
-      .map((market) => market.trim().toLowerCase())
-      .filter((market) => market === "btts")
-      .join(",");
+    const footballEventMarkets = configuredFootballEventMarkets(this.env);
     const historicalEnabled = enabledEnvFlag(this.env.ODDS_API_ALLOW_HISTORICAL_RUNTIME);
     const cacheKey = [sport, sportKeys.join(","), date, regions, markets, footballEventMarkets, historicalEnabled ? "historical" : "current"].join(":");
     const cached = this.oddsEventsCache.get(cacheKey);

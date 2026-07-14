@@ -41,8 +41,11 @@ export function MatchCard({ match, prediction }: { match: MatchSummary; predicti
   const followed = useFollowedTeams();
   const odds = mainOdds(match);
   const probabilities = winnerProbabilities(prediction);
-  const hasValue = prediction.bestPick.hasValue;
-  const bestEdge = hasValue ? prediction.bestPick.edge : 0;
+  const canonical = prediction.canonicalDecision;
+  const publishedPick = canonical.bestPublishedPick;
+  const displayedDecision = publishedPick ?? canonical.bestLean ?? canonical.bestWatchlistCandidate;
+  const hasValue = canonical.publicStatus === "value_pick" && publishedPick !== null;
+  const bestEdge = displayedDecision?.edge ?? 0;
   const winnerLabel = winnerMarketLabel(match);
   const hasOdds = odds.length > 0;
   const [leanLabel, leanProb] = modelLean(match, probabilities);
@@ -107,12 +110,12 @@ export function MatchCard({ match, prediction }: { match: MatchSummary; predicti
         </div>
         <div className="metric">
           <span className="metric-label">Value edge</span>
-          <span className="metric-value">{hasValue ? formatSignedPercent(bestEdge) : hasOdds ? "None found" : "Needs odds"}</span>
+          <span className="metric-value">{displayedDecision ? formatSignedPercent(bestEdge) : hasOdds ? "None found" : "Needs odds"}</span>
         </div>
         <div className="metric">
           <span className="metric-label">Expected value</span>
           <span className="metric-value">
-            {hasValue ? formatSignedPercent(prediction.bestPick.expectedValue) : hasOdds ? "Not positive" : "Needs odds"}
+            {displayedDecision ? formatSignedPercent(displayedDecision.expectedValue) : hasOdds ? "Not positive" : "Needs odds"}
           </span>
         </div>
       </div>
@@ -126,11 +129,17 @@ export function MatchCard({ match, prediction }: { match: MatchSummary; predicti
           Otherwise show the model's read honestly — an unpriced match isn't a
           "low confidence / high risk" failure, it just has no value bet yet. */}
       <div className="meta">
-        {hasValue ? (
+        {displayedDecision ? (
           <>
-            <ConfidenceBadge level={prediction.confidence} />
-            <RiskBadge level={prediction.risk} />
+            <span className={`badge ${hasValue ? "positive" : canonical.publicStatus === "lean" ? "medium" : "scheduled"}`}>
+              {hasValue ? `Value Pick — ${publishedPick.label}` : canonical.publicStatus === "lean" ? `Lean — ${displayedDecision.label}` : "Watchlist"}
+            </span>
+            <ConfidenceBadge level={canonical.confidence} />
+            <RiskBadge level={canonical.risk} />
             <ValueEdgeBadge edge={bestEdge} />
+            {canonical.publicStatus === "watchlist" || canonical.publicStatus === "stale" ? (
+              <span className="muted small">Watchlist — needs fresh odds/team news before publication.</span>
+            ) : null}
           </>
         ) : (
           <>
@@ -138,7 +147,7 @@ export function MatchCard({ match, prediction }: { match: MatchSummary; predicti
               Model leans {leanLabel} · {formatPercent(leanProb)}
             </span>
             <span className="muted small">
-              {hasOdds ? "No value edge at current odds" : "Odds pending — value needs bookmaker prices"}
+              {canonical.publicStatus === "needs_data" ? "Needs data before publication." : "No clear value found."}
             </span>
           </>
         )}

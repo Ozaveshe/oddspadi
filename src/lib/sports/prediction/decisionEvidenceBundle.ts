@@ -117,6 +117,7 @@ function marketSnapshot(match: Match, prediction: Prediction): Record<string, un
     observedOddsMarkets: match.oddsMarkets,
     modelMarkets: prediction.markets,
     valueEdges: prediction.valueEdges,
+    canonicalDecision: prediction.canonicalDecision,
     bestPick: prediction.bestPick,
     marketPriorAdjustment: prediction.marketPriorAdjustment ?? null
   };
@@ -131,7 +132,8 @@ function modelSnapshot(prediction: Prediction): Record<string, unknown> {
     learningProfile: prediction.decision.learningProfile ?? null,
     historicalDiscipline: prediction.decision.historicalDiscipline ?? null,
     caseMemory: prediction.decision.caseMemory ?? null,
-    candidatePick: prediction.bestPick.hasValue ? prediction.bestPick : null
+    canonicalDecision: prediction.canonicalDecision,
+    candidatePick: prediction.canonicalDecision.bestPublishedPick
   };
 }
 

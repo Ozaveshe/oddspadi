@@ -11,7 +11,7 @@ export function ResponsibleUseNotice() {
   return (
     <div className="notice">
       <strong>Play it smart, padi:</strong> good analysis helps you decide better, but no analysis removes risk.
-      OddsPadi never promises &ldquo;sure odds&rdquo;, doesn&apos;t take bets, and doesn&apos;t hold your money. If you
+      OddsPadi presents probabilities rather than certainty, doesn&apos;t take bets, and doesn&apos;t hold your money. If you
       bet, keep it fun — only stake what you can afford to lose.
     </div>
   );
