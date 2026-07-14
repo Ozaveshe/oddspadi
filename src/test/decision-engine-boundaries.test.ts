@@ -116,7 +116,13 @@ describe("decision engine module boundaries", () => {
     expect(engine).toContain('import { buildDecisionRobustnessAudit } from "./decisionRobustness"');
     expect(engine).not.toContain("function buildDecisionBoundary(");
     expect(engine).not.toContain("function buildDecisionRobustnessAudit(");
-    expect(engine.split(/\r?\n/).length).toBeLessThan(4800);
+    expect(engine).toContain('import { buildDecisionEvaluationPlan } from "./decisionEvaluationPlan"');
+    expect(engine).toContain('import { buildDecisionResearchBrief } from "./decisionResearchBrief"');
+    expect(engine).toContain('import { buildDecisionNotebook } from "./decisionNotebook"');
+    expect(engine).not.toContain("function buildDecisionEvaluationPlan(");
+    expect(engine).not.toContain("function buildDecisionResearchBrief(");
+    expect(engine).not.toContain("function buildDecisionNotebook(");
+    expect(engine.split(/\r?\n/).length).toBeLessThan(4300);
   });
 
   it("preserves evidence and attribution output across football, basketball, and tennis", async () => {
