@@ -102,7 +102,22 @@ function confidenceRank(value: ConfidenceLevel): number {
   return 1;
 }
 
-function evidenceQuality(dataQuality: number): EvidenceQuality {
+function evidenceQuality(
+  dataQuality: number,
+  signals: DecisionEngineReport["dataCoverage"]["signals"] = []
+): EvidenceQuality {
+  const required = signals.filter((signal) => signal.requiredForProduction && signal.status !== "not-applicable");
+  if (required.length) {
+    const evidenceScore = required.reduce((score, signal) => {
+      if (signal.status === "provider-backed") return score + 1;
+      if (signal.status === "computed") return score + 0.5;
+      if (signal.status === "stale") return score + 0.1;
+      return score;
+    }, 0) / required.length;
+    if (evidenceScore < 0.25) return "missing";
+    if (evidenceScore < 0.6) return "thin";
+    if (evidenceScore < 0.9) return "acceptable";
+  }
   if (dataQuality >= 0.82) return "strong";
   if (dataQuality >= 0.62) return "acceptable";
   if (dataQuality >= 0.45) return "thin";
@@ -163,7 +178,8 @@ function classifyAnalysis({
   kickoffLeadMinutes,
   now,
   engineAllowed,
-  engineBlockers
+  engineBlockers,
+  evidenceQuality: analysisEvidenceQuality
 }: {
   edge: ValueEdge;
   snapshot: DecisionOddsSnapshot | null;
@@ -175,6 +191,7 @@ function classifyAnalysis({
   now: Date;
   engineAllowed: boolean;
   engineBlockers: string[];
+  evidenceQuality: EvidenceQuality;
 }): DecisionMarketAnalysis {
   const blockers: string[] = [];
   const capturedMs = finiteMs(snapshot?.capturedAt);
@@ -242,7 +259,7 @@ function classifyAnalysis({
     oddsCapturedAt: snapshot?.capturedAt ?? null,
     expiresAt,
     dataQuality,
-    evidenceQuality: evidenceQuality(dataQuality),
+    evidenceQuality: analysisEvidenceQuality,
     publicationEligible,
     blockers: unique(blockers)
   };
@@ -326,6 +343,7 @@ export function buildCanonicalDecision(
   const fixtureSuspended = options.allowMockFixtures !== true &&
     (fixture.status !== "scheduled" || (kickoffLeadMinutes !== null && kickoffLeadMinutes <= 0));
   const engineGate = enginePublicationAllowed(modelOutput.decision);
+  const analysisEvidenceQuality = evidenceQuality(dataQuality, modelOutput.decision?.dataCoverage?.signals);
   const snapshotBySelection = new Map(oddsSnapshots.map((snapshot) => [`${snapshot.market}:${snapshot.selection}`, snapshot]));
   const analyses = capMarkets(
     modelOutput.valueEdges.map((edge) =>
@@ -339,7 +357,8 @@ export function buildCanonicalDecision(
         kickoffLeadMinutes,
         now,
         engineAllowed: engineGate.allowed,
-        engineBlockers: engineGate.blockers
+        engineBlockers: engineGate.blockers,
+        evidenceQuality: analysisEvidenceQuality
       })
     ),
     thresholds.maxMarketsPerFixture
@@ -366,7 +385,7 @@ export function buildCanonicalDecision(
     publicStatus,
     engineStatus: engineStatus(publicStatus),
     dataQuality,
-    evidenceQuality: evidenceQuality(dataQuality),
+    evidenceQuality: analysisEvidenceQuality,
     confidence: publicStatus === "value_pick" || publicStatus === "lean" ? primary?.confidence ?? "low" : "low",
     risk: publicStatus === "value_pick" || publicStatus === "lean" ? primary?.risk ?? "high" : "high",
     generatedAt,

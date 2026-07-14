@@ -10,6 +10,7 @@ import { TeamCrest } from "./TeamCrest";
 import { CountryFlag } from "./CountryFlag";
 import { useFollowedTeams } from "@/components/account/FollowedTeamsProvider";
 import { AddToSlipButton } from "./AddToSlipButton";
+import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
 
 function mainOdds(match: MatchSummary) {
   return match.oddsMarkets.find((market) => market.id === "match_winner")?.selections ?? [];
@@ -138,7 +139,7 @@ export function MatchCard({ match, prediction }: { match: MatchSummary; predicti
             <RiskBadge level={canonical.risk} />
             <ValueEdgeBadge edge={bestEdge} />
             {canonical.publicStatus === "watchlist" || canonical.publicStatus === "stale" ? (
-              <span className="muted small">Watchlist — needs fresh odds/team news before publication.</span>
+              <span className="muted small">{publicWatchlistReason(canonical)}</span>
             ) : null}
           </>
         ) : (

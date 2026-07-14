@@ -6,6 +6,7 @@ import { LocalTime } from "./LocalTime";
 import { TeamCrest } from "./TeamCrest";
 import { CountryFlag } from "./CountryFlag";
 import { AddToSlipButton } from "./AddToSlipButton";
+import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
 
 export function MatchPredictionTable({ rows }: { rows: PredictionListRow[] }) {
   return (
@@ -69,7 +70,7 @@ export function MatchPredictionTable({ rows }: { rows: PredictionListRow[] }) {
                     : canonical.publicStatus === "lean" && displayedDecision
                       ? `Lean — ${displayedDecision.label}`
                       : canonical.publicStatus === "watchlist" || canonical.publicStatus === "stale"
-                        ? "Watchlist — needs fresh odds/team news before publication."
+                        ? publicWatchlistReason(canonical)
                         : canonical.noPickReason ?? "No clear value found."}
                   <br />
                   <ConfidenceBadge level={prediction.confidence} />

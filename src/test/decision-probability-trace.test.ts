@@ -35,6 +35,14 @@ function activeCalibrationProfile(): DecisionLearningProfile {
 function winnerOnlyMatch(match: Match): Match {
   return {
     ...match,
+    homeTeam: {
+      ...match.homeTeam,
+      ratingEvidence: { source: "supabase-football-data-historical-elo-v1", sampleSize: 100 }
+    },
+    awayTeam: {
+      ...match.awayTeam,
+      ratingEvidence: { source: "supabase-football-data-historical-elo-v1", sampleSize: 100 }
+    },
     dataSource: {
       kind: "provider",
       fixtureProvider: "api-football",

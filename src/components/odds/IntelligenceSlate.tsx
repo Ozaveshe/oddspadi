@@ -3,6 +3,7 @@ import { LocalTime } from "@/components/odds/LocalTime";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import type { SlateFixture, SlatePublicStatus, SportsSlate } from "@/lib/sports/intelligence/types";
 import type { DailyTipsProduct, WeeklyTipsProduct, YesterdayResultsProduct } from "@/lib/sports/tips/product";
+import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
 
 const STATUS_LABELS: Record<SlatePublicStatus, string> = {
   value_pick: "Value Pick",
@@ -111,7 +112,7 @@ export function SlateFixtureCard({ row, compact = false, asOf }: { row: SlateFix
           </div>
         </>
       ) : <p className="muted small">{noPickExplanation(row)}</p>}
-      {!compact ? <p className="intelligence-reason"><strong>Why this matters</strong><span>{row.publicStatus === "watchlist" || row.publicStatus === "stale" ? "Watchlist — needs fresh odds or team news before publication." : displayedDecision ? displayedDecision.blockers[0] ?? (row.publicStatus === "value_pick" ? "This selection clears every publication guardrail." : "This is the strongest model preference at the current price.") : noPickExplanation(row)}</span></p> : null}
+      {!compact ? <p className="intelligence-reason"><strong>Why this matters</strong><span>{row.publicStatus === "watchlist" || row.publicStatus === "stale" ? publicWatchlistReason(decisionSummary) : displayedDecision ? displayedDecision.blockers[0] ?? (row.publicStatus === "value_pick" ? "This selection clears every publication guardrail." : "This is the strongest model preference at the current price.") : noPickExplanation(row)}</span></p> : null}
       <Link className="text-link intelligence-analysis-link" href={`/predictions/${encodeURIComponent(fixture.fixtureId)}`}>Full analysis →</Link>
     </article>
   );

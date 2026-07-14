@@ -246,12 +246,30 @@ export function scoreValueEdge(edge: ValueEdge, options: BestPickSelectionOption
   };
 }
 
-function marketPriorWeight(dataQuality: number, bookmakerMargin: number, selectionCount: number): number {
+export type MarketPriorEvidencePolicy = {
+  minimumWeight: number;
+  reason: string;
+};
+
+function marketPriorWeight(
+  dataQuality: number,
+  bookmakerMargin: number,
+  selectionCount: number,
+  evidencePolicy?: MarketPriorEvidencePolicy
+): number {
   const quality = clampProbability(dataQuality);
   const qualityWeight = 0.08 + (1 - quality) * 0.16;
   const marginDiscount = clampRange(1 - Math.max(0, bookmakerMargin) / 0.18, 0.25, 1);
   const selectionDepth = selectionCount >= 3 ? 1 : 0.92;
-  return round(clampRange(qualityWeight * marginDiscount * selectionDepth, 0.03, 0.24));
+  const standardWeight = qualityWeight * marginDiscount * selectionDepth;
+  const coherentMarket = bookmakerMargin >= -0.03 && bookmakerMargin <= 0.12;
+  const evidenceMarketReliability = bookmakerMargin <= 0.08
+    ? 1
+    : clampRange(1 - (bookmakerMargin - 0.08) / 0.05, 0.25, 1);
+  const evidenceFloor = coherentMarket && evidencePolicy
+    ? clampProbability(evidencePolicy.minimumWeight) * evidenceMarketReliability * selectionDepth
+    : 0;
+  return round(clampRange(Math.max(standardWeight, evidenceFloor), 0.03, 0.9));
 }
 
 function normalizeSelectionSubset(probabilities: Record<string, number>, selectionIds: string[]): Record<string, number> {
@@ -267,7 +285,8 @@ function normalizeSelectionSubset(probabilities: Record<string, number>, selecti
 export function applyMarketPriorAdjustmentToMarkets(
   predictionMarkets: PredictionMarket[],
   oddsMarkets: OddsMarket[],
-  dataQuality: number
+  dataQuality: number,
+  evidencePolicy?: MarketPriorEvidencePolicy
 ): { markets: PredictionMarket[]; adjustment: MarketPriorAdjustment } {
   const marketAdjustments: MarketPriorAdjustment["markets"] = [];
   let adjustedSelections = 0;
@@ -288,7 +307,7 @@ export function applyMarketPriorAdjustmentToMarkets(
     if (matchedSelections.length < 2) return predictionMarket;
 
     const bookmakerMargin = calculateBookmakerMargin(rawImpliedProbabilities);
-    const weight = marketPriorWeight(dataQuality, bookmakerMargin, matchedSelections.length);
+    const weight = marketPriorWeight(dataQuality, bookmakerMargin, matchedSelections.length, evidencePolicy);
     const blended = { ...predictionMarket.probabilities };
 
     for (const selection of matchedSelections) {
@@ -332,7 +351,10 @@ export function applyMarketPriorAdjustmentToMarkets(
       notes: applied
         ? [
             `Blended ${marketAdjustments.length} priced market${marketAdjustments.length === 1 ? "" : "s"} toward no-vig bookmaker probabilities before EV ranking.`,
-            "Market-prior weight increases when model data quality is lower and decreases when bookmaker margin is high."
+            "Market-prior weight increases when model data quality is lower and decreases when bookmaker margin is high.",
+            ...(evidencePolicy
+              ? [`Evidence-aware market-prior floor requested at ${Math.round(evidencePolicy.minimumWeight * 100)}%: ${evidencePolicy.reason}`]
+              : [])
           ]
         : ["No priced bookmaker market matched the model output, so odds were used only for edge comparison."]
     }

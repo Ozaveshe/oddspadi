@@ -20,6 +20,7 @@ import { ShareBar } from "@/components/share/ShareBar";
 import { FollowTeamButton } from "@/components/account/FollowTeamButton";
 import Link from "next/link";
 import { leagueSlugFromProviderId } from "@/lib/sports/leagueStandings";
+import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
 
 export const revalidate = 180;
 
@@ -84,7 +85,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
     : canonical.publicStatus === "lean" && displayedDecision
       ? `Lean — ${displayedDecision.label}`
       : canonical.publicStatus === "watchlist" || canonical.publicStatus === "stale"
-        ? "Watchlist — needs fresh odds/team news before publication."
+        ? publicWatchlistReason(canonical)
         : canonical.publicStatus === "needs_data"
           ? "Needs data before publication."
           : canonical.publicStatus === "suspended"
