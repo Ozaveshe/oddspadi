@@ -91,6 +91,7 @@ import {
   buildDecisionProbabilityTrace,
   type DecisionProbabilityRuntimeStages
 } from "./decisionProbabilityTrace";
+import { buildDecisionCalibrationInterval } from "./decisionCalibrationInterval";
 
 export const DECISION_ENGINE_VERSION = "decision-engine-v1";
 
@@ -1345,10 +1346,6 @@ function buildCalibration(
   };
 }
 
-function boundProbability(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
 function beliefSignalDirection(impact: DecisionEvidence["impact"]): DecisionBeliefSignal["direction"] {
   if (impact === "positive") return "supports";
   if (impact === "negative") return "opposes";
@@ -1389,7 +1386,8 @@ function buildDecisionBeliefState({
   abstentionRules,
   calibration,
   action,
-  caseMemory
+  caseMemory,
+  learningProfile
 }: {
   match: Match;
   diagnostics: FootballModelDiagnostics;
@@ -1401,6 +1399,7 @@ function buildDecisionBeliefState({
   calibration: DecisionCalibration;
   action: DecisionAction;
   caseMemory: DecisionCaseMemory;
+  learningProfile?: DecisionLearningProfile;
 }): DecisionBeliefState {
   const generatedAtDate = new Date();
   const ttlMinutes = beliefTtlMinutes(match);
@@ -1480,20 +1479,10 @@ function buildDecisionBeliefState({
       (caseMemory.adjustment === "abstain" ? 18 : caseMemory.adjustment === "discount" ? 9 : 0) +
       (match.status === "live" ? 16 : match.status === "finished" ? 22 : 0)
   );
-  const intervalWidth =
-    !bestPick.hasValue
-      ? null
-      : Math.min(0.24, (bestPick.confidence === "high" ? 0.055 : bestPick.confidence === "medium" ? 0.085 : 0.13) + uncertaintyScore / 1000);
-  const confidenceInterval =
-    bestPick.hasValue && intervalWidth !== null
-      ? {
-          low: boundProbability(bestPick.modelProbability - intervalWidth),
-          high: boundProbability(bestPick.modelProbability + intervalWidth)
-        }
-      : {
-          low: null,
-          high: null
-        };
+  const confidenceInterval = buildDecisionCalibrationInterval({
+    probability: bestPick.hasValue ? bestPick.modelProbability : null,
+    learningProfile
+  });
   const grade: DecisionBeliefState["grade"] =
     action === "consider" && calibration.health === "stable" && uncertaintyScore <= 38 && !triggeredRules.length
       ? "strong"
@@ -2022,12 +2011,14 @@ function buildDecisionUncertaintyDecomposition({
   return {
     status,
     score,
+    method: "weighted-evidence-risk-index-v1",
+    statistical: false,
     summary:
       status === "controlled"
-        ? `Uncertainty is controlled at ${score}/100; primary uncertainty is ${primary.label}.`
+        ? `Diagnostic uncertainty risk is controlled at ${score}/100; primary uncertainty is ${primary.label}.`
         : status === "watchlist"
-          ? `Uncertainty needs watchlist treatment at ${score}/100; primary uncertainty is ${primary.label}.`
-          : `Uncertainty is high-risk at ${score}/100; primary uncertainty is ${primary.label}.`,
+          ? `Diagnostic uncertainty risk needs watchlist treatment at ${score}/100; primary uncertainty is ${primary.label}.`
+          : `Diagnostic uncertainty risk is high at ${score}/100; primary uncertainty is ${primary.label}.`,
     primaryUncertainty: primary.label,
     confidencePenalty,
     components,
@@ -5959,7 +5950,8 @@ export function buildDecisionEngineReport({
     abstentionRules,
     calibration,
     action: candidateAction,
-    caseMemory
+    caseMemory,
+    learningProfile
   });
   const probabilityTrace = buildDecisionProbabilityTrace({
     diagnostics,

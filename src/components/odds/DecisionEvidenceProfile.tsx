@@ -116,7 +116,7 @@ export function DecisionEvidenceProfile({ decision }: { decision: DecisionEngine
         </figure>
 
         <figure className="uncertainty-profile-chart">
-          <figcaption><strong>Uncertainty profile</strong><span>{decision.uncertainty.score}/100 overall</span></figcaption>
+          <figcaption><strong>Decision-risk profile</strong><span>{decision.uncertainty.score}/100 diagnostic index</span></figcaption>
           <div className="uncertainty-chart-rows">
             {uncertainty.map((component) => (
               <div className="uncertainty-chart-row" key={component.id}>
@@ -127,6 +127,7 @@ export function DecisionEvidenceProfile({ decision }: { decision: DecisionEngine
               </div>
             ))}
           </div>
+          <p className="small muted">Weighted evidence-risk index, not a statistical confidence level.</p>
           <p><strong>{decision.uncertainty.primaryUncertainty}.</strong> {decision.uncertainty.decisionImpact} Confidence penalty {formatSignedPercent(-decision.uncertainty.confidencePenalty)}.</p>
         </figure>
       </div>

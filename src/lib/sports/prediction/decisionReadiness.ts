@@ -1023,7 +1023,12 @@ export async function runDecisionEngineSelfTest({
         expectedValue: null,
         confidenceInterval: {
           low: null,
-          high: null
+          high: null,
+          method: "unavailable",
+          confidenceLevel: null,
+          sampleSize: null,
+          source: null,
+          detail: "Empirical interval unavailable because the requested fixture was not found."
         },
         uncertaintyScore: 100,
         evidenceBalance: {
@@ -1317,7 +1322,9 @@ export async function runDecisionEngineSelfTest({
       uncertainty: {
         status: "high-risk",
         score: 100,
-        summary: "Uncertainty is high-risk at 100/100 because no fixture, model, market, or context evidence loaded.",
+        method: "weighted-evidence-risk-index-v1",
+        statistical: false,
+        summary: "Diagnostic uncertainty risk is high at 100/100 because no fixture, model, market, or context evidence loaded.",
         primaryUncertainty: "Fixture data is missing",
         confidencePenalty: 0.28,
         components: [

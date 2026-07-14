@@ -75,6 +75,12 @@ describe("decision probability runtime trace", () => {
     expect(trace.posteriorEdge).toBeCloseTo(selectedEdge.edge, 12);
     expect(trace.posteriorExpectedValue).toBeCloseTo(selectedEdge.expectedValue, 12);
     expect(trace.disagreement).toBeCloseTo(selectedEdge.edge, 12);
+    expect(prediction.decision.beliefState.confidenceInterval).toMatchObject({
+      low: null,
+      high: null,
+      method: "unavailable"
+    });
+    expect(trace.confidenceBand).toEqual({ low: null, high: null });
 
     const finalRuntimeStage = trace.steps.find((step) => step.id === "market-calibration");
     expect(finalRuntimeStage?.posteriorProbability).toBeCloseTo(selectedEdge.modelProbability, 12);
@@ -103,6 +109,14 @@ describe("decision probability runtime trace", () => {
       "posterior"
     ]);
     expect(trace.steps.find((step) => step.id === "learned-calibration")?.posteriorProbability).not.toBeNull();
+    expect(prediction.decision.beliefState.confidenceInterval).toMatchObject({
+      method: "wilson-calibration-bucket",
+      confidenceLevel: 0.95
+    });
+    expect(trace.confidenceBand).toEqual({
+      low: prediction.decision.beliefState.confidenceInterval.low,
+      high: prediction.decision.beliefState.confidenceInterval.high
+    });
     expect(trace.steps.find((step) => step.id === "market-calibration")?.posteriorProbability).toBeCloseTo(
       selectedEdge.modelProbability,
       12

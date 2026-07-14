@@ -368,7 +368,9 @@ export function DecisionEnginePanel({ decision }: { decision: DecisionEngineRepo
           <span className="metric-value">{decision.beliefState.uncertaintyScore}/100</span>
         </div>
         <div className="metric">
-          <span className="metric-label">Confidence band</span>
+          <span className="metric-label">
+            {decision.beliefState.confidenceInterval.method === "wilson-calibration-bucket" ? "Empirical 95% band" : "Empirical band"}
+          </span>
           <span className="metric-value">
             {decision.beliefState.confidenceInterval.low === null || decision.beliefState.confidenceInterval.high === null
               ? "No data"
@@ -388,6 +390,7 @@ export function DecisionEnginePanel({ decision }: { decision: DecisionEngineRepo
           <span className="metric-value">{decision.beliefState.evidenceBalance.opposes}</span>
         </div>
       </div>
+      <p className="small muted">{decision.beliefState.confidenceInterval.detail}</p>
       <p className="small muted">{decision.beliefState.summary}</p>
       <div className="match-list">
         {decision.beliefState.signals.slice(0, 4).map((signal) => (
@@ -512,14 +515,14 @@ export function DecisionEnginePanel({ decision }: { decision: DecisionEngineRepo
       ) : null}
       <p className="small muted">{decision.attribution.explanation}</p>
 
-      <h3>Uncertainty decomposition</h3>
+      <h3>Decision-risk decomposition</h3>
       <div className="metrics-grid">
         <div className="metric">
           <span className="metric-label">Status</span>
           <span className="metric-value">{decision.uncertainty.status.replaceAll("-", " ")}</span>
         </div>
         <div className="metric">
-          <span className="metric-label">Score</span>
+          <span className="metric-label">Diagnostic index</span>
           <span className="metric-value">{decision.uncertainty.score}/100</span>
         </div>
         <div className="metric">
@@ -532,6 +535,7 @@ export function DecisionEnginePanel({ decision }: { decision: DecisionEngineRepo
         </div>
       </div>
       <p className="small muted">{decision.uncertainty.summary}</p>
+      <p className="small muted">Weighted evidence-risk index, not a statistical confidence level.</p>
       <div className="match-list">
         {decision.uncertainty.components
           .slice()

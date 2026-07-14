@@ -50,7 +50,8 @@ describe("live OddsPadi product UI contract", () => {
     const evidence = source("src/components/odds/DecisionEvidenceProfile.tsx");
     expect(evidence).toContain("Probability journey");
     expect(evidence).toContain("Decision factor contribution");
-    expect(evidence).toContain("Uncertainty profile");
+    expect(evidence).toContain("Decision-risk profile");
+    expect(evidence).toContain("not a statistical confidence level");
     expect(evidence).toContain("Model and calibration provenance");
     expect(evidence).toContain("decision.probabilityTrace");
     expect(evidence).toContain("decision.learningProfile");

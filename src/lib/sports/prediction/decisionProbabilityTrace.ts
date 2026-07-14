@@ -246,13 +246,9 @@ export function buildDecisionProbabilityTrace({
   const posteriorEdge = posteriorProbability - noVigMarketProbability;
   const posteriorExpectedValue = posteriorProbability * bestPick.odds - 1;
   const disagreement = posteriorEdge;
-  const bandWidth =
-    beliefState.confidenceInterval.low !== null && beliefState.confidenceInterval.high !== null
-      ? Math.max(0.035, (beliefState.confidenceInterval.high - beliefState.confidenceInterval.low) / 2)
-      : 0.08;
   const confidenceBand = {
-    low: boundedProbability(posteriorProbability - bandWidth),
-    high: boundedProbability(posteriorProbability + bandWidth)
+    low: beliefState.confidenceInterval.low,
+    high: beliefState.confidenceInterval.high
   };
   const triggeredRules = abstentionRules.filter((rule) => rule.triggered);
   const conflicts = [

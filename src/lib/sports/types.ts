@@ -495,6 +495,7 @@ export type DecisionCommitteeStance = "support" | "challenge" | "neutral" | "abs
 export type DecisionCommitteeConsensus = "unanimous" | "leaning" | "split" | "blocked";
 export type DecisionBeliefDirection = "supports" | "opposes" | "uncertain";
 export type DecisionBeliefGrade = "strong" | "moderate" | "fragile";
+export type DecisionConfidenceIntervalMethod = "wilson-calibration-bucket" | "unavailable";
 export type DecisionMonitoringStatus = "active" | "watching" | "blocked" | "expired";
 export type DecisionMonitoringPriority = "critical" | "high" | "medium" | "low";
 export type DecisionActionabilityStatus = "actionable" | "watch-only" | "blocked";
@@ -626,6 +627,11 @@ export interface DecisionBeliefState {
   confidenceInterval: {
     low: number | null;
     high: number | null;
+    method: DecisionConfidenceIntervalMethod;
+    confidenceLevel: number | null;
+    sampleSize: number | null;
+    source: string | null;
+    detail: string;
   };
   uncertaintyScore: number;
   evidenceBalance: {
@@ -1026,6 +1032,8 @@ export interface DecisionUncertaintyComponent {
 export interface DecisionUncertaintyDecomposition {
   status: DecisionUncertaintyStatus;
   score: number;
+  method: "weighted-evidence-risk-index-v1";
+  statistical: false;
   summary: string;
   primaryUncertainty: string;
   confidencePenalty: number;
