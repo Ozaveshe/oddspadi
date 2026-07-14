@@ -1403,6 +1403,7 @@ export interface DecisionLearningProfile {
   active: boolean;
   modelKey?: string | null;
   engineVersion?: string | null;
+  modelCompatibility?: "exact-runtime-parity" | "benchmark-only" | "unverified-runtime-key" | "incompatible" | "unsupported-sport" | "missing";
   calibrationPromotion?: {
     id: string;
     candidateId: string;
@@ -1410,6 +1411,7 @@ export interface DecisionLearningProfile {
     expiresAt: string | null;
   } | null;
   sampleSize: number;
+  testSize?: number;
   realFinishedFixtures: number;
   minimumRecommendedFixtures: number;
   minimumEdge: number | null;
@@ -1418,8 +1420,13 @@ export interface DecisionLearningProfile {
   marketAdjustmentWeight: number | null;
   homeAdvantageElo: number | null;
   brierScore: number | null;
+  logLoss?: number | null;
+  calibrationError?: number | null;
   yield: number | null;
   closingLineValue: number | null;
+  playerFormFixtures?: number | null;
+  playerFormCoverage?: number | null;
+  minimumPlayerFormCoverage?: number | null;
   calibrationBuckets?: Array<{
     minProbability: number;
     maxProbability: number;

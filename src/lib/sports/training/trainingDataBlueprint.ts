@@ -1,5 +1,6 @@
 import type { MultiSportCorpusPlan, TrainingCorpusCommand, TrainingCorpusSport, TrainingCorpusSportPlan } from "@/lib/sports/training/multiSportCorpusPlan";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import { inspectRuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 
 export type TrainingDataBlueprintStatus = "ready-dry-run" | "waiting-env" | "needs-supabase-proof" | "blocked";
 export type TrainingDataBlueprintPhaseStatus = "ready" | "waiting" | "blocked";
@@ -253,6 +254,7 @@ function statusForSport(plan: TrainingCorpusSportPlan, snapshot: TrainingDataSna
 }
 
 function buildSport(plan: TrainingCorpusSportPlan, snapshot: TrainingDataSnapshot): TrainingDataBlueprintSport {
+  const runtimeBacktest = inspectRuntimeBacktestEvidence(snapshot.sport, snapshot.latestBacktest);
   const completeFeatureSnapshots = snapshot.counts.completeFeatureSnapshots ?? snapshot.counts.featureSnapshots;
   const current = {
     configured: snapshot.configured,
@@ -306,12 +308,12 @@ function buildSport(plan: TrainingCorpusSportPlan, snapshot: TrainingDataSnapsho
     }),
     gate({
       id: "backtest",
-      pass: current.backtestRuns > 0 && snapshot.latestBacktest?.status === "completed",
+      pass: current.backtestRuns > 0 && runtimeBacktest.exactRuntimeParity,
       watch: current.backtestRuns > 0,
-      label: "Completed real-data backtest",
+      label: "Runtime-parity real-data backtest",
       detail: snapshot.latestBacktest
-        ? `Latest backtest ${snapshot.latestBacktest.id} is ${snapshot.latestBacktest.status} with sample size ${snapshot.latestBacktest.sampleSize}.`
-        : "No completed real-data backtest is stored yet.",
+        ? `Latest backtest ${snapshot.latestBacktest.id} is ${snapshot.latestBacktest.status} with sample size ${snapshot.latestBacktest.sampleSize}; compatibility ${runtimeBacktest.compatibility}.`
+        : "No runtime-parity real-data backtest is stored yet.",
       unlocks: "Learned guardrails and model-card training readiness can be evaluated."
     })
   ];

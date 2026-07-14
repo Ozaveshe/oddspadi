@@ -3,6 +3,7 @@ import type { DecisionOutcomeReplay } from "@/lib/sports/prediction/decisionOutc
 import type { DecisionSettlementImpact } from "@/lib/sports/prediction/decisionSettlementImpact";
 import type { Sport } from "@/lib/sports/types";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import { inspectRuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 
 export type DecisionShadowBacktestLedgerStatus = "ready-shadow" | "needs-settlement" | "needs-backtest" | "needs-storage" | "blocked";
 export type DecisionShadowBacktestGateStatus = "pass" | "watch" | "block";
@@ -149,7 +150,7 @@ function statusFor(gates: DecisionShadowBacktestGate[], training: TrainingDataSn
     if (training.status === "not-configured" || calibration.status === "not-configured") return "needs-storage";
     return "blocked";
   }
-  if (!training.latestBacktest) return "needs-backtest";
+  if (!inspectRuntimeBacktestEvidence(training.sport, training.latestBacktest).exactRuntimeParity) return "needs-backtest";
   if (gates.some((item) => item.id === "settlement-labels" && item.status === "watch")) return "needs-settlement";
   if (gates.some((item) => item.status === "watch")) return "needs-settlement";
   return "ready-shadow";
@@ -180,6 +181,7 @@ export function buildDecisionShadowBacktestLedger({
   calibration: CalibrationSnapshot;
   now?: Date;
 }): DecisionShadowBacktestLedger {
+  const runtimeBacktest = inspectRuntimeBacktestEvidence(training.sport, training.latestBacktest);
   const sample = {
     candidates: outcomeReplay.rows.length,
     averageModelProbability: average(outcomeReplay.rows.map((row) => row.modelProbability)),
@@ -239,12 +241,14 @@ export function buildDecisionShadowBacktestLedger({
     }),
     gate({
       id: "historical-backtest",
-      label: "Historical backtest",
-      status: training.latestBacktest?.status === "completed" ? "pass" : training.configured ? "watch" : "block",
+      label: "Runtime-parity historical backtest",
+      status: runtimeBacktest.exactRuntimeParity ? "pass" : training.configured ? "watch" : "block",
       detail: training.latestBacktest
-        ? `Latest backtest ${training.latestBacktest.status}: sample ${training.latestBacktest.sampleSize}, Brier ${training.latestBacktest.brierScore ?? "N/A"}, ROI ${training.latestBacktest.roiUnits}.`
+        ? `Latest backtest ${training.latestBacktest.status}: sample ${training.latestBacktest.sampleSize}, Brier ${training.latestBacktest.brierScore ?? "N/A"}, ROI ${training.latestBacktest.roiUnits}, compatibility ${runtimeBacktest.compatibility}.`
         : training.readiness.detail,
-      nextAction: training.latestBacktest ? "Compare replay pressure against the next calibration run." : "Run a real-data backtest after the historical corpus is imported."
+      nextAction: runtimeBacktest.exactRuntimeParity
+        ? "Compare replay pressure against the next calibration run."
+        : "Replay the chronological holdout through the current runtime entrypoint and store its feature-contract receipt."
     }),
     gate({
       id: "calibration-sample",

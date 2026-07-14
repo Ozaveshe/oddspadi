@@ -1,5 +1,6 @@
 import type { DecisionFeatureMatrix, DecisionFeatureStatus } from "@/lib/sports/prediction/decisionFeatureMatrix";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import { inspectRuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 import type { Sport } from "@/lib/sports/types";
 
 export type DecisionModelGovernanceStatus = "approved" | "shadow" | "blocked";
@@ -96,7 +97,8 @@ function buildChecks(matrix: DecisionFeatureMatrix, training: TrainingDataSnapsh
   const fixtureScore = Math.min(100, pct(training.counts.realFinishedFixtures, minimum));
   const oddsScore = Math.min(100, pct(training.counts.realOddsSnapshots, Math.max(1, training.counts.realFinishedFixtures * 2)));
   const featureSnapshotScore = Math.min(100, pct(training.counts.featureSnapshots, Math.max(1, training.counts.realFinishedFixtures)));
-  const backtestScore = training.latestBacktest?.status === "completed" ? 100 : training.counts.backtestRuns > 0 ? 68 : 0;
+  const runtimeBacktest = inspectRuntimeBacktestEvidence(training.sport, training.latestBacktest);
+  const backtestScore = runtimeBacktest.exactRuntimeParity ? 100 : runtimeBacktest.completed ? 35 : training.counts.backtestRuns > 0 ? 20 : 0;
   const liveFeatureScore = matrix.coverage.averageTrainingReadyScore;
   const missingRatio = pct(matrix.coverage.missingFeatures, matrix.coverage.totalFeatures);
   const mockRatio = pct(matrix.coverage.mockFeatures, matrix.coverage.totalFeatures);
@@ -179,13 +181,15 @@ function buildChecks(matrix: DecisionFeatureMatrix, training: TrainingDataSnapsh
     check({
       id: "backtest-calibration",
       category: "calibration",
-      label: "Completed real-data backtest",
-      status: statusFromScore(backtestScore, !training.latestBacktest || training.latestBacktest.status !== "completed"),
+      label: "Runtime-parity held-out backtest",
+      status: statusFromScore(backtestScore, !runtimeBacktest.exactRuntimeParity),
       score: backtestScore,
       detail: training.latestBacktest
-        ? `Latest backtest ${training.latestBacktest.id} is ${training.latestBacktest.status} with sample size ${training.latestBacktest.sampleSize}.`
-        : "No completed real-data backtest is available.",
-      requiredAction: training.latestBacktest?.status === "completed" ? null : "Run a real-data backtest after importing enough fixtures, odds, and feature snapshots."
+        ? `Latest backtest ${training.latestBacktest.id} is ${training.latestBacktest.status} with sample size ${training.latestBacktest.sampleSize}; runtime compatibility is ${runtimeBacktest.compatibility}.`
+        : "No runtime-parity real-data backtest is available.",
+      requiredAction: runtimeBacktest.exactRuntimeParity
+        ? null
+        : "Replay the chronological holdout through the current runtime entrypoint and store its feature-contract receipt."
     }),
     check({
       id: "runtime-storage",

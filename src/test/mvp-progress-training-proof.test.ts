@@ -3,6 +3,7 @@ import { buildDecisionMvpProgressSnapshot } from "@/lib/sports/prediction/decisi
 import type { DecisionProviderEnvDiagnostic } from "@/lib/sports/prediction/decisionProviderEnvDiagnostic";
 import type { DecisionEngineReadiness } from "@/lib/sports/prediction/decisionReadiness";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import { runtimeModelIdentityReceipt, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 
 describe("MVP progress training proof", () => {
   it("credits stored calibrated corpus evidence while keeping learned promotion guarded", () => {
@@ -38,10 +39,26 @@ describe("MVP progress training proof", () => {
         readyForTraining: true
       },
       latestBacktest: {
+        id: "runtime-backtest-1",
+        modelKey: runtimeModelKey("football"),
         status: "completed",
+        sampleSize: 3800,
+        testSize: 1140,
         calibrationError: 0.024306,
         calibrationBuckets: [{ id: "p01" }],
-        learnedWeights: { minimumEdge: 0.055, valueEdgeWeight: 0.2885, dataQualityWeight: 0.18 }
+        learnedWeights: { minimumEdge: 0.055, valueEdgeWeight: 0.2885, dataQualityWeight: 0.18 },
+        config: {
+          modelIdentity: runtimeModelIdentityReceipt("football", {
+            featureContractStatus: "passed",
+            evaluatedFixtures: 1140,
+            entrypointInvocations: 1140,
+            executionHash: "fnv1a-progress-proof"
+          }),
+          featureContract: {
+            eligibleFixtures: 3800,
+            optionalCoverage: { playerFormFixtures: 2600 }
+          }
+        }
       }
     } as unknown as TrainingDataSnapshot;
 

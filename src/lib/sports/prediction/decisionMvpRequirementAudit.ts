@@ -11,6 +11,7 @@ import type { TenYearFootballCorpusBackfillPlan } from "@/lib/sports/training/co
 import type { FootballDataModelPromotionDecision } from "@/lib/sports/training/footballDataModelPromotionDecision";
 import type { PublicHistoricalTrainingEvidence } from "@/lib/sports/training/publicHistoricalTrainingEvidence";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import { inspectRuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 import type { DecisionDataSignalCategory, Match, Prediction, Sport } from "@/lib/sports/types";
 import { runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 
@@ -607,6 +608,7 @@ function buildTrainingSupabaseChecks({
   publicHistoricalTrainingEvidence?: PublicHistoricalTrainingEvidence | null;
   footballDataModelPromotionDecision?: FootballDataModelPromotionDecision | null;
 }): DecisionMvpRequirementAuditCheck[] {
+  const runtimeBacktest = inspectRuntimeBacktestEvidence(training.sport, training.latestBacktest);
   const publicHistoryCheck = publicHistoricalTrainingEvidence
     ? [
         check({
@@ -719,14 +721,14 @@ function buildTrainingSupabaseChecks({
     check({
       id: "training-backtest",
       group: "training-supabase",
-      status: training.latestBacktest?.status === "completed" ? "pass" : "block",
-      label: "Backtest and calibration",
-      requirement: "Backtest before learned thresholds affect live decisions.",
+      status: runtimeBacktest.exactRuntimeParity ? "pass" : "block",
+      label: "Runtime-parity backtest and calibration",
+      requirement: "Backtest the current runtime entrypoint before learned thresholds affect live decisions.",
       evidence: training.latestBacktest
-        ? `Latest backtest ${training.latestBacktest.id} is ${training.latestBacktest.status} with sample ${training.latestBacktest.sampleSize}.`
-        : "No completed real-data backtest is available.",
+        ? `Latest backtest ${training.latestBacktest.id} is ${training.latestBacktest.status} with sample ${training.latestBacktest.sampleSize}; compatibility ${runtimeBacktest.compatibility}.`
+        : "No runtime-parity real-data backtest is available.",
       proofUrl: "/api/sports/decision/training",
-      nextAction: "Run real-data sport-specific backtests after the minimum corpus and odds snapshots exist.",
+      nextAction: "Replay the current runtime model over a chronological holdout and store its model-identity and feature-contract receipts.",
       source: "trainingRepository"
     }),
     ...publicHistoryCheck,

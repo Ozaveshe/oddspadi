@@ -2,6 +2,7 @@ import type { DecisionLearningProfile, Sport } from "@/lib/sports/types";
 import { getTrainingDataSnapshot, type StoredBacktestRun, type TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
 import { readActiveCalibrationPromotion, type ActiveCalibrationPromotion } from "./decisionCalibrationPromotion";
 import { historicalModelCompatibility, isDecisionModelSport } from "./modelIdentity";
+import { inspectRuntimeBacktestEvidence, type RuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 
 function numberFromWeight(weights: Record<string, unknown>, key: string): number | null {
   const value = weights[key];
@@ -123,7 +124,11 @@ function footballLearningProvenanceBlocker(backtest: StoredBacktestRun): string 
   return null;
 }
 
-function liveMetricBlockers(snapshot: TrainingDataSnapshot, backtest: StoredBacktestRun | null): string[] {
+function liveMetricBlockers(
+  snapshot: TrainingDataSnapshot,
+  backtest: StoredBacktestRun | null,
+  evidence: RuntimeBacktestEvidence
+): string[] {
   if (!backtest) return ["no completed backtest"];
   const blockers: string[] = [];
   if (!isDecisionModelSport(snapshot.sport)) {
@@ -149,6 +154,11 @@ function liveMetricBlockers(snapshot: TrainingDataSnapshot, backtest: StoredBack
   if (snapshot.sport === "football") {
     const provenanceBlocker = footballLearningProvenanceBlocker(backtest);
     if (provenanceBlocker) blockers.push(provenanceBlocker);
+    if (evidence.compatibility === "exact-runtime-parity" && !evidence.playerEvidenceReady) {
+      const observed = evidence.playerFormCoverage === null ? "unverified" : `${(evidence.playerFormCoverage * 100).toFixed(1)}%`;
+      const required = `${((evidence.minimumPlayerFormCoverage ?? 0) * 100).toFixed(0)}%`;
+      blockers.push(`player-form coverage is ${observed}; ${required} of chronology-safe fixtures is required`);
+    }
   }
   if (Object.keys(backtest.learnedWeights).length < 3) blockers.push("learned-weight payload is incomplete");
   return blockers;
@@ -197,6 +207,7 @@ export function buildDecisionLearningProfileFromSnapshot(
   } = {}
 ): DecisionLearningProfile {
   const backtest = snapshot.latestBacktest;
+  const runtimeEvidence = inspectRuntimeBacktestEvidence(snapshot.sport, backtest);
   const promotionMatchesBacktest = Boolean(
     activePromotion && backtest && activePromotion.modelKey === backtest.modelKey && activePromotion.engineVersion === backtest.engineVersion
   );
@@ -208,7 +219,7 @@ export function buildDecisionLearningProfileFromSnapshot(
       : calibrationBuckets(backtest);
   const demoOnly = Boolean(backtest?.dataSource.includes("demo")) || snapshot.counts.realFinishedFixtures === 0;
   const promotionApproved = requireDurablePromotion ? promotionMatchesBacktest : promotionMatchesBacktest || hasExplicitLivePromotion(backtest);
-  const metricBlockers = liveMetricBlockers(snapshot, backtest);
+  const metricBlockers = liveMetricBlockers(snapshot, backtest, runtimeEvidence);
   const shadowReady = snapshot.status === "ready" && Boolean(backtest) && snapshot.readiness.readyForTraining && !demoOnly;
   const active = shadowReady && promotionApproved && metricBlockers.length === 0;
   const status: DecisionLearningProfile["status"] =
@@ -230,10 +241,12 @@ export function buildDecisionLearningProfileFromSnapshot(
     active,
     modelKey: backtest?.modelKey ?? activePromotion?.modelKey ?? null,
     engineVersion: backtest?.engineVersion ?? activePromotion?.engineVersion ?? null,
+    modelCompatibility: runtimeEvidence.compatibility,
     calibrationPromotion: promotionMatchesBacktest && activePromotion
       ? { id: activePromotion.id, candidateId: activePromotion.candidateId, approvedAt: activePromotion.approvedAt, expiresAt: activePromotion.expiresAt }
       : null,
     sampleSize: backtest?.sampleSize ?? 0,
+    testSize: backtest?.testSize ?? 0,
     realFinishedFixtures: snapshot.counts.realFinishedFixtures,
     minimumRecommendedFixtures: snapshot.readiness.minimumRecommendedFixtures,
     minimumEdge: learnedValue(backtest, "minimumEdge"),
@@ -242,8 +255,13 @@ export function buildDecisionLearningProfileFromSnapshot(
     marketAdjustmentWeight: learnedValue(backtest, "marketAdjustmentWeight"),
     homeAdvantageElo: learnedValue(backtest, "homeAdvantageElo"),
     brierScore: backtest?.brierScore ?? null,
+    logLoss: backtest?.logLoss ?? null,
+    calibrationError: backtest?.calibrationError ?? null,
     yield: backtest?.yield ?? null,
     closingLineValue: backtest?.closingLineValue ?? null,
+    playerFormFixtures: runtimeEvidence.playerFormFixtures,
+    playerFormCoverage: runtimeEvidence.playerFormCoverage,
+    minimumPlayerFormCoverage: runtimeEvidence.minimumPlayerFormCoverage,
     calibrationBuckets: resolvedCalibrationBuckets,
     generatedAt: snapshot.generatedAt,
     reason: profileReason({ snapshot, backtest, active, demoOnly, promotionApproved, metricBlockers, durablePromotionRequired: requireDurablePromotion }),

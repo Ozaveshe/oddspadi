@@ -3,6 +3,7 @@ import type { DecisionModelGovernance } from "@/lib/sports/prediction/decisionMo
 import type { DecisionOddsBoard } from "@/lib/sports/prediction/decisionOddsBoard";
 import type { DecisionPortfolioRisk } from "@/lib/sports/prediction/decisionPortfolioRisk";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import { inspectRuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 import type { Sport } from "@/lib/sports/types";
 
 export type DecisionModelTrustStatus = "trusted-shadow" | "needs-evidence" | "blocked";
@@ -117,7 +118,8 @@ function corpusScore(training: TrainingDataSnapshot): number {
   const minimum = training.readiness.minimumRecommendedFixtures;
   const fixtureScore = minimum > 0 ? (training.counts.realFinishedFixtures / minimum) * 55 : 0;
   const oddsScore = training.counts.realFinishedFixtures > 0 ? (training.counts.realOddsSnapshots / (training.counts.realFinishedFixtures * 2)) * 25 : 0;
-  const backtestScore = training.latestBacktest?.status === "completed" ? 20 : training.counts.backtestRuns > 0 ? 10 : 0;
+  const runtimeBacktest = inspectRuntimeBacktestEvidence(training.sport, training.latestBacktest);
+  const backtestScore = runtimeBacktest.exactRuntimeParity ? 20 : runtimeBacktest.completed ? 6 : training.counts.backtestRuns > 0 ? 3 : 0;
   return clamp(fixtureScore + oddsScore + backtestScore);
 }
 

@@ -106,7 +106,11 @@ function readySnapshot(): TrainingDataSnapshot {
           evaluatedFixtures: 360,
           entrypointInvocations: 360,
           executionHash: "fnv1a-calibration"
-        })
+        }),
+        featureContract: {
+          eligibleFixtures: 1200,
+          optionalCoverage: { playerFormFixtures: 900 }
+        }
       },
       notes: [],
       createdAt: "2026-08-21T12:00:00.000Z"
@@ -189,6 +193,8 @@ describe("calibration promotion safety", () => {
     });
 
     expect(active.active).toBe(true);
+    expect(active.modelCompatibility).toBe("exact-runtime-parity");
+    expect(active.playerFormCoverage).toBe(0.75);
     expect(active.calibrationPromotion).toMatchObject({ id: "promotion-1", candidateId: "candidate-1" });
     expect(mismatched.active).toBe(false);
     expect(mismatched.reason).toContain("model-bound calibration promotion");
@@ -233,6 +239,30 @@ describe("calibration promotion safety", () => {
 
     expect(profile.active).toBe(false);
     expect(profile.reason).toContain("learned weights lack training-window-only provenance");
+  });
+
+  it("keeps an exact-runtime football profile shadow-only when player-form history is too sparse", () => {
+    const snapshot = readySnapshot();
+    snapshot.latestBacktest = {
+      ...snapshot.latestBacktest!,
+      config: {
+        ...snapshot.latestBacktest!.config,
+        featureContract: {
+          eligibleFixtures: 1200,
+          optionalCoverage: { playerFormFixtures: 240 }
+        }
+      }
+    };
+
+    const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(profile.active).toBe(false);
+    expect(profile.modelCompatibility).toBe("exact-runtime-parity");
+    expect(profile.playerFormCoverage).toBe(0.2);
+    expect(profile.reason).toContain("player-form coverage is 20.0%; 60% of chronology-safe fixtures is required");
   });
 
   it("allows only pending-to-final settlement and never rewrites a final label", () => {

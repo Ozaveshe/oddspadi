@@ -3,6 +3,7 @@ import type { DecisionAISession } from "@/lib/sports/prediction/decisionAISessio
 import type { DecisionLearningQueue, DecisionLearningTask } from "@/lib/sports/prediction/decisionLearningQueue";
 import { decisionCurlCommand } from "@/lib/sports/prediction/decisionUrls";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import { inspectRuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 import type { DecisionAction, Sport } from "@/lib/sports/types";
 
 export type DecisionAISessionShadowEvaluationStatus = "ready-shadow" | "waiting" | "blocked";
@@ -183,7 +184,8 @@ function calibrationGate(calibration: CalibrationSnapshot, queue: DecisionLearni
 
 function backtestGate(training: TrainingDataSnapshot, queue: DecisionLearningQueue): DecisionAISessionShadowEvaluationGate {
   const sampleSize = training.latestBacktest?.sampleSize ?? 0;
-  const score = training.latestBacktest && sampleSize >= 1000 ? 86 : training.latestBacktest ? 58 : training.status === "ready" ? 34 : 10;
+  const runtimeBacktest = inspectRuntimeBacktestEvidence(training.sport, training.latestBacktest);
+  const score = runtimeBacktest.exactRuntimeParity && sampleSize >= 1000 ? 86 : runtimeBacktest.completed ? 38 : training.status === "ready" ? 24 : 10;
   const task = taskById(queue, `run-${training.sport}-backtest`);
   return {
     id: "historical-backtest",
@@ -191,9 +193,14 @@ function backtestGate(training: TrainingDataSnapshot, queue: DecisionLearningQue
     status: gateStatusFromScore(score),
     score,
     reason: training.latestBacktest
-      ? `Latest backtest ${training.latestBacktest.id} has sample ${sampleSize}, pick count ${training.latestBacktest.pickCount}, and Brier ${training.latestBacktest.brierScore ?? "n/a"}.`
+      ? `Latest backtest ${training.latestBacktest.id} has sample ${sampleSize}, pick count ${training.latestBacktest.pickCount}, Brier ${training.latestBacktest.brierScore ?? "n/a"}, and compatibility ${runtimeBacktest.compatibility}.`
       : training.reason ?? training.readiness.detail,
-    requiredEvidence: unique([sampleSize >= 1000 ? null : "Run a real-data backtest with a production-scale sample.", task?.expectedEvidence])
+    requiredEvidence: unique([
+      runtimeBacktest.exactRuntimeParity && sampleSize >= 1000
+        ? null
+        : "Run a production-scale chronological backtest through the current runtime entrypoint.",
+      task?.expectedEvidence
+    ])
   };
 }
 

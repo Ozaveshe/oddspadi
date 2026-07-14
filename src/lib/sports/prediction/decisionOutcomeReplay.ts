@@ -3,6 +3,7 @@ import { decisionCandidatePick } from "@/lib/sports/prediction/decisionCandidate
 import { buildDecisionOutcomeSettlement, type OutcomeSettlementPreview } from "@/lib/sports/prediction/decisionOutcomeSettlement";
 import type { Match, Prediction } from "@/lib/sports/types";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import { inspectRuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 import type { Sport } from "@/lib/sports/types";
 
 type PredictionRow = {
@@ -286,11 +287,13 @@ function rowFromPrediction({
   const brierIfWin = (probability - 1) ** 2;
   const brierIfLoss = probability ** 2;
   const expectedBrier = probability * brierIfWin + (1 - probability) * brierIfLoss;
-  const historicalBrier = training.latestBacktest?.brierScore ?? null;
-  const historicalLogLoss = training.latestBacktest?.logLoss ?? null;
-  const historicalRoi = training.latestBacktest?.roiUnits ?? null;
-  const historicalClv = training.latestBacktest?.closingLineValue ?? null;
-  const hasBacktest = Boolean(training.latestBacktest && training.latestBacktest.status === "completed");
+  const runtimeEvidence = inspectRuntimeBacktestEvidence(training.sport, training.latestBacktest);
+  const comparableBacktest = runtimeEvidence.exactRuntimeParity ? training.latestBacktest : null;
+  const historicalBrier = comparableBacktest?.brierScore ?? null;
+  const historicalLogLoss = comparableBacktest?.logLoss ?? null;
+  const historicalRoi = comparableBacktest?.roiUnits ?? null;
+  const historicalClv = comparableBacktest?.closingLineValue ?? null;
+  const hasBacktest = runtimeEvidence.exactRuntimeParity;
   const brierPressure = historicalBrier === null ? 0.42 : clamp((historicalBrier - expectedBrier) / 0.18 + 0.42, 0, 1);
   const logPressure = historicalLogLoss === null ? 0.36 : clamp((historicalLogLoss - 0.62) / 0.55 + 0.36, 0, 1);
   const roiPressure = historicalRoi === null ? 0.36 : historicalRoi >= 0 ? 0.18 : clamp(0.48 + Math.abs(historicalRoi) / 12, 0.48, 0.9);
@@ -353,7 +356,7 @@ function rowFromPrediction({
 function statusFor(rows: DecisionOutcomeReplayRow[], training: TrainingDataSnapshot): DecisionOutcomeReplayStatus {
   if (training.status === "failed") return "blocked";
   if (!rows.length) return "waiting-outcomes";
-  if (!training.latestBacktest) return "waiting-backtest";
+  if (!inspectRuntimeBacktestEvidence(training.sport, training.latestBacktest).exactRuntimeParity) return "waiting-backtest";
   if (rows.some((row) => row.action === "downgrade-until-settled" || row.action === "avoid")) return "waiting-outcomes";
   return "ready-replay";
 }

@@ -55,6 +55,7 @@ export function DecisionEvidenceProfile({
     .slice(0, 4);
   const profile = decision.learningProfile;
   const calibration = decision.probabilityCalibration;
+  const playerCoverage = profile?.playerFormCoverage;
   const confidenceLow = decision.probabilityTrace.confidenceBand.low;
   const confidenceHigh = decision.probabilityTrace.confidenceBand.high;
   const hasConfidenceBand = !separatedPublicCandidate && finiteProbability(confidenceLow) && finiteProbability(confidenceHigh) && confidenceHigh >= confidenceLow;
@@ -120,14 +121,28 @@ export function DecisionEvidenceProfile({
         <div className="evidence-provenance">
           <strong>Model and calibration provenance</strong>
           <dl>
-            <div><dt>Runtime model</dt><dd>{profile?.modelKey ?? "Current sport model"}</dd></div>
+            <div><dt>Historical evidence model</dt><dd>{profile?.modelKey ?? "Not established"}</dd></div>
+            <div><dt>Runtime parity</dt><dd>{profile?.modelCompatibility?.replaceAll("-", " ") ?? "Not established"}</dd></div>
             <div><dt>Engine version</dt><dd>{decision.engineVersion}</dd></div>
             <div><dt>Learning profile</dt><dd>{profile?.status ?? "Not loaded"}</dd></div>
             <div><dt>Calibration</dt><dd>{calibration?.status ?? "Not attached"}</dd></div>
             <div><dt>Historical sample</dt><dd>{profile ? profile.sampleSize.toLocaleString() : "Not established"}</dd></div>
-            <div><dt>Brier score</dt><dd>{metric(profile?.brierScore, (value) => value.toFixed(3))}</dd></div>
+            <div><dt>Held-out sample</dt><dd>{profile?.testSize ? profile.testSize.toLocaleString() : "Not established"}</dd></div>
+            <div><dt>Normalized Brier</dt><dd>{metric(profile?.brierScore, (value) => value.toFixed(3))}</dd></div>
+            <div><dt>Log loss</dt><dd>{metric(profile?.logLoss, (value) => value.toFixed(3))}</dd></div>
+            <div><dt>Calibration error</dt><dd>{metric(profile?.calibrationError, (value) => value.toFixed(3))}</dd></div>
+            <div>
+              <dt>Player-form coverage</dt>
+              <dd>
+                {finiteProbability(playerCoverage ?? null)
+                  ? `${formatPercent(playerCoverage!)} (${profile?.playerFormFixtures?.toLocaleString() ?? 0} fixtures)`
+                  : "Not established"}
+              </dd>
+            </div>
           </dl>
-          <p>{calibration?.summary ?? profile?.reason ?? "No governed historical calibration profile was attached to this decision."}</p>
+          <p>{profile?.reason ?? "No governed historical calibration profile was attached to this decision."}</p>
+          {calibration?.summary ? <p className="small muted">Live outcome calibration: {calibration.summary}</p> : null}
+          <p className="small muted">Normalized Brier averages squared probability error across the market outcomes; lower is better. Calibration error measures the weighted gap between forecast probability and observed frequency.</p>
         </div>
       </div>
 

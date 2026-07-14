@@ -13617,6 +13617,10 @@ describe("prediction utilities", () => {
                 entrypointInvocations: 300,
                 executionHash: "fnv1a-learning"
               }),
+              featureContract: {
+                eligibleFixtures: 1200,
+                optionalCoverage: { playerFormFixtures: 900 }
+              },
               promotion: {
                 status: "approved",
                 scope: "live-guardrails",

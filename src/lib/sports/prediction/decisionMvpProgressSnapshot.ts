@@ -4,6 +4,7 @@ import type { DecisionEngineReadiness } from "@/lib/sports/prediction/decisionRe
 import type { ApiFootballEntitlementProbe } from "@/lib/sports/training/apiFootballEntitlementProbe";
 import type { PublicHistoricalTrainingEvidence } from "@/lib/sports/training/publicHistoricalTrainingEvidence";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import { inspectRuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 import type { Sport } from "@/lib/sports/types";
 
 export type DecisionMvpProgressSnapshotStatus = "local-mvp-ready" | "needs-provider-keys" | "needs-storage" | "needs-openai" | "needs-training";
@@ -196,13 +197,16 @@ export function buildDecisionMvpProgressSnapshot({
   const storageIsForeignBlocked = foreignSchemaSignals.length > 0;
   const storagePercent = storageIsForeignBlocked ? 28 : readiness.supabase.status === "ready" ? 78 : readiness.supabase.configured ? 48 : 18;
   const aiPercent = readiness.openAi.status === "ready" ? 82 : readiness.openAi.configured ? 54 : 22;
+  const latestBacktest = trainingSnapshot?.latestBacktest;
+  const runtimeBacktest = inspectRuntimeBacktestEvidence(sport, latestBacktest);
   const storedTrainingReady = Boolean(
     trainingSnapshot?.status === "ready" &&
       trainingSnapshot.readiness.readyForTraining &&
-      trainingSnapshot.latestBacktest?.status === "completed" &&
-      trainingSnapshot.latestBacktest.calibrationError !== null &&
-      trainingSnapshot.latestBacktest.calibrationBuckets.length > 0 &&
-      Object.keys(trainingSnapshot.latestBacktest.learnedWeights).length > 0
+      runtimeBacktest.exactRuntimeParity &&
+      latestBacktest &&
+      latestBacktest.calibrationError !== null &&
+      latestBacktest.calibrationBuckets.length > 0 &&
+      Object.keys(latestBacktest.learnedWeights).length > 0
   );
   const trainingPercent = storedTrainingReady ? 88 : readiness.trainingData.status === "ready" ? 72 : readiness.trainingData.configured ? 45 : 24;
   const publicHistoryPercent = publicHistoricalTrainingEvidence?.contribution.mvpCorpusPercent ?? 34;
