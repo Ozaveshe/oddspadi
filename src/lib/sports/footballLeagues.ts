@@ -46,6 +46,17 @@ export function predictionLeagueBySlug(slug: string) { return predictionFootball
 export function footballLeaguePriority(id: string | number) { return footballLeagueById(id)?.enrichmentPriority ?? null; }
 export function homeAdvantageForLeague(id: string | number) { return footballLeagueById(id)?.homeAdvantageFactor ?? 1.11; }
 
+/** Shared normalization used by both daily provider fixtures and historical replay. */
+export function footballLeagueStrength(country: string, leagueName: string): number {
+  const text = `${country} ${leagueName}`.toLowerCase();
+  if (text.includes("champions league")) return 0.98;
+  if (text.includes("england") || text.includes("premier league")) return 0.94;
+  if (text.includes("spain") || text.includes("italy") || text.includes("germany")) return 0.9;
+  if (text.includes("france") || text.includes("netherlands") || text.includes("portugal")) return 0.85;
+  if (text.includes("nigeria") || text.includes("ghana") || text.includes("kenya") || text.includes("south africa")) return 0.7;
+  return 0.78;
+}
+
 export function configuredPredictionLeagueIds(raw: string | undefined): Set<string> {
   const allowed = new Set(defaultPredictionFootballLeagueIds);
   if (!raw?.trim()) return allowed;

@@ -20,7 +20,7 @@ import {
 } from "@/lib/sports/prediction/historicalTennisStrength";
 import type { HeadToHeadSummary, Match, MatchContextSignal, MatchStatus, OddsMarket, Sport, SportsDataProvider, TeamForm } from "@/lib/sports/types";
 import { currentFootballSeason, leagueBySlug, type LeagueTable } from "@/lib/sports/leagueStandings";
-import { configuredPredictionLeagueIds, footballLeaguePriority } from "@/lib/sports/footballLeagues";
+import { configuredPredictionLeagueIds, footballLeaguePriority, footballLeagueStrength } from "@/lib/sports/footballLeagues";
 import {
   loadPlayerFormSignalsForFixtures,
   type PlayerFormFixture
@@ -627,16 +627,6 @@ function tennisStatus(status: string | undefined): MatchStatus {
   if (["finished", "complete", "ended", "retired", "walkover"].some((term) => normalized.includes(term))) return "finished";
   if (["live", "set", "game", "in progress"].some((term) => normalized.includes(term))) return "live";
   return "scheduled";
-}
-
-function leagueStrength(country: string, leagueName: string): number {
-  const text = `${country} ${leagueName}`.toLowerCase();
-  if (text.includes("champions league")) return 0.98;
-  if (text.includes("england") || text.includes("premier league")) return 0.94;
-  if (text.includes("spain") || text.includes("italy") || text.includes("germany")) return 0.9;
-  if (text.includes("france") || text.includes("netherlands") || text.includes("portugal")) return 0.85;
-  if (text.includes("nigeria") || text.includes("ghana") || text.includes("kenya") || text.includes("south africa")) return 0.7;
-  return 0.78;
 }
 
 function dataQualityForFixture(item: ApiFootballFixture, hasOdds: boolean, hasProviderForm: boolean): number {
@@ -1263,7 +1253,7 @@ function oddsBackedFootballFixturesFromEvents(
     const isEpl = sportKey.includes("soccer_epl") || rawLeagueName.toLowerCase() === "epl" || rawLeagueName.toLowerCase().includes("premier league");
     const leagueName = isEpl ? "Premier League" : rawLeagueName || "Football";
     const country = isEpl ? "England" : "World";
-    const strength = leagueStrength(country, leagueName);
+    const strength = footballLeagueStrength(country, leagueName);
     const eventId = safeId(event.id, `${slug(homeName)}-${slug(awayName)}-${date}`);
     const homeId = `the-odds-api:${slug(homeName) || `home-${eventId}`}`;
     const awayId = `the-odds-api:${slug(awayName) || `away-${eventId}`}`;
@@ -1385,7 +1375,7 @@ function oddsBackedBasketballFixturesFromEvents(
     const sportKey = cleanText(event.sport_key) || "basketball_nba";
     const leagueName = cleanText(event.sport_title) || "Basketball";
     const country = basketballCountryForSportKey(sportKey);
-    const strength = leagueStrength(country, leagueName);
+    const strength = footballLeagueStrength(country, leagueName);
     const eventId = safeId(event.id, `${slug(homeName)}-${slug(awayName)}-${date}`);
     const homeId = `the-odds-api:${slug(homeName) || `home-${eventId}`}`;
     const awayId = `the-odds-api:${slug(awayName) || `away-${eventId}`}`;
@@ -1587,8 +1577,8 @@ function selectFootballEnrichmentFixtures(fixtures: ApiFootballFixture[], env: E
         const status = matchStatus(fixture.fixture?.status?.short);
         return status === "live" ? 3 : status === "scheduled" ? 2 : 1;
       };
-      const leftStrength = leagueStrength(cleanText(left.league?.country) || "World", cleanText(left.league?.name) || "Football");
-      const rightStrength = leagueStrength(cleanText(right.league?.country) || "World", cleanText(right.league?.name) || "Football");
+      const leftStrength = footballLeagueStrength(cleanText(left.league?.country) || "World", cleanText(left.league?.name) || "Football");
+      const rightStrength = footballLeagueStrength(cleanText(right.league?.country) || "World", cleanText(right.league?.name) || "Football");
       const leftPriority = footballLeaguePriority(String(left.league?.id ?? "")) ?? 999;
       const rightPriority = footballLeaguePriority(String(right.league?.id ?? "")) ?? 999;
       return statusWeight(right) - statusWeight(left) || leftPriority - rightPriority || rightStrength - leftStrength;
@@ -2077,7 +2067,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       if (!homeName || !awayName || !kickoffTime) return [];
       const country = cleanText(fixture.league?.country) || "World";
       const leagueName = cleanText(fixture.league?.name) || "Football";
-      const strength = leagueStrength(country, leagueName);
+      const strength = footballLeagueStrength(country, leagueName);
       const homeId = `api-football:${safeId(fixture.teams?.home?.id, slug(homeName) || "home")}`;
       const awayId = `api-football:${safeId(fixture.teams?.away?.id, slug(awayName) || "away")}`;
       const directOddsMarkets = firstOddsMarketsForFixture(oddsByEvent, homeName, awayName, kickoffTime);
@@ -2226,7 +2216,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       if (!homeName || !awayName) return [];
       const country = cleanText(game.league?.country) || "World";
       const leagueName = cleanText(game.league?.name) || "Basketball";
-      const strength = leagueStrength(country, leagueName);
+      const strength = footballLeagueStrength(country, leagueName);
       const kickoffTime = basketballKickoff(game);
       const homeId = `api-basketball:${safeId(game.teams?.home?.id, slug(homeName) || "home")}`;
       const awayId = `api-basketball:${safeId(game.teams?.away?.id, slug(awayName) || "away")}`;

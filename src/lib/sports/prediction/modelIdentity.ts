@@ -11,6 +11,13 @@ export type DecisionModelIdentity = Readonly<{
   runtimeEntrypoint: string;
 }>;
 
+export type RuntimeModelIdentityProof = Readonly<{
+  featureContractStatus: "passed";
+  evaluatedFixtures: number;
+  entrypointInvocations: number;
+  executionHash: string;
+}>;
+
 const IDENTITIES: Readonly<Record<DecisionModelSport, DecisionModelIdentity>> = {
   football: {
     sport: "football",
@@ -77,18 +84,31 @@ export function historicalModelCompatibility({
     receipt.runtimeModelKey === identity.runtimeModelKey &&
     receipt.featureContractVersion === identity.featureContractVersion &&
     receipt.runtimeEntrypoint === identity.runtimeEntrypoint &&
-    receipt.execution === "runtime-model";
+    receipt.execution === "runtime-model" &&
+    receipt.featureContractStatus === "passed" &&
+    typeof receipt.evaluatedFixtures === "number" &&
+    receipt.evaluatedFixtures > 0 &&
+    receipt.entrypointInvocations === receipt.evaluatedFixtures &&
+    typeof receipt.executionHash === "string" &&
+    receipt.executionHash.length >= 8;
   return exact ? "exact-runtime-parity" : "unverified-runtime-key";
 }
 
-export function runtimeModelIdentityReceipt(sport: DecisionModelSport): Record<string, string> {
+export function runtimeModelIdentityReceipt(
+  sport: DecisionModelSport,
+  proof: RuntimeModelIdentityProof
+): Record<string, string | number> {
   const identity = decisionModelIdentity(sport);
   return {
     sport,
     runtimeModelKey: identity.runtimeModelKey,
     featureContractVersion: identity.featureContractVersion,
     runtimeEntrypoint: identity.runtimeEntrypoint,
-    execution: "runtime-model"
+    execution: "runtime-model",
+    featureContractStatus: proof.featureContractStatus,
+    evaluatedFixtures: proof.evaluatedFixtures,
+    entrypointInvocations: proof.entrypointInvocations,
+    executionHash: proof.executionHash
   };
 }
 

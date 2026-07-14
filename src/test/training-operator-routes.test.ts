@@ -3,6 +3,7 @@ import { POST as backfill } from "@/app/api/sports/decision/training/backfill/ro
 import { GET as storageReceipt } from "@/app/api/sports/decision/training/historical-provider-storage-receipt/route";
 import { POST as providerSync } from "@/app/api/sports/decision/training/provider-sync/route";
 import { GET as inspectBacktest, POST as runBacktest } from "@/app/api/sports/decision/training/multi-sport-backtest-run/route";
+import { GET as inspectRuntimeReplay, POST as storeRuntimeReplay } from "@/app/api/sports/decision/training/football-runtime-replay/route";
 import { POST as runCalibration } from "@/app/api/sports/decision/training/calibration/route";
 import { POST as promoteCalibration } from "@/app/api/sports/decision/training/calibration-promotion/route";
 import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
@@ -34,11 +35,12 @@ describe("historical training operator routes", () => {
     process.env.ODDSPADI_ADMIN_TOKEN = "correct-token";
     const requests = [
       runBacktest(new Request("http://localhost/api/sports/decision/training/multi-sport-backtest-run?sport=football", { method: "POST" })),
+      storeRuntimeReplay(new Request("http://localhost/api/sports/decision/training/football-runtime-replay", { method: "POST" })),
       runCalibration(new Request("http://localhost/api/sports/decision/training/calibration?sport=football", { method: "POST" })),
       promoteCalibration(new Request("http://localhost/api/sports/decision/training/calibration-promotion", { method: "POST" }))
     ];
     const responses = await Promise.all(requests);
-    expect(responses.map((response) => response.status)).toEqual([401, 401, 401]);
+    expect(responses.map((response) => response.status)).toEqual([401, 401, 401, 401]);
   });
 
   it("blocks the legacy GET run switch before loading corpus or storage state", async () => {
@@ -47,6 +49,10 @@ describe("historical training operator routes", () => {
       new Request("http://localhost/api/sports/decision/training/multi-sport-backtest-run?sport=football&run=1")
     );
     expect(response.status).toBe(401);
+    const runtimeResponse = await inspectRuntimeReplay(
+      new Request("http://localhost/api/sports/decision/training/football-runtime-replay")
+    );
+    expect(runtimeResponse.status).toBe(401);
   });
 
   it("blocks receipt execution without a token while retaining a non-executing preview contract", async () => {

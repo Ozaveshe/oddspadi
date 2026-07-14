@@ -19,6 +19,13 @@ import {
   type HistoricalFootballOddsQuote
 } from "./footballBacktest";
 import {
+  footballRuntimeReplayIdentityReceipt,
+  runFootballRuntimeReplay,
+  type FootballRuntimeReplayConfig,
+  type FootballRuntimeReplayResult
+} from "./footballRuntimeReplay";
+import type { HistoricalFootballFixtureInput } from "./historicalIngestion";
+import {
   TENNIS_BACKTEST_MODEL_KEY,
   runTennisBacktest,
   type HistoricalTennisMatch,
@@ -29,11 +36,12 @@ import {
 
 type DbNumeric = number | string | null;
 type TrainingSport = Extract<Sport, "football" | "basketball" | "tennis">;
-type HistoricalBacktestResult = FootballBacktestResult | BasketballBacktestResult | TennisBacktestResult;
+type HistoricalBacktestResult = FootballBacktestResult | FootballRuntimeReplayResult | BasketballBacktestResult | TennisBacktestResult;
 type HistoricalBacktestConfig = FootballBacktestConfig | BasketballBacktestConfig | TennisBacktestConfig;
 
 type FixtureRow = {
   id: string;
+  provider: string;
   external_id: string;
   league_external_id: string | null;
   season: string | null;
@@ -43,9 +51,48 @@ type FixtureRow = {
   away_team_external_id: string;
   home_score: number | null;
   away_score: number | null;
+  home_xg: DbNumeric;
+  away_xg: DbNumeric;
   neutral_venue: boolean | null;
   data_quality: DbNumeric;
   metadata: Record<string, unknown> | null;
+};
+
+type LeagueDimensionRow = {
+  provider: string;
+  external_id: string;
+  name: string;
+  country: string | null;
+  strength: DbNumeric;
+};
+
+type TeamDimensionRow = {
+  provider: string;
+  external_id: string;
+  name: string;
+  country: string | null;
+};
+
+type AvailabilityRow = {
+  provider: string;
+  fixture_external_id: string;
+  team_external_id: string;
+  player_external_id: string | null;
+  player_name: string;
+  status: "available" | "doubtful" | "injured" | "suspended" | "unknown";
+  impact_score: DbNumeric;
+  reason: string | null;
+  observed_at: string | null;
+};
+
+type LineupRow = {
+  provider: string;
+  fixture_external_id: string;
+  team_external_id: string;
+  lineup_status: "predicted" | "confirmed" | "unavailable";
+  formation: string | null;
+  players: unknown[] | null;
+  observed_at: string | null;
 };
 
 type FeatureRow = {
@@ -279,6 +326,7 @@ function trainingControls(canRunBacktest: boolean): NonNullable<TrainingDataSnap
 function trainingProofUrls(): string[] {
   return [
     "/api/sports/decision/training",
+    "/api/sports/decision/training/football-runtime-replay",
     "/api/sports/decision/training/corpus-proof",
     "/api/sports/decision/training/data-blueprint",
     "/api/sports/decision/supabase-bootstrap",
@@ -901,7 +949,7 @@ async function readFinishedFixtureRows(
     let query = client
       .from("op_fixtures")
       .select(
-        "id, external_id, league_external_id, season, round, kickoff_at, home_team_external_id, away_team_external_id, home_score, away_score, neutral_venue, data_quality, metadata"
+        "id, provider, external_id, league_external_id, season, round, kickoff_at, home_team_external_id, away_team_external_id, home_score, away_score, home_xg, away_xg, neutral_venue, data_quality, metadata"
       )
       .eq("sport", sport)
       .eq("status", "finished")
@@ -912,7 +960,10 @@ async function readFinishedFixtureRows(
       query = query.neq("provider", "demo_seed");
     }
 
-    const { data, error } = await query.order("kickoff_at", { ascending: true }).range(offset, to);
+    const { data, error } = await query
+      .order("kickoff_at", { ascending: true })
+      .order("external_id", { ascending: true })
+      .range(offset, to);
     if (error) return { error: error.message };
 
     const page = (data ?? []) as FixtureRow[];
@@ -926,7 +977,7 @@ async function readFinishedFixtureRows(
 async function readStoredFinishedFixtures(
   sport: TrainingSport,
   limit = 5000,
-  { includeDemo = false }: { includeDemo?: boolean } = {}
+  { includeDemo = false, includeFeatures = true }: { includeDemo?: boolean; includeFeatures?: boolean } = {}
 ): Promise<StoredFinishedFixtures | { error: string }> {
   const client = getSupabaseServerClient();
   if (!client) return { error: "Supabase client could not be created." };
@@ -945,19 +996,21 @@ async function readStoredFinishedFixtures(
   const fixtureExternalIds = fixtures.map((fixture) => fixture.external_id);
 
   const featureRows: FeatureRow[] = [];
-  for (const chunk of chunkItems(fixtureIds)) {
-    const { data, error } = await client
-      .from("op_fixture_team_features")
-      .select(
-        "fixture_id, side, elo_rating, attack_strength, defense_strength, recent_form_points, recent_goals_for, recent_goals_against, rest_days, injuries_count, suspensions_count, metadata"
-      )
-      .in("fixture_id", chunk);
-    if (error) return { error: error.message };
-    featureRows.push(...((data ?? []) as FeatureRow[]));
+  if (includeFeatures) {
+    for (const chunk of chunkItems(fixtureIds)) {
+      const { data, error } = await client
+        .from("op_fixture_team_features")
+        .select(
+          "fixture_id, side, elo_rating, attack_strength, defense_strength, recent_form_points, recent_goals_for, recent_goals_against, rest_days, injuries_count, suspensions_count, metadata"
+        )
+        .in("fixture_id", chunk);
+      if (error) return { error: error.message };
+      featureRows.push(...((data ?? []) as FeatureRow[]));
+    }
   }
 
   const oddsRows: OddsRow[] = [];
-  for (const chunk of chunkItems(fixtureExternalIds, 50)) {
+  for (const chunk of chunkItems(fixtureExternalIds, 100)) {
     const { data, error } = await client
       .from("op_odds_snapshots")
       .select("fixture_external_id, market, selection, decimal_odds, is_closing, observed_at, bookmaker")
@@ -1076,6 +1129,142 @@ export async function readHistoricalFootballFixtures(
       homeSuspensionsCount: home?.suspensions_count ?? undefined,
       awaySuspensionsCount: away?.suspensions_count ?? undefined,
       odds: footballOddsFromRows(stored.oddsByFixture.get(fixture.external_id) ?? [])
+    };
+  });
+}
+
+function dimensionKey(provider: string, externalId: string): string {
+  return `${provider}:${externalId}`;
+}
+
+/**
+ * Read the raw historical identities/outcomes needed to rebuild leakage-safe
+ * runtime features. Stored strength snapshots are intentionally not trusted
+ * here because legacy rows do not carry an as-of or leakage receipt.
+ */
+export async function readHistoricalFootballRuntimeFixtures(
+  limit = 50_000,
+  { includeDemo = false }: { includeDemo?: boolean } = {}
+): Promise<HistoricalFootballFixtureInput[] | { error: string }> {
+  const stored = await readStoredFinishedFixtures("football", limit, { includeDemo, includeFeatures: false });
+  if ("error" in stored) return stored;
+  if (!stored.fixtures.length) return [];
+
+  const client = getSupabaseServerClient();
+  if (!client) return { error: "Supabase client could not be created." };
+  const leagueIds = Array.from(new Set(stored.fixtures.map((fixture) => fixture.league_external_id).filter((value): value is string => Boolean(value))));
+  const teamIds = Array.from(new Set(stored.fixtures.flatMap((fixture) => [fixture.home_team_external_id, fixture.away_team_external_id])));
+  const leagues: LeagueDimensionRow[] = [];
+  const teams: TeamDimensionRow[] = [];
+  const availabilityRows: AvailabilityRow[] = [];
+  const lineupRows: LineupRow[] = [];
+
+  for (const chunk of chunkItems(leagueIds)) {
+    const { data, error } = await client
+      .from("op_leagues")
+      .select("provider, external_id, name, country, strength")
+      .eq("sport", "football")
+      .in("external_id", chunk);
+    if (error) return { error: error.message };
+    leagues.push(...((data ?? []) as LeagueDimensionRow[]));
+  }
+  for (const chunk of chunkItems(teamIds)) {
+    const { data, error } = await client
+      .from("op_teams")
+      .select("provider, external_id, name, country")
+      .eq("sport", "football")
+      .in("external_id", chunk);
+    if (error) return { error: error.message };
+    teams.push(...((data ?? []) as TeamDimensionRow[]));
+  }
+  const fixtureExternalIds = stored.fixtures.map((fixture) => fixture.external_id);
+  for (const chunk of chunkItems(fixtureExternalIds, 100)) {
+    const { data, error } = await client
+      .from("op_player_availability_snapshots")
+      .select("provider, fixture_external_id, team_external_id, player_external_id, player_name, status, impact_score, reason, observed_at")
+      .eq("sport", "football")
+      .in("fixture_external_id", chunk);
+    if (error) return { error: error.message };
+    availabilityRows.push(...((data ?? []) as AvailabilityRow[]));
+  }
+  for (const chunk of chunkItems(fixtureExternalIds, 100)) {
+    const { data, error } = await client
+      .from("op_lineup_snapshots")
+      .select("provider, fixture_external_id, team_external_id, lineup_status, formation, players, observed_at")
+      .eq("sport", "football")
+      .in("fixture_external_id", chunk);
+    if (error) return { error: error.message };
+    lineupRows.push(...((data ?? []) as LineupRow[]));
+  }
+
+  const leaguesByKey = new Map(leagues.map((row) => [dimensionKey(row.provider, row.external_id), row]));
+  const teamsByKey = new Map(teams.map((row) => [dimensionKey(row.provider, row.external_id), row]));
+  const availabilityByFixture = new Map<string, AvailabilityRow[]>();
+  for (const row of availabilityRows) {
+    const key = dimensionKey(row.provider, row.fixture_external_id);
+    availabilityByFixture.set(key, [...(availabilityByFixture.get(key) ?? []), row]);
+  }
+  const lineupsByFixture = new Map<string, LineupRow[]>();
+  for (const row of lineupRows) {
+    const key = dimensionKey(row.provider, row.fixture_external_id);
+    lineupsByFixture.set(key, [...(lineupsByFixture.get(key) ?? []), row]);
+  }
+
+  return stored.fixtures.map((fixture) => {
+    const leagueExternalId = fixture.league_external_id ?? "";
+    const league = leaguesByKey.get(dimensionKey(fixture.provider, leagueExternalId));
+    const homeTeam = teamsByKey.get(dimensionKey(fixture.provider, fixture.home_team_external_id));
+    const awayTeam = teamsByKey.get(dimensionKey(fixture.provider, fixture.away_team_external_id));
+    return {
+      externalId: fixture.external_id,
+      kickoffAt: fixture.kickoff_at,
+      league: {
+        externalId: leagueExternalId,
+        name: league?.name ?? "",
+        country: league?.country ?? null,
+        strength: toNumber(league?.strength)
+      },
+      season: fixture.season,
+      round: fixture.round,
+      status: "finished" as const,
+      homeTeam: {
+        externalId: fixture.home_team_external_id,
+        name: homeTeam?.name ?? "",
+        country: homeTeam?.country ?? null
+      },
+      awayTeam: {
+        externalId: fixture.away_team_external_id,
+        name: awayTeam?.name ?? "",
+        country: awayTeam?.country ?? null
+      },
+      homeScore: fixture.home_score,
+      awayScore: fixture.away_score,
+      homeXg: toNumber(fixture.home_xg),
+      awayXg: toNumber(fixture.away_xg),
+      neutralVenue: Boolean(fixture.neutral_venue),
+      dataQuality: toNumber(fixture.data_quality, 0.72),
+      odds: footballOddsFromRows(stored.oddsByFixture.get(fixture.external_id) ?? []),
+      availability: (availabilityByFixture.get(dimensionKey(fixture.provider, fixture.external_id)) ?? []).map((row) => ({
+        teamExternalId: row.team_external_id,
+        playerExternalId: row.player_external_id,
+        playerName: row.player_name,
+        status: row.status,
+        impactScore: toNumber(row.impact_score),
+        reason: row.reason,
+        observedAt: row.observed_at
+      })),
+      lineups: (lineupsByFixture.get(dimensionKey(fixture.provider, fixture.external_id)) ?? []).map((row) => ({
+        teamExternalId: row.team_external_id,
+        lineupStatus: row.lineup_status,
+        formation: row.formation,
+        players: Array.isArray(row.players) ? row.players : [],
+        observedAt: row.observed_at
+      })),
+      metadata: {
+        ...(fixture.metadata ?? {}),
+        provider: fixture.provider,
+        runtimeReplaySource: "stored-identities-and-outcomes"
+      }
     };
   });
 }
@@ -1202,13 +1391,23 @@ function runBacktestForSport(
   return runFootballBacktest(fixtures as HistoricalFootballFixture[], config as FootballBacktestConfig);
 }
 
+function isFootballRuntimeReplayResult(result: HistoricalBacktestResult): result is FootballRuntimeReplayResult {
+  return result.sport === "football" && "featureContract" in result && "executionHash" in result;
+}
+
+function modelIdentityForResult(result: HistoricalBacktestResult): Record<string, string | number> {
+  if (!isFootballRuntimeReplayResult(result)) return benchmarkModelIdentityReceipt(result.sport);
+  return footballRuntimeReplayIdentityReceipt(result);
+}
+
 function backtestInsertPayload(result: HistoricalBacktestResult, includeDemo: boolean): Record<string, unknown> {
+  const runtimeReplay = isFootballRuntimeReplayResult(result);
   return {
     sport: result.sport,
     model_key: result.modelKey,
     engine_version: result.engineVersion,
     status: "completed",
-    data_source: includeDemo ? "supabase:op_fixtures:demo-included" : "supabase:op_fixtures:real-only",
+    data_source: `${includeDemo ? "supabase:op_fixtures:demo-included" : "supabase:op_fixtures:real-only"}${runtimeReplay ? ":runtime-entrypoint" : ":benchmark"}`,
     train_window_start: resultTrainWindowStart(result),
     train_window_end: resultTrainWindowEnd(result),
     test_window_start: resultTestWindowStart(result),
@@ -1230,7 +1429,10 @@ function backtestInsertPayload(result: HistoricalBacktestResult, includeDemo: bo
     learned_weights: result.learnedWeights,
     config: {
       ...result.config,
-      modelIdentity: benchmarkModelIdentityReceipt(result.sport)
+      ...(runtimeReplay
+        ? { featureContract: result.featureContract, executionHash: result.executionHash }
+        : {}),
+      modelIdentity: modelIdentityForResult(result)
     },
     notes: result.notes
   };
@@ -1241,8 +1443,7 @@ function legacyBacktestInsertPayload(result: HistoricalBacktestResult, includeDe
   delete payload.calibration_error;
   delete payload.calibration_buckets;
   payload.config = {
-    ...(typeof result.config === "object" ? result.config : {}),
-    modelIdentity: benchmarkModelIdentityReceipt(result.sport),
+    ...(typeof payload.config === "object" ? payload.config : {}),
     calibration: {
       expectedCalibrationError: result.calibrationError,
       buckets: result.calibrationBuckets
@@ -1343,6 +1544,58 @@ export async function runAndStoreHistoricalFootballBacktest({
   includeDemo?: boolean;
 } = {}): Promise<BacktestRunStoreResult> {
   return runAndStoreHistoricalBacktest({ sport: "football", minSample, limit, config, includeDemo });
+}
+
+export async function previewStoredFootballRuntimeReplay({
+  limit = 50_000,
+  config = {},
+  includeDemo = false
+}: {
+  limit?: number;
+  config?: FootballRuntimeReplayConfig;
+  includeDemo?: boolean;
+} = {}): Promise<FootballRuntimeReplayResult | { error: string }> {
+  const fixtures = await readHistoricalFootballRuntimeFixtures(limit, { includeDemo });
+  if ("error" in fixtures) return fixtures;
+  return runFootballRuntimeReplay(fixtures, config);
+}
+
+export async function runAndStoreFootballRuntimeReplay({
+  minSample = 100,
+  limit = 50_000,
+  config = {},
+  includeDemo = false
+}: {
+  minSample?: number;
+  limit?: number;
+  config?: FootballRuntimeReplayConfig;
+  includeDemo?: boolean;
+} = {}): Promise<BacktestRunStoreResult> {
+  const runtime = getSupabaseRuntimeStatus();
+  if (!runtime.serverWriteReady) {
+    return {
+      status: "not-configured",
+      configured: false,
+      reason: `Supabase server writes are not configured. Missing: ${runtime.missingServerEnv.join(", ")}.`
+    };
+  }
+
+  const replay = await previewStoredFootballRuntimeReplay({ limit, config, includeDemo });
+  if ("error" in replay) return { status: "failed", configured: true, reason: replay.error };
+  if (replay.status !== "completed" || replay.featureContract.status !== "passed" || replay.sampleSize < minSample) {
+    return {
+      status: "no-data",
+      configured: true,
+      reason: replay.sampleSize < minSample
+        ? `Only ${replay.sampleSize} football fixture(s) satisfy the exact runtime feature contract; ${minSample} are required.`
+        : replay.notes[0] ?? "No exact-entrypoint football runtime replay was produced.",
+      result: replay
+    };
+  }
+
+  const stored = await insertBacktestRun({ result: replay, includeDemo });
+  if ("error" in stored) return { status: "failed", configured: true, reason: stored.error, result: replay };
+  return { status: "stored", configured: true, id: stored.id, result: replay };
 }
 
 export function trainingModelKey(sport: TrainingSport = "football"): string {

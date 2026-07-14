@@ -55,7 +55,12 @@ function backtest(sport: TrainingCorpusSport, overrides: Partial<StoredBacktestR
     calibrationError: 0.08,
     calibrationBuckets: [],
     learnedWeights: {},
-    config: { modelIdentity: runtimeModelIdentityReceipt(sport) },
+    config: { modelIdentity: runtimeModelIdentityReceipt(sport, {
+      featureContractStatus: "passed",
+      evaluatedFixtures: 150,
+      entrypointInvocations: 150,
+      executionHash: `fnv1a-${sport}`
+    }) },
     notes: [],
     createdAt: "2026-07-10T10:00:00.000Z",
     ...overrides

@@ -39,7 +39,7 @@ function signalMagnitude(signal: MatchContextSignal): number {
   return clampRange(signal.weight * signal.confidence * signalQualityMultiplier(signal), 0, 0.05);
 }
 
-function footballProviderContext(match: Match): {
+function footballProviderContext(match: Match, now: Date): {
   source: "provider-context" | "deterministic-proxy";
   signalCount: number;
   homeAdjustment: number;
@@ -50,7 +50,7 @@ function footballProviderContext(match: Match): {
   const signals = (match.providerContextSignals ?? []).filter(
     (signal) =>
       ["injury", "suspension", "lineup", "weather", "news"].includes(signal.category) &&
-      (!providerMatch || isFreshProviderContextSignal(signal, { requireTimestamp: true }))
+      (!providerMatch || isFreshProviderContextSignal(signal, { requireTimestamp: true, now }))
   );
 
   if (!signals.length) {
@@ -113,7 +113,7 @@ function xgBlendAdjustment({
   return clampRange((boundedObserved - proxy) * weight, -0.42, 0.42);
 }
 
-function expectedGoalsForMatch(match: Match) {
+function expectedGoalsForMatch(match: Match, now: Date) {
   const ratingDiff = (match.homeTeam.rating - match.awayTeam.rating) / 100;
   const formDiff = formScore(match.homeForm.recentResults) - formScore(match.awayForm.recentResults);
   const leagueGoalRate = 2.48 + (match.league.strength - 0.72) * 0.38;
@@ -146,7 +146,7 @@ function expectedGoalsForMatch(match: Match) {
     proxy: awayProxyGoals,
     dataQualityScore: match.dataQualityScore
   });
-  const providerContext = footballProviderContext(match);
+  const providerContext = footballProviderContext(match, now);
   const homeExpectedGoals = clampRange(homeProxyGoals + homeXgAdjustment + providerContext.homeAdjustment, 0.25, 3.65);
   const awayExpectedGoals = clampRange(awayProxyGoals + awayXgAdjustment + providerContext.awayAdjustment, 0.2, 3.45);
 
@@ -230,8 +230,16 @@ function buildLiveScoreProjection(match: Match, preMatchExpectedGoals: ExpectedG
   };
 }
 
-export function modelFootballMatch(match: Match): { markets: PredictionMarket[]; diagnostics: FootballModelDiagnostics } {
-  const preMatchExpectedGoals = expectedGoalsForMatch(match);
+export type FootballModelOptions = {
+  /** Evaluation clock used by provider-signal freshness checks; defaults to wall time in daily runtime. */
+  now?: Date;
+};
+
+export function modelFootballMatch(
+  match: Match,
+  { now = new Date() }: FootballModelOptions = {}
+): { markets: PredictionMarket[]; diagnostics: FootballModelDiagnostics } {
+  const preMatchExpectedGoals = expectedGoalsForMatch(match, now);
   const isLiveWithScore = match.status === "live" && Boolean(match.score);
   const dixonColesRho = dixonColesRhoForMatch(match, preMatchExpectedGoals, isLiveWithScore);
   const liveProjection = buildLiveScoreProjection(match, preMatchExpectedGoals, dixonColesRho);

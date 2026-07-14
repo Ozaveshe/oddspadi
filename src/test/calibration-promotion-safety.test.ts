@@ -82,7 +82,12 @@ function readySnapshot(): TrainingDataSnapshot {
         { minProbability: 0.5, maxProbability: 0.8, sampleSize: 700, averageProbability: 0.62, observedRate: 0.63, calibrationError: 0.01 }
       ],
       learnedWeights: { minimumEdge: 0.03, valueEdgeWeight: 0.4, dataQualityWeight: 0.2 },
-      config: { modelIdentity: runtimeModelIdentityReceipt("football") },
+      config: { modelIdentity: runtimeModelIdentityReceipt("football", {
+        featureContractStatus: "passed",
+        evaluatedFixtures: 360,
+        entrypointInvocations: 360,
+        executionHash: "fnv1a-calibration"
+      }) },
       notes: []
     },
     readiness: { readyForTraining: true, minimumRecommendedFixtures: 1000, detail: "ready" }

@@ -399,6 +399,7 @@ API routes:
 - `POST /api/sports/decision/calibration` stores a new calibration run. It requires `ODDSPADI_ADMIN_TOKEN` and `x-oddspadi-admin-token`.
 - `/api/sports/decision/training` returns historical fixture, odds, event, news, context, feature, and backtest readiness.
 - `POST /api/sports/decision/training?sport=football|basketball|tennis` runs and stores the sport-specific backtest when enough historical fixtures/matches exist. It uses real provider data by default; `includeDemo=1` is only for demo-seed smoke tests. It requires `ODDSPADI_ADMIN_TOKEN` and `x-oddspadi-admin-token`.
+- `GET /api/sports/decision/training/football-runtime-replay` executes a no-write football replay through the exact `modelFootballMatch` runtime entrypoint and returns a compact feature-contract, invocation-count, execution-hash, calibration, and rejection summary. `POST` stores the same proved replay in `op_backtest_runs`. Both methods require `x-oddspadi-admin-token`; neither applies weights, promotes a model, publishes picks, or stakes.
 - `POST /api/sports/decision/training/ingest` validates and ingests normalized historical football, basketball, and tennis fixtures/matches, teams/players, features, odds, event snapshots, news signals, standings/context snapshots, player availability, lineups, weather snapshots, raw payload archives, and ingestion-run audit rows. It defaults to `dryRun`; pass `dryRun=0` for writes. `mode=demo` generates synthetic pipeline-test fixtures that are never counted as real training readiness.
 - `POST /api/sports/decision/training/provider-sync` fetches provider data and maps it into the normalized ingestion layer. It supports `provider=api-football` for fixture history, optional `includeEvents=1` API-Football event archives, optional `includeNews=1` NewsAPI archives, optional `includeContext=1` standings/injuries/suspensions/lineups/weather archives, `provider=api-basketball` for basketball game history, `provider=api-tennis` for tennis event history, and `provider=the-odds-api` for historical h2h odds snapshots. It defaults to `dryRun`; pass `dryRun=0` only after reviewing the normalized counts.
 - `POST /api/sports/decision/training/backfill` plans and executes capped multi-season/date imports. It supports API-Football and API-Basketball season ranges, API-Tennis date slices, and The Odds API historical date batches for odds snapshots. It defaults to `dryRun`, caps jobs with `maxJobs`, and requires the same admin header.
@@ -474,7 +475,9 @@ Case memory answers: "Does this decision look like recent stored decisions, and 
 The new training layer is built around:
 
 - `src/lib/sports/training/footballBacktest.ts`, `basketballBacktest.ts`, and `tennisBacktest.ts` - pure sport-specific backtest engines with no-vig bookmaker implied probability, value-edge picks, Brier score, log loss, ROI, yield, CLV, and learned weights.
-- `src/lib/sports/prediction/modelIdentity.ts` - canonical runtime-versus-benchmark model identities. The existing historical runners are benchmark evaluators, not runtime-parity proof. A future runtime-key backtest must also persist the exact runtime entrypoint and feature-contract receipt; matching a model-key string alone cannot unlock learning.
+- `src/lib/sports/prediction/modelIdentity.ts` - canonical runtime-versus-benchmark model identities. Benchmark runners cannot grant runtime parity. A runtime receipt must prove a passed feature contract, a positive evaluated sample, equal entrypoint invocation/evaluation counts, and an execution hash; matching a model-key string alone cannot unlock learning.
+- `src/lib/sports/training/footballRuntimeReplay.ts` - fail-closed football runtime replay. It rebuilds ordered pre-match form from earlier results only, shares daily league-strength and Elo-to-runtime-rating preprocessing, evaluates stored player availability and lineup freshness at the original kickoff clock, calls `modelFootballMatch`, records proper scoring/calibration, and rejects rows whose identities, chronology, history floor, timestamps, or representable venue contract are incomplete.
+- `src/lib/sports/training/footballChronologyFeatures.ts` - chronology-v3 feature materializer. It stores newest-first W/D/L, an exclusive as-of timestamp, prior-match counts, the runtime feature-contract version, and leakage-safe provenance before each fixture outcome updates state.
 - `src/lib/sports/training/trainingRepository.ts` - Supabase reader/writer for normalized historical fixtures, features, odds, and stored backtest runs.
 - `src/lib/sports/training/historicalIngestion.ts` - normalized provider ingestion for leagues, teams, fixtures, team features, odds snapshots, standings snapshots, player availability, lineups, weather snapshots, event snapshots, news signals, feature snapshots, raw payload archive, and ingestion-run audit.
 - `src/lib/sports/training/providerSync.ts` - provider adapters for API-Football fixture history, API-Football event/context archives, API-Basketball game history, API-Tennis event history, NewsAPI article archives, OpenWeather forecast snapshots, and The Odds API historical h2h odds snapshots.
@@ -496,11 +499,12 @@ The minimum recommended football corpus is 1,000 real finished fixtures with odd
 
 After creating a fresh Supabase project, the safe order is: prove the project ref, refresh `SUPABASE_SERVICE_ROLE_KEY` from the new project, verify `/api/sports/decision/status` no longer reports `credential-error`, check `/api/sports/decision/supabase-project-isolation`, prove the MCP session is OddsPadi-scoped, apply the `op_` migrations, then run the football, basketball, and tennis `dryRun=1` provider commands from `/api/sports/decision/supabase-bootstrap`.
 
-The 10-year collection sequence is intentionally two-pass:
+The 10-year collection and evaluation sequence is intentionally staged:
 
 1. Import fixture/context history first through API-Football dry-runs, then write-mode backfills after Supabase schema verification and provider counts look right.
 2. Use stored kickoff times to generate fixture-derived odds jobs for opening, pre-kickoff, and closing-line snapshots. The current The Odds API date-batch path is used as a market-history probe, not as the final full odds corpus.
-3. Run sport-specific backtests only after real fixtures/matches and odds are present; learned guardrails stay inactive until real-data sample size and calibration are sufficient.
+3. Run benchmark backtests only after real fixtures/matches and odds are present; these remain benchmark evidence.
+4. Run the admin-gated football runtime replay in no-write mode, review its feature-contract and rejection counts, then `POST` the same route to store the receipt. Runtime parity still does not authorize promotion by itself.
 
 Provider sync examples:
 
@@ -514,6 +518,12 @@ curl -X POST "http://localhost:3013/api/sports/decision/training/backfill?provid
 curl "http://localhost:3013/api/sports/decision/training/corpus-plan"
 
 curl "http://localhost:3013/api/sports/decision/training/multi-sport-corpus-plan"
+
+curl "http://localhost:3013/api/sports/decision/training/football-runtime-replay?limit=50000&minPriorMatches=3" \
+  -H "x-oddspadi-admin-token: $ODDSPADI_ADMIN_TOKEN"
+
+curl -X POST "http://localhost:3013/api/sports/decision/training/football-runtime-replay?limit=50000&minPriorMatches=3&minSample=1000" \
+  -H "x-oddspadi-admin-token: $ODDSPADI_ADMIN_TOKEN"
 
 curl -X POST "http://localhost:3013/api/sports/decision/training/provider-sync?provider=the-odds-api&sportKey=soccer_epl&date=2025-08-01T12:00:00Z" \
   -H "x-oddspadi-admin-token: $ODDSPADI_ADMIN_TOKEN"

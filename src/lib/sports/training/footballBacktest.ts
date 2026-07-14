@@ -5,8 +5,8 @@ import { benchmarkBacktestModelKey } from "@/lib/sports/prediction/modelIdentity
 
 export const FOOTBALL_BACKTEST_MODEL_KEY = benchmarkBacktestModelKey("football");
 
-type FootballOutcome = "home" | "draw" | "away";
-type BacktestConfidence = "low" | "medium" | "high";
+export type FootballOutcome = "home" | "draw" | "away";
+export type BacktestConfidence = "low" | "medium" | "high";
 
 export type HistoricalFootballOddsQuote = {
   market: "match_winner";
@@ -129,6 +129,22 @@ export type FootballBacktestResult = {
   results: FootballBacktestFixtureResult[];
 };
 
+export type FootballEvaluationSummary = {
+  pickCount: number;
+  roiUnits: number;
+  yield: number | null;
+  brierScore: number | null;
+  logLoss: number | null;
+  averageEdge: number | null;
+  closingLineValue: number | null;
+  calibrationError: number | null;
+  calibrationBuckets: ProbabilityCalibrationBucket[];
+  marketBreakdown: Record<string, FootballBacktestBreakdown>;
+  confidenceBreakdown: Record<string, FootballBacktestBreakdown>;
+};
+
+export type FootballDecisionLearnedWeights = Omit<FootballBacktestResult["learnedWeights"], "homeAdvantageElo">;
+
 type EloRatings = Map<string, number>;
 type SelectionOdds = {
   odds: number;
@@ -143,6 +159,10 @@ const DEFAULT_CONFIG: Required<FootballBacktestConfig> = {
   eloKFactor: 24,
   homeAdvantageElo: 62
 };
+
+export function resolveFootballBacktestConfig(config: FootballBacktestConfig = {}): Required<FootballBacktestConfig> {
+  return { ...DEFAULT_CONFIG, ...config };
+}
 
 function roundMetric(value: number | null, digits = 6): number | null {
   if (value === null || !Number.isFinite(value)) return null;
@@ -411,9 +431,70 @@ function buildCalibration(results: FootballBacktestFixtureResult[]) {
   );
 }
 
+/** Evaluate one probability vector using the shared odds, pick, and scoring policy. */
+export function evaluateFootballPrediction({
+  fixture,
+  probabilities,
+  expectedGoals,
+  config
+}: {
+  fixture: HistoricalFootballFixture;
+  probabilities: Record<FootballOutcome, number>;
+  expectedGoals: FootballBacktestFixtureResult["expectedGoals"];
+  config: Required<FootballBacktestConfig>;
+}): FootballBacktestFixtureResult {
+  const actual = actualOutcome(fixture.homeScore, fixture.awayScore);
+  const odds = winnerOdds(fixture.odds);
+  return {
+    fixtureExternalId: fixture.fixtureExternalId,
+    kickoffAt: fixture.kickoffAt,
+    actualOutcome: actual,
+    probabilities,
+    expectedGoals,
+    brierScore: brierScore(probabilities, actual),
+    logLoss: logLoss(probabilities, actual),
+    pick: odds ? selectBacktestPick(fixture, probabilities, odds, actual, config) : null
+  };
+}
+
+/** Aggregate model-agnostic scoring so benchmark and exact-runtime replay stay comparable. */
+export function summarizeFootballEvaluation(results: FootballBacktestFixtureResult[]): FootballEvaluationSummary {
+  const picks = results.map((result) => result.pick).filter((pick): pick is FootballBacktestPick => Boolean(pick));
+  const roiUnits = picks.reduce((sum, pick) => sum + pick.unitReturn, 0);
+  const breakdowns = buildBreakdowns(results);
+  const calibration = buildCalibration(results);
+  return {
+    pickCount: picks.length,
+    roiUnits: roundMetric(roiUnits, 6) ?? 0,
+    yield: roundMetric(picks.length ? roiUnits / picks.length : null, 6),
+    brierScore: roundMetric(average(results.map((result) => result.brierScore)), 6),
+    logLoss: roundMetric(average(results.map((result) => result.logLoss)), 6),
+    averageEdge: roundMetric(average(picks.map((pick) => pick.edge)), 6),
+    closingLineValue: roundMetric(
+      average(picks.map((pick) => pick.closingLineValue).filter((value): value is number => value !== null)),
+      6
+    ),
+    calibrationError: calibration.expectedCalibrationError,
+    calibrationBuckets: calibration.buckets,
+    marketBreakdown: breakdowns.byMarket,
+    confidenceBreakdown: breakdowns.byConfidence
+  };
+}
+
 function learnedWeights(
   result: Pick<FootballBacktestResult, "pickCount" | "yield" | "brierScore" | "closingLineValue" | "config">
 ): FootballBacktestResult["learnedWeights"] {
+  return {
+    ...footballDecisionLearnedWeights(result),
+    homeAdvantageElo: result.config.homeAdvantageElo
+  };
+}
+
+export function footballDecisionLearnedWeights(
+  result: Pick<FootballBacktestResult, "pickCount" | "yield" | "brierScore" | "closingLineValue"> & {
+    config: Pick<Required<FootballBacktestConfig>, "minEdge">;
+  }
+): FootballDecisionLearnedWeights {
   const yieldValue = result.yield ?? 0;
   const brierPenalty = result.brierScore !== null && result.brierScore > 0.22 ? 0.03 : 0;
   const clvSignal = result.closingLineValue ?? 0;
@@ -422,8 +503,7 @@ function learnedWeights(
     valueEdgeWeight: roundMetric(clamp(0.32 + yieldValue * 0.25 + clvSignal * 0.1, 0.22, 0.44), 4) ?? 0.32,
     dataQualityWeight: roundMetric(clamp(0.18 + brierPenalty, 0.16, 0.26), 4) ?? 0.18,
     minimumEdge: roundMetric(clamp(result.config.minEdge + (yieldValue < 0 ? 0.02 : -0.005) + brierPenalty, 0.02, 0.09), 4) ?? result.config.minEdge,
-    marketAdjustmentWeight: roundMetric(clamp(0.16 + clvSignal * 0.2, 0.08, 0.24), 4) ?? 0.16,
-    homeAdvantageElo: result.config.homeAdvantageElo
+    marketAdjustmentWeight: roundMetric(clamp(0.16 + clvSignal * 0.2, 0.08, 0.24), 4) ?? 0.16
   };
 }
 
@@ -441,7 +521,7 @@ export function runFootballBacktest(
   fixtures: HistoricalFootballFixture[],
   configInput: FootballBacktestConfig = {}
 ): FootballBacktestResult {
-  const config = { ...DEFAULT_CONFIG, ...configInput };
+  const config = resolveFootballBacktestConfig(configInput);
   const sortedFixtures = fixtures
     .filter((fixture) => Number.isFinite(fixture.homeScore) && Number.isFinite(fixture.awayScore))
     .sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime());
@@ -494,42 +574,22 @@ export function runFootballBacktest(
   sortedFixtures.forEach((fixture, index) => {
     const homeElo = getRating(ratings, fixture.homeTeamExternalId, fixture.homeElo);
     const awayElo = getRating(ratings, fixture.awayTeamExternalId, fixture.awayElo);
-    const actual = actualOutcome(fixture.homeScore, fixture.awayScore);
     const expectedGoals = estimateExpectedGoals(fixture, homeElo, awayElo, config);
     const probabilities = probabilitiesFromExpectedGoals(expectedGoals);
-    const odds = winnerOdds(fixture.odds);
 
     if (index >= testStartIndex) {
-      const pick = odds ? selectBacktestPick(fixture, probabilities, odds, actual, config) : null;
-      results.push({
-        fixtureExternalId: fixture.fixtureExternalId,
-        kickoffAt: fixture.kickoffAt,
-        actualOutcome: actual,
-        probabilities,
-        expectedGoals,
-        brierScore: brierScore(probabilities, actual),
-        logLoss: logLoss(probabilities, actual),
-        pick
-      });
+      results.push(evaluateFootballPrediction({ fixture, probabilities, expectedGoals, config }));
     }
 
     updateEloRatings(ratings, fixture, config);
   });
 
-  const picks = results.map((result) => result.pick).filter((pick): pick is FootballBacktestPick => Boolean(pick));
-  const roiUnits = picks.reduce((sum, pick) => sum + pick.unitReturn, 0);
-  const brier = roundMetric(average(results.map((result) => result.brierScore)), 6);
-  const loss = roundMetric(average(results.map((result) => result.logLoss)), 6);
-  const averageEdge = roundMetric(average(picks.map((pick) => pick.edge)), 6);
-  const clv = roundMetric(average(picks.map((pick) => pick.closingLineValue).filter((value): value is number => value !== null)), 6);
-  const yieldValue = roundMetric(picks.length ? roiUnits / picks.length : null, 6);
-  const breakdowns = buildBreakdowns(results);
-  const calibration = buildCalibration(results);
+  const summary = summarizeFootballEvaluation(results);
   const partialResult = {
-    pickCount: picks.length,
-    yield: yieldValue,
-    brierScore: brier,
-    closingLineValue: clv,
+    pickCount: summary.pickCount,
+    yield: summary.yield,
+    brierScore: summary.brierScore,
+    closingLineValue: summary.closingLineValue,
     config
   };
 
@@ -542,23 +602,23 @@ export function runFootballBacktest(
     sampleSize,
     trainSize: testStartIndex,
     testSize: results.length,
-    pickCount: picks.length,
+    pickCount: summary.pickCount,
     windowStart: sortedFixtures[0]?.kickoffAt ?? null,
     windowEnd: sortedFixtures[sortedFixtures.length - 1]?.kickoffAt ?? null,
     trainWindowStart: sortedFixtures[0]?.kickoffAt ?? null,
     trainWindowEnd: sortedFixtures[Math.max(0, testStartIndex - 1)]?.kickoffAt ?? null,
     testWindowStart: sortedFixtures[testStartIndex]?.kickoffAt ?? null,
     testWindowEnd: sortedFixtures[sortedFixtures.length - 1]?.kickoffAt ?? null,
-    brierScore: brier,
-    logLoss: loss,
-    roiUnits: roundMetric(roiUnits, 6) ?? 0,
-    yield: yieldValue,
-    averageEdge,
-    closingLineValue: clv,
-    calibrationError: calibration.expectedCalibrationError,
-    calibrationBuckets: calibration.buckets,
-    marketBreakdown: breakdowns.byMarket,
-    confidenceBreakdown: breakdowns.byConfidence,
+    brierScore: summary.brierScore,
+    logLoss: summary.logLoss,
+    roiUnits: summary.roiUnits,
+    yield: summary.yield,
+    averageEdge: summary.averageEdge,
+    closingLineValue: summary.closingLineValue,
+    calibrationError: summary.calibrationError,
+    calibrationBuckets: summary.calibrationBuckets,
+    marketBreakdown: summary.marketBreakdown,
+    confidenceBreakdown: summary.confidenceBreakdown,
     learnedWeights: learnedWeights(partialResult),
     config,
     notes: [],

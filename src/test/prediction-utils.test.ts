@@ -13597,7 +13597,12 @@ describe("prediction utilities", () => {
             ...snapshot.latestBacktest,
             modelKey: runtimeModelKey("football"),
             config: {
-              modelIdentity: runtimeModelIdentityReceipt("football"),
+              modelIdentity: runtimeModelIdentityReceipt("football", {
+                featureContractStatus: "passed",
+                evaluatedFixtures: 300,
+                entrypointInvocations: 300,
+                executionHash: "fnv1a-learning"
+              }),
               promotion: {
                 status: "approved",
                 scope: "live-guardrails",
@@ -21279,7 +21284,12 @@ describe("prediction utilities", () => {
             calibrationError: 0.08,
             calibrationBuckets: [],
             learnedWeights: {},
-            config: { modelIdentity: runtimeModelIdentityReceipt("basketball") },
+            config: { modelIdentity: runtimeModelIdentityReceipt("basketball", {
+              featureContractStatus: "passed",
+              evaluatedFixtures: 40,
+              entrypointInvocations: 40,
+              executionHash: "fnv1a-basketball"
+            }) },
             notes: [],
             createdAt: "2026-07-04T10:00:00.000Z"
           }

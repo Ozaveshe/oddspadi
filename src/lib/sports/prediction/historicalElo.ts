@@ -290,7 +290,7 @@ function effectiveKFactor(fixture: NormalizedFixture, config: ResolvedConfig): n
   return clamp(config.baseK * goalMarginScale * qualityScale, config.minK, config.maxK);
 }
 
-function modelRatingFromElo(rawElo: number): number {
+export function footballModelRatingFromElo(rawElo: number): number {
   return Math.round(clamp(80 + (rawElo - HISTORICAL_ELO_INITIAL_RATING) / 15, MIN_MODEL_RATING, MAX_MODEL_RATING));
 }
 
@@ -359,7 +359,7 @@ export function buildHistoricalFootballElo(
       Object.freeze({
         teamKey,
         rawElo,
-        modelRating: modelRatingFromElo(rawElo),
+        modelRating: footballModelRatingFromElo(rawElo),
         matchCount: rating.matchCount,
         asOf: rating.lastMatchAt
       })

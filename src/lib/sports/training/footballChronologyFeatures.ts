@@ -2,8 +2,10 @@ import type {
   HistoricalFootballFeatureInput,
   HistoricalFootballFixtureInput
 } from "./historicalIngestion";
+import { decisionModelIdentity } from "@/lib/sports/prediction/modelIdentity";
 
 type RecentResult = {
+  result: "W" | "D" | "L";
   points: number;
   goalsFor: number;
   goalsAgainst: number;
@@ -107,8 +109,16 @@ function pointsFor(goalsFor: number, goalsAgainst: number): number {
   return 0;
 }
 
+function resultFor(goalsFor: number, goalsAgainst: number): RecentResult["result"] {
+  if (goalsFor > goalsAgainst) return "W";
+  if (goalsFor === goalsAgainst) return "D";
+  return "L";
+}
+
 function leagueKey(fixture: HistoricalFootballFixtureInput): string {
-  return cleanText(fixture.league.externalId) || cleanText(fixture.league.name) || "football";
+  const provider = cleanText(fixture.metadata?.provider) || "provider";
+  const league = cleanText(fixture.league.externalId) || cleanText(fixture.league.name) || "football";
+  return `${provider}:${league}`;
 }
 
 function teamKey(fixture: HistoricalFootballFixtureInput, side: "home" | "away"): string {
@@ -184,7 +194,8 @@ function derivedFeatureState({
     restDays: restDays(team, kickoffAt),
     metadata: {
       chronology: {
-        version: "football-provider-chronology-v2",
+        version: "football-provider-chronology-v3",
+        featureContractVersion: decisionModelIdentity("football").featureContractVersion,
         source: "finished-provider-fixtures",
         leakageSafe: true,
         asOfExclusive: kickoffAt,
@@ -194,6 +205,8 @@ function derivedFeatureState({
         leagueGoalsPerTeam: round(goalRate),
         priorTeamMatches: config.priorTeamMatches,
         recentWindow: config.recentWindow,
+        // The runtime model consumes provider form newest -> oldest.
+        recentResults: [...recent].reverse().map((result) => result.result),
         strengthWindow: config.strengthWindow,
         strengthMatches: strength.length,
         strengthGoalsForPerMatch: strength.length ? round(strengthGoalsFor / strength.length) : null,
@@ -238,7 +251,10 @@ function updateTeamState(
   strengthWindow: number
 ): void {
   state.played += 1;
-  state.recent = [...state.recent, { points: pointsFor(goalsFor, goalsAgainst), goalsFor, goalsAgainst }].slice(-strengthWindow);
+  state.recent = [
+    ...state.recent,
+    { result: resultFor(goalsFor, goalsAgainst), points: pointsFor(goalsFor, goalsAgainst), goalsFor, goalsAgainst }
+  ].slice(-strengthWindow);
   state.lastKickoffAt = kickoffAt;
   state.seasons.add(season);
 }

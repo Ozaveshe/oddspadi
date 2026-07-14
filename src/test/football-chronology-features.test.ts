@@ -130,11 +130,24 @@ describe("football chronology features", () => {
     const newHome = chronology(derived[1], "home");
 
     expect(derived[1].homeFeatures?.eloRating).toBeGreaterThan(1500);
-    expect(newHome.version).toBe("football-provider-chronology-v2");
+    expect(newHome.version).toBe("football-provider-chronology-v3");
+    expect(newHome.featureContractVersion).toBe("football-runtime-features-v2");
     expect(newHome.priorSeasons).toEqual(["2023"]);
     expect(newHome.crossSeasonHistory).toBe(true);
     expect(newHome.seasonRegression).toBe(0.25);
     expect(newHome.strengthMatches).toBe(1);
+  });
+
+  it("stores runtime form newest-first without leaking the current result", () => {
+    const derived = deriveFootballChronologyFeatures([
+      fixture({ id: "first", kickoffAt: "2025-01-01T15:00:00.000Z", home: "A", away: "B", homeScore: 2, awayScore: 0 }),
+      fixture({ id: "second", kickoffAt: "2025-01-08T15:00:00.000Z", home: "B", away: "A", homeScore: 1, awayScore: 1 }),
+      fixture({ id: "current", kickoffAt: "2025-01-15T15:00:00.000Z", home: "A", away: "B", homeScore: 0, awayScore: 7 })
+    ]);
+
+    expect(chronology(derived[2], "home").recentResults).toEqual(["D", "W"]);
+    expect(chronology(derived[2], "away").recentResults).toEqual(["D", "L"]);
+    expect(chronology(derived[2], "home").asOfExclusive).toBe("2025-01-15T15:00:00.000Z");
   });
 
   it("bounds team scoring evidence to the latest configured result window", () => {

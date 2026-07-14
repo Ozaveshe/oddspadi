@@ -574,6 +574,7 @@ export function buildMultiSportCorpusPlan(options: MultiSportCorpusPlanOptions =
       "/api/sports/decision/training/multi-sport-corpus-plan",
       "/api/sports/decision/training/corpus-plan",
       "/api/sports/decision/training/backfill",
+      "/api/sports/decision/training/football-runtime-replay",
       "/api/sports/decision/mvp-audit",
       "/api/sports/decision/supabase-bootstrap"
     ]

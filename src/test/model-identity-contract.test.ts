@@ -26,8 +26,28 @@ describe("decision model identity contract", () => {
     expect(historicalModelCompatibility({
       sport: "football",
       evidenceModelKey: "football-poisson-v2",
-      config: { modelIdentity: runtimeModelIdentityReceipt("football") }
+      config: { modelIdentity: runtimeModelIdentityReceipt("football", {
+        featureContractStatus: "passed",
+        evaluatedFixtures: 120,
+        entrypointInvocations: 120,
+        executionHash: "fnv1a-contract"
+      }) }
     })).toBe("exact-runtime-parity");
+    expect(historicalModelCompatibility({
+      sport: "football",
+      evidenceModelKey: "football-poisson-v2",
+      config: {
+        modelIdentity: {
+          ...runtimeModelIdentityReceipt("football", {
+            featureContractStatus: "passed",
+            evaluatedFixtures: 120,
+            entrypointInvocations: 120,
+            executionHash: "fnv1a-contract"
+          }),
+          entrypointInvocations: 119
+        }
+      }
+    })).toBe("unverified-runtime-key");
     expect(historicalModelCompatibility({ sport: "football", evidenceModelKey: "football-poisson-v99" })).toBe("incompatible");
   });
 });
