@@ -3113,6 +3113,19 @@ a.score-row:active,
 .uncertainty-track i { display: block; height: 100%; border-radius: inherit; background: var(--green-strong); }
 .uncertainty-track i.level-medium { background: var(--amber); }
 .uncertainty-track i.level-high,.uncertainty-track i.level-critical { background: var(--red); }
+.candidate-evidence-panel,.candidate-trace-separation { min-width: 0; }
+.candidate-evidence-panel h3,.candidate-trace-separation h3 { margin: 8px 0 14px; font-size: clamp(19px, 2.4vw, 25px); line-height: 1.08; }
+.candidate-evidence-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; background: var(--border); }
+.candidate-evidence-metrics div { display: grid; gap: 4px; min-width: 0; padding: 12px 14px; background: var(--surface); }
+.candidate-evidence-metrics dt { color: var(--muted); font: 780 9px/1.25 var(--font-mono); letter-spacing: .055em; text-transform: uppercase; }
+.candidate-evidence-metrics dd { margin: 0; overflow-wrap: anywhere; font-weight: 800; font-variant-numeric: tabular-nums; text-transform: capitalize; }
+.candidate-gate-list { display: grid; gap: 7px; margin: 16px 0 0; padding: 14px 16px 14px 34px; border-left: 3px solid var(--amber); background: var(--surface-2); color: var(--muted); font-size: 12px; }
+.candidate-trace-separation { padding: 20px 22px; border-left: 3px solid var(--blue); background: var(--surface-2); }
+.candidate-trace-separation > p { margin: 0; color: var(--muted); font-size: 12px; }
+.candidate-trace-separation dl { display: grid; gap: 0; margin: 14px 0; border-top: 1px solid var(--border); }
+.candidate-trace-separation dl div { display: flex; justify-content: space-between; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.candidate-trace-separation dt { color: var(--muted); font-size: 11px; }
+.candidate-trace-separation dd { margin: 0; font-size: 11px; font-weight: 800; text-align: right; text-transform: capitalize; }
 
 .odds-history-panel { overflow: hidden; }
 .odds-movement-chart { margin: 24px 0 0; padding-top: 22px; border-top: 1px solid var(--border-strong); }

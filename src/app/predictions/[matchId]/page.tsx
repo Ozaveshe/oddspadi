@@ -218,7 +218,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
             />
           </div>
 
-          <DecisionEvidenceProfile decision={displayDecision} />
+          <DecisionEvidenceProfile decision={displayDecision} publicCandidate={displayedDecision} />
 
           <div className="panel">
             <h2>Market analysis</h2>
