@@ -13,6 +13,7 @@ project `wncwtzqipnoqwmqlznqn`.
 | `multi-sport-decision-cycle-sweep` | `20 */2 * * *` | Basketball/tennis capture |
 | `sports-intelligence-sweep` | `25 */2 * * *` | Refreshes the canonical multi-sport intelligence pipeline and daily/weekly public slates |
 | `football-settlement-sweep` | `*/30 * * * *` | Grades finished football picks |
+| `football-corpus-refresh-sweep` | `40 3 * * *` | Idempotently stores the previous two complete UTC days of EPL fixtures, events, lineups, and finished-match player statistics |
 | `multi-sport-settlement-sweep` | `50 * * * *` | Grades other sports |
 | `results-settlement-sweep` | `15 * * * *` | Settles the canonical public-pick ledger and records explicit pending/manual-review reasons |
 | `editorial-generation-sweep` | `35 5,11,17,23 * * *` | Regenerates News stories from ledger rows (OpenAI prose pass when `OPENAI_API_KEY` is set; deterministic fallback otherwise) |

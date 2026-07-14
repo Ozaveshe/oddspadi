@@ -21,6 +21,7 @@ export type HistoricalProviderStorageReceiptStatus =
   | "ready-to-run"
   | "dry-run-passed"
   | "stored"
+  | "no-data"
   | "partial"
   | "waiting-admin"
   | "waiting-provider-env"
@@ -287,6 +288,13 @@ function statusFor({
   if (observation.statusLabel === "invalid-request") return "invalid-request";
   if (observation.statusLabel === "not-configured") return "waiting-provider-env";
   if (observation.statusLabel === "stored" && !observation.dryRun && observation.rowsWritten > 0) return "stored";
+  if (
+    observation.statusLabel === "stored" &&
+    !observation.dryRun &&
+    observation.fetched === 0 &&
+    observation.normalized === 0 &&
+    observation.errors.length === 0
+  ) return "no-data";
   if (observation.statusLabel === "partial") return "partial";
   if (observation.statusLabel === "dry-run" && observation.dryRun && observation.normalized > 0) return "dry-run-passed";
   if (observation.errors.length && observation.executedJobs > 0) return "provider-error";
@@ -295,6 +303,7 @@ function statusFor({
 
 function summaryFor(status: HistoricalProviderStorageReceiptStatus, observation: HistoricalProviderStorageObservation): string {
   if (status === "stored") return `Stored ${observation.rowsWritten} provider corpus row(s) from ${observation.executedJobs} capped historical job(s); training and public picks remain locked.`;
+  if (status === "no-data") return "Historical provider refresh completed successfully, but the requested window contained no provider rows to store.";
   if (status === "dry-run-passed") return `Provider storage receipt dry-run normalized ${observation.normalized} fixture row(s) from ${observation.fetched} fetched provider item(s); write mode remains separate.`;
   if (status === "partial") return "Historical provider storage receipt partially completed; inspect failed jobs before continuing.";
   if (status === "waiting-admin") return "Historical provider storage receipt requires run=1 plus x-oddspadi-admin-token before spending provider credits or writing rows.";
@@ -442,7 +451,14 @@ export async function observeHistoricalProviderStorageReceipt({
       errors: readbackErrors
     },
     nextAction: {
-      label: status === "stored" ? "Generate feature/backtest readiness from stored corpus" : request.dryRun ? "Run capped provider storage dry-run" : "Run capped provider storage write",
+      label:
+        status === "stored"
+          ? "Generate feature/backtest readiness from stored corpus"
+          : status === "no-data"
+            ? "Wait for the next completed-fixture window"
+            : request.dryRun
+              ? "Run capped provider storage dry-run"
+              : "Run capped provider storage write",
       command,
       verifyUrl,
       expectedEvidence:

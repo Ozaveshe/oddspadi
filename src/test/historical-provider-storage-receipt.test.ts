@@ -223,4 +223,58 @@ describe("historical provider storage receipt", () => {
     expect(receipt.controls.canPublishPicks).toBe(false);
     expect(receipt.controls.canStake).toBe(false);
   });
+
+  it("records a successful quiet provider window as no-data instead of a failure", async () => {
+    const emptyResult = backfillResult("stored", false);
+    emptyResult.fetched = 0;
+    emptyResult.normalized = 0;
+    emptyResult.counts = {
+      fixtures: 0,
+      oddsRows: 0,
+      eventRows: 0,
+      newsRows: 0,
+      standingsRows: 0,
+      availabilityRows: 0,
+      lineupRows: 0,
+      playerPerformanceRows: 0,
+      playerPerformanceRowsVerified: 0,
+      weatherRows: 0,
+      featureSnapshots: 0
+    };
+    const ingestion = emptyResult.jobs[0]?.result.ingestion;
+    if (ingestion) {
+      ingestion.rowsReceived = 0;
+      ingestion.rowsWritten = 0;
+      ingestion.counts = {
+        leagues: 0,
+        teams: 0,
+        fixtures: 0,
+        featureRows: 0,
+        oddsRows: 0,
+        eventRows: 0,
+        newsRows: 0,
+        standingsRows: 0,
+        availabilityRows: 0,
+        lineupRows: 0,
+        weatherRows: 0,
+        featureSnapshots: 0
+      };
+    }
+
+    const receipt = await observeHistoricalProviderStorageReceipt({
+      env: readyEnv,
+      origin: "http://127.0.0.1:3025",
+      request: { dryRun: false },
+      runRequested: true,
+      adminAuthorized: true,
+      backfillRunner: async () => emptyResult,
+      censusReader: async () => census(0, 0, 0),
+      now: new Date("2026-07-10T00:04:00.000Z")
+    });
+
+    expect(receipt.status).toBe("no-data");
+    expect(receipt.summary).toContain("completed successfully");
+    expect(receipt.readback.evidenceReady).toBe(false);
+    expect(receipt.nextAction.label).toBe("Wait for the next completed-fixture window");
+  });
 });
