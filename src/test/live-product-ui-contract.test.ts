@@ -40,9 +40,20 @@ describe("live OddsPadi product UI contract", () => {
     expect(detail.indexOf("match-decision-hero")).toBeLessThan(detail.indexOf("Advanced engine audit"));
     expect(detail).toContain("match-decision-primary");
     expect(detail).toContain("ProbabilityDistribution");
+    expect(detail).toContain("DecisionEvidenceProfile");
     expect(detail).toContain("Fair market chance");
     expect(detail).not.toContain("The short version");
     expect(detail).toContain("Audit-only detail cannot override the canonical public decision above");
+  });
+
+  it("surfaces the deterministic probability path, factors, uncertainty, and calibration provenance", () => {
+    const evidence = source("src/components/odds/DecisionEvidenceProfile.tsx");
+    expect(evidence).toContain("Probability journey");
+    expect(evidence).toContain("Decision factor contribution");
+    expect(evidence).toContain("Uncertainty profile");
+    expect(evidence).toContain("Model and calibration provenance");
+    expect(evidence).toContain("decision.probabilityTrace");
+    expect(evidence).toContain("decision.learningProfile");
   });
 
   it("provides a readable mobile market analysis instead of relying on the desktop table", () => {

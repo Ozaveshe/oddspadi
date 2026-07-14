@@ -3015,6 +3015,47 @@ a.score-row:active,
 .probability-quality-track { height: 7px; overflow: hidden; border-radius: 2px; background: var(--surface-3); }
 .probability-quality-track span { display: block; height: 100%; background: var(--green-strong); }
 
+.decision-evidence-profile { padding: clamp(22px, 4vw, 30px); }
+.decision-evidence-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+.decision-evidence-heading h2 { margin-top: 8px; }
+.decision-evidence-profile > p { max-width: 78ch; margin: 10px 0 24px; }
+.decision-evidence-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(250px, .85fr); gap: clamp(22px, 4vw, 42px); }
+.decision-evidence-grid + .decision-evidence-grid { margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--border); }
+.probability-journey,.factor-contribution-chart,.uncertainty-profile-chart { min-width: 0; margin: 0; }
+.probability-journey figcaption,.factor-contribution-chart figcaption,.uncertainty-profile-chart figcaption { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; margin-bottom: 16px; }
+.probability-journey figcaption span,.factor-contribution-chart figcaption span,.uncertainty-profile-chart figcaption span { color: var(--muted); font-size: 12px; text-align: right; }
+.probability-journey-track { position: relative; height: 42px; margin: 12px 10px 18px; border-bottom: 2px solid var(--border-strong); background-image: linear-gradient(90deg, transparent 24.8%, var(--border) 25%, transparent 25.2%, transparent 49.8%, var(--border) 50%, transparent 50.2%, transparent 74.8%, var(--border) 75%, transparent 75.2%); }
+.probability-confidence-band { position: absolute; bottom: -6px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--blue) 26%, transparent); }
+.probability-stage { position: absolute; bottom: -8px; width: 0; height: 22px; }
+.probability-stage i { position: absolute; left: -2px; bottom: 0; width: 4px; height: 22px; border-radius: 2px; background: var(--text); }
+.probability-stage b { position: absolute; left: -10px; top: -22px; display: grid; width: 20px; height: 20px; place-items: center; border-radius: 50%; background: var(--text); color: var(--surface); font: 800 10px/1 var(--font-mono); }
+.probability-stage.stage-model i,.probability-stage.stage-model b { background: var(--blue); }
+.probability-stage.stage-posterior i,.probability-stage.stage-posterior b { background: var(--green-strong); }
+.probability-stage-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.probability-stage-list li { display: flex; min-width: 0; gap: 8px; align-items: center; }
+.probability-stage-list li > span { display: grid; width: 20px; height: 20px; flex: 0 0 auto; place-items: center; border: 1px solid var(--border-strong); border-radius: 50%; font: 800 9px/1 var(--font-mono); }
+.probability-stage-list div { display: grid; min-width: 0; }
+.probability-stage-list small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.probability-stage-list strong { font-variant-numeric: tabular-nums; }
+.probability-journey > p,.evidence-provenance > p,.uncertainty-profile-chart > p { margin: 16px 0 0; color: var(--muted); font-size: 12px; }
+.evidence-provenance { padding-left: 22px; border-left: 1px solid var(--border-strong); }
+.evidence-provenance dl { display: grid; gap: 0; margin: 14px 0 0; }
+.evidence-provenance dl div { display: flex; justify-content: space-between; gap: 18px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.evidence-provenance dt { color: var(--muted); font-size: 11px; }
+.evidence-provenance dd { max-width: 58%; margin: 0; overflow-wrap: anywhere; font-size: 11px; font-weight: 800; text-align: right; }
+.factor-chart-rows,.uncertainty-chart-rows { display: grid; gap: 14px; }
+.factor-chart-row > div:first-child,.uncertainty-chart-row > div:first-child { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 6px; font-size: 11px; }
+.factor-chart-row > div:first-child span,.uncertainty-chart-row > div:first-child span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.factor-chart-row > div:first-child strong,.uncertainty-chart-row > div:first-child strong { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.factor-diverging-track { position: relative; height: 8px; border-radius: 2px; background: linear-gradient(90deg, var(--surface-3) 0 49.6%, var(--border-strong) 49.6% 50.4%, var(--surface-3) 50.4% 100%); }
+.factor-diverging-track i { position: absolute; top: 0; height: 100%; border-radius: 2px; }
+.factor-diverging-track i.positive { background: var(--green-strong); }
+.factor-diverging-track i.negative { background: var(--red); }
+.uncertainty-track { height: 8px; overflow: hidden; border-radius: 2px; background: var(--surface-3); }
+.uncertainty-track i { display: block; height: 100%; border-radius: inherit; background: var(--green-strong); }
+.uncertainty-track i.level-medium { background: var(--amber); }
+.uncertainty-track i.level-high,.uncertainty-track i.level-critical { background: var(--red); }
+
 .market-mobile-list { display: none; }
 .market-mobile-card { display: grid; gap: 14px; padding: 16px 0; border-top: 1px solid var(--border-strong); }
 .market-mobile-card header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
@@ -3079,6 +3120,11 @@ a.score-row:active,
   .probability-distribution-track { height: 22px; }
   .probability-distribution figcaption { grid-template-columns: 1fr; gap: 18px; }
   .probability-distribution-legend dd { font-size: 20px; }
+  .decision-evidence-grid { grid-template-columns: 1fr; }
+  .decision-evidence-grid + .decision-evidence-grid { gap: 26px; }
+  .evidence-provenance { padding-left: 0; padding-top: 20px; border-left: 0; border-top: 1px solid var(--border); }
+  .probability-stage-list { grid-template-columns: 1fr; }
+  .probability-stage-list small { white-space: normal; }
   .market-table-desktop { display: none; }
   .market-mobile-list { display: grid; }
 }

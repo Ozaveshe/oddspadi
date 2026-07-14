@@ -8,6 +8,7 @@ import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { PredictionExplanation } from "@/components/odds/PredictionExplanation";
 import { LocalTime } from "@/components/odds/LocalTime";
 import { ProbabilityDistribution } from "@/components/odds/ProbabilityDistribution";
+import { DecisionEvidenceProfile } from "@/components/odds/DecisionEvidenceProfile";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { AddToSlipButton } from "@/components/odds/AddToSlipButton";
@@ -205,6 +206,8 @@ export default async function MatchDetailPage({ params }: PageProps) {
               dataQuality={match.dataQualityScore}
             />
           </div>
+
+          <DecisionEvidenceProfile decision={displayDecision} />
 
           <div className="panel">
             <h2>Market analysis</h2>
