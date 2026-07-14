@@ -85,6 +85,10 @@ import { inspectContextSignal, isRequiredProductionDataSignalBlocked } from "./c
 import type { PublicHistoricalTrainingEvidence } from "@/lib/sports/training/publicHistoricalTrainingEvidence";
 import { formatOdds, formatPercent, formatSignedPercent } from "./format";
 import { scoreValueEdge, selectBestPick } from "./odds";
+import {
+  buildDecisionHistoricalDiscipline,
+  buildHistoricalResultsCoverageSignal
+} from "./decisionHistoricalEvidence";
 
 export const DECISION_ENGINE_VERSION = "decision-engine-v1";
 
@@ -6335,11 +6339,13 @@ function buildDecisionDataCoverageAudit({
   const weatherSignal = byCategory("weather");
   const newsSignal = byCategory("news") ?? injurySignal;
   const liveEventSignal = byCategory("live-event");
+  const playerFormSignal = byCategory("player-form");
   const trainingStatus: DecisionDataCoverageSignal["status"] =
     learningProfile?.active ? "provider-backed" : learningProfile?.status === "demo-only" ? "mock" : "missing";
   const signalFreshness = (signalItem: MatchContextSignal | undefined): DecisionDataCoverageSignal["freshness"] =>
     contextSignalInspection(match, signalItem)?.freshness ?? "missing";
   const fixtureSignal = matchFixtureSignal(match);
+  const historicalResultsSignal = buildHistoricalResultsCoverageSignal({ match, playerFormSignal });
   const formSignal = matchFormSignal(match);
   const oddsSignal = matchOddsSignal(match);
 
@@ -6359,11 +6365,11 @@ function buildDecisionDataCoverageAudit({
       id: "historical-results",
       category: "historical-results",
       label: "Team/player historical results",
-      status: "mock",
-      source: "mockSportsDataProvider",
-      freshness: "mock",
+      status: historicalResultsSignal.status,
+      source: historicalResultsSignal.source,
+      freshness: historicalResultsSignal.freshness,
       weight: 0.9,
-      detail: "Recent results and ratings are present in the mock fixture; production needs provider-backed historical rows.",
+      detail: historicalResultsSignal.detail,
       requiredForProduction: true
     },
     {
@@ -6553,137 +6559,6 @@ function buildDecisionDataCoverageAudit({
     summary,
     signals,
     requiredBeforeTrust
-  };
-}
-
-function buildDecisionHistoricalDiscipline({
-  publicHistoricalTrainingEvidence,
-  bestPick,
-  match
-}: {
-  publicHistoricalTrainingEvidence?: PublicHistoricalTrainingEvidence | null;
-  bestPick: BestPickResult;
-  match: Match;
-}): DecisionHistoricalDiscipline {
-  const leagueName = match.league.name.toLowerCase();
-  const leagueId = match.league.id.toLowerCase();
-  const country = match.league.country.toLowerCase();
-  const isEnglishPremierLeague =
-    match.sport === "football" &&
-    ((country === "england" && leagueName.includes("premier league")) ||
-      leagueId === "epl" ||
-      leagueId.endsWith(":39") ||
-      leagueId.includes("soccer_epl") ||
-      leagueId.includes("football-data:epl"));
-  const hasOddsEventIdentity =
-    match.id.startsWith("the-odds-api:") ||
-    match.dataSource?.fixtureProvider === "the-odds-api-events" ||
-    match.dataSource?.oddsProvider === "the-odds-api";
-
-  if (!publicHistoricalTrainingEvidence) {
-    return {
-      status: "not-attached",
-      attached: false,
-      source: null,
-      seasons: null,
-      fixtures: 0,
-      oddsRows: 0,
-      bookmakerMarkets: 0,
-      diagnosticScore: 0,
-      benchmarkVerdict: null,
-      trustEffect: "none",
-      cappedByMarketPrior: false,
-      summary: "No 10-year public historical evidence is attached to this decision run.",
-      instruction: "Run the public historical evidence proof before using history to discipline raw model edges.",
-      requiredBeforePromotion: [
-        "Attach public historical evidence or a persisted provider-backed learning profile.",
-        "Keep learned thresholds and public picks locked until provider-enriched backtests pass."
-      ],
-      proofUrls: ["/api/sports/decision/training/public-historical-training-evidence"]
-    };
-  }
-
-  if (!isEnglishPremierLeague) {
-    return {
-      status: "not-applicable",
-      attached: false,
-      source: null,
-      seasons: null,
-      fixtures: 0,
-      oddsRows: 0,
-      bookmakerMarkets: 0,
-      diagnosticScore: 0,
-      benchmarkVerdict: null,
-      trustEffect: "none",
-      cappedByMarketPrior: false,
-      summary: "The attached historical corpus covers the English Premier League and is not applicable to this fixture.",
-      instruction: "Use league-specific historical evidence before applying any historical trust cap to this match.",
-      requiredBeforePromotion: ["Attach a real historical corpus and market benchmark for this fixture's league."],
-      proofUrls: []
-    };
-  }
-
-  const status: DecisionHistoricalDiscipline["status"] =
-    publicHistoricalTrainingEvidence.status === "market-prior-dominant"
-      ? "market-prior-dominant"
-      : publicHistoricalTrainingEvidence.status === "provider-retest-ready"
-        ? "provider-retest-ready"
-        : publicHistoricalTrainingEvidence.status === "failed" || publicHistoricalTrainingEvidence.status === "insufficient-history"
-          ? "blocked"
-          : "diagnostic-only";
-  const cappedByMarketPrior = status === "market-prior-dominant" && bestPick.hasValue;
-  const trustEffect: DecisionHistoricalDiscipline["trustEffect"] =
-    status === "market-prior-dominant"
-      ? "cap-raw-edge"
-      : status === "provider-retest-ready"
-        ? "queue-provider-retest"
-        : status === "blocked"
-          ? "block"
-          : "diagnostic-context";
-  const requiredBeforePromotion = publicHistoricalTrainingEvidence.failureDiagnosis.providerRetestChecklist.map((item) => {
-    if (hasOddsEventIdentity && item.label === "Provider fixture identity") {
-      return `${item.label}: Odds API event identity is attached for this market; map the same fixture to API-Football/APISports fixture ID, teams, standings, availability, and context before promotion.`;
-    }
-    return `${item.label}: ${item.requiredEvidence}`;
-  });
-
-  return {
-    status,
-    attached: true,
-    source: publicHistoricalTrainingEvidence.source.label,
-    seasons: publicHistoricalTrainingEvidence.source.seasons,
-    fixtures: publicHistoricalTrainingEvidence.scorecard.fixtures,
-    oddsRows: publicHistoricalTrainingEvidence.scorecard.oddsRows,
-    bookmakerMarkets: publicHistoricalTrainingEvidence.scorecard.bookmakerMarkets,
-    diagnosticScore: publicHistoricalTrainingEvidence.diagnosticScore,
-    benchmarkVerdict: publicHistoricalTrainingEvidence.scorecard.benchmarkVerdict,
-    trustEffect,
-    cappedByMarketPrior,
-    summary:
-      status === "market-prior-dominant"
-        ? hasOddsEventIdentity
-          ? `10-year public EPL benchmark says market consensus beats the current model; Odds API event identity is attached, but raw positive-EV picks stay capped until full provider fixture context is mapped.`
-          : `10-year public EPL benchmark says market consensus beats the current model; raw positive-EV picks stay capped.`
-        : status === "provider-retest-ready"
-          ? `10-year public EPL history found a provider-enriched retest path with score ${publicHistoricalTrainingEvidence.diagnosticScore}/100.`
-          : status === "blocked"
-            ? `Public historical evidence is too thin or failed, so historical learning cannot support this decision.`
-            : `Public historical evidence is diagnostic-only with score ${publicHistoricalTrainingEvidence.diagnosticScore}/100.`,
-    instruction:
-      status === "market-prior-dominant"
-        ? hasOddsEventIdentity
-          ? "Use the Odds API event as read-only market identity, but prefer no-vig market discipline over raw model edge until API-Football fixture/context retests beat market consensus."
-          : "Prefer no-vig market discipline over raw model edge until provider-enriched retests beat market consensus."
-        : status === "provider-retest-ready"
-          ? "Queue provider-enriched retest with fixture IDs, stored odds snapshots, context features, and promotion gates before any learned behavior is applied."
-          : status === "blocked"
-            ? "Do not use this historical evidence for trust upgrades; repair or replace the corpus proof first."
-            : "Use public history only as cautionary context; do not mutate probabilities, thresholds, or live recommendations.",
-    requiredBeforePromotion,
-    proofUrls: [
-      ...publicHistoricalTrainingEvidence.proofUrls,
-      ...(hasOddsEventIdentity ? ["/api/sports/decision/epl-odds-market-map", "/api/sports/decision/epl-provider-fixture-map"] : [])
-    ]
   };
 }
 

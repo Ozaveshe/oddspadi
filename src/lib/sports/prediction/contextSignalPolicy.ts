@@ -12,6 +12,7 @@ type ContextSignalInspectionOptions = {
 };
 
 const PROVIDER_ONLY_CATEGORIES = new Set<DecisionDataCoverageSignal["category"]>([
+  "historical-results",
   "standings",
   "injuries",
   "suspensions",
