@@ -61,6 +61,7 @@ export default async function EnginePerformancePage() {
   const evidence = report.historicalEvidence;
   const sourceUnavailable = report.source === "unavailable";
   const activeModels = evidence.models.filter((model) => model.active).length;
+  const learning = evidence.learningPipeline;
 
   return (
     <main id="main" className="container performance-page">
@@ -114,6 +115,18 @@ export default async function EnginePerformancePage() {
           <div><span>Player match facts</span><strong>{count(evidence.playerMatchPerformances)}</strong></div>
         </div>
 
+        <div className="learning-pipeline-heading">
+          <div><span className="section-kicker">Learning pipeline</span><h3>From raw history to a live-approved adjustment</h3></div>
+          <p>Each gate is separate. Later stages cannot borrow authority from a large corpus or a promising backtest.</p>
+        </div>
+        <ol className="learning-pipeline" aria-label="Historical learning and promotion stages">
+          <li data-state={evidence.census.totals.finishedFixtures ? "ready" : "waiting"}><span>01</span><strong>{count(evidence.census.totals.finishedFixtures)}</strong><h4>Finished fixtures</h4><p>Chronological results and provider facts.</p></li>
+          <li data-state={evidence.census.totals.completedBacktests ? "ready" : "waiting"}><span>02</span><strong>{count(evidence.census.totals.completedBacktests)}</strong><h4>Backtest runs</h4><p>Walk-forward holdouts with proper scoring.</p></li>
+          <li data-state={learning.calibrationRuns ? "ready" : "waiting"}><span>03</span><strong>{count(learning.calibrationRuns)}</strong><h4>Calibration runs</h4><p>Settled live decisions grouped by model version.</p></li>
+          <li data-state={learning.reviewReadyCandidates ? "ready" : "waiting"}><span>04</span><strong>{learning.reviewReadyCandidates}/{learning.promotionCandidates}</strong><h4>Review-ready</h4><p>Candidates passing sample, skill, error and CLV gates.</p></li>
+          <li data-state={learning.approvedPromotions ? "ready" : "waiting"}><span>05</span><strong>{learning.approvedPromotions}</strong><h4>Approved promotions</h4><p>Operator-approved, model-bound live adjustments.</p></li>
+        </ol>
+
         <div className="evidence-sport-grid">
           {evidence.census.sports.map((sport) => {
             const completion = sport.featureSnapshots ? Math.min(100, Math.round((sport.completeFeatureSnapshots / sport.featureSnapshots) * 100)) : 0;
@@ -147,9 +160,9 @@ export default async function EnginePerformancePage() {
           </div>
           <aside className="model-governance-card">
             <span className="section-kicker">Promotion gate</span>
-            <strong>{activeModels}/{evidence.models.length}</strong>
-            <h3>model versions active</h3>
-            <p>{activeModels ? "Only promoted model versions may affect live decisions." : "No stored model version is promoted active. The UI must not imply that historical backtests have been approved for live trust."}</p>
+            <strong>{learning.approvedPromotions}</strong>
+            <h3>live calibration promotions</h3>
+            <p>{learning.approvedPromotions ? `Approved promotions exist; ${activeModels}/${evidence.models.length} separately registered model versions are active.` : "No model-bound calibration candidate is approved for live use. Historical backtests remain evidence, not authority."}</p>
             <ul>{evidence.limitations.map((item) => <li key={item}>{item}</li>)}</ul>
           </aside>
         </div>

@@ -114,7 +114,7 @@ describe("engine performance analytics", () => {
   it("ships a transparent dashboard and JSON/CSV export routes", () => {
     const page = readFileSync("src/app/engine/performance/page.tsx", "utf8");
     expect(page).toContain("Is the OddsPadi engine");
-    for (const section of ["Engine Health", "Public Pick Performance", "Calibration", "Market Performance", "Data Quality", "Closing Line Value", "Warnings"]) expect(page).toContain(section);
+    for (const section of ["Engine Health", "Learning pipeline", "Public Pick Performance", "Calibration", "Market Performance", "Data Quality", "Closing Line Value", "Warnings"]) expect(page).toContain(section);
     expect(readFileSync("src/app/api/engine/performance/route.ts", "utf8")).toContain("getEnginePerformanceReport");
     expect(readFileSync("src/app/api/engine/performance.csv/route.ts", "utf8")).toContain("formatEnginePerformanceCsv");
   });

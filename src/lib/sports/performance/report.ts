@@ -94,6 +94,10 @@ function finiteNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
 async function getHistoricalEngineEvidence() {
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
   const census = await readSupabaseTrainingCorpusCensus({ origin }).catch((error: unknown) => ({
@@ -109,6 +113,7 @@ async function getHistoricalEngineEvidence() {
       census,
       latestBacktests: [],
       models: [],
+      learningPipeline: { calibrationRuns: 0, promotionCandidates: 0, reviewReadyCandidates: 0, approvedPromotions: 0 },
       playerAvailabilitySnapshots: 0,
       lineupSnapshots: 0,
       playerMatchPerformances: 0,
@@ -119,7 +124,7 @@ async function getHistoricalEngineEvidence() {
     };
   }
 
-  const [backtests, models, availability, lineups, playerPerformances] = await Promise.all([
+  const [backtests, models, calibrationRuns, calibrationCandidates, calibrationPromotions, availability, lineups, playerPerformances] = await Promise.all([
     client
       .from("op_backtest_runs")
       .select("sport,model_key,engine_version,status,data_source,sample_size,test_size,pick_count,brier_score,log_loss,yield,closing_line_value,calibration_error,created_at")
@@ -130,16 +135,35 @@ async function getHistoricalEngineEvidence() {
       .from("op_model_versions")
       .select("sport,model_key,version_label,is_active,metrics,updated_at")
       .order("sport", { ascending: true }),
+    client.from("op_calibration_runs").select("id", { count: "exact", head: true }),
+    client.from("op_calibration_candidates").select("id,metrics").order("created_at", { ascending: false }).limit(100),
+    client.from("op_calibration_promotions").select("id,status,expires_at").order("approved_at", { ascending: false }).limit(100),
     client.from("op_player_availability_snapshots").select("id", { count: "exact", head: true }),
     client.from("op_lineup_snapshots").select("id", { count: "exact", head: true }),
     client.from("op_player_match_performances").select("id", { count: "exact", head: true })
   ]);
-  const errors = [backtests.error, models.error, availability.error, lineups.error, playerPerformances.error].flatMap((error) => error ? [error.message] : []);
+  const errors = [...new Set(
+    [backtests.error, models.error, calibrationRuns.error, calibrationCandidates.error, calibrationPromotions.error, availability.error, lineups.error, playerPerformances.error]
+      .flatMap((error) => {
+        const message = error?.message?.trim();
+        return message ? [message] : [];
+      })
+  )];
   const latestBySport = new Map<string, Record<string, unknown>>();
   for (const row of (backtests.data ?? []) as Array<Record<string, unknown>>) {
     const sport = String(row.sport ?? "unknown");
     if (!latestBySport.has(sport)) latestBySport.set(sport, row);
   }
+  const reviewReadyCandidates = ((calibrationCandidates.data ?? []) as Array<Record<string, unknown>>).filter((row) => {
+    const readiness = record(record(row.metrics).promotionReadiness);
+    return readiness.status === "ready-shadow-review";
+  }).length;
+  const now = Date.now();
+  const approvedPromotions = ((calibrationPromotions.data ?? []) as Array<Record<string, unknown>>).filter((row) => {
+    if (row.status !== "approved") return false;
+    const expiresAt = typeof row.expires_at === "string" ? Date.parse(row.expires_at) : Number.NaN;
+    return !Number.isFinite(expiresAt) || expiresAt > now;
+  }).length;
 
   return {
     source: errors.length ? "degraded" as const : "supabase" as const,
@@ -166,6 +190,12 @@ async function getHistoricalEngineEvidence() {
       active: row.is_active === true,
       updatedAt: String(row.updated_at ?? "")
     })),
+    learningPipeline: {
+      calibrationRuns: calibrationRuns.count ?? 0,
+      promotionCandidates: calibrationCandidates.data?.length ?? 0,
+      reviewReadyCandidates,
+      approvedPromotions
+    },
     playerAvailabilitySnapshots: availability.count ?? 0,
     lineupSnapshots: lineups.count ?? 0,
     playerMatchPerformances: playerPerformances.count ?? 0,
