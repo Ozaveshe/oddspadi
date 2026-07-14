@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildDecisionBeliefState } from "@/lib/sports/prediction/decisionBeliefState";
+import { buildDecisionEvidence } from "@/lib/sports/prediction/decisionEvidence";
+import { buildDecisionAttribution } from "@/lib/sports/prediction/decisionAttribution";
+import { selectBestPick } from "@/lib/sports/prediction/odds";
+import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
+import { buildPrediction } from "@/lib/sports/service";
 import type {
   DecisionCalibration,
   DecisionCaseMemory,
@@ -93,6 +98,46 @@ describe("decision engine module boundaries", () => {
     expect(engine).toContain('import { buildDecisionUncertaintyDecomposition } from "./decisionUncertainty"');
     expect(engine).not.toContain("function buildDecisionBeliefState(");
     expect(engine).not.toContain("function buildDecisionUncertaintyDecomposition(");
-    expect(engine.split(/\r?\n/).length).toBeLessThan(6100);
+    expect(engine).toContain('import { buildDecisionEvidence, findCoreModelContextSignal, hasLiveInPlayModel } from "./decisionEvidence"');
+    expect(engine).toContain('import { buildDecisionAttribution } from "./decisionAttribution"');
+    expect(engine).not.toContain("function buildDecisionEvidence(");
+    expect(engine).not.toContain("function buildDecisionAttribution(");
+    expect(engine.split(/\r?\n/).length).toBeLessThan(5600);
+  });
+
+  it("preserves evidence and attribution output across football, basketball, and tennis", async () => {
+    for (const sport of ["football", "basketball", "tennis"] as const) {
+      const fixtures = await mockSportsDataProvider.getFixtures("2026-07-14", sport);
+      const fixture = fixtures.find((item) => item.status === "live") ?? fixtures[0];
+      const prediction = buildPrediction(fixture);
+      const decision = prediction.decision;
+      const selectedPick = selectBestPick(prediction.valueEdges, { learningProfile: decision.learningProfile });
+
+      const rebuiltEvidence = buildDecisionEvidence({
+        match: fixture,
+        markets: prediction.markets,
+        diagnostics: prediction.diagnostics,
+        bestPick: selectedPick,
+        contextAdjustment: decision.contextAdjustment
+      });
+      const rebuiltAttribution = buildDecisionAttribution({
+        bestPick: selectedPick,
+        action: decision.action,
+        probabilityTrace: decision.probabilityTrace,
+        oddsIntelligence: decision.oddsIntelligence,
+        marketMovement: decision.marketMovement,
+        dataCoverage: decision.dataCoverage,
+        caseMemory: decision.caseMemory,
+        calibration: decision.calibration,
+        abstentionRules: decision.abstentionRules,
+        actionability: decision.actionability,
+        reviewLoop: decision.reviewLoop
+      });
+
+      expect(rebuiltEvidence, `${sport} evidence`).toEqual(decision.evidence);
+      expect(rebuiltAttribution, `${sport} attribution`).toEqual(decision.attribution);
+      expect(rebuiltAttribution.valueScore).toBeGreaterThanOrEqual(0);
+      expect(rebuiltAttribution.riskScore).toBeGreaterThanOrEqual(0);
+    }
   });
 });
