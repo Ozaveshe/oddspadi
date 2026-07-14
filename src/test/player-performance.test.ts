@@ -53,6 +53,21 @@ function performance(overrides: Partial<PlayerMatchPerformance>): PlayerMatchPer
   };
 }
 
+function completeFixturePlayerResponse() {
+  return {
+    response: [1, 2].map((teamId) => ({
+      team: { id: teamId, name: teamId === 1 ? "Home FC" : "Away FC" },
+      players: Array.from({ length: 11 }, (_, index) => ({
+        player: { id: teamId * 100 + index, name: `Team ${teamId} Player ${index + 1}` },
+        statistics: [{
+          games: { minutes: 90, rating: "7.4", substitute: false },
+          goals: { total: index === 0 ? 1 : 0 }
+        }]
+      }))
+    }))
+  };
+}
+
 describe("player performance corpus", () => {
   it("normalizes API-Football fixture player statistics into typed facts", () => {
     const rows = normalizeApiFootballPlayerPerformancesForFixture({
@@ -147,7 +162,7 @@ describe("player performance corpus", () => {
         const url = String(input);
         calls.push(url);
         if (url.includes("/fixtures/players")) {
-          return new Response(JSON.stringify({ response: [{ team: { id: 1, name: "Home FC" }, players: [{ player: { id: 9, name: "Ada Striker" }, statistics: [{ games: { minutes: 90, rating: "7.4", substitute: false }, goals: { total: 1 } }] }] }] }), { status: 200, headers: { "content-type": "application/json" } });
+          return new Response(JSON.stringify(completeFixturePlayerResponse()), { status: 200, headers: { "content-type": "application/json" } });
         }
         return new Response(JSON.stringify({ response: [{
           fixture: { id: 101, date: fixture.kickoffAt, status: { short: "FT" } },
@@ -159,10 +174,44 @@ describe("player performance corpus", () => {
     });
 
     expect(result.status).toBe("dry-run");
-    expect(result.playerPerformancesFetched).toBe(1);
-    expect(result.playerPerformancesNormalized).toBe(1);
+    expect(result.playerPerformancesFetched).toBe(22);
+    expect(result.playerPerformancesNormalized).toBe(22);
+    expect(result.playerPerformanceFixturesRequested).toBe(1);
+    expect(result.playerPerformanceFixturesCovered).toBe(1);
     expect(result.playerPerformancesStored).toBe(0);
     expect(result.playerPerformancesVerified).toBe(0);
     expect(calls.filter((url) => url.includes("/fixtures/players"))).toHaveLength(1);
+  });
+
+  it("rejects a finished-fixture backfill when player rows are missing or incomplete", async () => {
+    const result = await syncHistoricalFootballProvider({
+      request: {
+        provider: "api-football",
+        league: "39",
+        season: "2026",
+        dryRun: true,
+        includePlayerStats: true,
+        maxContextFixtures: 1
+      },
+      env: { API_FOOTBALL_KEY: "test-key" },
+      fetchImpl: async (input) => {
+        const url = String(input);
+        if (url.includes("/fixtures/players")) {
+          return new Response(JSON.stringify({ response: [] }), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        return new Response(JSON.stringify({ response: [{
+          fixture: { id: 101, date: fixture.kickoffAt, status: { short: "FT" } },
+          league: { id: 39, name: "Premier League", country: "England", season: 2026 },
+          teams: { home: { id: 1, name: "Home FC" }, away: { id: 2, name: "Away FC" } },
+          goals: { home: 2, away: 1 }
+        }] }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+    });
+
+    expect(result.status).toBe("invalid-response");
+    expect(result.playerPerformanceFixturesRequested).toBe(1);
+    expect(result.playerPerformanceFixturesCovered).toBe(0);
+    expect(result.playerPerformancesStored).toBe(0);
+    expect(result.playerPerformancesErrors?.[0]).toContain("at least 11 per team are required");
   });
 });

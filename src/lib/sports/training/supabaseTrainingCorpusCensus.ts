@@ -25,6 +25,7 @@ export type SupabaseTrainingCorpusSportCounts = {
   oddsSnapshots: number;
   matchWinnerOddsSnapshots: number;
   rawProviderPayloads: number;
+  playerPerformanceRows: number;
   featureSnapshots: number;
   completeFeatureSnapshots: number;
   completeLiveFeatureSnapshots: number;
@@ -37,12 +38,12 @@ export type SupabaseTrainingCorpusSportCounts = {
 
 export type SupabaseTrainingCorpusSportCountsInput = Omit<
   SupabaseTrainingCorpusSportCounts,
-  "completeFeatureSnapshots" | "completeLiveFeatureSnapshots" | "partialFeatureSnapshots" | "proxyFeatureSnapshots"
+  "playerPerformanceRows" | "completeFeatureSnapshots" | "completeLiveFeatureSnapshots" | "partialFeatureSnapshots" | "proxyFeatureSnapshots"
 > &
   Partial<
     Pick<
       SupabaseTrainingCorpusSportCounts,
-      "completeFeatureSnapshots" | "completeLiveFeatureSnapshots" | "partialFeatureSnapshots" | "proxyFeatureSnapshots"
+      "playerPerformanceRows" | "completeFeatureSnapshots" | "completeLiveFeatureSnapshots" | "partialFeatureSnapshots" | "proxyFeatureSnapshots"
     >
   >;
 
@@ -64,6 +65,7 @@ export type SupabaseTrainingCorpusCensus = {
     finishedFixtures: number;
     oddsSnapshots: number;
     rawProviderPayloads: number;
+    playerPerformanceRows: number;
     featureSnapshots: number;
     completeFeatureSnapshots: number;
     completeLiveFeatureSnapshots: number;
@@ -112,6 +114,7 @@ const ZERO_COUNTS: SupabaseTrainingCorpusSportCounts[] = TRAINING_SPORTS.map((sp
   oddsSnapshots: 0,
   matchWinnerOddsSnapshots: 0,
   rawProviderPayloads: 0,
+  playerPerformanceRows: 0,
   featureSnapshots: 0,
   completeFeatureSnapshots: 0,
   completeLiveFeatureSnapshots: 0,
@@ -155,10 +158,12 @@ function sumBy(rows: SupabaseTrainingCorpusSportCounts[], key: keyof Omit<Supaba
 
 function normalizedCounts(row: SupabaseTrainingCorpusSportCountsInput): SupabaseTrainingCorpusSportCounts {
   const proxyFeatureSnapshots = row.proxyFeatureSnapshots ?? 0;
+  const playerPerformanceRows = row.playerPerformanceRows ?? 0;
   const completeFeatureSnapshots = row.completeFeatureSnapshots ?? row.featureSnapshots;
   const completeLiveFeatureSnapshots = row.completeLiveFeatureSnapshots ?? row.liveFeatureSnapshots;
   return {
     ...row,
+    playerPerformanceRows,
     completeFeatureSnapshots,
     completeLiveFeatureSnapshots,
     partialFeatureSnapshots:
@@ -204,7 +209,7 @@ function statusFor({
 function summaryFor(status: SupabaseTrainingCorpusCensusStatus, totals: SupabaseTrainingCorpusCensus["totals"]): string {
   if (status === "ready-shadow-backtest") return `Supabase has ${totals.finishedFixtures} finished fixture row(s), ${totals.completeFeatureSnapshots} complete feature row(s), and ${totals.completedBacktests} completed backtest row(s) for shadow training review.`;
   if (status === "ready-live-monitor") return `Supabase has live monitor evidence across ${totals.fixtures} fixture row(s), ${totals.oddsSnapshots} odds row(s), and ${totals.completeLiveFeatureSnapshots} complete live feature row(s).`;
-  if (status === "partial-corpus") return `Supabase corpus is partially populated: ${totals.fixtures} fixture row(s), ${totals.oddsSnapshots} odds row(s), ${totals.completeFeatureSnapshots}/${totals.featureSnapshots} complete feature row(s), and ${totals.completedBacktests} backtest row(s).`;
+  if (status === "partial-corpus") return `Supabase corpus is partially populated: ${totals.fixtures} fixture row(s), ${totals.oddsSnapshots} odds row(s), ${totals.playerPerformanceRows} real player-performance row(s), ${totals.completeFeatureSnapshots}/${totals.featureSnapshots} complete feature row(s), and ${totals.completedBacktests} backtest row(s).`;
   if (status === "empty-corpus") return "Supabase op_ tables are reachable, but the training corpus is still empty.";
   if (status === "waiting-supabase") return "Training corpus census is waiting on OddsPadi Supabase service-role read readiness.";
   return "Training corpus census failed while reading Supabase row counts.";
@@ -272,6 +277,7 @@ export function buildSupabaseTrainingCorpusCensus({
     finishedFixtures: sumBy(rows, "finishedFixtures"),
     oddsSnapshots: sumBy(rows, "oddsSnapshots"),
     rawProviderPayloads: sumBy(rows, "rawProviderPayloads"),
+    playerPerformanceRows: sumBy(rows, "playerPerformanceRows"),
     featureSnapshots: sumBy(rows, "featureSnapshots"),
     completeFeatureSnapshots: sumBy(rows, "completeFeatureSnapshots"),
     completeLiveFeatureSnapshots: sumBy(rows, "completeLiveFeatureSnapshots"),
@@ -321,7 +327,7 @@ export function buildSupabaseTrainingCorpusCensus({
     nextAction: nextActionFor(status, origin),
     locks: [
       "Corpus census is read-only and cannot write fixtures, odds, feature snapshots, backtests, picks, or stakes.",
-      "Table existence is not treated as training evidence; row counts must prove fixture, odds, raw payload, feature, settlement, and backtest coverage.",
+      "Table existence is not treated as training evidence; row counts must prove fixture, odds, player-performance, raw payload, feature, settlement, and backtest coverage.",
       "Live monitor readiness cannot train models until settled labels and completed backtests exist.",
       "Shadow backtest readiness still requires model-vs-market promotion gates before learned weights can influence live decisions."
     ],
@@ -406,16 +412,17 @@ async function readSportCounts(sport: TrainingSport, env: EnvLike): Promise<{ co
     countRows("op_odds_snapshots", [{ column: "sport", value: sport }], env),
     countRows("op_odds_snapshots", [{ column: "sport", value: sport }, { column: "market", value: "match_winner" }], env),
     countRows("op_raw_provider_payloads", [{ column: "sport", value: sport }], env),
+    countRows("op_player_match_performances", [{ column: "sport", value: sport }, { column: "source_kind", value: "real" }], env),
     countRows("op_training_feature_snapshots", [{ column: "sport", value: sport }], env),
     countRows("op_training_feature_snapshots", [{ column: "sport", value: sport }, { column: "split", value: "live" }], env),
     countRows("op_training_feature_snapshots", [{ column: "sport", value: sport }, { column: "label", operator: "not-null" }], env),
     readFeatureQualityCounts(sport, env),
     countRows("op_backtest_runs", [{ column: "sport", value: sport }, { column: "status", value: "completed" }], env)
   ]);
-  const quality = reads[9] as Awaited<ReturnType<typeof readFeatureQualityCounts>>;
-  const rowReads = reads.filter((_, index) => index !== 9) as Array<{ count: number; error: string | null }>;
+  const quality = reads[10] as Awaited<ReturnType<typeof readFeatureQualityCounts>>;
+  const rowReads = reads.filter((_, index) => index !== 10) as Array<{ count: number; error: string | null }>;
   const errors = [...rowReads.flatMap((read) => (read.error ? [`${sport}: ${read.error}`] : [])), ...quality.errors];
-  const partialFeatureSnapshots = Math.max(0, rowReads[6].count - quality.complete - quality.proxy);
+  const partialFeatureSnapshots = Math.max(0, rowReads[7].count - quality.complete - quality.proxy);
 
   return {
     errors,
@@ -427,14 +434,15 @@ async function readSportCounts(sport: TrainingSport, env: EnvLike): Promise<{ co
       oddsSnapshots: rowReads[3].count,
       matchWinnerOddsSnapshots: rowReads[4].count,
       rawProviderPayloads: rowReads[5].count,
-      featureSnapshots: rowReads[6].count,
+      playerPerformanceRows: rowReads[6].count,
+      featureSnapshots: rowReads[7].count,
       completeFeatureSnapshots: quality.complete,
       completeLiveFeatureSnapshots: quality.completeLive,
       partialFeatureSnapshots,
       proxyFeatureSnapshots: quality.proxy,
-      liveFeatureSnapshots: rowReads[7].count,
-      labeledFeatureSnapshots: rowReads[8].count,
-      completedBacktests: rowReads[9].count
+      liveFeatureSnapshots: rowReads[8].count,
+      labeledFeatureSnapshots: rowReads[9].count,
+      completedBacktests: rowReads[10].count
     }
   };
 }
@@ -442,6 +450,43 @@ async function readSportCounts(sport: TrainingSport, env: EnvLike): Promise<{ co
 function countValue(value: unknown): number {
   const count = typeof value === "number" ? value : Number(value);
   return Number.isFinite(count) && count >= 0 ? Math.trunc(count) : 0;
+}
+
+async function readPlayerPerformanceCounts(env: EnvLike): Promise<{ counts: Map<TrainingSport, number>; errors: string[] }> {
+  const client = getSupabaseServerClient(env);
+  if (client) {
+    const { data, error } = await client.rpc("op_player_performance_corpus_counts");
+    if (!error && Array.isArray(data)) {
+      const rows = data as Array<Record<string, unknown>>;
+      const counts = new Map<TrainingSport, number>();
+      for (const row of rows) {
+        const sport = String(row.sport ?? "");
+        if (sport === "football" || sport === "basketball" || sport === "tennis") {
+          counts.set(sport, countValue(row.player_performance_rows));
+        }
+      }
+      if (TRAINING_SPORTS.every((sport) => counts.has(sport))) return { counts, errors: [] };
+    }
+  }
+
+  const reads = await Promise.all(TRAINING_SPORTS.map(async (sport) => ({
+    sport,
+    read: await countRows("op_player_match_performances", [
+      { column: "sport", value: sport },
+      { column: "source_kind", value: "real" }
+    ], env)
+  })));
+  return {
+    counts: new Map(reads.map(({ sport, read }) => [sport, read.count])),
+    errors: reads.flatMap(({ sport, read }) => read.error ? [`${sport}: ${read.error}`] : [])
+  };
+}
+
+function attachPlayerPerformanceCounts(
+  counts: SupabaseTrainingCorpusSportCounts[],
+  playerCounts: Map<TrainingSport, number>
+): SupabaseTrainingCorpusSportCounts[] {
+  return counts.map((row) => ({ ...row, playerPerformanceRows: playerCounts.get(row.sport) ?? 0 }));
 }
 
 async function readSnapshotRpcCounts(env: EnvLike): Promise<SupabaseTrainingCorpusSportCounts[] | null> {
@@ -467,6 +512,7 @@ async function readSnapshotRpcCounts(env: EnvLike): Promise<SupabaseTrainingCorp
       oddsSnapshots: countValue(row.odds_snapshots),
       matchWinnerOddsSnapshots: countValue(row.match_winner_odds_snapshots),
       rawProviderPayloads: countValue(row.raw_provider_payloads),
+      playerPerformanceRows: 0,
       featureSnapshots,
       completeFeatureSnapshots,
       completeLiveFeatureSnapshots: countValue(row.complete_live_feature_snapshots),
@@ -499,6 +545,7 @@ async function readRpcCounts(env: EnvLike): Promise<SupabaseTrainingCorpusSportC
       oddsSnapshots: countValue(row.odds_snapshots),
       matchWinnerOddsSnapshots: countValue(row.match_winner_odds_snapshots),
       rawProviderPayloads: countValue(row.raw_provider_payloads),
+      playerPerformanceRows: 0,
       featureSnapshots: countValue(row.feature_snapshots),
       completeFeatureSnapshots: countValue(row.complete_feature_snapshots),
       completeLiveFeatureSnapshots: countValue(row.complete_live_feature_snapshots),
@@ -519,20 +566,26 @@ function censusCacheTtlMs(env: EnvLike): number {
 
 async function loadCorpusCounts(env: EnvLike): Promise<CorpusCountsRead> {
   const snapshotRpcCounts = await readSnapshotRpcCounts(env);
-  if (snapshotRpcCounts) return { counts: snapshotRpcCounts, errors: [] };
+  if (snapshotRpcCounts) {
+    const playerCounts = await readPlayerPerformanceCounts(env);
+    return { counts: attachPlayerPerformanceCounts(snapshotRpcCounts, playerCounts.counts), errors: playerCounts.errors };
+  }
 
   const rpcCounts = await readRpcCounts(env);
   if (rpcCounts) {
-    const quality = await Promise.all(TRAINING_SPORTS.map((sport) => readFeatureQualityCounts(sport, env)));
+    const [quality, playerCounts] = await Promise.all([
+      Promise.all(TRAINING_SPORTS.map((sport) => readFeatureQualityCounts(sport, env))),
+      readPlayerPerformanceCounts(env)
+    ]);
     return {
-      counts: rpcCounts.map((row, index) => ({
+      counts: attachPlayerPerformanceCounts(rpcCounts.map((row, index) => ({
         ...row,
         completeFeatureSnapshots: quality[index].complete,
         completeLiveFeatureSnapshots: quality[index].completeLive,
         partialFeatureSnapshots: Math.max(0, row.featureSnapshots - quality[index].complete - quality[index].proxy),
         proxyFeatureSnapshots: quality[index].proxy
-      })),
-      errors: quality.flatMap((read) => read.errors)
+      })), playerCounts.counts),
+      errors: [...quality.flatMap((read) => read.errors), ...playerCounts.errors]
     };
   }
 

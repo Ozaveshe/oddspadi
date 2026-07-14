@@ -73,6 +73,8 @@ export type ProviderSyncResult = {
   lineupsErrors?: string[];
   playerPerformancesFetched?: number;
   playerPerformancesNormalized?: number;
+  playerPerformanceFixturesRequested?: number;
+  playerPerformanceFixturesCovered?: number;
   playerPerformancesStored?: number;
   playerPerformancesVerified?: number;
   playerPerformancesErrors?: string[];
@@ -1074,6 +1076,22 @@ function playerPerformanceDataQuality({
   return Number(Math.min(0.95, score).toFixed(4));
 }
 
+const MINIMUM_PLAYER_ROWS_PER_TEAM = 11;
+
+function playerPerformanceCoverage(
+  fixture: HistoricalFootballFixtureInput,
+  performances: PlayerMatchPerformance[]
+): { complete: boolean; homeRows: number; awayRows: number } {
+  const activeRows = performances.filter((row) => row.minutes > 0);
+  const homeRows = activeRows.filter((row) => row.teamExternalId === fixture.homeTeam.externalId).length;
+  const awayRows = activeRows.filter((row) => row.teamExternalId === fixture.awayTeam.externalId).length;
+  return {
+    complete: homeRows >= MINIMUM_PLAYER_ROWS_PER_TEAM && awayRows >= MINIMUM_PLAYER_ROWS_PER_TEAM,
+    homeRows,
+    awayRows
+  };
+}
+
 export function normalizeApiFootballPlayerPerformancesForFixture(
   response: ApiFootballFixturePlayersResponse,
   fixture: HistoricalFootballFixtureInput,
@@ -1637,6 +1655,8 @@ async function syncApiFootballFixtures({
   const lineupsErrors: string[] = [];
   let playerPerformancesFetched = 0;
   let playerPerformancesNormalized = 0;
+  let playerPerformanceFixturesRequested = 0;
+  let playerPerformanceFixturesCovered = 0;
   const playerPerformancesErrors: string[] = [];
   let playerPerformances: PlayerMatchPerformance[] = [];
   let weatherFetched = 0;
@@ -1762,12 +1782,21 @@ async function syncApiFootballFixtures({
   if (includePlayerStats && normalized.length) {
     const finishedFixtures = normalized.filter((fixture) => fixture.status === "finished");
     const selectedFixtures = cappedFixtureSlice(finishedFixtures, contextFixtureLimit, "Player statistics", playerPerformancesErrors, "maxContextFixtures");
+    playerPerformanceFixturesRequested = selectedFixtures.length;
     const performanceEntries = await Promise.all(
       selectedFixtures.map(async (fixture) => {
         const result = await fetchApiFootballFixturePlayerPerformances({ fixture, apiKey, fetchImpl });
         playerPerformancesFetched += result.fetched;
         playerPerformancesNormalized += result.performances.length;
         if (result.error) playerPerformancesErrors.push(`${fixture.externalId}: ${result.error}`);
+        const coverage = playerPerformanceCoverage(fixture, result.performances);
+        if (!result.error && !coverage.complete) {
+          playerPerformancesErrors.push(
+            `${fixture.externalId}: player statistics covered ${coverage.homeRows} home and ${coverage.awayRows} away participant(s) with minutes; at least ${MINIMUM_PLAYER_ROWS_PER_TEAM} per team are required.`
+          );
+        }
+        if (!coverage.complete) return [];
+        playerPerformanceFixturesCovered += 1;
         return result.performances;
       })
     );
@@ -1850,9 +1879,18 @@ async function syncApiFootballFixtures({
     playerPerformanceStorage.status === "failed" ||
     ((request.dryRun ?? true) === false && playerPerformanceStorage.status === "not-configured")
   );
+  const playerCoverageFailed = includePlayerStats && playerPerformanceFixturesRequested > playerPerformanceFixturesCovered;
 
   return {
-    status: playerStorageFailed ? "failed" : ingestion.status === "stored" || ingestion.status === "dry-run" ? ingestion.status : emptyDryRun ? "dry-run" : "failed",
+    status: playerStorageFailed
+      ? "failed"
+      : playerCoverageFailed
+        ? "invalid-response"
+        : ingestion.status === "stored" || ingestion.status === "dry-run"
+          ? ingestion.status
+          : emptyDryRun
+            ? "dry-run"
+            : "failed",
     configured: true,
     provider: "api-football",
     dryRun: ingestion.dryRun,
@@ -1876,6 +1914,8 @@ async function syncApiFootballFixtures({
     lineupsErrors: includeLineups && lineupsErrors.length ? lineupsErrors : undefined,
     playerPerformancesFetched: includePlayerStats ? playerPerformancesFetched : undefined,
     playerPerformancesNormalized: includePlayerStats ? playerPerformancesNormalized : undefined,
+    playerPerformanceFixturesRequested: includePlayerStats ? playerPerformanceFixturesRequested : undefined,
+    playerPerformanceFixturesCovered: includePlayerStats ? playerPerformanceFixturesCovered : undefined,
     playerPerformancesStored: includePlayerStats ? playerPerformanceStorage.rowsWritten : undefined,
     playerPerformancesVerified: includePlayerStats ? playerPerformanceStorage.rowsVerified : undefined,
     playerPerformancesErrors: includePlayerStats && playerPerformancesErrors.length ? playerPerformancesErrors : undefined,

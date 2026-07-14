@@ -31,6 +31,11 @@ EPL `39`), `ODDSPADI_FOOTBALL_CORPUS_FIXTURE_LIMIT` (default `12`), and
 Its response reports the recent and historical lanes separately. HTTP `207`
 means one lane completed while the other failed; treat that as degraded and
 inspect both receipts rather than marking the corpus healthy.
+HTTP `200` from an inner backfill route is not sufficient on its own: the
+worker accepts `stored` only when census readback is evidence-ready, and accepts
+`no-data` only for a genuinely quiet provider window. A finished fixture's
+player-stat payload must cover at least 11 participants with minutes for each
+team; incomplete payloads fail the lane and are not stored as player history.
 
 ## Scripts (run from the repo root)
 

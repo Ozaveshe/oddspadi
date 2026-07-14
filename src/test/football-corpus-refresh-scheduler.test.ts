@@ -101,7 +101,7 @@ describe("football historical corpus refresh scheduler", () => {
     const fetchImpl = vi.fn(async () => {
       requestNumber += 1;
       return requestNumber === 1
-        ? Response.json({ success: true }, { status: 200 })
+        ? Response.json({ success: true, data: { status: "stored", readback: { evidenceReady: true } } }, { status: 200 })
         : Response.json({ success: false, error: "player statistics entitlement unavailable" }, { status: 403 });
     });
     const response = await runFootballCorpusRefreshWorker({
@@ -114,6 +114,23 @@ describe("football historical corpus refresh scheduler", () => {
     expect(response.status).toBe(207);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(await response.json()).toEqual(expect.objectContaining({ success: false, pipelineStatus: "partial" }));
+  });
+
+  it("rejects HTTP 200 when the storage receipt did not prove readback evidence", async () => {
+    const fetchImpl = vi.fn(async () => Response.json({
+      success: true,
+      data: { status: "stored", readback: { evidenceReady: false } }
+    }));
+    const response = await runFootballCorpusRefreshWorker({
+      siteUrl: "https://oddspadi.example",
+      adminToken: "admin-token",
+      scheduleToken: "admin-token",
+      now: new Date("2026-07-14T03:40:00.000Z"),
+      fetchImpl
+    });
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual(expect.objectContaining({ success: false, pipelineStatus: "failed" }));
   });
 
   it("rejects an invalid scheduler token before spending provider credits", async () => {

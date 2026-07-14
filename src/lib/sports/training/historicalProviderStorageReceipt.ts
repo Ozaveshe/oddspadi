@@ -80,6 +80,7 @@ export type HistoricalProviderStorageReceipt = {
     fixturesVisible: number;
     oddsVisible: number;
     rawPayloadsVisible: number;
+    playerPerformancesVisible: number;
     featureSnapshotsVisible: number;
     errors: string[];
   };
@@ -287,6 +288,14 @@ function statusFor({
   if (!runRequested) return "ready-to-run";
   if (observation.statusLabel === "invalid-request") return "invalid-request";
   if (observation.statusLabel === "not-configured") return "waiting-provider-env";
+  if (observation.statusLabel === "provider-error") return "provider-error";
+  if (
+    observation.statusLabel === "stored" &&
+    !observation.dryRun &&
+    request.includePlayerStats &&
+    (observation.fetched > 0 || observation.normalized > 0) &&
+    observation.counts.playerPerformanceRowsVerified === 0
+  ) return "failed";
   if (observation.statusLabel === "stored" && !observation.dryRun && observation.rowsWritten > 0) return "stored";
   if (
     observation.statusLabel === "stored" &&
@@ -355,7 +364,10 @@ function readbackReady({
 }): boolean {
   if (!after || observation.statusLabel !== "stored" || request.dryRun) return false;
   if (request.provider === "the-odds-api") return after.totals.oddsSnapshots > 0 && after.totals.rawProviderPayloads > 0;
-  return after.totals.fixtures > 0 && after.totals.rawProviderPayloads > 0 && after.totals.featureSnapshots > 0;
+  const playerEvidenceReady = !request.includePlayerStats || (
+    observation.counts.playerPerformanceRowsVerified > 0 && after.totals.playerPerformanceRows > 0
+  );
+  return after.totals.fixtures > 0 && after.totals.rawProviderPayloads > 0 && after.totals.featureSnapshots > 0 && playerEvidenceReady;
 }
 
 export async function observeHistoricalProviderStorageReceipt({
@@ -389,7 +401,7 @@ export async function observeHistoricalProviderStorageReceipt({
   const result = canAttempt ? await backfillRunner({ request, env, fetchImpl }) : null;
   const observation = observationFromResult(result);
   const after = runtime.serverWriteReady && (canAttempt || before) ? await censusReader({ env, origin, now, fresh: canAttempt && !request.dryRun }).catch(() => null) : before;
-  const status = statusFor({
+  const observedStatus = statusFor({
     runRequested,
     adminAuthorized,
     request,
@@ -415,10 +427,17 @@ export async function observeHistoricalProviderStorageReceipt({
     tables: targetTables(request.provider)
   };
   const evidenceReady = readbackReady({ request, observation, after });
+  const status = observedStatus === "stored" && !evidenceReady ? "failed" : observedStatus;
   const readbackErrors = unique([
     ...(before?.readiness.errors ?? []),
     ...(after?.readiness.errors ?? []),
-    runtime.serverWriteReady ? "" : "Supabase server-write/readback readiness is missing."
+    runtime.serverWriteReady ? "" : "Supabase server-write/readback readiness is missing.",
+    request.includePlayerStats && observation.statusLabel === "stored" && (observation.fetched > 0 || observation.normalized > 0) && observation.counts.playerPerformanceRowsVerified === 0
+      ? "Player statistics were requested, but no player-performance rows passed storage readback."
+      : "",
+    request.includePlayerStats && observation.counts.playerPerformanceRowsVerified > 0 && (after?.totals.playerPerformanceRows ?? 0) === 0
+      ? "The batch verified player-performance writes, but the corpus census cannot see any real player-performance rows."
+      : ""
   ]);
   const receiptHash = stableHash({
     status,
@@ -447,6 +466,7 @@ export async function observeHistoricalProviderStorageReceipt({
       fixturesVisible: after?.totals.fixtures ?? 0,
       oddsVisible: after?.totals.oddsSnapshots ?? 0,
       rawPayloadsVisible: after?.totals.rawProviderPayloads ?? 0,
+      playerPerformancesVisible: after?.totals.playerPerformanceRows ?? 0,
       featureSnapshotsVisible: after?.totals.featureSnapshots ?? 0,
       errors: readbackErrors
     },
@@ -462,7 +482,7 @@ export async function observeHistoricalProviderStorageReceipt({
       command,
       verifyUrl,
       expectedEvidence:
-        "Provider backfill result plus Supabase census readback show fixtures, odds/raw payloads, and feature snapshots visible while training, publishing, and staking remain locked."
+        "Provider backfill result plus Supabase census readback show fixtures, odds/raw payloads, requested player performances, and feature snapshots visible while training, publishing, and staking remain locked."
     },
     controls: {
       canInspectReadOnly: true,

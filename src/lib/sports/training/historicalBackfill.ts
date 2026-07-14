@@ -8,7 +8,7 @@ import {
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 type EnvMap = Record<string, string | undefined>;
 
-type BackfillStatus = "dry-run" | "stored" | "partial" | "not-configured" | "invalid-request" | "failed";
+type BackfillStatus = "dry-run" | "stored" | "partial" | "not-configured" | "invalid-request" | "provider-error" | "failed";
 
 export type HistoricalProviderBackfillRequest = {
   provider: ProviderName;
@@ -368,7 +368,8 @@ function statusForResults({
   executedJobs,
   storedJobs,
   dryRunJobs,
-  failedJobs
+  failedJobs,
+  jobResults
 }: {
   dryRun: boolean;
   errors: string[];
@@ -376,11 +377,16 @@ function statusForResults({
   storedJobs: number;
   dryRunJobs: number;
   failedJobs: number;
+  jobResults: HistoricalProviderBackfillJobResult[];
 }): BackfillStatus {
   if (errors.length && !executedJobs) return "invalid-request";
   if (!executedJobs) return "failed";
   if (failedJobs && (storedJobs || dryRunJobs)) return "partial";
-  if (failedJobs) return "not-configured";
+  if (failedJobs) {
+    if (jobResults.some(({ result }) => result.status === "not-configured")) return "not-configured";
+    if (jobResults.some(({ result }) => result.status === "provider-error" || result.status === "invalid-response")) return "provider-error";
+    return "failed";
+  }
   if (storedJobs) return "stored";
   if (dryRun || dryRunJobs) return "dry-run";
   return "failed";
@@ -444,7 +450,8 @@ export async function runHistoricalProviderBackfill({
       executedJobs,
       storedJobs,
       dryRunJobs,
-      failedJobs
+      failedJobs,
+      jobResults
     }),
     provider: plan.provider,
     dryRun: plan.dryRun,

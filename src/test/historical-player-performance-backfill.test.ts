@@ -65,4 +65,24 @@ describe("historical player-performance backfill accounting", () => {
     expect(result.counts.playerPerformanceRows).toBe(80);
     expect(result.counts.playerPerformanceRowsVerified).toBe(80);
   });
+
+  it("surfaces an incomplete player-stat response as a provider error", async () => {
+    const incomplete = {
+      ...syncResult(true),
+      status: "invalid-response" as const,
+      playerPerformancesFetched: 0,
+      playerPerformancesNormalized: 0,
+      playerPerformanceFixturesRequested: 6,
+      playerPerformanceFixturesCovered: 0,
+      reason: "Player statistics did not cover the finished fixtures."
+    };
+    const result = await runHistoricalProviderBackfill({
+      request: { provider: "api-football", league: "39", seasons: [2025], includePlayerStats: true, dryRun: true },
+      syncImpl: async () => incomplete
+    });
+
+    expect(result.status).toBe("provider-error");
+    expect(result.failedJobs).toBe(1);
+    expect(result.errors[0]).toContain("did not cover the finished fixtures");
+  });
 });

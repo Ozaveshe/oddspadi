@@ -26,6 +26,14 @@ type BackfillReceipt = {
   body: unknown;
 };
 
+type BackfillResponseEnvelope = {
+  success?: boolean;
+  data?: {
+    status?: string;
+    readback?: { evidenceReady?: boolean };
+  };
+};
+
 const DAY_MS = 24 * 60 * 60_000;
 const PLAYER_HISTORY_WINDOW_DAYS = 7;
 const PLAYER_HISTORY_ROTATION_ANCHOR = Date.UTC(2026, 6, 14);
@@ -108,10 +116,16 @@ async function requestBackfill(fetchImpl: FetchLike, endpoint: URL, token: strin
       headers: { accept: "application/json", "x-oddspadi-admin-token": token },
       signal: AbortSignal.timeout(6 * 60_000)
     });
+    const body = await response.json().catch(() => null) as BackfillResponseEnvelope | null;
+    const receiptStatus = body?.data?.status;
+    const receiptSucceeded = body?.success === true && (
+      receiptStatus === "no-data" ||
+      (receiptStatus === "stored" && body.data?.readback?.evidenceReady === true)
+    );
     return {
-      success: response.ok,
+      success: response.ok && receiptSucceeded,
       status: response.status,
-      body: await response.json().catch(() => null)
+      body
     };
   } catch (error) {
     return {
@@ -173,7 +187,8 @@ export async function runFootballCorpusRefreshWorker({
   const recentReceipt = await requestBackfill(fetchImpl, recentEndpoint, token);
   const playerHistoryReceipt = await requestBackfill(fetchImpl, endpointFor(playerHistoryWindow, historyLimit), token);
   const success = recentReceipt.success && playerHistoryReceipt.success;
-  const status = success ? 200 : recentReceipt.success || playerHistoryReceipt.success ? 207 : recentReceipt.status || playerHistoryReceipt.status || 500;
+  const upstreamFailureStatus = [recentReceipt.status, playerHistoryReceipt.status].find((status) => status >= 400) ?? 502;
+  const status = success ? 200 : recentReceipt.success || playerHistoryReceipt.success ? 207 : upstreamFailureStatus;
 
   return Response.json(
     {

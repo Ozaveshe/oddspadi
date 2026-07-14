@@ -12,7 +12,7 @@ const readyEnv = {
   THE_ODDS_API_KEY: "odds-key"
 };
 
-function census(fixtures: number, rawProviderPayloads: number, featureSnapshots: number): SupabaseTrainingCorpusCensus {
+function census(fixtures: number, rawProviderPayloads: number, featureSnapshots: number, playerPerformanceRows = 0): SupabaseTrainingCorpusCensus {
   return buildSupabaseTrainingCorpusCensus({
     env: readyEnv,
     projectRef: "wncwtzqipnoqwmqlznqn",
@@ -27,6 +27,7 @@ function census(fixtures: number, rawProviderPayloads: number, featureSnapshots:
         oddsSnapshots: 0,
         matchWinnerOddsSnapshots: 0,
         rawProviderPayloads,
+        playerPerformanceRows,
         featureSnapshots,
         liveFeatureSnapshots: 0,
         labeledFeatureSnapshots: 0,
@@ -198,13 +199,13 @@ describe("historical provider storage receipt", () => {
     const receipt = await observeHistoricalProviderStorageReceipt({
       env: readyEnv,
       origin: "http://127.0.0.1:3025",
-      request: { dryRun: false },
+      request: { dryRun: false, includePlayerStats: true },
       runRequested: true,
       adminAuthorized: true,
       backfillRunner: async () => backfillResult("stored", false),
       censusReader: async () => {
         readCount += 1;
-        return readCount === 1 ? census(0, 0, 0) : census(5, 1, 5);
+        return readCount === 1 ? census(0, 0, 0) : census(5, 1, 5, 28);
       },
       now: new Date("2026-07-10T00:03:00.000Z")
     });
@@ -215,6 +216,7 @@ describe("historical provider storage receipt", () => {
     expect(receipt.readback.evidenceReady).toBe(true);
     expect(receipt.readback.fixturesVisible).toBe(5);
     expect(receipt.readback.rawPayloadsVisible).toBe(1);
+    expect(receipt.readback.playerPerformancesVisible).toBe(28);
     expect(receipt.controls.canWriteProviderRows).toBe(true);
     expect(receipt.controls.canWriteRawPayloads).toBe(true);
     expect(receipt.controls.canWriteFeatureSnapshots).toBe(true);
@@ -222,6 +224,28 @@ describe("historical provider storage receipt", () => {
     expect(receipt.controls.canApplyLearnedWeights).toBe(false);
     expect(receipt.controls.canPublishPicks).toBe(false);
     expect(receipt.controls.canStake).toBe(false);
+  });
+
+  it("does not call a player-stat backfill stored until the player corpus is visible", async () => {
+    let readCount = 0;
+    const receipt = await observeHistoricalProviderStorageReceipt({
+      env: readyEnv,
+      origin: "http://127.0.0.1:3025",
+      request: { dryRun: false, includePlayerStats: true },
+      runRequested: true,
+      adminAuthorized: true,
+      backfillRunner: async () => backfillResult("stored", false),
+      censusReader: async () => {
+        readCount += 1;
+        return readCount === 1 ? census(0, 0, 0) : census(5, 1, 5, 0);
+      },
+      now: new Date("2026-07-10T00:03:30.000Z")
+    });
+
+    expect(receipt.status).toBe("failed");
+    expect(receipt.readback.evidenceReady).toBe(false);
+    expect(receipt.readback.playerPerformancesVisible).toBe(0);
+    expect(receipt.readback.errors[0]).toContain("census cannot see any real player-performance rows");
   });
 
   it("records a successful quiet provider window as no-data instead of a failure", async () => {
