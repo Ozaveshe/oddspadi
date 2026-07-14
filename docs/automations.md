@@ -36,7 +36,7 @@ inspect both receipts rather than marking the corpus healthy.
 
 | Script | Purpose | Needs |
 | --- | --- | --- |
-| `node scripts/site-health.mjs` | Read-only production sweep: page latency + size budgets, `/api/health`, per-sport prediction APIs, community feed non-empty. Exit 1 on any failure — use as the canary after every deploy. | optional `ODDSPADI_ADMIN_TOKEN` for the provider section |
+| `node scripts/site-health.mjs` | Read-only production sweep: page latency + size budgets, `/api/health`, per-sport prediction APIs, community feed non-empty. It also fails when live provider or private Supabase server configuration is incomplete. Exit 1 on any failure — use as the canary after every deploy. | optional `ODDSPADI_ADMIN_TOKEN` for the provider section |
 | `node scripts/warm-caches.mjs` | Hits the heavy pages/APIs once so the durable caches are primed and the first visitor is fast. Run right after a deploy. | nothing |
 | `node scripts/run-editorial-sweep.mjs` | Forces a News regeneration now (same worker the schedule calls). Use when the ledger changed and you don't want to wait for the next edition. | `ODDSPADI_ADMIN_TOKEN` |
 | `node scripts/seed-community-posts.mjs` | Posts one fresh feed item per seed persona (skips anyone who posted in the last 20h). Keeps the padi feed alive on quiet days. | `SUPABASE_URL` + `SUPABASE_SECRET_KEY` |

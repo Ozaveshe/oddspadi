@@ -24,7 +24,12 @@ export function GET(request: Request) {
     openai: anyConfigured("OPENAI_API_KEY")
   };
 
-  const liveDataReady = providers.apiFootball || providers.theOddsApi;
+  const providerConfigured = providers.apiFootball || providers.theOddsApi;
+  const storageConfigured = providers.supabase;
+  // Provider credentials alone do not make the product live-data ready. The
+  // prediction and corpus tables are protected by RLS, so the server also
+  // needs its private Supabase credential before it can read or write them.
+  const liveDataReady = providerConfigured && storageConfigured;
 
   const adminToken = process.env.ODDSPADI_ADMIN_TOKEN?.trim();
   const url = new URL(request.url);
@@ -36,6 +41,11 @@ export function GET(request: Request) {
       status: "ok",
       time: new Date().toISOString(),
       liveDataReady,
+      readiness: {
+        provider: providerConfigured ? "configured" : "unconfigured",
+        storage: storageConfigured ? "configured" : "unconfigured",
+        publicOutput: "not-checked"
+      },
       ...(authorized
         ? {
             providers,

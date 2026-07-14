@@ -52,7 +52,19 @@ await checkPage("/predictions", { maxMs: 6000 });
 await checkPage("/news");
 await checkPage("/community");
 
-await checkJson("/api/health", (payload) => (payload?.status === "ok" ? null : "status not ok"), "api /api/health");
+await checkJson(
+  "/api/health",
+  (payload) => {
+    if (payload?.status !== "ok") return "status not ok";
+    if (!payload?.liveDataReady) {
+      const provider = payload?.readiness?.provider ?? "unknown";
+      const storage = payload?.readiness?.storage ?? "unknown";
+      return `live data configuration incomplete: provider=${provider}, storage=${storage}`;
+    }
+    return null;
+  },
+  "api /api/health"
+);
 if (adminToken) {
   await checkJson(
     "/api/health",
