@@ -6,7 +6,9 @@ import { applyLearnedProbabilityCalibration } from "@/lib/sports/prediction/lear
 import { classifyPredictionOutcomeTransition, isPredictionOutcomeIdempotencyConflict } from "@/lib/sports/prediction/decisionOutcomes";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
 import type { DecisionLearningProfile, PredictionMarket } from "@/lib/sports/types";
-import { runtimeModelIdentityReceipt } from "@/lib/sports/prediction/modelIdentity";
+import { runtimeModelIdentityReceipt, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
+
+const FOOTBALL_RUNTIME_MODEL_KEY = runtimeModelKey("football");
 
 function outcome(id: string, decisionRunId: string): OutcomeRow {
   return {
@@ -67,7 +69,7 @@ function readySnapshot(): TrainingDataSnapshot {
     latestBacktest: {
       id: "backtest-1",
       sport: "football",
-      modelKey: "football-poisson-v2",
+      modelKey: FOOTBALL_RUNTIME_MODEL_KEY,
       engineVersion: "decision-engine-v1",
       status: "completed",
       dataSource: "supabase:op_fixtures:real-only",
@@ -113,7 +115,7 @@ function readySnapshot(): TrainingDataSnapshot {
   } as unknown as TrainingDataSnapshot;
 }
 
-function promotion(modelKey = "football-poisson-v2", engineVersion = "decision-engine-v1"): ActiveCalibrationPromotion {
+function promotion(modelKey = FOOTBALL_RUNTIME_MODEL_KEY, engineVersion = "decision-engine-v1"): ActiveCalibrationPromotion {
   return {
     id: "promotion-1",
     candidateId: "candidate-1",

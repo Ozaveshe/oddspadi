@@ -9,7 +9,7 @@ function profile(overrides: Partial<DecisionLearningProfile> = {}): DecisionLear
     status: "active",
     source: "validated-holdout",
     active: true,
-    modelKey: "football-poisson-v2",
+    modelKey: "football-poisson-v3",
     engineVersion: "decision-engine-v1",
     sampleSize: 1200,
     realFinishedFixtures: 1200,
@@ -41,7 +41,7 @@ describe("learned probability calibration", () => {
       { marketId: "over_under_25", probabilities: { over_25: 0.54, under_25: 0.46 } }
     ];
 
-    const result = applyLearnedProbabilityCalibration({ markets, profile: profile(), modelKey: "football-poisson-v2", engineVersion: "decision-engine-v1" });
+    const result = applyLearnedProbabilityCalibration({ markets, profile: profile(), modelKey: "football-poisson-v3", engineVersion: "decision-engine-v1" });
     const winner = result.markets.find((market) => market.marketId === "match_winner");
 
     expect(result.adjustment.status).toBe("applied");
@@ -58,7 +58,7 @@ describe("learned probability calibration", () => {
     const result = applyLearnedProbabilityCalibration({
       markets,
       profile: profile({ active: false, status: "shadow-only" }),
-      modelKey: "football-poisson-v2",
+      modelKey: "football-poisson-v3",
       engineVersion: "decision-engine-v1"
     });
 
@@ -89,6 +89,6 @@ describe("learned probability calibration", () => {
       status: "shadow-only",
       active: false
     });
-    expect(prediction.decision.learningProfile?.reason).toContain("does not match runtime football-poisson-v2");
+    expect(prediction.decision.learningProfile?.reason).toContain("does not match runtime football-poisson-v3");
   });
 });

@@ -12,6 +12,7 @@ import type { FootballDataModelPromotionDecision } from "@/lib/sports/training/f
 import type { PublicHistoricalTrainingEvidence } from "@/lib/sports/training/publicHistoricalTrainingEvidence";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
 import type { DecisionDataSignalCategory, Match, Prediction, Sport } from "@/lib/sports/types";
+import { runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 
 type DecisionRow = {
   match: Match;
@@ -366,7 +367,8 @@ function buildPredictionModelChecks({
   modelGovernance: DecisionModelGovernance;
 }): DecisionMvpRequirementAuditCheck[] {
   const footballRows = rows.filter((row) => row.match.sport === "football");
-  const footballModelReady = footballRows.some((row) => row.prediction.diagnostics.modelVersion === "football-poisson-v2");
+  const footballRuntimeModelKey = runtimeModelKey("football");
+  const footballModelReady = footballRows.some((row) => row.prediction.diagnostics.modelVersion === footballRuntimeModelKey);
   const footballHasContext = footballRows.some((row) => row.prediction.contextAdjustment.signals.length > 0);
   const footballHasMarketPrior = footballRows.some((row) => row.prediction.marketPriorAdjustment.markets.length > 0);
 
@@ -378,7 +380,7 @@ function buildPredictionModelChecks({
       label: "Football model",
       requirement: "Use Poisson expected goals, team strength, home advantage, recent form, context, xG where available, and market adjustment.",
       evidence: footballModelReady
-        ? `Football uses football-poisson-v2 across ${footballRows.length} row(s), with ${featureMatrix.coverage.totalFeatures} live feature slots and market-prior adjustment ${footballHasMarketPrior ? "present" : "missing"}.`
+        ? `Football uses ${footballRuntimeModelKey} across ${footballRows.length} row(s), with ${featureMatrix.coverage.totalFeatures} live feature slots and market-prior adjustment ${footballHasMarketPrior ? "present" : "missing"}.`
         : "No football Poisson model evidence was found in the current slate.",
       proofUrl: "/api/sports/decision/feature-matrix",
       nextAction: footballHasContext

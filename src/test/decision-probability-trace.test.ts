@@ -8,7 +8,7 @@ function activeCalibrationProfile(): DecisionLearningProfile {
     status: "active",
     source: "validated-holdout",
     active: true,
-    modelKey: "football-poisson-v2",
+    modelKey: "football-poisson-v3",
     engineVersion: "decision-engine-v1",
     sampleSize: 1200,
     realFinishedFixtures: 1200,

@@ -132,7 +132,7 @@ describe("football chronology features", () => {
 
     expect(derived[1].homeFeatures?.eloRating).toBeGreaterThan(1500);
     expect(newHome.version).toBe("football-provider-chronology-v3");
-    expect(newHome.featureContractVersion).toBe("football-runtime-features-v2");
+    expect(newHome.featureContractVersion).toBe("football-runtime-features-v3");
     expect(newHome.priorSeasons).toEqual(["2023"]);
     expect(newHome.crossSeasonHistory).toBe(true);
     expect(newHome.seasonRegression).toBe(0.25);

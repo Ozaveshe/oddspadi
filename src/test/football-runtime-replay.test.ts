@@ -83,8 +83,8 @@ describe("football exact runtime replay", () => {
     const result = runFootballRuntimeReplay(history(), { trainRatio: 0.5, minPriorMatches: 3 });
 
     expect(result.status).toBe("completed");
-    expect(result.modelKey).toBe("football-poisson-v2");
-    expect(result.featureContract.version).toBe("football-runtime-features-v2");
+    expect(result.modelKey).toBe("football-poisson-v3");
+    expect(result.featureContract.version).toBe("football-runtime-features-v3");
     expect(result.featureContract.chronologyVersion).toBe("football-provider-chronology-v3");
     expect(result.featureContract.status).toBe("passed");
     expect(result.featureContract.entrypointInvocations).toBe(result.testSize);

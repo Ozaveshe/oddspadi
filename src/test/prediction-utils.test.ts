@@ -4688,7 +4688,7 @@ describe("prediction utilities", () => {
     expect(opener?.match.providerContextSignals?.map((signal) => signal.label)).toEqual(
       expect.arrayContaining(["Official EPL fixture release", "Preseason horizon risk", "Promoted club baseline"])
     );
-    expect(opener?.prediction.diagnostics.modelVersion).toBe("football-poisson-v2");
+    expect(opener?.prediction.diagnostics.modelVersion).toBe("football-poisson-v3");
     expect(opener?.prediction.diagnostics.expectedGoals.home).toBeGreaterThan(opener?.prediction.diagnostics.expectedGoals.away ?? 0);
     expect(opener?.prediction.contextAdjustment.missingSignals).toEqual(expect.arrayContaining(["Confirmed lineups", "Injury and suspension news", "Weather check"]));
     expect(opener?.prediction.contextAdjustment.riskFlags.join(" ")).toContain("Preseason horizon risk");
@@ -5331,7 +5331,7 @@ describe("prediction utilities", () => {
       status: "active",
       source: "supabase:op_fixtures:real-only",
       active: true,
-      modelKey: "football-poisson-v2",
+      modelKey: "football-poisson-v3",
       engineVersion: "decision-engine-v1",
       sampleSize: 1200,
       realFinishedFixtures: 1200,
@@ -5464,7 +5464,7 @@ describe("prediction utilities", () => {
     const [match] = await mockSportsDataProvider.getFixtures("2026-06-24", "football");
     const output = modelFootballMatch(match);
 
-    expect(output.diagnostics.modelVersion).toBe("football-poisson-v2");
+    expect(output.diagnostics.modelVersion).toBe("football-poisson-v3");
     expect(output.diagnostics.expectedGoals.home).toBeGreaterThan(0);
     expect(output.diagnostics.topCorrectScores.length).toBe(5);
     expect(output.diagnostics.homeDrawAwayTotal).toBeCloseTo(1, 4);
@@ -10276,7 +10276,7 @@ describe("prediction utilities", () => {
     expect(dossier.status).toBe("blocked");
     expect(dossier.dossierHash).toMatch(/^fnv1a-[a-f0-9]{8}$/);
     expect(dossier.target.matchId).toBeTruthy();
-    expect(dossier.modelContext.modelVersion).toBe("football-poisson-v2");
+    expect(dossier.modelContext.modelVersion).toBe("football-poisson-v3");
     expect(dossier.marketContext.totalSelections).toBeGreaterThan(0);
     expect(dossier.dataContext.missingEnv).toEqual(expect.arrayContaining(["API_FOOTBALL_KEY", "THE_ODDS_API_KEY"]));
     expect(dossier.trainingContext.governanceStatus).toBe("blocked");
@@ -13642,7 +13642,7 @@ describe("prediction utilities", () => {
       status: "active",
       source: "supabase:op_fixtures:real-only",
       active: true,
-      modelKey: "football-poisson-v2",
+      modelKey: "football-poisson-v3",
       engineVersion: "decision-engine-v1",
       sampleSize: 1200,
       realFinishedFixtures: 1200,
@@ -20277,7 +20277,7 @@ describe("prediction utilities", () => {
     expect(modelCards.mode).toBe("decision-model-cards");
     expect(modelCards.cards).toHaveLength(1);
     expect(modelCards.cards[0].sport).toBe("football");
-    expect(modelCards.cards[0].modelKey).toBe("football-poisson-v2");
+    expect(modelCards.cards[0].modelKey).toBe("football-poisson-v3");
     expect(modelCards.cards[0].formulas.map((formula) => formula.id)).toEqual(["expected-goals", "poisson-score-matrix", "odds-edge"]);
     expect(modelCards.cards[0].formulas.find((formula) => formula.id === "expected-goals")?.inputs).toEqual(expect.arrayContaining(["provider xG where available"]));
     expect(modelCards.cards[0].parameters.map((parameter) => parameter.key)).toContain("xg_blend_weight");

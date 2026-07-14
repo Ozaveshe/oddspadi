@@ -49,7 +49,7 @@ function footballProviderContext(match: Match, now: Date): {
   const providerMatch = match.dataSource?.kind === "provider";
   const signals = (match.providerContextSignals ?? []).filter(
     (signal) =>
-      ["injury", "suspension", "lineup", "weather", "news"].includes(signal.category) &&
+      ["injury", "suspension", "lineup", "player-form", "weather", "news"].includes(signal.category) &&
       (!providerMatch || isFreshProviderContextSignal(signal, { requireTimestamp: true, now }))
   );
 
@@ -309,7 +309,7 @@ export function modelFootballMatch(
         value: Number((preMatchExpectedGoals.context.homeAdjustment - preMatchExpectedGoals.context.awayAdjustment).toFixed(3)),
         note:
           preMatchExpectedGoals.context.source === "provider-context"
-            ? `Poisson expected goals consumed ${preMatchExpectedGoals.context.signalCount} provider/context injury, suspension, lineup, weather, or news signal(s). Goal adjustments ${preMatchExpectedGoals.context.homeAdjustment.toFixed(
+            ? `Poisson expected goals consumed ${preMatchExpectedGoals.context.signalCount} provider/context injury, suspension, lineup, player-form, weather, or news signal(s). Goal adjustments ${preMatchExpectedGoals.context.homeAdjustment.toFixed(
                 2
               )}-${preMatchExpectedGoals.context.awayAdjustment.toFixed(2)}.`
             : "Poisson expected goals used deterministic team strength, form, and xG proxies because provider-backed football context was not attached."
@@ -351,7 +351,7 @@ export function modelFootballMatch(
         ? "When provider xG is available, the football model blends xG-for and opponent xG-against into the pre-match expected-goals estimate with bounded influence."
         : "xG blend is inactive for this fixture because provider xG inputs are not available yet.",
       preMatchExpectedGoals.context.source === "provider-context"
-        ? "Provider/context injury, suspension, lineup, weather, or news signals were consumed inside the bounded Poisson expected-goals estimate before market comparison."
+        ? "Provider/context injury, suspension, lineup, player-form, weather, or news signals were consumed inside the bounded Poisson expected-goals estimate before market comparison."
         : "Future upgrades can add closing-line calibration, shot-pressure xG, and richer injury/news adjustments."
     ]
   };

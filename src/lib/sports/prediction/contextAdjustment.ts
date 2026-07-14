@@ -190,7 +190,7 @@ export function coreModelContextCategories(match: Match): MatchContextSignal["ca
   if (!match.providerContextSignals?.length) return [];
   if (match.sport === "basketball") return ["rest", "injury", "suspension", "lineup", "news"];
   if (match.sport === "tennis") return ["surface", "injury", "news", "rest"];
-  return ["injury", "suspension", "lineup", "weather", "news"];
+  return ["injury", "suspension", "lineup", "player-form", "weather", "news"];
 }
 
 export function buildMatchContextAdjustment(

@@ -21,9 +21,9 @@ export type RuntimeModelIdentityProof = Readonly<{
 const IDENTITIES: Readonly<Record<DecisionModelSport, DecisionModelIdentity>> = {
   football: {
     sport: "football",
-    runtimeModelKey: "football-poisson-v2",
+    runtimeModelKey: "football-poisson-v3",
     benchmarkBacktestModelKey: "football-poisson-elo-v1",
-    featureContractVersion: "football-runtime-features-v2",
+    featureContractVersion: "football-runtime-features-v3",
     runtimeEntrypoint: "modelFootballMatch"
   },
   basketball: {
