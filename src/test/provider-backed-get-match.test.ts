@@ -157,8 +157,13 @@ describe("provider-backed match detail retrieval", () => {
     expect(first?.dataSource?.fixtureProvider).toBe("the-odds-api-events");
     expect(first?.oddsMarkets[0]?.id).toBe("match_winner");
     expect(second).toBe(first);
-    expect(calls).toHaveLength(3);
+    // Football resolution reads the free `/v4/sports/` catalogue once (cached for
+    // ten minutes, and it does not draw request quota) so that odds are only
+    // requested for competitions currently in season. It fails open on the 404
+    // here, falling back to the configured keys.
+    expect(calls).toHaveLength(4);
     expect(calls.map((url) => new URL(url).pathname)).toEqual([
+      "/v4/sports/",
       "/v4/sports/soccer_epl/events/odds-event-701/odds",
       "/v4/sports/basketball_nba/events/odds-event-701/odds",
       "/v4/sports/tennis_atp_wimbledon/events/odds-event-701/odds"

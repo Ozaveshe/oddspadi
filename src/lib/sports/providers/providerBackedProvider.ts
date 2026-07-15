@@ -20,7 +20,7 @@ import {
 } from "@/lib/sports/prediction/historicalTennisStrength";
 import type { HeadToHeadSummary, Match, MatchContextSignal, MatchStatus, OddsMarket, Sport, SportsDataProvider, TeamForm } from "@/lib/sports/types";
 import { currentFootballSeason, leagueBySlug, type LeagueTable } from "@/lib/sports/leagueStandings";
-import { configuredPredictionLeagueIds, footballLeaguePriority, footballLeagueStrength } from "@/lib/sports/footballLeagues";
+import { configuredPredictionLeagueIds, footballLeaguePriority, footballLeagueStrength, predictionOddsSportKeys } from "@/lib/sports/footballLeagues";
 import {
   loadPlayerFormSignalResultForFixtures,
   type PlayerFormFixture,
@@ -78,10 +78,12 @@ type ApiBasketballGame = {
     name?: string;
     country?: string;
     season?: number | string;
+    logo?: string;
   };
+  country?: { name?: string; code?: string; flag?: string | null };
   teams?: {
-    home?: { id?: number | string; name?: string };
-    away?: { id?: number | string; name?: string };
+    home?: { id?: number | string; name?: string; logo?: string | null };
+    away?: { id?: number | string; name?: string; logo?: string | null };
   };
   scores?: {
     home?: { total?: number | string | null };
@@ -615,8 +617,11 @@ function basketballStatus(status: ApiBasketballGame["status"]): MatchStatus {
   if (["cancelled", "canceled", "abandoned"].some((term) => normalized.includes(term))) return "cancelled";
   if (["postponed", "rescheduled"].some((term) => normalized.includes(term))) return "postponed";
   if (["suspended", "interrupted"].some((term) => normalized.includes(term))) return "suspended";
-  if (["ft", "aot", "after over time", "finished", "game finished", "ended"].some((term) => normalized.includes(term))) return "finished";
-  if (["q1", "q2", "q3", "q4", "ot", "live", "halftime", "in play"].some((term) => normalized.includes(term))) return "live";
+  if (/\b(?:ft|aot)\b/.test(normalized) || ["after over time", "finished", "game finished", "ended"].some((term) => normalized.includes(term))) return "finished";
+  // API-Basketball combines short and long status values (for example,
+  // "NS Not Started"). Match abbreviated live states as whole tokens so the
+  // `ot` inside "not" cannot turn future, scoreless games into live fixtures.
+  if (/\b(?:q1|q2|q3|q4|ot)\b/.test(normalized) || ["live", "halftime", "in play"].some((term) => normalized.includes(term))) return "live";
   return "scheduled";
 }
 
@@ -1195,12 +1200,80 @@ function oddsMarketsByEvent(events: OddsApiEvent[], sport: Extract<Sport, "footb
   return byKey;
 }
 
-function firstOddsMarketsForFixture(oddsByEvent: Map<string, OddsMarket[]>, homeName: string, awayName: string, kickoffTime: string): OddsMarket[] {
+// Suffixes and prefixes that identify a club's legal form rather than the club.
+// The two providers disagree constantly outside the top five ("Sutjeska" vs
+// "FK Sutjeska Nikšić", "ML Vitebsk" vs "FC Vitebsk"), which left in-season
+// fixtures priced by nobody because the exact-key lookup below never hit.
+const CLUB_AFFIX_TOKENS = new Set([
+  "fc", "cf", "afc", "sc", "ac", "fk", "kf", "sk", "nk", "hk", "bk", "if", "ks", "cd", "ca",
+  "cs", "ss", "ssc", "ud", "sd", "rc", "mfk", "ofk", "club", "calcio", "futbol", "football"
+]);
+
+function teamNameTokens(value: string): string[] {
+  return value
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 3 && !CLUB_AFFIX_TOKENS.has(token));
+}
+
+function teamNameTokenMatches(left: string, right: string): boolean {
+  if (left === right) return true;
+  const [shorter, longer] = left.length <= right.length ? [left, right] : [right, left];
+  // "Klaksvik" vs "Klaksvikar" — a transliteration ending, not a different club.
+  return shorter.length >= 5 && longer.startsWith(shorter);
+}
+
+/**
+ * True when two spellings denote the same club. Deliberately a subset test
+ * rather than an overlap test: "Manchester United" and "Manchester City" share
+ * a token but neither is a subset of the other, so they must not align.
+ */
+export function teamNamesAlign(left: string, right: string): boolean {
+  const leftTokens = teamNameTokens(left);
+  const rightTokens = teamNameTokens(right);
+  if (!leftTokens.length || !rightTokens.length) return false;
+  const [fewer, more] = leftTokens.length <= rightTokens.length ? [leftTokens, rightTokens] : [rightTokens, leftTokens];
+  return fewer.every((token) => more.some((candidate) => teamNameTokenMatches(token, candidate)));
+}
+
+const KICKOFF_ALIGN_TOLERANCE_MS = 15 * 60_000;
+
+function kickoffsAlign(left: string, right: string): boolean {
+  const leftTime = new Date(left).getTime();
+  const rightTime = new Date(right).getTime();
+  if (!Number.isFinite(leftTime) || !Number.isFinite(rightTime)) return false;
+  return Math.abs(leftTime - rightTime) <= KICKOFF_ALIGN_TOLERANCE_MS;
+}
+
+/**
+ * Fuzzy alignment is gated on the kickoff instant as well as both team names.
+ * Requiring both sides to align at the same moment means a false positive would
+ * need two distinct fixtures kicking off together with both clubs' names
+ * subsuming each other — which is what keeps this safe to price a pick from.
+ */
+function oddsEventAlignsWithFixture(event: OddsApiEvent, homeName: string, awayName: string, kickoffTime: string): boolean {
+  return (
+    kickoffsAlign(cleanText(event.commence_time), kickoffTime) &&
+    teamNamesAlign(cleanText(event.home_team), homeName) &&
+    teamNamesAlign(cleanText(event.away_team), awayName)
+  );
+}
+
+function firstOddsMarketsForFixture(
+  oddsByEvent: Map<string, OddsMarket[]>,
+  homeName: string,
+  awayName: string,
+  kickoffTime: string,
+  events: OddsApiEvent[] = []
+): OddsMarket[] {
   for (const key of eventKeys(homeName, awayName, kickoffTime)) {
     const markets = oddsByEvent.get(key);
     if (markets?.length) return markets;
   }
-  return [];
+  const aligned = events.find((event) => oddsEventAlignsWithFixture(event, homeName, awayName, kickoffTime));
+  return aligned ? oddsMarketsForEvent(aligned, "football") : [];
 }
 
 function firstOddsEventForFixture(events: OddsApiEvent[], homeName: string, awayName: string, kickoffTime: string): OddsApiEvent | null {
@@ -1211,7 +1284,9 @@ function firstOddsEventForFixture(events: OddsApiEvent[], homeName: string, away
       const eventHome = cleanText(event.home_team);
       const eventAway = cleanText(event.away_team);
       return eventKeys(eventHome, eventAway, eventKickoff).some((key) => fixtureKeys.has(key));
-    }) ?? null
+    }) ??
+    events.find((event) => oddsEventAlignsWithFixture(event, homeName, awayName, kickoffTime)) ??
+    null
   );
 }
 
@@ -1619,6 +1694,31 @@ function providerRequestTimeoutMs(env: EnvMap): number {
   return Number.isFinite(configured) && configured > 0 ? Math.round(clampRange(configured, 1_000, 15_000)) : 4_000;
 }
 
+async function settleOptionalEnrichment<T>(
+  source: Promise<T>,
+  fallback: T,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const guarded = source.catch(() => {
+    console.warn(`[sports-provider] ${label} unavailable; continuing with primary fixture data.`);
+    return fallback;
+  });
+  const timedOut = new Promise<T>((resolve) => {
+    timeout = setTimeout(() => {
+      console.warn(`[sports-provider] ${label} timed out; continuing with primary fixture data.`);
+      resolve(fallback);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([guarded, timedOut]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 /** Minimal FIFO counting semaphore — bounds concurrent tasks to `max`. */
 class RequestSemaphore {
   private available: number;
@@ -1971,35 +2071,74 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   }
 
   /**
-   * Resolve tournament-scoped tennis keys from The Odds API's free `/sports`
-   * catalogue. Football and basketball keep their stable configured defaults;
-   * explicit environment configuration remains authoritative for every sport.
+   * The Odds API's free `/sports` catalogue, reduced to the competitions that
+   * are currently active. Returns null when the catalogue can't be read, so
+   * callers fail open on their configured keys rather than dropping odds
+   * entirely on a transient catalogue error.
    */
-  private async getOddsSportKeys(
-    sport: Extract<Sport, "football" | "basketball" | "tennis">
-  ): Promise<string[]> {
-    const configured = explicitOddsSportKeys(this.env, sport);
-    if (configured.length) return configured;
-    if (sport !== "tennis") return fallbackOddsSportKeys(this.env, sport);
+  private async activeOddsSportKeys(): Promise<Set<string> | null> {
     const apiKey = firstEnv(this.env, ["THE_ODDS_API_KEY", "ODDS_API_KEY"]);
-    if (!apiKey) return [];
+    if (!apiKey) return null;
 
     const now = Date.now();
     if (!this.oddsSportsCache || this.oddsSportsCache.expiresAt <= now) {
       const endpoint = new URL("https://api.the-odds-api.com/v4/sports/");
       endpoint.searchParams.set("apiKey", apiKey);
-      const sports = this.limitedFetch(endpoint).then((payload) =>
-        Array.isArray(payload) ? payload.filter((row): row is OddsApiSport => Boolean(row) && typeof row === "object") : []
-      );
+      const sports = this.limitedFetch(endpoint)
+        .then((payload) =>
+          Array.isArray(payload) ? payload.filter((row): row is OddsApiSport => Boolean(row) && typeof row === "object") : []
+        )
+        .catch(() => [] as OddsApiSport[]);
       this.oddsSportsCache = { expiresAt: now + 10 * 60_000, sports };
     }
 
+    const rows = await this.oddsSportsCache.sports;
+    if (!rows.length) return null;
+    return new Set(
+      rows
+        .filter((row) => row.active !== false && row.has_outrights !== true)
+        .map((row) => cleanText(row.key))
+        .filter(Boolean)
+    );
+  }
+
+  /**
+   * Football competitions are seasonal, so a configured key list is a statement
+   * of preference rather than of availability: through the European summer every
+   * top-five key is dormant and spending the request budget on them returns no
+   * prices at all. Rank configured keys first, back-fill from the prediction
+   * registry so in-season competitions can be priced, then keep only what the
+   * provider currently reports as active.
+   */
+  private async activeFootballOddsSportKeys(configured: string[]): Promise<string[]> {
+    const candidates = Array.from(new Set([...configured, ...predictionOddsSportKeys()]));
+    const fallback = (configured.length ? configured : candidates).slice(0, 8);
+    const active = await this.activeOddsSportKeys();
+    if (!active) return fallback;
+    const live = candidates.filter((key) => active.has(key));
+    return live.length ? live.slice(0, 8) : fallback;
+  }
+
+  /**
+   * Resolve odds keys per sport. Football is season-aware (see above); tennis
+   * resolves tournament-scoped keys from the catalogue; basketball keeps its
+   * stable configured default.
+   */
+  private async getOddsSportKeys(
+    sport: Extract<Sport, "football" | "basketball" | "tennis">
+  ): Promise<string[]> {
+    const configured = explicitOddsSportKeys(this.env, sport);
+    if (sport === "football") return this.activeFootballOddsSportKeys(configured);
+    if (configured.length) return configured;
+    if (sport !== "tennis") return fallbackOddsSportKeys(this.env, sport);
+
     const prefix = oddsSportKeyPrefix(sport);
-    const discovered = (await this.oddsSportsCache.sports)
-      .filter((row) => row.active !== false && row.has_outrights !== true)
-      .map((row) => cleanText(row.key))
-      .filter((key) => key.startsWith(prefix))
-      .slice(0, 8);
+    const active = await this.activeOddsSportKeys();
+    const discovered = active
+      ? Array.from(active)
+          .filter((key) => key.startsWith(prefix))
+          .slice(0, 8)
+      : [];
     return discovered.length ? discovered : fallbackOddsSportKeys(this.env, sport);
   }
 
@@ -2086,7 +2225,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       const strength = footballLeagueStrength(country, leagueName);
       const homeId = `api-football:${safeId(fixture.teams?.home?.id, slug(homeName) || "home")}`;
       const awayId = `api-football:${safeId(fixture.teams?.away?.id, slug(awayName) || "away")}`;
-      const directOddsMarkets = firstOddsMarketsForFixture(oddsByEvent, homeName, awayName, kickoffTime);
+      const directOddsMarkets = firstOddsMarketsForFixture(oddsByEvent, homeName, awayName, kickoffTime, oddsEvents);
       const directOddsEvent = firstOddsEventForFixture(oddsEvents, homeName, awayName, kickoffTime);
       const oddsBackedMatch = firstMatchForFixture(oddsBackedByEvent, homeName, awayName, kickoffTime);
       const mergedOddsFromOddsEvent = !hasCompleteFootballMatchWinnerOdds(directOddsMarkets) && hasCompleteFootballMatchWinnerOdds(oddsBackedMatch?.oddsMarkets ?? []);
@@ -2197,7 +2336,21 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     });
 
     const apiFootballKeys = new Set(matches.flatMap(matchEventKeys));
-    const unmatchedOddsBackedMatches = oddsBackedMatches.filter((match) => !matchEventKeys(match).some((key) => apiFootballKeys.has(key)));
+    // Odds-only entries exist to cover matches the fixture provider does not
+    // list, so they are dropped only when they duplicate a fixture we already
+    // publish — never merely because the competition is covered, which would
+    // hide a genuinely missing match. Exact keys catch the common case; the
+    // aligner catches providers spelling the same club differently
+    // ("Sutjeska" vs "FK Sutjeska Nikšić") at the same kickoff.
+    const unmatchedOddsBackedMatches = oddsBackedMatches.filter((match) => {
+      if (matchEventKeys(match).some((key) => apiFootballKeys.has(key))) return false;
+      return !matches.some(
+        (fixture) =>
+          kickoffsAlign(fixture.kickoffTime, match.kickoffTime) &&
+          teamNamesAlign(fixture.homeTeam.name, match.homeTeam.name) &&
+          teamNamesAlign(fixture.awayTeam.name, match.awayTeam.name)
+      );
+    });
     const mergedMatches = [...matches, ...unmatchedOddsBackedMatches];
 
     return mergedMatches.length ? mergedMatches : this.fallback.getFixtures(date, sport);
@@ -2208,7 +2361,12 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     if (!apiKey) {
       const [oddsEvents, historicalStrengths] = await Promise.all([
         this.getCurrentOddsEvents(date, "basketball"),
-        this.getHistoricalBasketballStrengths()
+        settleOptionalEnrichment(
+          this.getHistoricalBasketballStrengths(),
+          new Map(),
+          providerRequestTimeoutMs(this.env),
+          "Basketball historical strength"
+        )
       ]);
       const oddsBackedMatches = oddsBackedBasketballFixturesFromEvents(date, oddsEvents, historicalStrengths);
       return oddsBackedMatches.length ? oddsBackedMatches : this.fallback.getFixtures(date, "basketball");
@@ -2216,12 +2374,17 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
 
     const endpoint = new URL("https://v1.basketball.api-sports.io/games");
     endpoint.searchParams.set("date", date);
-    const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiBasketballResponse | null;
-    const games = Array.isArray(data?.response) ? data.response : [];
-    const [oddsEvents, historicalStrengths] = await Promise.all([
+    const [data, oddsEvents, historicalStrengths] = await Promise.all([
+      this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } }) as Promise<ApiBasketballResponse | null>,
       this.getCurrentOddsEvents(date, "basketball"),
-      this.getHistoricalBasketballStrengths()
+      settleOptionalEnrichment(
+        this.getHistoricalBasketballStrengths(),
+        new Map(),
+        providerRequestTimeoutMs(this.env),
+        "Basketball historical strength"
+      )
     ]);
+    const games = Array.isArray(data?.response) ? data.response : [];
     const oddsBackedMatches = oddsBackedBasketballFixturesFromEvents(date, oddsEvents, historicalStrengths);
     if (!games.length) return oddsBackedMatches.length ? oddsBackedMatches : this.fallback.getFixtures(date, "basketball");
     const oddsByEvent = oddsMarketsByEvent(oddsEvents, "basketball");
@@ -2230,7 +2393,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       const homeName = cleanText(game.teams?.home?.name);
       const awayName = cleanText(game.teams?.away?.name);
       if (!homeName || !awayName) return [];
-      const country = cleanText(game.league?.country) || "World";
+      const country = cleanText(game.country?.name || game.league?.country) || "World";
       const leagueName = cleanText(game.league?.name) || "Basketball";
       const strength = footballLeagueStrength(country, leagueName);
       const kickoffTime = basketballKickoff(game);
@@ -2254,11 +2417,13 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
             id: `api-basketball:${safeId(game.league?.id, slug(leagueName) || "league")}`,
             name: leagueName,
             country,
-            strength
+            strength,
+            logo: cleanText(game.league?.logo) || null,
+            flag: cleanText(game.country?.flag) || null
           },
           kickoffTime,
-          homeTeam: { id: homeId, name: homeName, rating: homeRating.rating, ratingEvidence: homeRating.evidence },
-          awayTeam: { id: awayId, name: awayName, rating: awayRating.rating, ratingEvidence: awayRating.evidence },
+          homeTeam: { id: homeId, name: homeName, rating: homeRating.rating, ratingEvidence: homeRating.evidence, logo: cleanText(game.teams?.home?.logo) || null },
+          awayTeam: { id: awayId, name: awayName, rating: awayRating.rating, ratingEvidence: awayRating.evidence, logo: cleanText(game.teams?.away?.logo) || null },
           status,
           score:
             status === "scheduled" || homeScore === null || awayScore === null
