@@ -163,6 +163,17 @@ describe("production daily sports intelligence", () => {
     expect(classifyProviderRunStatus({ fixtures: [], errors: ["provider failed"], env })).toBe("failed");
   });
 
+  it("does not persist a provider fixture as live hours before kickoff", async () => {
+    const now = new Date("2026-07-15T01:45:00.000Z");
+    const futureLive = {
+      ...(await providerMatch({ kickoffTime: "2026-07-15T07:00:00.000Z" })),
+      status: "live" as const
+    };
+
+    expect(normalizeCanonicalFixture(futureLive, now).status).toBe("scheduled");
+    expect(normalizeCanonicalFixture({ ...futureLive, kickoffTime: "2026-07-15T01:50:00.000Z" }, now).status).toBe("live");
+  });
+
   it("blocks mock fallback fixtures in production public reads", async () => {
     const provider = new ProviderBackedSportsDataProvider({ env: { NODE_ENV: "production" } });
     expect(await provider.getFixtures("2026-07-13", "football")).toEqual([]);

@@ -55,7 +55,7 @@ export const POST = withApiHandler(async (request: Request) => {
     request: {
       provider,
       dryRun: parseBoolean(url, body, "dryRun", true),
-      league: pickText(url, body, "league"), season: pickText(url, body, "season"), date: pickText(url, body, "date"),
+      league: pickText(url, body, "league"), team: pickText(url, body, "team"), season: pickText(url, body, "season"), date: pickText(url, body, "date"),
       from: pickText(url, body, "from"), to: pickText(url, body, "to"), sportKey: pickText(url, body, "sportKey"),
       regions: pickText(url, body, "regions"), bookmakers: pickText(url, body, "bookmakers"),
       includeEvents: parseBoolean(url, body, "includeEvents"), includeNews: parseBoolean(url, body, "includeNews"),

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { HistoricalFootballFixtureInput } from "@/lib/sports/training/historicalIngestion";
 import { buildPlayerFormSignal, type PlayerMatchPerformance } from "@/lib/sports/training/playerPerformance";
 import {
@@ -152,6 +152,7 @@ describe("player performance corpus", () => {
       request: {
         provider: "api-football",
         league: "39",
+        team: "1346",
         season: "2026",
         dryRun: true,
         includePlayerStats: true,
@@ -180,6 +181,7 @@ describe("player performance corpus", () => {
     expect(result.playerPerformanceFixturesCovered).toBe(1);
     expect(result.playerPerformancesStored).toBe(0);
     expect(result.playerPerformancesVerified).toBe(0);
+    expect(calls.find((url) => url.includes("/fixtures?"))).toContain("team=1346");
     expect(calls.filter((url) => url.includes("/fixtures/players"))).toHaveLength(1);
   });
 
@@ -213,5 +215,18 @@ describe("player performance corpus", () => {
     expect(result.playerPerformanceFixturesCovered).toBe(0);
     expect(result.playerPerformancesStored).toBe(0);
     expect(result.playerPerformancesErrors?.[0]).toContain("at least 11 per team are required");
+  });
+
+  it("rejects an invalid team filter before making a provider request", async () => {
+    const fetchImpl = vi.fn();
+    const result = await syncHistoricalFootballProvider({
+      request: { provider: "api-football", team: "Coventry", dryRun: true },
+      env: { API_FOOTBALL_KEY: "test-key" },
+      fetchImpl
+    });
+
+    expect(result.status).toBe("invalid-response");
+    expect(result.reason).toContain("numeric API-Football team ID");
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

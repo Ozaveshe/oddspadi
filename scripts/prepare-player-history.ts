@@ -195,6 +195,8 @@ async function main() {
   await loadLocalEnv();
   const key = apiKey();
   const league = cliValue("league", "39")!;
+  const team = cliValue("team");
+  if (team && !/^\d+$/.test(team)) throw new Error("--team must be a numeric API-Football team ID.");
   const season = cliValue("season", "2025")!;
   const from = requireDate("from");
   const to = requireDate("to");
@@ -216,6 +218,7 @@ async function main() {
 
   const fixtureEndpoint = new URL(`${API_ROOT}/fixtures`);
   fixtureEndpoint.searchParams.set("league", league);
+  if (team) fixtureEndpoint.searchParams.set("team", team);
   fixtureEndpoint.searchParams.set("season", season);
   fixtureEndpoint.searchParams.set("from", from);
   fixtureEndpoint.searchParams.set("to", to);
@@ -302,6 +305,7 @@ async function main() {
     providerSecretIncluded: false,
     request: {
       league,
+      team: team ?? null,
       season,
       from,
       to,

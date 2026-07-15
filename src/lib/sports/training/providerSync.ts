@@ -28,6 +28,7 @@ export type ProviderSyncRequest = {
   provider: ProviderName;
   dryRun?: boolean;
   league?: string;
+  team?: string;
   season?: string;
   date?: string;
   from?: string;
@@ -1597,12 +1598,27 @@ async function syncApiFootballFixtures({
 }): Promise<ProviderSyncResult> {
   const apiKey = firstEnv(env, ["API_FOOTBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"]);
   const endpoint = new URL("https://v3.football.api-sports.io/fixtures");
+  const team = request.team?.trim();
   appendSearchParam(endpoint, "league", request.league);
+  if (team && /^\d+$/.test(team)) appendSearchParam(endpoint, "team", team);
   appendSearchParam(endpoint, "season", request.season);
   appendSearchParam(endpoint, "date", request.date);
   appendSearchParam(endpoint, "from", request.from);
   appendSearchParam(endpoint, "to", request.to);
   endpoint.searchParams.set("timezone", "UTC");
+
+  if (team && !/^\d+$/.test(team)) {
+    return {
+      status: "invalid-response",
+      configured: Boolean(apiKey),
+      provider: "api-football",
+      dryRun: request.dryRun ?? true,
+      endpoint: endpoint.toString(),
+      fetched: 0,
+      normalized: 0,
+      reason: "team must be a numeric API-Football team ID."
+    };
+  }
 
   if (!apiKey) {
     return {

@@ -33,23 +33,23 @@ export const newsStories: NewsStory[] = [
   },
   {
     slug: "basketball-summer-league-matchday-watchlist",
-    title: "NBA Summer League July 13 desk: official slate, storage gap",
-    excerpt: "Eight official Las Vegas games are scheduled, but OddsPadi has no July 13 fixture rows yet—so this is a schedule watch, not a prediction card.",
+    title: "NBA Summer League July 14 desk: six stored games, no public picks",
+    excerpt: "All six official Las Vegas games are now stored, but every latest OddsPadi decision is suspended—so this remains a fixture watch, not a prediction card.",
     category: "Matchday briefing",
     sport: "Basketball",
     publishedAt: "2026-07-12",
-    updatedAt: "2026-07-13",
-    sourceAsOf: "2026-07-13T06:00:00Z",
-    revision: 2,
+    updatedAt: "2026-07-14",
+    sourceAsOf: "2026-07-14T04:27:25Z",
+    revision: 3,
     readMinutes: 4,
     body: [
-      "The NBA's official schedule lists eight Las Vegas Summer League games for Monday, July 13: Detroit–New York, Toronto–Indiana, Atlanta–Boston, Dallas–Memphis, Miami–Cleveland, Chicago–Utah, Phoenix–Milwaukee and Minnesota–Portland.",
-      "OddsPadi's verified July 13 UTC fixture window currently contains no stored rows. That means the Matchday Desk cannot honestly attach model probabilities, prices or decision outcomes to this slate yet; an official schedule is not a substitute for ingested evidence.",
-      "Summer League also remains a volatile forecasting environment because rotations and availability move quickly. Until provider fixtures and usable prices arrive, treat this page as a dated schedule watch and use the public predictions page to confirm whether any match has become available."
+      "The NBA's official schedule lists six Las Vegas Summer League games for Tuesday, July 14: Philadelphia–Houston, Sacramento–Brooklyn, Memphis–Golden State, Washington–Chicago, Denver–Oklahoma City and LA Clippers–L.A. Lakers.",
+      "OddsPadi storage contains all six fixtures. Their 20:00–02:00 UTC tip-off window crosses into July 15 UTC, which is why a calendar-day-only query can split the slate. The latest stored decision summary for every game is suspended and says the fixture is not eligible for a new public pre-match decision, so there is no model pick to publish honestly.",
+      "The stored fixture labels are useful for schedule coverage, but they are not a substitute for usable prices and an eligible decision. Summer League rotations and availability can also move quickly. Treat this as a dated fixture watch and check the public predictions page nearer tip-off for any evidence-backed status change."
     ],
     sources: [
-      { label: "Official 2026 NBA Summer League schedule", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-13" },
-      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-13" }
+      { label: "Official 2026 NBA Summer League schedule", url: "https://www.nba.com/news/2026-nba-summer-league-schedule", checkedAt: "2026-07-14" },
+      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-14" }
     ]
   },
   {

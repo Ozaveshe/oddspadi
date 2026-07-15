@@ -17,6 +17,7 @@ import type {
 } from "./types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_FUTURE_LIVE_CLOCK_SKEW_MS = 15 * 60 * 1000;
 
 function finiteDate(value: string | undefined, fallback: Date): Date {
   const parsed = value ? new Date(value) : fallback;
@@ -52,6 +53,18 @@ export function isProviderBackedMatch(match: Match): boolean {
   );
 }
 
+function canonicalFixtureStatus(match: Match, now: Date): CanonicalFixture["status"] {
+  const kickoff = Date.parse(match.kickoffTime);
+  if (
+    match.status === "live" &&
+    Number.isFinite(kickoff) &&
+    kickoff > now.getTime() + MAX_FUTURE_LIVE_CLOCK_SKEW_MS
+  ) {
+    return "scheduled";
+  }
+  return match.status;
+}
+
 export function normalizeCanonicalFixture(match: Match, now = new Date()): CanonicalFixture {
   if (!isProviderBackedMatch(match)) throw new Error(`Fixture ${match.id} is not provider-backed.`);
   const syncedAt = finiteDate(match.dataSource?.fetchedAt, now).toISOString();
@@ -66,7 +79,7 @@ export function normalizeCanonicalFixture(match: Match, now = new Date()): Canon
     kickoffAt: match.kickoffTime,
     homeTeam: { id: match.homeTeam.id, name: match.homeTeam.name, logo: match.homeTeam.logo },
     awayTeam: { id: match.awayTeam.id, name: match.awayTeam.name, logo: match.awayTeam.logo },
-    status: match.status,
+    status: canonicalFixtureStatus(match, now),
     score: match.score ? { ...match.score } : null,
     provider: match.dataSource?.fixtureProvider ?? "unknown",
     lastSyncedAt: syncedAt,
