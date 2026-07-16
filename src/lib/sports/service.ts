@@ -359,7 +359,9 @@ export async function getPredictions(filters: PredictionFilters = {}) {
           buildUnavailableCaseMemoryBank(error instanceof Error ? error.message : "unknown error")
         )
       : Promise.resolve(undefined),
-    fixtureProvider.getFixtures(date, sport),
+    filters.providerMode === "preview"
+      ? mockSportsDataProvider.getFixtures(date, sport)
+      : sportsProvider.getFixtures(date, sport, { storedEnrichment: storageReadsEnabled }),
     getPublicHistoricalTrainingEvidenceForPredictions({ ...filters, sport })
   ]);
   const now = new Date();

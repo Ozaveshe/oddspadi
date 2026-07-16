@@ -29,6 +29,7 @@ import {
 
 type EnvMap = Record<string, string | undefined>;
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
+export type ProviderFixtureReadOptions = { storedEnrichment?: boolean };
 
 type ApiFootballFixture = {
   fixture?: {
@@ -2142,13 +2143,14 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     return discovered.length ? discovered : fallbackOddsSportKeys(this.env, sport);
   }
 
-  async getFixtures(date: string, sport: Sport): Promise<Match[]> {
-    const cacheKey = `${sport}:${date}`;
+  async getFixtures(date: string, sport: Sport, readOptions: ProviderFixtureReadOptions = {}): Promise<Match[]> {
+    const storedEnrichment = readOptions.storedEnrichment !== false;
+    const cacheKey = `${storedEnrichment ? "full" : "public"}:${sport}:${date}`;
     const cached = this.fixtureCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.matches;
 
     const expiresAt = Date.now() + fixtureCacheTtlMs(this.env, date);
-    const matches = this.fetchFixtures(date, sport).then((rows) => {
+    const matches = this.fetchFixtures(date, sport, storedEnrichment).then((rows) => {
       for (const match of rows) setBoundedCache(this.matchCache, match.id, { expiresAt, match });
       return rows;
     });
@@ -2162,9 +2164,9 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     return matches;
   }
 
-  private async fetchFixtures(date: string, sport: Sport): Promise<Match[]> {
-    if (sport === "basketball") return this.getBasketballFixtures(date);
-    if (sport === "tennis") return this.getTennisFixtures(date);
+  private async fetchFixtures(date: string, sport: Sport, storedEnrichment: boolean): Promise<Match[]> {
+    if (sport === "basketball") return this.getBasketballFixtures(date, storedEnrichment);
+    if (sport === "tennis") return this.getTennisFixtures(date, storedEnrichment);
     if (sport !== "football") return this.fallback.getFixtures(date, sport);
     const apiKey = firstEnv(this.env, ["API_FOOTBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"]);
     if (!apiKey) {
@@ -2196,7 +2198,9 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
         awayTeam: { externalId: `api-football:${safeId(fixture.teams?.away?.id, slug(awayName) || "away")}`, name: awayName }
       } satisfies PlayerFormFixture];
     });
-    const playerFormLoad: Promise<PlayerFormSignalLoadResult> = this.options.playerFormSignalsLoader
+    const playerFormLoad: Promise<PlayerFormSignalLoadResult> = !storedEnrichment
+      ? Promise.resolve({ status: "no-data", signals: new Map(), rowsRead: 0, reason: "Stored player-form enrichment is disabled for this public read." })
+      : this.options.playerFormSignalsLoader
       ? this.options.playerFormSignalsLoader(playerFormFixtures).then((signals) => ({
           status: signals.size ? "ready" : "no-data",
           signals,
@@ -2208,7 +2212,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       this.getCurrentOddsEvents(date, "football"),
       this.getFootballContextByFixture(enrichmentFixtures),
       this.getRecentFootballFormByTeam(enrichmentFixtures),
-      this.getHistoricalFootballRatings(),
+      storedEnrichment ? this.getHistoricalFootballRatings() : Promise.resolve(new Map()),
       playerFormLoad
     ]);
     const playerFormByFixture = playerFormResult.signals;
@@ -2356,13 +2360,13 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     return mergedMatches.length ? mergedMatches : this.fallback.getFixtures(date, sport);
   }
 
-  private async getBasketballFixtures(date: string): Promise<Match[]> {
+  private async getBasketballFixtures(date: string, storedEnrichment: boolean): Promise<Match[]> {
     const apiKey = firstEnv(this.env, ["API_BASKETBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"]);
     if (!apiKey) {
       const [oddsEvents, historicalStrengths] = await Promise.all([
         this.getCurrentOddsEvents(date, "basketball"),
         settleOptionalEnrichment(
-          this.getHistoricalBasketballStrengths(),
+          storedEnrichment ? this.getHistoricalBasketballStrengths() : Promise.resolve(new Map()),
           new Map(),
           providerRequestTimeoutMs(this.env),
           "Basketball historical strength"
@@ -2378,7 +2382,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } }) as Promise<ApiBasketballResponse | null>,
       this.getCurrentOddsEvents(date, "basketball"),
       settleOptionalEnrichment(
-        this.getHistoricalBasketballStrengths(),
+        storedEnrichment ? this.getHistoricalBasketballStrengths() : Promise.resolve(new Map()),
         new Map(),
         providerRequestTimeoutMs(this.env),
         "Basketball historical strength"
@@ -2471,12 +2475,12 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     return mergedMatches.length ? mergedMatches : this.fallback.getFixtures(date, "basketball");
   }
 
-  private async getTennisFixtures(date: string): Promise<Match[]> {
+  private async getTennisFixtures(date: string, storedEnrichment: boolean): Promise<Match[]> {
     const apiKey = firstEnv(this.env, ["API_TENNIS_KEY", "SPORTS_API_KEY"]);
     if (!apiKey) {
       const [oddsEvents, historicalStrengths] = await Promise.all([
         this.getCurrentOddsEvents(date, "tennis"),
-        this.getHistoricalTennisStrengths()
+        storedEnrichment ? this.getHistoricalTennisStrengths() : Promise.resolve(new Map())
       ]);
       const oddsBackedMatches = oddsBackedTennisFixturesFromEvents(date, oddsEvents, historicalStrengths);
       return oddsBackedMatches.length ? oddsBackedMatches : this.fallback.getFixtures(date, "tennis");
@@ -2491,7 +2495,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     const events = Array.isArray(data?.result) ? data.result : Array.isArray(data?.response) ? data.response : [];
     const [oddsEvents, historicalStrengths] = await Promise.all([
       this.getCurrentOddsEvents(date, "tennis"),
-      this.getHistoricalTennisStrengths()
+      storedEnrichment ? this.getHistoricalTennisStrengths() : Promise.resolve(new Map())
     ]);
     const oddsBackedMatches = oddsBackedTennisFixturesFromEvents(date, oddsEvents, historicalStrengths);
     if (!events.length) return oddsBackedMatches.length ? oddsBackedMatches : this.fallback.getFixtures(date, "tennis");
