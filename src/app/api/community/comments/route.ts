@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable, reportDatabaseError } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
+import { readBoundedJson } from "@/lib/security/boundedJson";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,9 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to comment." }, { status: 401 });
 
-  const payload = (await request.json().catch(() => ({}))) as { postId?: unknown; body?: unknown };
+  const parsed = await readBoundedJson<{ postId?: unknown; body?: unknown }>(request, 8_192);
+  if (!parsed.ok) return parsed.response;
+  const payload = parsed.value;
   const postId = typeof payload.postId === "string" ? payload.postId : "";
   const body = typeof payload.body === "string" ? payload.body.trim() : "";
   if (!isUuid(postId)) return Response.json({ error: "Missing post." }, { status: 400 });

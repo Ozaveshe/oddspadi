@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
+import { readBoundedJson } from "@/lib/security/boundedJson";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,9 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to start a thread." }, { status: 401 });
 
-  const payload = (await request.json().catch(() => ({}))) as { categoryId?: unknown; title?: unknown; body?: unknown };
+  const parsed = await readBoundedJson<{ categoryId?: unknown; title?: unknown; body?: unknown }>(request, 24_576);
+  if (!parsed.ok) return parsed.response;
+  const payload = parsed.value;
   const categoryId = typeof payload.categoryId === "string" ? payload.categoryId : "";
   const title = typeof payload.title === "string" ? payload.title.trim() : "";
   const body = typeof payload.body === "string" ? payload.body.trim() : "";

@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
+import { readBoundedJson } from "@/lib/security/boundedJson";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,9 @@ export async function GET() {
 export async function POST(request: Request) {
   const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const auth = await authClient(); if (auth.error) return auth.error;
-  const payload = (await request.json().catch(() => ({}))) as { teamId?: unknown };
+  const parsed = await readBoundedJson<{ teamId?: unknown }>(request, 2_048);
+  if (!parsed.ok) return parsed.response;
+  const payload = parsed.value;
   const teamId = typeof payload.teamId === "string" ? payload.teamId : "";
   if (!isUuid(teamId)) return Response.json({ error: "Choose a team to follow." }, { status: 400 });
   const { error } = await auth.supabase.from("op_followed_teams").insert({ user_id: auth.user.id, team_id: teamId });

@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
+import { readBoundedJson } from "@/lib/security/boundedJson";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,9 @@ async function authenticated() {
 export async function POST(request: Request) {
   const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const auth = await authenticated(); if (auth.response) return auth.response;
-  const payload = (await request.json().catch(() => ({}))) as { postId?: unknown };
+  const parsed = await readBoundedJson<{ postId?: unknown }>(request, 2_048);
+  if (!parsed.ok) return parsed.response;
+  const payload = parsed.value;
   const postId = typeof payload.postId === "string" ? payload.postId : "";
   if (!isUuid(postId)) return Response.json({ error: "Missing post." }, { status: 400 });
   const { error } = await auth.supabase.from("op_feed_post_likes").insert({ post_id: postId, user_id: auth.user.id });

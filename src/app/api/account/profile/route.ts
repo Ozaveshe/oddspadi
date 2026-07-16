@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
+import { readBoundedJson } from "@/lib/security/boundedJson";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,9 @@ export async function POST(request: Request) {
   if (!supabase) return Response.json({ error: "Profiles are not configured." }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to update your profile." }, { status: 401 });
-  const payload = (await request.json().catch(() => ({}))) as { displayName?: unknown; bio?: unknown; favouriteTeamId?: unknown };
+  const parsed = await readBoundedJson<{ displayName?: unknown; bio?: unknown; favouriteTeamId?: unknown }>(request, 8_192);
+  if (!parsed.ok) return parsed.response;
+  const payload = parsed.value;
   const displayName = typeof payload.displayName === "string" ? payload.displayName.trim() : "";
   const bio = typeof payload.bio === "string" ? payload.bio.trim() : "";
   const favouriteTeamRequested = payload.favouriteTeamId !== undefined;

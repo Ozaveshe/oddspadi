@@ -3,6 +3,7 @@ import { publicReadAbortSignal } from "@/lib/supabase/publicReadClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable, reportDatabaseError } from "@/lib/security/databaseError";
 import { cleanExternalIdentifier, isIsoTimestampCursor, isUuid } from "@/lib/security/inputValidation";
+import { readBoundedJson } from "@/lib/security/boundedJson";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,9 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to post." }, { status: 401 });
 
-  const payload = (await request.json().catch(() => ({}))) as { body?: unknown; matchId?: unknown };
+  const parsed = await readBoundedJson<{ body?: unknown; matchId?: unknown }>(request, 8_192);
+  if (!parsed.ok) return parsed.response;
+  const payload = parsed.value;
   const body = typeof payload.body === "string" ? payload.body.trim() : "";
   if (!body || body.length > 2000) {
     return Response.json({ error: "A post must be between 1 and 2000 characters." }, { status: 400 });
