@@ -38,6 +38,13 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+export function identityArtworkMetadata(identity?: { logo?: string | null; flag?: string | null }): Record<string, string> {
+  return {
+    ...(text(identity?.logo) ? { logo: text(identity?.logo) as string } : {}),
+    ...(text(identity?.flag) ? { flag: text(identity?.flag) as string } : {})
+  };
+}
+
 function identityKey(row: { sport: unknown; provider: unknown; external_id: unknown }): string {
   return `${String(row.sport)}:${String(row.provider)}:${String(row.external_id)}`;
 }
@@ -265,16 +272,14 @@ export async function persistFixturesAndOdds({
       name: fixture.league,
       country: fixture.country,
       strength: match?.league.strength ?? null,
-      ...(match?.league.logo || match?.league.flag
-        ? { metadata: { logo: match.league.logo ?? null, flag: match.league.flag ?? null } }
-        : {})
+      metadata: identityArtworkMetadata(match?.league)
     };
   });
   const teamRows = fixtures.flatMap((fixture) => {
     const match = matchById.get(fixture.fixtureId);
     return [
-      { sport: fixture.sport, provider: fixture.provider, external_id: fixture.homeTeam.id, name: fixture.homeTeam.name, country: fixture.homeTeam.country ?? fixture.country, ...(match?.homeTeam.logo ? { metadata: { logo: match.homeTeam.logo } } : {}) },
-      { sport: fixture.sport, provider: fixture.provider, external_id: fixture.awayTeam.id, name: fixture.awayTeam.name, country: fixture.awayTeam.country ?? fixture.country, ...(match?.awayTeam.logo ? { metadata: { logo: match.awayTeam.logo } } : {}) }
+      { sport: fixture.sport, provider: fixture.provider, external_id: fixture.homeTeam.id, name: fixture.homeTeam.name, country: fixture.homeTeam.country ?? fixture.country, metadata: identityArtworkMetadata(match?.homeTeam) },
+      { sport: fixture.sport, provider: fixture.provider, external_id: fixture.awayTeam.id, name: fixture.awayTeam.name, country: fixture.awayTeam.country ?? fixture.country, metadata: identityArtworkMetadata(match?.awayTeam) }
     ];
   });
   const uniqueRows = <T extends { provider: string; sport: string; external_id: string }>(rows: T[]) => [...new Map(rows.map((row) => [`${row.provider}:${row.sport}:${row.external_id}`, row])).values()];

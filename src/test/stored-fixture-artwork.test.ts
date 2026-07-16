@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { storedFixtureArtwork } from "@/lib/sports/intelligence/repository";
+import { identityArtworkMetadata, storedFixtureArtwork } from "@/lib/sports/intelligence/repository";
 
 describe("stored fixture artwork", () => {
+  it("always produces non-null identity metadata for storage", () => {
+    expect(identityArtworkMetadata()).toEqual({});
+    expect(identityArtworkMetadata({ logo: "  ", flag: null })).toEqual({});
+    expect(identityArtworkMetadata({ logo: "https://cdn.test/team.png", flag: "https://cdn.test/flag.svg" })).toEqual({
+      logo: "https://cdn.test/team.png",
+      flag: "https://cdn.test/flag.svg"
+    });
+  });
+
   it("rejoins league flags, crests, and team countries onto public slate fixtures", () => {
     const fixture = {
       sport: "football",
