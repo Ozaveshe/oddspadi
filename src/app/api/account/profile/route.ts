@@ -3,6 +3,7 @@ import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
 import { readBoundedJson } from "@/lib/security/boundedJson";
+import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ export async function POST(request: Request) {
   if (!supabase) return Response.json({ error: "Profiles are not configured." }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to update your profile." }, { status: 401 });
+  const rateLimit = await enforceUserRateLimit(supabase, "profile_update"); if (rateLimit) return rateLimit;
   const parsed = await readBoundedJson<{ displayName?: unknown; bio?: unknown; favouriteTeamId?: unknown }>(request, 8_192);
   if (!parsed.ok) return parsed.response;
   const payload = parsed.value;

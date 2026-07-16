@@ -3,6 +3,7 @@ import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
 import { readBoundedJson } from "@/lib/security/boundedJson";
+import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ async function authenticated() {
 export async function POST(request: Request) {
   const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const auth = await authenticated(); if (auth.response) return auth.response;
+  const rateLimit = await enforceUserRateLimit(auth.supabase, "community_like"); if (rateLimit) return rateLimit;
   const parsed = await readBoundedJson<{ postId?: unknown }>(request, 2_048);
   if (!parsed.ok) return parsed.response;
   const payload = parsed.value;
@@ -30,6 +32,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const auth = await authenticated(); if (auth.response) return auth.response;
+  const rateLimit = await enforceUserRateLimit(auth.supabase, "community_like"); if (rateLimit) return rateLimit;
   const postId = new URL(request.url).searchParams.get("postId") ?? "";
   if (!isUuid(postId)) return Response.json({ error: "Missing post." }, { status: 400 });
   const { error } = await auth.supabase.from("op_feed_post_likes").delete().eq("post_id", postId).eq("user_id", auth.user.id);

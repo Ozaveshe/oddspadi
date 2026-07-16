@@ -3,6 +3,7 @@ import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
 import { readBoundedJson } from "@/lib/security/boundedJson";
+import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const auth = await authClient(); if (auth.error) return auth.error;
+  const rateLimit = await enforceUserRateLimit(auth.supabase, "follow_team"); if (rateLimit) return rateLimit;
   const parsed = await readBoundedJson<{ teamId?: unknown }>(request, 2_048);
   if (!parsed.ok) return parsed.response;
   const payload = parsed.value;
@@ -64,6 +66,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const auth = await authClient(); if (auth.error) return auth.error;
+  const rateLimit = await enforceUserRateLimit(auth.supabase, "follow_team"); if (rateLimit) return rateLimit;
   const teamId = new URL(request.url).searchParams.get("teamId") ?? "";
   if (!isUuid(teamId)) return Response.json({ error: "Choose a team to unfollow." }, { status: 400 });
   const { error } = await auth.supabase.from("op_followed_teams").delete().eq("user_id", auth.user.id).eq("team_id", teamId);

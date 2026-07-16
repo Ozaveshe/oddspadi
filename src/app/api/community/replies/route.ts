@@ -3,6 +3,7 @@ import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
 import { readBoundedJson } from "@/lib/security/boundedJson";
+import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export async function POST(request: Request) {
     data: { user }
   } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to reply." }, { status: 401 });
+  const rateLimit = await enforceUserRateLimit(supabase, "forum_reply"); if (rateLimit) return rateLimit;
 
   const parsed = await readBoundedJson<{ threadId?: unknown; body?: unknown }>(request, 24_576);
   if (!parsed.ok) return parsed.response;

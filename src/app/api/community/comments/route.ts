@@ -3,6 +3,7 @@ import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable, reportDatabaseError } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
 import { readBoundedJson } from "@/lib/security/boundedJson";
+import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
   if (!supabase) return Response.json({ error: "Community is not enabled yet." }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to comment." }, { status: 401 });
+  const rateLimit = await enforceUserRateLimit(supabase, "community_comment"); if (rateLimit) return rateLimit;
 
   const parsed = await readBoundedJson<{ postId?: unknown; body?: unknown }>(request, 8_192);
   if (!parsed.ok) return parsed.response;
@@ -59,6 +61,7 @@ export async function DELETE(request: Request) {
   if (!supabase) return Response.json({ error: "Community is not enabled yet." }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to delete a comment." }, { status: 401 });
+  const rateLimit = await enforceUserRateLimit(supabase, "community_comment"); if (rateLimit) return rateLimit;
   const commentId = new URL(request.url).searchParams.get("commentId") ?? "";
   if (!isUuid(commentId)) return Response.json({ error: "Missing comment." }, { status: 400 });
   // RLS is the final ownership check; author_id also avoids ambiguous success.

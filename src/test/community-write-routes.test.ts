@@ -27,6 +27,7 @@ function client(userId: string | null = "user-1") {
   const from = vi.fn(() => ({ insert }));
   createSupabaseServerClientMock.mockResolvedValue({
     auth: { getUser: vi.fn(async () => ({ data: { user: userId ? { id: userId } : null } })) },
+    rpc: vi.fn(async () => ({ data: [{ allowed: true, remaining: 10, retry_after_seconds: 60 }], error: null })),
     from
   });
   return { from, insert };

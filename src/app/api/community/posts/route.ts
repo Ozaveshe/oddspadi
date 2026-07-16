@@ -4,6 +4,7 @@ import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable, reportDatabaseError } from "@/lib/security/databaseError";
 import { cleanExternalIdentifier, isIsoTimestampCursor, isUuid } from "@/lib/security/inputValidation";
 import { readBoundedJson } from "@/lib/security/boundedJson";
+import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ export async function DELETE(request: Request) {
   if (!supabase) return Response.json({ error: "Community is not enabled yet." }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to delete a post." }, { status: 401 });
+  const rateLimit = await enforceUserRateLimit(supabase, "community_post"); if (rateLimit) return rateLimit;
   const postId = new URL(request.url).searchParams.get("postId") ?? "";
   if (!isUuid(postId)) return Response.json({ error: "Missing post." }, { status: 400 });
   // RLS is the final ownership check; author_id also avoids ambiguous success.
@@ -59,6 +61,7 @@ export async function POST(request: Request) {
     data: { user }
   } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to post." }, { status: 401 });
+  const rateLimit = await enforceUserRateLimit(supabase, "community_post"); if (rateLimit) return rateLimit;
 
   const parsed = await readBoundedJson<{ body?: unknown; matchId?: unknown }>(request, 8_192);
   if (!parsed.ok) return parsed.response;
