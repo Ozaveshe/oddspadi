@@ -45,6 +45,19 @@ async function checkJson(path, validate, label = path, options = {}) {
   }
 }
 
+async function checkRssFreshness(path, maxAgeMs = 36 * 60 * 60_000) {
+  try {
+    const { response, ms } = await timedFetch(path);
+    const body = await response.text();
+    const published = body.match(/<pubDate>([^<]+)<\/pubDate>/i)?.[1] ?? null;
+    const publishedAt = published ? Date.parse(published) : Number.NaN;
+    const fresh = Number.isFinite(publishedAt) && Date.now() - publishedAt <= maxAgeMs;
+    report(response.ok && body.includes('<rss version="2.0"') && fresh, "daily editorial RSS freshness", !response.ok ? `${response.status}, ${ms}ms` : !published ? "no RSS item has a publication date" : !fresh ? `latest item is ${((Date.now() - publishedAt) / 3_600_000).toFixed(1)}h old` : `${response.status}, ${ms}ms`);
+  } catch (error) {
+    report(false, "daily editorial RSS freshness", String(error));
+  }
+}
+
 function tipsFixtures(payload) {
   return Array.isArray(payload?.data?.slate?.fixtures) ? payload.data.slate.fixtures : [];
 }
@@ -105,6 +118,7 @@ await checkPage("/predictions", { maxMs: 6000 });
 await checkPage("/predictions/history", { maxMs: 6000 });
 await checkPage("/news");
 await checkPage("/community");
+await checkRssFreshness("/news/rss.xml");
 
 const todayTips = await checkJson("/api/tips/today", tipsFreshnessProblem, "api today's tips freshness");
 await checkJson("/api/tips/tomorrow", tipsFreshnessProblem, "api tomorrow's tips freshness");
@@ -121,6 +135,16 @@ await checkLatestRun("/api/cron/import-fixtures", 26 * 60 * 60_000, "scheduled f
 await checkLatestRun("/api/cron/refresh-odds", 4 * 60 * 60_000, "scheduled odds refresh receipt");
 await checkLatestRun("/api/cron/run-daily-engine", 26 * 60 * 60_000, "scheduled daily engine receipt");
 await checkLatestRun("/api/cron/generate-weekly-predictions", 26 * 60 * 60_000, "scheduled weekly engine receipt");
+
+for (const sport of ["football", "basketball", "tennis"]) {
+  await checkJson(`/api/sports/decision/training/calibration?sport=${sport}`, (payload) => {
+    if (!payload?.success || payload?.data?.status !== "ready") return "calibration snapshot is unavailable";
+    const createdAt = Date.parse(payload.data.latestRun?.createdAt ?? "");
+    if (!Number.isFinite(createdAt)) return "no stored calibration run";
+    const ageMs = Date.now() - createdAt;
+    return ageMs > 48 * 60 * 60_000 ? `latest calibration is ${(ageMs / 3_600_000).toFixed(1)}h old` : null;
+  }, `governed ${sport} learning receipt`);
+}
 
 await checkJson(
   "/api/health",

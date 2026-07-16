@@ -34,4 +34,21 @@ describe("sports intelligence full-cycle retry", () => {
     expect(calls).toEqual(["import-fixtures", "refresh-odds", "run-daily-engine", "generate-weekly-predictions"]);
     expect(stages.every((stage) => stage.ok)).toBe(true);
   });
+
+  it("refreshes today's decisions on bounded odds-only schedule ticks", async () => {
+    const calls: string[] = [];
+    const result = (jobType: string) => async () => {
+      calls.push(jobType);
+      return { run: { jobType, status: "completed" } } as never;
+    };
+
+    await runSportsIntelligenceCycle(false, {
+      importFixtures: result("import-fixtures"),
+      refreshOdds: result("refresh-odds"),
+      runDailyEngine: result("run-daily-engine"),
+      generateWeeklyPredictions: result("generate-weekly-predictions")
+    });
+
+    expect(calls).toEqual(["refresh-odds", "run-daily-engine"]);
+  });
 });

@@ -127,6 +127,7 @@ type ApiFootballLineup = {
   team?: {
     id?: number | string;
     name?: string;
+    logo?: string | null;
   };
   formation?: string;
   startXI?: Array<{
@@ -192,6 +193,7 @@ type ApiFootballStanding = {
   team?: {
     id?: number | string;
     name?: string;
+    logo?: string | null;
   };
   points?: number;
   goalsDiff?: number;
@@ -2684,7 +2686,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   async getFootballLeagueTable(slug: string, season = currentFootballSeason(this.now())): Promise<LeagueTable | null> {
     const league = leagueBySlug(slug); if (!league) return null; const key = `${league.leagueId}:${season}`; const cached = this.standingsCache.get(key); if (cached && cached.expiresAt > Date.now()) return cached.table;
     const apiKey = firstEnv(this.env, ["API_FOOTBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"]); if (!apiKey) return null;
-    const table = (async () => { const endpoint = new URL("https://v3.football.api-sports.io/standings"); endpoint.searchParams.set("league", league.leagueId); endpoint.searchParams.set("season", season); const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballStandingsResponse | null; const standings = data?.response?.[0]?.league?.standings?.[0] ?? []; const rows = standings.flatMap((standing) => { const position = Number(standing.rank); const played = Number(standing.all?.played ?? 0); if (!position || !standing.team?.name) return []; const goalsFor = Number(standing.all?.goals?.for ?? 0); const goalsAgainst = Number(standing.all?.goals?.against ?? 0); return [{ position, previousPosition: null, movement: null, teamId: `api-football:${standing.team.id ?? standing.team.name}`, teamName: standing.team.name, played, wins: Number(standing.all?.win ?? 0), draws: Number(standing.all?.draw ?? 0), losses: Number(standing.all?.lose ?? 0), goalsFor, goalsAgainst, goalDifference: goalsFor - goalsAgainst, points: Number(standing.points ?? 0), form: cleanText(standing.form).replace(/[^WDL]/gi, "").slice(-6).toUpperCase() }]; }); return rows.length ? { ...league, season, source: "api-football-standings" as const, updatedAt: this.now().toISOString(), rows: rows.sort((a,b) => a.position-b.position) } : null; })();
+    const table = (async () => { const endpoint = new URL("https://v3.football.api-sports.io/standings"); endpoint.searchParams.set("league", league.leagueId); endpoint.searchParams.set("season", season); const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballStandingsResponse | null; const standings = data?.response?.[0]?.league?.standings?.[0] ?? []; const rows = standings.flatMap((standing) => { const position = Number(standing.rank); const played = Number(standing.all?.played ?? 0); if (!position || !standing.team?.name) return []; const goalsFor = Number(standing.all?.goals?.for ?? 0); const goalsAgainst = Number(standing.all?.goals?.against ?? 0); return [{ position, previousPosition: null, movement: null, teamId: `api-football:${standing.team.id ?? standing.team.name}`, teamName: standing.team.name, teamLogo: cleanText(standing.team.logo) || null, teamCountry: league.country, played, wins: Number(standing.all?.win ?? 0), draws: Number(standing.all?.draw ?? 0), losses: Number(standing.all?.lose ?? 0), goalsFor, goalsAgainst, goalDifference: goalsFor - goalsAgainst, points: Number(standing.points ?? 0), form: cleanText(standing.form).replace(/[^WDL]/gi, "").slice(-6).toUpperCase() }]; }); return rows.length ? { ...league, season, source: "api-football-standings" as const, updatedAt: this.now().toISOString(), rows: rows.sort((a,b) => a.position-b.position) } : null; })();
     table.catch(() => { if (this.standingsCache.get(key)?.table === table) this.standingsCache.delete(key); }); setBoundedCache(this.standingsCache, key, { expiresAt: Date.now() + 3 * 60 * 60_000, table }); return table;
   }
 

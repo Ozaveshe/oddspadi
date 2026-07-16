@@ -8,11 +8,13 @@ export type CanonicalFixture = {
   sport: Sport;
   league: string;
   leagueId: string;
+  leagueLogo?: string | null;
+  leagueFlag?: string | null;
   country: string;
   season: string | null;
   kickoffAt: string;
-  homeTeam: { id: string; name: string; logo?: string | null };
-  awayTeam: { id: string; name: string; logo?: string | null };
+  homeTeam: { id: string; name: string; logo?: string | null; country?: string | null };
+  awayTeam: { id: string; name: string; logo?: string | null; country?: string | null };
   status: CanonicalFixtureStatus;
   score: { home: number; away: number; minute?: number } | null;
   provider: string;

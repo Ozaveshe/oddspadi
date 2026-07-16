@@ -2750,6 +2750,14 @@ a.score-row:active,
 .intelligence-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 8px; }
 .intelligence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .intelligence-card { position: relative; display: grid; gap: 13px; padding: 18px; border: 1px solid var(--border); border-left: 4px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 14px 34px -28px rgba(7, 94, 51, .65); }
+.intelligence-competition { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.intelligence-competition > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.intelligence-matchline > a { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: center; }
+.intelligence-team { display: flex; gap: 9px; align-items: center; min-width: 0; }
+.intelligence-team strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.intelligence-team--away { justify-content: flex-end; text-align: right; }
+.intelligence-team--away .team-crest { order: 2; }
+.intelligence-versus { color: var(--faint); font: 800 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
 .intelligence-card.status-value_pick { border-left-color: var(--green); }
 .intelligence-card.status-lean, .intelligence-card.status-ready { border-left-color: var(--amber); }
 .intelligence-card.status-watchlist, .intelligence-card.status-preliminary { border-left-color: var(--blue); }
@@ -3557,4 +3565,17 @@ a.score-row:active,
   .live-results-footer .button {
     width: 100%;
   }
+}
+
+.standings-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.standings-team > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

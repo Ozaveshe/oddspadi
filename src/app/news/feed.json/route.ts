@@ -2,7 +2,7 @@ import { getNewsStories } from "@/lib/editorial/news";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
 
-export const revalidate = 21_600;
+export const revalidate = 900;
 
 export async function GET() {
   const newsStories = await getNewsStories();

@@ -9,7 +9,9 @@ describe("deterministic editorial generators", () => {
   it("builds all four story classes from owned engine rows", () => {
     const rows = [row({}), row({ id: "won", result: "won", settled_at: "2026-07-12T18:00:00Z", kickoff_at: "2026-07-12T15:00:00Z", odds: 2.2 }), row({ id: "lost", result: "lost", settled_at: "2026-07-12T19:00:00Z", kickoff_at: "2026-07-12T16:00:00Z", home_team: "Sundowns", away_team: "Pirates" })];
     const stories = generateEditorialStories(rows, now);
-    expect(stories.map((story) => story.generator)).toEqual(["weekend-preview", "results-recap", "value-picks-watch", "model-vs-market"]);
+    expect(stories.map((story) => story.generator)).toEqual(["daily-slate", "weekend-preview", "results-recap", "value-picks-watch", "model-vs-market"]);
+    expect(stories[0]?.slug).toBe("daily-slate-2026-07-13");
+    expect(stories[0]?.body.join(" ")).toContain("fresh stored OddsPadi fixture and decision records");
     expect(stories.find((story) => story.generator === "results-recap")?.body.join(" ")).toContain("1 wins, 1 losses");
     const marketStory = stories.find((story) => story.generator === "model-vs-market");
     expect(marketStory?.title).not.toContain("today");

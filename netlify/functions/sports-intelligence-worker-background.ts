@@ -61,8 +61,11 @@ export async function runSportsIntelligenceCycle(fullCycle: boolean, operations:
   const stages = [];
   if (fullCycle) stages.push(await runStage("import-fixtures", operations.importFixtures));
   stages.push(await runStage("refresh-odds", operations.refreshOdds));
+  // Rebuild today's canonical decisions after every odds refresh. Import and
+  // seven-day generation stay on the bounded daily full cycle, but a new price
+  // must not wait until tomorrow before it reaches the public decision board.
+  stages.push(await runStage("run-daily-engine", operations.runDailyEngine));
   if (fullCycle) {
-    stages.push(await runStage("run-daily-engine", operations.runDailyEngine));
     stages.push(await runStage("generate-weekly-predictions", operations.generateWeeklyPredictions));
   }
   return stages;

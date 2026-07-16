@@ -38,6 +38,40 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+function identityKey(row: { sport: unknown; provider: unknown; external_id: unknown }): string {
+  return `${String(row.sport)}:${String(row.provider)}:${String(row.external_id)}`;
+}
+
+type StoredIdentityRow = Record<string, unknown> & {
+  sport: string;
+  provider: string;
+  external_id: string;
+};
+
+export function storedFixtureArtwork({
+  fixture,
+  teams,
+  leagues
+}: {
+  fixture: Record<string, unknown>;
+  teams: StoredIdentityRow[];
+  leagues: StoredIdentityRow[];
+}) {
+  const fixtureKey = (externalId: unknown) => identityKey({ sport: fixture.sport, provider: fixture.provider, external_id: externalId });
+  const home = teams.find((row) => identityKey(row) === fixtureKey(fixture.home_team_external_id));
+  const away = teams.find((row) => identityKey(row) === fixtureKey(fixture.away_team_external_id));
+  const league = leagues.find((row) => identityKey(row) === fixtureKey(fixture.league_external_id));
+  const fixtureMetadata = record(fixture.metadata);
+  return {
+    leagueLogo: text(record(league?.metadata).logo) ?? text(fixtureMetadata.leagueLogo),
+    leagueFlag: text(record(league?.metadata).flag) ?? text(fixtureMetadata.leagueFlag),
+    homeLogo: text(record(home?.metadata).logo),
+    awayLogo: text(record(away?.metadata).logo),
+    homeCountry: text(home?.country) ?? text(fixture.country),
+    awayCountry: text(away?.country) ?? text(fixture.country)
+  };
+}
+
 function decisionSummaryFromRow(row: Record<string, unknown>): DecisionSummary | null {
   const fixtureId = text(row.fixture_external_id);
   const generatedAt = text(row.generated_at);
@@ -231,14 +265,16 @@ export async function persistFixturesAndOdds({
       name: fixture.league,
       country: fixture.country,
       strength: match?.league.strength ?? null,
-      metadata: { logo: match?.league.logo ?? null, flag: match?.league.flag ?? null }
+      ...(match?.league.logo || match?.league.flag
+        ? { metadata: { logo: match.league.logo ?? null, flag: match.league.flag ?? null } }
+        : {})
     };
   });
   const teamRows = fixtures.flatMap((fixture) => {
     const match = matchById.get(fixture.fixtureId);
     return [
-      { sport: fixture.sport, provider: fixture.provider, external_id: fixture.homeTeam.id, name: fixture.homeTeam.name, country: fixture.country, metadata: { logo: match?.homeTeam.logo ?? null } },
-      { sport: fixture.sport, provider: fixture.provider, external_id: fixture.awayTeam.id, name: fixture.awayTeam.name, country: fixture.country, metadata: { logo: match?.awayTeam.logo ?? null } }
+      { sport: fixture.sport, provider: fixture.provider, external_id: fixture.homeTeam.id, name: fixture.homeTeam.name, country: fixture.homeTeam.country ?? fixture.country, ...(match?.homeTeam.logo ? { metadata: { logo: match.homeTeam.logo } } : {}) },
+      { sport: fixture.sport, provider: fixture.provider, external_id: fixture.awayTeam.id, name: fixture.awayTeam.name, country: fixture.awayTeam.country ?? fixture.country, ...(match?.awayTeam.logo ? { metadata: { logo: match.awayTeam.logo } } : {}) }
     ];
   });
   const uniqueRows = <T extends { provider: string; sport: string; external_id: string }>(rows: T[]) => [...new Map(rows.map((row) => [`${row.provider}:${row.sport}:${row.external_id}`, row])).values()];
@@ -629,10 +665,14 @@ export async function readStoredSlate({
   const staleRows = eligibleRows.filter((row) => !isStoredFixtureFresh(text(row.last_synced_at), now, maxFixtureAgeMs));
   const fixtureRows = eligibleRows.filter((row) => isStoredFixtureFresh(text(row.last_synced_at), now, maxFixtureAgeMs));
   const databaseFixtureIds = fixtureRows.map((row) => String(row.id));
+  const teamExternalIds = [...new Set(fixtureRows.flatMap((row) => [text(row.home_team_external_id), text(row.away_team_external_id)]).filter((value): value is string => Boolean(value)))];
+  const leagueExternalIds = [...new Set(fixtureRows.map((row) => text(row.league_external_id)).filter((value): value is string => Boolean(value)))];
   const [
     { data: odds, error: oddsError },
     { data: decisions, error: decisionsError },
     { data: summaries, error: summariesError },
+    { data: teams, error: teamsError },
+    { data: leagues, error: leaguesError },
     lastRun
   ] = await Promise.all([
     databaseFixtureIds.length
@@ -644,11 +684,19 @@ export async function readStoredSlate({
     databaseFixtureIds.length
       ? client.from("op_fixture_decision_summaries").select("fixture_id,fixture_external_id,best_published_pick,best_lean,best_watchlist_candidate,no_pick_reason,all_market_analyses,public_status,engine_status,data_quality,evidence_quality,confidence,risk,generated_at,expires_at,audit_summary").in("fixture_id", databaseFixtureIds).is("superseded_by", null).order("generated_at", { ascending: false }).limit(1000)
       : Promise.resolve({ data: [], error: null }),
+    teamExternalIds.length
+      ? client.from("op_teams").select("sport,provider,external_id,country,metadata").in("external_id", teamExternalIds).limit(2000)
+      : Promise.resolve({ data: [], error: null }),
+    leagueExternalIds.length
+      ? client.from("op_leagues").select("sport,provider,external_id,country,metadata").in("external_id", leagueExternalIds).limit(1000)
+      : Promise.resolve({ data: [], error: null }),
     readLatestProviderRun(jobTypes, client)
   ]);
   if (oddsError) throw new Error(`Stored odds read failed: ${oddsError.message}`);
   if (decisionsError) throw new Error(`Stored decision read failed: ${decisionsError.message}`);
   if (summariesError) throw new Error(`Stored canonical decision summary read failed: ${summariesError.message}`);
+  if (teamsError) throw new Error(`Stored team identity read failed: ${teamsError.message}`);
+  if (leaguesError) throw new Error(`Stored league identity read failed: ${leaguesError.message}`);
 
   const latestOdds = new Map<string, CanonicalOddsSnapshot>();
   for (const row of (odds ?? []) as Array<Record<string, unknown>>) {
@@ -698,29 +746,36 @@ export async function readStoredSlate({
     decisionSummariesByFixture.set(summary.fixtureId, summary);
   }
 
-  const fixtures: CanonicalFixture[] = fixtureRows.map((row) => ({
-    fixtureId: String(row.external_id),
-    providerFixtureId: text(row.provider_fixture_id) ?? String(row.external_id),
-    sport: row.sport as CanonicalFixture["sport"],
-    league: text(row.league_name) ?? text(record(row.metadata).leagueName) ?? "Competition",
-    leagueId: text(row.league_external_id) ?? "unknown",
-    country: text(row.country) ?? "World",
-    season: text(row.season),
-    kickoffAt: String(row.kickoff_at),
-    homeTeam: { id: String(row.home_team_external_id), name: text(row.home_team_name) ?? "Home" },
-    awayTeam: { id: String(row.away_team_external_id), name: text(row.away_team_name) ?? "Away" },
-    status: reconcileStoredFixtureStatus({
-      status: row.status as Match["status"],
+  const teamRows = (teams ?? []) as StoredIdentityRow[];
+  const leagueRows = (leagues ?? []) as StoredIdentityRow[];
+  const fixtures: CanonicalFixture[] = fixtureRows.map((row) => {
+    const artwork = storedFixtureArtwork({ fixture: row, teams: teamRows, leagues: leagueRows });
+    return {
+      fixtureId: String(row.external_id),
+      providerFixtureId: text(row.provider_fixture_id) ?? String(row.external_id),
+      sport: row.sport as CanonicalFixture["sport"],
+      league: text(row.league_name) ?? text(record(row.metadata).leagueName) ?? "Competition",
+      leagueId: text(row.league_external_id) ?? "unknown",
+      leagueLogo: artwork.leagueLogo,
+      leagueFlag: artwork.leagueFlag,
+      country: text(row.country) ?? "World",
+      season: text(row.season),
       kickoffAt: String(row.kickoff_at),
-      lastSyncedAt: text(row.last_synced_at),
-      homeScore: number(row.home_score),
-      awayScore: number(row.away_score)
-    }, now, maxFixtureAgeMs),
-    score: number(row.home_score) !== null && number(row.away_score) !== null ? { home: number(row.home_score) as number, away: number(row.away_score) as number } : null,
-    provider: String(row.provider),
-    lastSyncedAt: text(row.last_synced_at) ?? String(row.kickoff_at),
-    dataQuality: number(row.data_quality) ?? 0
-  }));
+      homeTeam: { id: String(row.home_team_external_id), name: text(row.home_team_name) ?? "Home", logo: artwork.homeLogo, country: artwork.homeCountry },
+      awayTeam: { id: String(row.away_team_external_id), name: text(row.away_team_name) ?? "Away", logo: artwork.awayLogo, country: artwork.awayCountry },
+      status: reconcileStoredFixtureStatus({
+        status: row.status as Match["status"],
+        kickoffAt: String(row.kickoff_at),
+        lastSyncedAt: text(row.last_synced_at),
+        homeScore: number(row.home_score),
+        awayScore: number(row.away_score)
+      }, now, maxFixtureAgeMs),
+      score: number(row.home_score) !== null && number(row.away_score) !== null ? { home: number(row.home_score) as number, away: number(row.away_score) as number } : null,
+      provider: String(row.provider),
+      lastSyncedAt: text(row.last_synced_at) ?? String(row.kickoff_at),
+      dataQuality: number(row.data_quality) ?? 0
+    };
+  });
   const staleReason = staleRows.length
     ? `${staleRows.length} stored fixture${staleRows.length === 1 ? " was" : "s were"} excluded because provider sync was older than ${Math.round(maxFixtureAgeMs / 60_000)} minutes.`
     : null;

@@ -2,7 +2,9 @@ import { getNewsStories } from "@/lib/editorial/news";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
 
-export const revalidate = 21_600;
+// Editorial generation runs four times a day; the syndication surface should
+// not remain six hours behind a successfully published desk edition.
+export const revalidate = 900;
 
 function xml(value: string) {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");

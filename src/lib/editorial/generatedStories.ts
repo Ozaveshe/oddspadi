@@ -5,7 +5,7 @@ export type EditorialOutcome = {
 };
 
 export type GeneratedEditorialStory = {
-  slug: string; generator: "weekend-preview" | "results-recap" | "value-picks-watch" | "model-vs-market"; title: string; excerpt: string;
+  slug: string; generator: "daily-slate" | "weekend-preview" | "results-recap" | "value-picks-watch" | "model-vs-market"; title: string; excerpt: string;
   category: string; sport: string; body: string[]; sources: Array<{ label: string; url: string; checkedAt: string }>;
   revision: number; sourceAsOf: string; publishedAt: string; readMinutes: number; dataFingerprint: string;
 };
@@ -21,6 +21,12 @@ function base(kind: GeneratedEditorialStory["generator"], date: string, rows: Ed
 export function generateEditorialStories(rows: EditorialOutcome[], now = new Date(), revisions: Partial<Record<GeneratedEditorialStory["generator"], number>> = {}): GeneratedEditorialStory[] {
   const date = isoDate(now); const stories: GeneratedEditorialStory[] = [];
   const pending = rows.filter((row) => row.result === "pending" && row.kickoff_at && new Date(row.kickoff_at).getTime() >= now.getTime()).sort((a, b) => new Date(a.kickoff_at!).getTime() - new Date(b.kickoff_at!).getTime());
+  const daily = distinctFixtures(pending).slice(0, 8);
+  if (daily.length) stories.push({ ...base("daily-slate", date, daily, revisions["daily-slate"] ?? 1, now), title: `Matchday desk: ${daily.length} upcoming fixtures`, excerpt: `The next ${daily.length} verified fixtures on the OddsPadi board, with current model readings and abstentions kept honest.`, category: "Daily preview", body: [
+    `This daily desk was generated from fresh stored OddsPadi fixture and decision records available at ${now.toISOString()}. It will change when prices or evidence change.`,
+    ...daily.map((row) => `${matchName(row)} — ${pickName(row)} is the strongest current model reading at ${pct(Number(row.model_probability))} and recorded odds ${Number(row.odds).toFixed(2)}. ${row.league ? `Competition: ${row.league}.` : "The competition label is unavailable."}`),
+    "A model preference is not automatically a public pick. OddsPadi still withholds action when price, calibration, context, or evidence gates do not pass."
+  ], sport: "All sports" });
   const weekendEnd = new Date(now); weekendEnd.setUTCDate(weekendEnd.getUTCDate() + 4);
   const preview = distinctFixtures(pending.filter((row) => new Date(row.kickoff_at!).getTime() <= weekendEnd.getTime())).slice(0, 6);
   if (preview.length) stories.push({ ...base("weekend-preview", date, preview, revisions["weekend-preview"] ?? 1, now), title: `Weekend preview: ${preview.length} matches on the OddsPadi radar`, excerpt: `A dated look at ${preview.length} upcoming fixtures, using stored model probabilities without turning analysis into promises.`, category: "Weekend preview", body: [
