@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getNewsStories } from "@/lib/editorial/news";
 import { getSupabasePublicReadClient, publicReadAbortSignal } from "@/lib/supabase/publicReadClient";
 
-export const revalidate = 21_600;
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Sports news, match previews and season outlooks",

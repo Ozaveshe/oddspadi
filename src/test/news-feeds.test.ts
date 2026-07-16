@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { GET as getRss } from "@/app/news/rss.xml/route";
-import { GET as getJsonFeed } from "@/app/news/feed.json/route";
+import { dynamic as rssDynamic, GET as getRss } from "@/app/news/rss.xml/route";
+import { dynamic as jsonFeedDynamic, GET as getJsonFeed } from "@/app/news/feed.json/route";
 import { getNewsStories, newsStories } from "@/lib/editorial/news";
 
 describe("Matchday Desk syndication feeds", () => {
+  it("renders database-backed feeds at request time", () => {
+    expect(rssDynamic).toBe("force-dynamic");
+    expect(jsonFeedDynamic).toBe("force-dynamic");
+  });
+
   it("keeps the current matchday revision source-dated and honest about recovered storage evidence", () => {
     const story = newsStories.find((item) => item.slug === "basketball-summer-league-matchday-watchlist");
     expect(story?.revision).toBe(6);

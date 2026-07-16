@@ -4,7 +4,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
 
 // Editorial generation runs four times a day; the syndication surface should
 // not remain six hours behind a successfully published desk edition.
-export const revalidate = 900;
+export const dynamic = "force-dynamic";
 
 function xml(value: string) {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");

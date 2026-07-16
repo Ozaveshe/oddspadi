@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getNewsStory, getNewsStories } from "@/lib/editorial/news";
+import { getNewsStory } from "@/lib/editorial/news";
 import { LocalTime } from "@/components/odds/LocalTime";
 import { ShareBar } from "@/components/share/ShareBar";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 
-export const revalidate = 21_600;
-
-export async function generateStaticParams() { return (await getNewsStories()).map(({ slug }) => ({ slug })); }
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const story = await getNewsStory((await params).slug);
