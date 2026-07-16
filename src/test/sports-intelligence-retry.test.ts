@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldRunFullCycle } from "../../netlify/functions/sports-intelligence-worker-background";
+import { runSportsIntelligenceCycle, shouldRunFullCycle } from "../../netlify/functions/sports-intelligence-worker-background";
 
 describe("sports intelligence full-cycle retry", () => {
   const now = new Date("2026-07-16T06:25:00.000Z");
@@ -16,5 +16,22 @@ describe("sports intelligence full-cycle retry", () => {
 
   it("honours an explicit full-cycle request before the scheduled hour", () => {
     expect(shouldRunFullCycle({ requested: true, now: new Date("2026-07-16T00:25:00.000Z"), fullRunHour: 2, latestWeeklyRun: null })).toBe(true);
+  });
+
+  it("executes full-cycle pipeline operations directly and in order", async () => {
+    const calls: string[] = [];
+    const result = (jobType: string) => async () => {
+      calls.push(jobType);
+      return { run: { jobType, status: "completed" } } as never;
+    };
+    const stages = await runSportsIntelligenceCycle(true, {
+      importFixtures: result("import-fixtures"),
+      refreshOdds: result("refresh-odds"),
+      runDailyEngine: result("run-daily-engine"),
+      generateWeeklyPredictions: result("generate-weekly-predictions")
+    });
+
+    expect(calls).toEqual(["import-fixtures", "refresh-odds", "run-daily-engine", "generate-weekly-predictions"]);
+    expect(stages.every((stage) => stage.ok)).toBe(true);
   });
 });

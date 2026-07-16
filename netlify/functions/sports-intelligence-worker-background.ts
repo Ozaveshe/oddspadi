@@ -1,5 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import type { Context } from "@netlify/functions";
+import { generateWeeklyPredictions, importFixtures, refreshOdds, runDailyEngine } from "../../src/lib/sports/intelligence/pipeline";
+import { readLatestProviderRun } from "../../src/lib/sports/intelligence/repository";
+import type { PipelineRunResult } from "../../src/lib/sports/intelligence/types";
 
 declare const Netlify: { env: { get(name: string): string | undefined } };
 
@@ -14,16 +17,28 @@ function tokenMatches(expected: string, supplied: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-async function callStage(siteUrl: string, path: string, token: string): Promise<{ path: string; ok: boolean; status: number; body: unknown }> {
+type PipelineOperation = () => Promise<PipelineRunResult>;
+type PipelineOperations = {
+  importFixtures: PipelineOperation;
+  refreshOdds: PipelineOperation;
+  runDailyEngine: PipelineOperation;
+  generateWeeklyPredictions: PipelineOperation;
+};
+
+const defaultOperations: PipelineOperations = {
+  importFixtures: () => importFixtures(),
+  refreshOdds: () => refreshOdds(),
+  runDailyEngine: () => runDailyEngine(),
+  generateWeeklyPredictions: () => generateWeeklyPredictions()
+};
+
+async function runStage(path: string, operation: PipelineOperation): Promise<{ path: string; ok: boolean; status: number; body: unknown }> {
   try {
-    const response = await fetch(new URL(path, siteUrl), {
-      method: "POST",
-      headers: { accept: "application/json", "x-oddspadi-schedule-token": token },
-      signal: AbortSignal.timeout(5 * 60_000)
-    });
-    return { path, ok: response.ok, status: response.status, body: await response.json().catch(() => null) };
+    const result = await operation();
+    const ok = !["failed", "unavailable"].includes(result.run.status);
+    return { path, ok, status: ok ? result.run.status === "partial" ? 207 : 200 : 503, body: { success: ok, data: result } };
   } catch (error) {
-    return { path, ok: false, status: 504, body: { error: error instanceof Error ? error.message : "Pipeline stage failed." } };
+    return { path, ok: false, status: 500, body: { error: error instanceof Error ? error.message : "Pipeline stage failed." } };
   }
 }
 
@@ -42,25 +57,21 @@ export function shouldRunFullCycle({ requested, now, fullRunHour, latestWeeklyRu
   return !(sameUtcDay && ["running", "completed", "partial", "empty"].includes(status ?? ""));
 }
 
-async function readLatestWeeklyRun(siteUrl: string): Promise<LatestRun> {
-  try {
-    const response = await fetch(new URL("/api/cron/generate-weekly-predictions", siteUrl), {
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(15_000)
-    });
-    if (!response.ok) return null;
-    const payload = await response.json() as { data?: LatestRun };
-    return payload.data ?? null;
-  } catch {
-    return null;
+export async function runSportsIntelligenceCycle(fullCycle: boolean, operations: PipelineOperations = defaultOperations) {
+  const stages = [];
+  if (fullCycle) stages.push(await runStage("import-fixtures", operations.importFixtures));
+  stages.push(await runStage("refresh-odds", operations.refreshOdds));
+  if (fullCycle) {
+    stages.push(await runStage("run-daily-engine", operations.runDailyEngine));
+    stages.push(await runStage("generate-weekly-predictions", operations.generateWeeklyPredictions));
   }
+  return stages;
 }
 
-export default async function sportsIntelligenceWorker(request: Request, context: Context): Promise<Response> {
-  const siteUrl = clean(Netlify.env.get("ODDSPADI_SITE_URL")) ?? clean(context.site.url) ?? clean(Netlify.env.get("URL"));
+export default async function sportsIntelligenceWorker(request: Request, _context: Context): Promise<Response> {
   const token = clean(Netlify.env.get("ODDSPADI_ADMIN_TOKEN"));
   const supplied = clean(request.headers.get("x-oddspadi-schedule-token"));
-  if (!siteUrl || !token) return Response.json({ success: false, error: "Sports intelligence worker configuration is incomplete." }, { status: 503 });
+  if (!token) return Response.json({ success: false, error: "Sports intelligence worker configuration is incomplete." }, { status: 503 });
   if (!supplied || !tokenMatches(token, supplied)) return Response.json({ success: false, error: "Sports intelligence worker authorization failed." }, { status: 401 });
 
   const requestedFullCycle = new URL(request.url).searchParams.get("full") === "1";
@@ -69,15 +80,9 @@ export default async function sportsIntelligenceWorker(request: Request, context
     ? configuredFullRunHour
     : 2;
   const now = new Date();
-  const latestWeeklyRun = requestedFullCycle ? null : await readLatestWeeklyRun(siteUrl);
+  const latestWeeklyRun = requestedFullCycle ? null : await readLatestProviderRun(["generate-weekly-predictions"]);
   const fullCycle = shouldRunFullCycle({ requested: requestedFullCycle, now, fullRunHour, latestWeeklyRun });
-  const stages = [];
-  if (fullCycle) stages.push(await callStage(siteUrl, "/api/cron/import-fixtures", token));
-  stages.push(await callStage(siteUrl, "/api/cron/refresh-odds", token));
-  if (fullCycle) {
-    stages.push(await callStage(siteUrl, "/api/cron/run-daily-engine", token));
-    stages.push(await callStage(siteUrl, "/api/cron/generate-weekly-predictions", token));
-  }
+  const stages = await runSportsIntelligenceCycle(fullCycle);
   const success = stages.every((stage) => stage.ok);
   console.info(JSON.stringify({ event: "oddspadi-sports-intelligence-cycle", success, fullCycle, stages: stages.map(({ path, ok, status }) => ({ path, ok, status })) }));
   return Response.json({ success, mode: "sports-intelligence-cycle", fullCycle, stages }, { status: success ? 200 : 502 });

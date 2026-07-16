@@ -154,14 +154,13 @@ export async function startProviderRun({
     const { data: active } = await client
       .from("op_provider_ingestion_runs")
       .select("id,provider,ingestion_type,job_type,status,started_at,completed_at,finished_at,rows_received,fixtures_found,odds_found,predictions_generated,value_picks_published,error_message,errors,metadata,created_at")
-      .eq("job_type", jobType)
       .eq("status", "running")
       .order("started_at", { ascending: false })
       .limit(1)
       .maybeSingle();
     const existing = active ? runLogFromRow(active as Record<string, unknown>) : base;
     return {
-      run: { ...existing, errors: [...existing.errors, `Skipped overlapping ${jobType} run; an active receipt already owns this job.`] },
+      run: { ...existing, errors: [...existing.errors, `Skipped ${jobType}; active ${existing.jobType} receipt owns the sports pipeline.`] },
       acquired: false
     };
   }
