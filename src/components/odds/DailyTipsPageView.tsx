@@ -18,7 +18,7 @@ export function DailyTipsPageView({ product, fallbackBoard = null }: { product: 
 
   return (
     <main id="main" className="container">
-      <div className="page-heading tips-heading">
+      <div className="page-heading product-heading tips-heading">
         <span className="section-kicker">The Matchday Desk · {isToday ? "Today" : "Tomorrow"}</span>
         <h1>{heading}</h1>
         <p>Every available match is scanned by the OddsPadi engine. We show value picks when the numbers clear our guardrails, leans when the model likes a side but price is tight, and no-pick reasons when the edge is not there.</p>

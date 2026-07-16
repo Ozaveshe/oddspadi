@@ -35,7 +35,7 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
   const sportLabel = requestedSport ? requestedSport[0].toUpperCase() + requestedSport.slice(1) : null;
   return (
     <main id="main" className="container">
-      <div className="page-heading">
+      <div className="page-heading product-heading predictions-heading">
         <span className="section-kicker">Daily sports intelligence</span>
         <h1>Today&apos;s {sportLabel ? <span className="accent">{sportLabel} predictions</span> : <>provider-backed <span className="accent">predictions</span></>}</h1>
         <p>Every available {sportLabel ? `${sportLabel.toLowerCase()} match` : "match"} is run through the OddsPadi engine. Value, leans, watchlists and abstentions stay separate, and a provider failure never turns into a fake fixture.</p>

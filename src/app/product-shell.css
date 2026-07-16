@@ -1,0 +1,606 @@
+/*
+ * OddsPadi product shell — "Floodlit paper".
+ *
+ * Data surfaces stay light and editorial; navigation, hero moments and
+ * operational ledgers use stadium-night ink. This explicit layer preserves
+ * the component primitives while giving the whole product one visual voice.
+ */
+
+:root {
+  --bg: #f2f0e8;
+  --bg-soft: #ebe8df;
+  --surface: #fffdf8;
+  --surface-2: #f7f4eb;
+  --surface-3: #e8e9df;
+  --surface-4: #d9ded3;
+  --surface-strong: #f8f6ef;
+  --border: #d8d9cf;
+  --border-strong: #b8c1b7;
+  --text: #10261a;
+  --muted: #596b60;
+  --faint: #6a786e;
+  --green: #16a15a;
+  --green-strong: #087a43;
+  --green-deep: #062c1a;
+  --green-soft: rgba(22, 161, 90, 0.11);
+  --green-line: rgba(22, 161, 90, 0.3);
+  --green-ink: #f5fff8;
+  --gold: #f3bd4a;
+  --gold-strong: #ffd877;
+  --amber: #f3bd4a;
+  --shadow-sm: 0 8px 24px -18px rgba(6, 44, 26, 0.45);
+  --shadow-soft: 0 22px 54px -38px rgba(6, 44, 26, 0.48);
+  --shadow: 0 28px 68px -40px rgba(6, 44, 26, 0.56);
+  --shadow-lg: 0 44px 90px -48px rgba(6, 44, 26, 0.6);
+  --maxw: 1240px;
+}
+
+body {
+  background: linear-gradient(rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.22)), var(--bg);
+}
+
+body::before {
+  background:
+    radial-gradient(820px 500px at 8% -10%, rgba(22, 161, 90, 0.12), transparent 62%),
+    radial-gradient(700px 420px at 92% -8%, rgba(243, 189, 74, 0.08), transparent 60%);
+}
+
+::selection {
+  background: rgba(43, 220, 125, 0.32);
+  color: #07170f;
+}
+
+/* Compact, dark matchday masthead shared by every route. */
+.site-header {
+  padding-top: 14px;
+}
+
+.site-header .nav {
+  min-height: 62px;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(7, 23, 15, 0.96);
+  box-shadow: 0 20px 48px -30px rgba(2, 16, 9, 0.72), inset 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.site-header .brand-word {
+  color: #f2fff6;
+}
+
+.site-header .brand-word em {
+  color: #55e896;
+}
+
+.site-header .nav-links {
+  color: #aebdb3;
+}
+
+.site-header .nav-links a:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.site-header .nav-links a[aria-current="page"] {
+  background: #d9f8e5;
+  color: #06301b;
+}
+
+.site-header .nav-links a[aria-current="page"]::after {
+  bottom: -4px;
+  background: var(--gold);
+  box-shadow: 0 0 10px rgba(243, 189, 74, 0.65);
+}
+
+.container {
+  padding-top: 34px;
+}
+
+.section {
+  padding-block: clamp(40px, 5vw, 66px);
+}
+
+.section-kicker,
+.eyebrow {
+  border-color: rgba(8, 122, 67, 0.25);
+  background: #e4f4e9;
+  color: #086a3c;
+}
+
+.button {
+  border-color: #c9cec5;
+  background: #fffdf8;
+  box-shadow: 0 9px 24px -18px rgba(6, 44, 26, 0.5);
+}
+
+.button:hover {
+  border-color: #90a699;
+  background: #fff;
+}
+
+.button.primary {
+  border-color: #0b8b4c;
+  background: #0b8b4c;
+}
+
+/* Signature route intros: editorial type inside a night-sky plate. */
+.product-heading {
+  position: relative;
+  isolation: isolate;
+  max-width: none;
+  overflow: hidden;
+  margin-top: 6px;
+  padding: clamp(32px, 5vw, 62px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px 78px 28px 28px;
+  background:
+    radial-gradient(460px 260px at 100% 0%, rgba(34, 194, 103, 0.26), transparent 70%),
+    linear-gradient(135deg, #07170f 0%, #0a2f1d 100%);
+  color: #f5fff8;
+  box-shadow: var(--shadow-lg);
+}
+
+.product-heading::after {
+  content: "";
+  position: absolute;
+  right: -90px;
+  bottom: -170px;
+  z-index: -1;
+  width: 440px;
+  height: 440px;
+  border: 1px solid rgba(112, 236, 164, 0.14);
+  border-radius: 50%;
+  box-shadow: 0 0 0 54px rgba(112, 236, 164, 0.035), 0 0 0 108px rgba(112, 236, 164, 0.025);
+}
+
+.product-heading h1 {
+  max-width: 930px;
+  color: #f7fff9;
+  font-size: clamp(44px, 7vw, 82px);
+  letter-spacing: -0.055em;
+}
+
+.product-heading h1 .accent {
+  color: #58e798;
+}
+
+.product-heading > p {
+  max-width: 68ch;
+  color: rgba(231, 246, 237, 0.7);
+  font-size: clamp(16px, 1.7vw, 19px);
+}
+
+.product-heading .section-kicker {
+  border-color: rgba(88, 231, 152, 0.28);
+  background: rgba(88, 231, 152, 0.1);
+  color: #8ef1b9;
+}
+
+.product-heading .button:not(.primary) {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.07);
+  color: #ecfff3;
+  box-shadow: none;
+}
+
+.product-heading .button:not(.primary):hover {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.product-heading .editorial-feed-links a,
+.editorial-heading .editorial-feed-links a {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: #a7f4c8;
+}
+
+/* Homepage: one decisive matchday scene instead of a white brochure intro. */
+.home-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  align-items: center;
+  margin: 6px 0 28px;
+  padding: clamp(38px, 6vw, 74px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 30px 84px 30px 30px;
+  background:
+    radial-gradient(520px 320px at 100% 0%, rgba(31, 203, 107, 0.28), transparent 68%),
+    linear-gradient(135deg, #07170f 0%, #092d1c 100%);
+  color: #f4fff7;
+  box-shadow: var(--shadow-lg);
+}
+
+.home-hero::before {
+  content: "";
+  position: absolute;
+  right: -165px;
+  bottom: -260px;
+  z-index: -1;
+  width: 600px;
+  height: 600px;
+  border: 1px solid rgba(107, 240, 164, 0.12);
+  border-radius: 50%;
+  box-shadow: 0 0 0 70px rgba(107, 240, 164, 0.028), 0 0 0 140px rgba(107, 240, 164, 0.018);
+}
+
+.home-hero h1 {
+  max-width: 760px;
+  color: #f7fff9;
+  font-size: clamp(48px, 7.2vw, 88px);
+  letter-spacing: -0.06em;
+}
+
+.home-hero h1 .accent {
+  color: #55e896;
+}
+
+.home-hero p,
+.home-hero .home-hero-note {
+  color: rgba(232, 247, 238, 0.7) !important;
+}
+
+.home-hero .section-kicker {
+  border-color: rgba(85, 232, 150, 0.28);
+  background: rgba(85, 232, 150, 0.1);
+  color: #91f0bb;
+}
+
+.home-hero .button:not(.primary) {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.07);
+  color: white;
+}
+
+.home-matchday-brief {
+  border-color: rgba(255, 255, 255, 0.13);
+  border-top-color: #55e896;
+  background: rgba(255, 255, 255, 0.075);
+  color: white;
+  box-shadow: 18px 18px 0 rgba(91, 227, 151, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.home-matchday-brief > strong {
+  color: #6befa5;
+}
+
+.home-matchday-brief > span:not(.section-kicker),
+.home-matchday-source {
+  color: rgba(231, 246, 237, 0.66);
+}
+
+.home-matchday-brief > div {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.home-matchday-brief .text-link {
+  color: #9ff4c3;
+}
+
+.home-engine-strip {
+  overflow: hidden;
+  padding-inline: 10px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.home-engine-strip > div:first-child {
+  padding-left: 20px;
+}
+
+.home-today-best {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px 58px 20px 20px;
+  background:
+    radial-gradient(360px 220px at 0% 100%, rgba(38, 192, 103, 0.22), transparent 75%),
+    #052c1a;
+  box-shadow: var(--shadow);
+}
+
+.home-results-summary {
+  padding-right: clamp(18px, 4vw, 38px);
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--green);
+  border-radius: 0 22px 22px 0;
+  background: var(--surface);
+}
+
+.home-weekly-empty,
+.live-coverage-fallback {
+  border-radius: 0 18px 18px 0;
+  background: #fffaf0;
+}
+
+.notice {
+  border-color: #e8c66d;
+  background: #fff8e7;
+  color: #684b08;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.72);
+}
+
+.notice .inline-link {
+  color: #654500;
+}
+
+/* Operational evidence reads like a console, not a neutral form. */
+.engine-rundown {
+  padding: 16px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(360px 180px at 0% 0%, rgba(32, 191, 101, 0.17), transparent 70%),
+    #091b12;
+  color: #effbf3;
+  box-shadow: var(--shadow);
+}
+
+.engine-rundown-state {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.engine-rundown-state small,
+.engine-rundown dt,
+.engine-rundown details {
+  color: #9fb1a5;
+}
+
+.engine-rundown dl div {
+  border-left-color: rgba(85, 232, 150, 0.28);
+}
+
+.engine-rundown dd {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.engine-rundown details {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.intelligence-card,
+.no-pick-card,
+.matchday-fallback-card,
+.share-preview {
+  border-color: #d2d6cd;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.intelligence-card {
+  border-left-width: 5px;
+  border-radius: 14px 28px 14px 14px;
+  transition: transform 0.3s var(--ease), border-color 0.25s var(--ease), box-shadow 0.3s var(--ease);
+}
+
+.intelligence-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+
+.intelligence-empty-slate {
+  border-radius: 16px 42px 16px 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Matchday Desk: cards are an editorial sequence, never empty grid paint. */
+.news-lead {
+  padding-top: 42px;
+}
+
+.news-lead-art {
+  border-radius: 18px 70px 18px 18px;
+  background:
+    radial-gradient(260px 220px at 100% 0%, rgba(91, 231, 151, 0.24), transparent 72%),
+    #062c1a;
+  box-shadow: 22px 22px 0 #cfe5d5;
+}
+
+.news-lead-art span {
+  color: #8cefb6;
+}
+
+.news-grid {
+  gap: 14px;
+  background: transparent;
+}
+
+.news-recap-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  margin-top: 24px;
+}
+
+.news-card {
+  border: 1px solid var(--border);
+  border-radius: 16px 34px 16px 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.3s var(--ease), border-color 0.25s var(--ease), box-shadow 0.3s var(--ease);
+}
+
+.news-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--green-line);
+  box-shadow: var(--shadow);
+}
+
+.news-recap-grid .news-card {
+  border-top: 5px solid var(--gold);
+}
+
+/* Deliberate dark close instead of an extended pale sitemap. */
+.footer {
+  border-color: rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(560px 300px at 0% 0%, rgba(29, 167, 89, 0.14), transparent 70%),
+    #07170f;
+  color: #9eafa4;
+}
+
+.footer h2,
+.footer h4,
+.footer .brand-word {
+  color: #edf9f1;
+}
+
+.footer .brand-word em,
+.footer-links a:hover {
+  color: #62e99c;
+}
+
+.footer-links a,
+.footer .muted,
+.footer-brand p {
+  color: #9eafa4;
+}
+
+.footer-bottom {
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+.footer-bottom-inner {
+  color: #84958a;
+}
+
+@media (max-width: 900px) {
+  .home-hero {
+    align-items: start;
+  }
+
+  .home-matchday-brief {
+    max-width: 620px;
+  }
+}
+
+@media (max-width: 768px) {
+  .site-header .nav,
+  .tabbar,
+  .tabbar-sheet {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: #07170f;
+  }
+
+  .tabbar {
+    box-shadow: 0 18px 42px rgba(3, 18, 10, 0.34), inset 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  .tabbar a,
+  .tabbar-more {
+    color: #9eafa4;
+  }
+
+  .tabbar a[aria-current="page"],
+  .tabbar-more[aria-expanded="true"],
+  .tabbar-more[aria-current="true"] {
+    color: #65eca0;
+  }
+
+  .tabbar-sheet a,
+  .tabbar-sheet-header strong {
+    color: #edf9f1;
+  }
+
+  .tabbar-sheet a[aria-current="page"] {
+    background: rgba(85, 232, 150, 0.12);
+    color: #75efa9;
+  }
+
+  .tabbar-sheet-header button {
+    color: #75efa9;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding-inline: 13px;
+  }
+
+  .product-heading,
+  .home-hero {
+    border-radius: 20px 48px 20px 20px;
+    padding: 28px 22px 32px;
+  }
+
+  .product-heading h1,
+  .home-hero h1 {
+    font-size: clamp(39px, 12vw, 54px);
+    line-height: 0.94;
+  }
+
+  .product-heading > p,
+  .home-hero p {
+    font-size: 15px;
+    line-height: 1.58;
+  }
+
+  .product-heading .intelligence-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .product-heading .intelligence-nav .button {
+    min-width: 0;
+    padding-inline: 12px;
+  }
+
+  .home-matchday-brief {
+    margin-right: 10px;
+    box-shadow: 10px 10px 0 rgba(91, 227, 151, 0.08);
+  }
+
+  .home-engine-strip {
+    padding-inline: 4px;
+  }
+
+  .engine-rundown {
+    padding: 12px;
+  }
+
+  .engine-rundown-state {
+    align-items: flex-start;
+    padding: 10px 6px 14px;
+  }
+
+  .engine-rundown dl div {
+    padding-inline: 8px;
+  }
+
+  .news-lead-art {
+    margin-right: 10px;
+    border-radius: 14px 46px 14px 14px;
+    box-shadow: 10px 10px 0 #cfe5d5;
+  }
+
+  .news-card {
+    padding: 22px;
+  }
+
+  .footer-inner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px 20px;
+    padding-top: 40px;
+  }
+
+  .footer-brand,
+  .footer-inner > div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .footer-links {
+    gap: 7px;
+    font-size: 13px;
+  }
+
+  .footer-bottom-inner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intelligence-card,
+  .news-card {
+    transition: none;
+  }
+}

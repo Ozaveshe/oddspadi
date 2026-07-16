@@ -25,7 +25,7 @@ export default async function NewsPage() {
   const [lead, ...rest] = stories;
   return (
     <main id="main" className="container editorial-page">
-      <header className="page-heading editorial-heading">
+      <header className="page-heading product-heading editorial-heading">
         <span className="section-kicker">The Matchday Desk</span>
         <h1>News that helps you <span className="accent">read the game.</span></h1>
         <p>Fresh briefings, transparent model notes, and season outlooks—built from the same evidence behind OddsPadi predictions.</p>
@@ -43,7 +43,7 @@ export default async function NewsPage() {
           <Link className="text-link" href={`/news/${lead.slug}`}>Read the briefing →</Link>
         </article>
       </section>
-      <section className="section" aria-labelledby="weekly-recaps"><div className="section-title"><div><span className="section-kicker">No cherry-picking</span><h2 id="weekly-recaps">Weeks in review</h2></div></div>{recaps.length ? <div className="news-grid">{recaps.map((recap) => <article className="news-card" key={recap.week_start}><div className="story-meta"><span>Public record</span><time>{recap.week_start} – {recap.week_end}</time></div><h3>{recap.wins} hits, {recap.losses} misses</h3><p>{recap.graded_count} picks graded · {Math.round(Number(recap.accuracy) * 100)}% accuracy · {recap.pushes} pushes · {recap.voids} voids.</p>{recap.best_call ? <p className="small"><strong>Best call:</strong> {recap.best_call}</p> : null}<Link className="text-link" href="/predictions/history">Inspect every result →</Link></article>)}</div> : <div className="empty-state compact"><h3>First weekly recap is still forming</h3><p className="muted">We publish the complete week after settlement. No sample wins are substituted while the ledger is empty.</p></div>}</section>
+      <section className="section" aria-labelledby="weekly-recaps"><div className="section-title"><div><span className="section-kicker">No cherry-picking</span><h2 id="weekly-recaps">Weeks in review</h2></div></div>{recaps.length ? <div className="news-grid news-recap-grid">{recaps.map((recap) => <article className="news-card" key={recap.week_start}><div className="story-meta"><span>Public record</span><time>{recap.week_start} – {recap.week_end}</time></div><h3>{recap.wins} hits, {recap.losses} misses</h3><p>{recap.graded_count} picks graded · {Math.round(Number(recap.accuracy) * 100)}% accuracy · {recap.pushes} pushes · {recap.voids} voids.</p>{recap.best_call ? <p className="small"><strong>Best call:</strong> {recap.best_call}</p> : null}<Link className="text-link" href="/predictions/history">Inspect every result →</Link></article>)}</div> : <div className="empty-state compact"><h3>First weekly recap is still forming</h3><p className="muted">We publish the complete week after settlement. No sample wins are substituted while the ledger is empty.</p></div>}</section>
       <section className="news-grid" aria-label="Latest stories">
         {rest.map((story) => <article className="news-card" key={story.slug}>
           <div className="story-meta"><span>{story.category}</span><span>{story.sport}</span>{(story.revision ?? 1) > 1 ? <span className="badge scheduled">Updated</span> : null}</div>

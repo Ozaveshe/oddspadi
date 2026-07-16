@@ -5,6 +5,7 @@ import { BrandWord, LogoMark } from "@/components/site/Logo";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { DesktopNavLinks, MobileTabBar } from "@/components/site/SiteNav";
 import "./globals.css";
+import "./product-shell.css";
 import { FollowedTeamsProvider } from "@/components/account/FollowedTeamsProvider";
 import { ServiceWorkerRegistration } from "@/components/pwa/ServiceWorkerRegistration";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
@@ -78,7 +79,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: "#07170f",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover"
