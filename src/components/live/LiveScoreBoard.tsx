@@ -12,6 +12,12 @@ type TabId = "all" | LiveFixturePhase;
 type SportTab = "all" | LiveBoardFixture["sport"];
 
 const FIXTURE_PAGE_SIZE = LIVE_BOARD_INITIAL_FIXTURES;
+// API-Sports currently advertises this crest URL for Atlante U21 (team 28004),
+// but the asset CDN returns a cached 404. Keep the honest blank crest instead
+// of requesting a broken image or substituting another team's artwork.
+const CONFIRMED_MISSING_PROVIDER_ARTWORK = new Set([
+  "https://media.api-sports.io/football/teams/28004.png"
+]);
 
 const SPORT_TABS: Array<{ id: SportTab; label: string; icon: string }> = [
   { id: "all", label: "All sports", icon: "●" },
@@ -63,6 +69,10 @@ function isOptimizableProviderImage(src: string): boolean {
 }
 
 function ProviderArtwork({ src, className, width, height }: { src: string; className: string; width: number; height: number }) {
+  if (CONFIRMED_MISSING_PROVIDER_ARTWORK.has(src)) {
+    return <span className={className} aria-hidden="true" />;
+  }
+
   if (isOptimizableProviderImage(src)) {
     return (
       <Image
