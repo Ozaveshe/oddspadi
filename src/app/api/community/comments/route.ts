@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
+import { databaseUnavailable, reportDatabaseError } from "@/lib/security/databaseError";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,10 @@ export async function GET(request: Request) {
     .eq("post_id", postId)
     .order("created_at", { ascending: true })
     .limit(100);
-  if (error) return Response.json({ comments: [], note: error.message });
+  if (error) {
+    reportDatabaseError("community comments read", error);
+    return Response.json({ comments: [], note: "Comments are temporarily unavailable." });
+  }
   return Response.json({ comments: data ?? [] });
 }
 
@@ -42,7 +46,7 @@ export async function POST(request: Request) {
     .insert({ post_id: postId, author_id: user.id, body })
     .select(COMMENT_SELECT)
     .single();
-  if (error) return Response.json({ error: error.message }, { status: 400 });
+  if (error) return databaseUnavailable("community comment create", error, "Could not publish that comment right now.");
   return Response.json({ comment: data }, { status: 201 });
 }
 
@@ -56,6 +60,6 @@ export async function DELETE(request: Request) {
   if (!UUID.test(commentId)) return Response.json({ error: "Missing comment." }, { status: 400 });
   // RLS is the final ownership check; author_id also avoids ambiguous success.
   const { error } = await supabase.from("op_feed_comments").delete().eq("id", commentId).eq("author_id", user.id);
-  if (error) return Response.json({ error: error.message }, { status: 400 });
+  if (error) return databaseUnavailable("community comment delete", error, "Could not delete that comment right now.");
   return Response.json({ ok: true });
 }

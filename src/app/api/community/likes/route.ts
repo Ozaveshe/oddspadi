@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
+import { databaseUnavailable } from "@/lib/security/databaseError";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
   const postId = typeof payload.postId === "string" ? payload.postId : "";
   if (!postId) return Response.json({ error: "Missing post." }, { status: 400 });
   const { error } = await auth.supabase.from("op_feed_post_likes").insert({ post_id: postId, user_id: auth.user.id });
-  if (error && error.code !== "23505") return Response.json({ error: error.message }, { status: 400 });
+  if (error && error.code !== "23505") return databaseUnavailable("community like create", error, "Could not like that post right now.");
   return Response.json({ ok: true }, { status: 201 });
 }
 
@@ -28,6 +29,6 @@ export async function DELETE(request: Request) {
   const postId = new URL(request.url).searchParams.get("postId") ?? "";
   if (!postId) return Response.json({ error: "Missing post." }, { status: 400 });
   const { error } = await auth.supabase.from("op_feed_post_likes").delete().eq("post_id", postId).eq("user_id", auth.user.id);
-  if (error) return Response.json({ error: error.message }, { status: 400 });
+  if (error) return databaseUnavailable("community like delete", error, "Could not remove that like right now.");
   return Response.json({ ok: true });
 }

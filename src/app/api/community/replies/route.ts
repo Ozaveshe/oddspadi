@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
+import { databaseUnavailable } from "@/lib/security/databaseError";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,6 @@ export async function POST(request: Request) {
     .select("id")
     .single();
 
-  if (error) return Response.json({ error: error.message }, { status: 400 });
+  if (error) return databaseUnavailable("forum reply create", error, "Could not publish that reply right now.");
   return Response.json({ id: data.id }, { status: 201 });
 }

@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
+import { databaseUnavailable } from "@/lib/security/databaseError";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +19,14 @@ export async function POST(request: Request) {
   if (bio.length > 500) return Response.json({ error: "Bio must be 500 characters or fewer." }, { status: 400 });
   let favouriteTeam: string | null = null;
   if (favouriteTeamRequested && favouriteTeamId) {
-    const { data: team } = await supabase.from("op_teams").select("name").eq("id", favouriteTeamId).maybeSingle();
+    const { data: team, error: teamError } = await supabase.from("op_teams").select("name").eq("id", favouriteTeamId).maybeSingle();
+    if (teamError) return databaseUnavailable("profile favourite team lookup", teamError, "Could not verify that team right now.");
     if (!team) return Response.json({ error: "Choose a team from the search results." }, { status: 400 });
     favouriteTeam = team.name;
   }
   const updates: { display_name: string | null; bio: string | null; favourite_team?: string | null } = { display_name: displayName || null, bio: bio || null };
   if (favouriteTeamRequested) updates.favourite_team = favouriteTeam;
   const { error } = await supabase.from("op_profiles").update(updates).eq("id", user.id);
-  if (error) return Response.json({ error: error.message }, { status: 400 });
+  if (error) return databaseUnavailable("profile update", error, "Could not update your profile right now.");
   return Response.json({ ok: true, favouriteTeam });
 }

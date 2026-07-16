@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
+import { databaseUnavailable } from "@/lib/security/databaseError";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export async function GET() {
   const { data, error } = await auth.supabase.from("op_followed_teams")
     .select("team:op_teams!op_followed_teams_team_id_fkey(id,external_id,name,sport,country,metadata)")
     .eq("user_id", auth.user.id).order("created_at");
-  if (error) return Response.json({ error: error.message }, { status: 400 });
+  if (error) return databaseUnavailable("followed teams read", error, "Followed teams are temporarily unavailable.");
   return Response.json(
     { teams: teamRows(data as Array<{ team: unknown }> | null), authenticated: true },
     { headers: PRIVATE_READ_HEADERS }
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
   const { error } = await auth.supabase.from("op_followed_teams").insert({ user_id: auth.user.id, team_id: teamId });
   // Following an already-followed team is an idempotent success. Avoiding an
   // upsert also means the public API never needs UPDATE privileges on the join.
-  if (error && error.code !== "23505") return Response.json({ error: error.message }, { status: 400 });
+  if (error && error.code !== "23505") return databaseUnavailable("follow team", error, "Could not follow that team right now.");
   return Response.json({ ok: true }, { status: 201 });
 }
 
@@ -62,6 +63,6 @@ export async function DELETE(request: Request) {
   const teamId = new URL(request.url).searchParams.get("teamId") ?? "";
   if (!teamId) return Response.json({ error: "Choose a team to unfollow." }, { status: 400 });
   const { error } = await auth.supabase.from("op_followed_teams").delete().eq("user_id", auth.user.id).eq("team_id", teamId);
-  if (error) return Response.json({ error: error.message }, { status: 400 });
+  if (error) return databaseUnavailable("unfollow team", error, "Could not unfollow that team right now.");
   return Response.json({ ok: true });
 }

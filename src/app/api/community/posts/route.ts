@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { publicReadAbortSignal } from "@/lib/supabase/publicReadClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
+import { databaseUnavailable, reportDatabaseError } from "@/lib/security/databaseError";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,10 @@ export async function GET(request: Request) {
       .limit(21);
     if (cursor) query = query.lt("created_at", cursor);
     const { data, error } = await query.abortSignal(publicReadAbortSignal());
-    if (error) return Response.json({ posts: [], note: COMMUNITY_READ_UNAVAILABLE_NOTE });
+    if (error) {
+      reportDatabaseError("community posts read", error);
+      return Response.json({ posts: [], note: COMMUNITY_READ_UNAVAILABLE_NOTE });
+    }
     const rows = data ?? [];
     return Response.json({ posts: rows.slice(0, 20), nextCursor: rows.length > 20 ? rows[19]?.created_at : null });
   } catch {
@@ -39,7 +43,7 @@ export async function DELETE(request: Request) {
   if (!postId) return Response.json({ error: "Missing post." }, { status: 400 });
   // RLS is the final ownership check; author_id also avoids ambiguous success.
   const { error } = await supabase.from("op_feed_posts").delete().eq("id", postId).eq("author_id", user.id);
-  if (error) return Response.json({ error: error.message }, { status: 400 });
+  if (error) return databaseUnavailable("community post delete", error, "Could not delete that post right now.");
   return Response.json({ ok: true });
 }
 
@@ -67,6 +71,6 @@ export async function POST(request: Request) {
     .select("id")
     .single();
 
-  if (error) return Response.json({ error: error.message }, { status: 400 });
+  if (error) return databaseUnavailable("community post create", error, "Could not publish that post right now.");
   return Response.json({ id: data.id }, { status: 201 });
 }
