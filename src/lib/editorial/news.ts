@@ -33,19 +33,19 @@ export const newsStories: NewsStory[] = [
   },
   {
     slug: "basketball-summer-league-matchday-watchlist",
-    title: "NBA Summer League July 16 desk: seven official games, no pick claim",
-    excerpt: "The NBA lists seven Las Vegas games from 4 to 10 p.m. ET on the last preliminary-slate day; a fresh OddsPadi engine read was unavailable, so this is a schedule-and-format briefing only.",
+    title: "NBA Summer League July 16 desk: seven official games, four stored, no pick",
+    excerpt: "The NBA lists seven Las Vegas games from 4 to 10 p.m. ET; four were present in OddsPadi's recovered store, but their stale, suspended state does not support a pick.",
     category: "Matchday briefing",
     sport: "Basketball",
     publishedAt: "2026-07-12",
     updatedAt: "2026-07-16",
-    sourceAsOf: "2026-07-14T04:27:25Z",
-    revision: 5,
+    sourceAsOf: "2026-07-16T16:32:05.225873Z",
+    revision: 6,
     readMinutes: 4,
     body: [
       "The NBA's official schedule lists seven Las Vegas Summer League games for Thursday, July 16: Dallas–Oklahoma City at 4 p.m. ET, Brooklyn–Houston at 4:30 p.m., LA Lakers–Chicago at 6 p.m., Golden State–New York at 7 p.m., Memphis–Atlanta at 8 p.m., Toronto–Miami at 9 p.m. and Portland–Denver at 10 p.m.",
       "This is the last day of the first-four-game stage. After each team has completed that stage, the top four records advance to the July 18 semifinals; the other 26 teams play a fifth consolation game from July 17–19, and the championship follows on July 19. The published tiebreak order starts with head-to-head for a two-team tie, then point differential and total points.",
-      "Three bounded reads against the verified OddsPadi project timed out during this editorial run. The last successfully verified engine snapshot remains July 14 at 04:27:25 UTC, and that earlier state cannot be carried forward to today's slate. This article therefore makes no model pick and does not claim that the seven fixtures are stored or have a current decision or outcome; check the public predictions page nearer tip-off for a current evidence-backed status."
+      "An exact OddsPadi database check completed on July 16 at 16:32:05 UTC. Four of the seven official fixtures were stored: Dallas–Oklahoma City, Brooklyn–Houston, LA Lakers–Chicago and Golden State–New York. Memphis–Atlanta, Toronto–Miami and Portland–Denver were not present in the checked schedule window. The four stored rows had last synced on July 15 at 02:26:37 UTC and were marked live without scores; their latest summaries were suspended, with no current market decisions, outcomes or public picks. This desk therefore makes no model pick and does not treat the stored status as current game-state evidence."
     ],
     sources: [
       { label: "Official NBA Summer League schedule PDF", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-16" },
