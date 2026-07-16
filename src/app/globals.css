@@ -74,7 +74,7 @@
 
   --text: #10281a;
   --muted: #53685b;
-  --faint: #718477;
+  --faint: #637568;
 
   /* Brand — pitch green (the single decorative accent) */
   --green: #118a4e;
@@ -1156,7 +1156,7 @@ p {
 .badge.live {
   background: var(--live-soft);
   border-color: rgba(255, 61, 110, 0.35);
-  color: #ff9db1;
+  color: var(--red-strong);
 }
 
 .badge.live::before {
@@ -1167,6 +1167,21 @@ p {
   background: var(--live);
   box-shadow: 0 0 0 0 var(--live);
   animation: pulse-ring 1.8s ease-out infinite;
+}
+
+.live-results-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .badge.medium,
@@ -3460,4 +3475,86 @@ a.score-row:active,
   .learning-pipeline li:first-child { border-top: 0; }
   .learning-pipeline li > strong { margin-top: 12px; }
   .learning-pipeline h4 { margin-top: 10px; }
+}
+
+/* Keep the matchday shell inexpensive and thumb-friendly on small screens. */
+@media (max-width: 768px) {
+  html {
+    scroll-padding-bottom: calc(var(--tabbar-h) + 32px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body {
+    padding-bottom: calc(var(--tabbar-h) + 24px + env(safe-area-inset-bottom, 0px));
+  }
+
+  body::before {
+    position: absolute;
+    bottom: auto;
+    height: 640px;
+  }
+
+  body::after {
+    display: none;
+  }
+
+  .nav,
+  .tabbar,
+  .tabbar-sheet {
+    background: #fff;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .tabbar {
+    box-shadow: 0 8px 28px rgba(7, 45, 25, 0.14), inset 0 1px #fff;
+  }
+
+  .sport-switcher {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .sport-switcher::-webkit-scrollbar {
+    display: none;
+  }
+
+  .live-toolbar .seg {
+    width: 100%;
+  }
+
+  .live-toolbar .seg button {
+    flex: 1 1 92px;
+    justify-content: center;
+    padding-inline: 10px;
+  }
+
+  .live-search {
+    max-width: none;
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 540px) {
+  .sport-switcher {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+    gap: 8px;
+    padding-bottom: 4px;
+  }
+
+  .sport-switcher button {
+    min-width: 0;
+    justify-content: center;
+    padding-inline: 10px;
+  }
+
+  .live-results-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .live-results-footer .button {
+    width: 100%;
+  }
 }

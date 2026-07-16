@@ -26,6 +26,7 @@ export function useLiveBoard(initial: LiveScoreBoard | null, pollMs = 45_000, da
     const isCurrent = () => aliveRef.current && requestId === latestRequestRef.current;
 
     setRefreshing(true);
+    let succeeded = false;
     try {
       const response = await fetch(date ? `/api/live?date=${encodeURIComponent(date)}` : "/api/live", {
         cache: "no-store",
@@ -36,6 +37,7 @@ export function useLiveBoard(initial: LiveScoreBoard | null, pollMs = 45_000, da
         if (isCurrent()) {
           setBoard(next);
           setUpdatedAt(Date.now());
+          succeeded = true;
         }
       }
     } catch {
@@ -43,6 +45,7 @@ export function useLiveBoard(initial: LiveScoreBoard | null, pollMs = 45_000, da
     } finally {
       if (isCurrent()) setRefreshing(false);
     }
+    return succeeded;
   }, [date]);
 
   const mountedRef = useRef(false);

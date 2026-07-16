@@ -1,13 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LiveBoardFixture, LiveFixturePhase, LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
+import { LIVE_BOARD_INITIAL_FIXTURES } from "@/lib/sports/liveBoardPresentation";
 import { useLiveBoard } from "./useLiveBoard";
 import { useFollowedTeams } from "@/components/account/FollowedTeamsProvider";
 
 type TabId = "all" | LiveFixturePhase;
 type SportTab = "all" | LiveBoardFixture["sport"];
+
+const FIXTURE_PAGE_SIZE = LIVE_BOARD_INITIAL_FIXTURES;
 
 const SPORT_TABS: Array<{ id: SportTab; label: string; icon: string }> = [
   { id: "all", label: "All sports", icon: "●" },
@@ -49,11 +53,50 @@ function StatusCell({ fixture }: { fixture: LiveBoardFixture }) {
   );
 }
 
+function isOptimizableProviderImage(src: string): boolean {
+  try {
+    const url = new URL(src);
+    return url.hostname === "media.api-sports.io" && !/\.svg(?:$|\?)/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function ProviderArtwork({ src, className, width, height }: { src: string; className: string; width: number; height: number }) {
+  if (isOptimizableProviderImage(src)) {
+    return (
+      <Image
+        className={className}
+        src={src}
+        alt=""
+        width={width}
+        height={height}
+        sizes={`${width}px`}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+      />
+    );
+  }
+
+  return (
+    <img
+      className={className}
+      src={src}
+      alt=""
+      width={width}
+      height={height}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+    />
+  );
+}
+
 function TeamLine({ side, phase }: { side: LiveBoardFixture["home"]; phase: LiveFixturePhase }) {
   return (
     <span className={`team-line${side.winner && phase === "finished" ? " winner" : ""}`}>
       {side.logo ? (
-        <img className="crest" src={side.logo} alt="" loading="lazy" referrerPolicy="no-referrer" />
+        <ProviderArtwork className="crest" src={side.logo} width={20} height={20} />
       ) : (
         <span className="crest" aria-hidden="true" />
       )}
@@ -74,9 +117,8 @@ function ScoreCell({ fixture }: { fixture: LiveBoardFixture }) {
   );
 }
 
-function FixtureRow({ fixture }: { fixture: LiveBoardFixture }) {
-  const followed = useFollowedTeams();
-  const highlighted = followed.isFollowed(fixture.home.name) || followed.isFollowed(fixture.away.name);
+function FixtureRow({ fixture, isFollowed }: { fixture: LiveBoardFixture; isFollowed: (name: string) => boolean }) {
+  const highlighted = isFollowed(fixture.home.name) || isFollowed(fixture.away.name);
   const body = (
     <>
       <StatusCell fixture={fixture} />
@@ -172,11 +214,15 @@ const DATE_WINDOW_BACK = 6;
 const DATE_WINDOW_FORWARD = 8;
 
 export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null }) {
+  const followed = useFollowedTeams();
   const [date, setDate] = useState<string | undefined>(undefined);
   const { board, refreshing, updatedAt, refresh } = useLiveBoard(initial, 45_000, date);
   const [tab, setTab] = useState<TabId>("all");
   const [sport, setSport] = useState<SportTab>("all");
   const [query, setQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(LIVE_BOARD_INITIAL_FIXTURES);
+  const [completeBoardFailed, setCompleteBoardFailed] = useState(false);
+  const loadingCompleteBoardRef = useRef(false);
 
   const activeDate = date ?? board?.date ?? todayIso();
   const isToday = activeDate === todayIso();
@@ -199,12 +245,45 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
     });
   }, [board, sport, tab, query]);
 
-  const groups = useMemo(() => groupByLeague(filtered), [filtered]);
+  const totalFixtureCount = board
+    ? Math.max(
+        board.fixtures.length,
+        board.counts.live + board.counts.upcoming + board.counts.finished + board.counts.other
+      )
+    : 0;
+  const boardIsPartial = Boolean(board && board.fixtures.length < totalFixtureCount);
+  const requiresCompleteBoard = boardIsPartial && (sport !== "all" || tab !== "all" || query.trim().length > 0);
+
+  const ensureCompleteBoard = useCallback(async () => {
+    if (!boardIsPartial || loadingCompleteBoardRef.current) return;
+    loadingCompleteBoardRef.current = true;
+    setCompleteBoardFailed(false);
+    try {
+      const succeeded = await refresh();
+      if (!succeeded) setCompleteBoardFailed(true);
+    } finally {
+      loadingCompleteBoardRef.current = false;
+    }
+  }, [boardIsPartial, refresh]);
+
+  useEffect(() => {
+    setVisibleCount(LIVE_BOARD_INITIAL_FIXTURES);
+    setCompleteBoardFailed(false);
+  }, [activeDate, query, sport, tab]);
+
+  useEffect(() => {
+    if (requiresCompleteBoard) void ensureCompleteBoard();
+  }, [ensureCompleteBoard, query, requiresCompleteBoard, sport, tab]);
+
+  const visibleFixtures = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+  const groups = useMemo(() => groupByLeague(visibleFixtures), [visibleFixtures]);
+  const visibleResultCount = boardIsPartial && !requiresCompleteBoard ? totalFixtureCount : filtered.length;
+  const remainingFixtures = Math.max(0, visibleResultCount - visibleFixtures.length);
 
   if (!board) return <BoardSkeleton />;
 
   const counts: Record<TabId, number> = {
-    all: board.fixtures.length,
+    all: totalFixtureCount,
     live: board.counts.live,
     upcoming: board.counts.upcoming,
     finished: board.counts.finished,
@@ -219,7 +298,7 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
     <div>
       <div className="sport-switcher" role="group" aria-label="Choose sport">
         {SPORT_TABS.map((item) => {
-          const count = item.id === "all" ? board.fixtures.length : board.sportCounts[item.id];
+          const count = item.id === "all" ? totalFixtureCount : board.sportCounts[item.id];
           return (
             <button
               key={item.id}
@@ -326,7 +405,22 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
         {board.note ? <span>{board.note}</span> : null}
       </div>
 
-      {board.source === "none" ? (
+      {requiresCompleteBoard && !completeBoardFailed ? (
+        <div className="empty-state" aria-live="polite">
+          <div className="empty-emoji">↻</div>
+          <h2>Loading full matchday coverage</h2>
+          <p className="muted">Fetching the complete cached board for this filter.</p>
+        </div>
+      ) : requiresCompleteBoard ? (
+        <div className="empty-state" aria-live="polite">
+          <div className="empty-emoji">📡</div>
+          <h2>Full filtered coverage is temporarily unavailable</h2>
+          <p className="muted">The first match window is still intact. Retry when the live feed is reachable.</p>
+          <button className="button small-btn" type="button" onClick={() => void ensureCompleteBoard()}>
+            Retry full board
+          </button>
+        </div>
+      ) : board.source === "none" ? (
         <div className="empty-state">
           <div className="empty-emoji">📡</div>
           <h2>Live scores are warming up</h2>
@@ -338,9 +432,9 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
             <section className="league-group" key={group.key}>
               <header className="league-head">
                 {group.league.flag ? (
-                  <img className="flag" src={group.league.flag} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                  <ProviderArtwork className="flag" src={group.league.flag} width={20} height={14} />
                 ) : group.league.logo ? (
-                  <img className="flag" src={group.league.logo} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                  <ProviderArtwork className="flag" src={group.league.logo} width={20} height={14} />
                 ) : null}
                 <span>{group.league.name}</span>
                 <span className="league-country">· {group.league.country}</span>
@@ -348,10 +442,26 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
                 {group.liveCount ? <span className="league-live-count">{group.liveCount} live</span> : null}
               </header>
               {group.fixtures.map((fixture) => (
-                <FixtureRow fixture={fixture} key={fixture.id} />
+                <FixtureRow fixture={fixture} isFollowed={followed.isFollowed} key={fixture.id} />
               ))}
             </section>
           ))}
+          {remainingFixtures > 0 ? (
+            <div className="live-results-footer" role="status">
+              <span>Showing {visibleFixtures.length} of {visibleResultCount} matches</span>
+              <button
+                className="button small-btn"
+                type="button"
+                onClick={() => {
+                  setVisibleCount((count) => count + FIXTURE_PAGE_SIZE);
+                  void ensureCompleteBoard();
+                }}
+                disabled={refreshing}
+              >
+                {refreshing && boardIsPartial ? "Loading matches…" : `Show next ${Math.min(FIXTURE_PAGE_SIZE, remainingFixtures)}`}
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="empty-state">

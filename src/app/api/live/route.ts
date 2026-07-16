@@ -1,10 +1,10 @@
-import { fetchLiveScoreBoard } from "@/lib/sports/liveScoreBoard";
+import { getCachedLiveScoreBoard } from "@/lib/sports/cachedLiveScoreBoard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const date = new URL(request.url).searchParams.get("date") ?? undefined;
-  const board = await fetchLiveScoreBoard(date);
+  const board = await getCachedLiveScoreBoard(date);
   return Response.json(board, {
     headers: {
       // Let the CDN absorb polling traffic: one origin hit per 30s window.

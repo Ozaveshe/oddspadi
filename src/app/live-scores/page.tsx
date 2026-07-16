@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { LiveScoreBoardView } from "@/components/live/LiveScoreBoard";
-import { fetchLiveScoreBoard } from "@/lib/sports/liveScoreBoard";
+import { getCachedLiveScoreBoard } from "@/lib/sports/cachedLiveScoreBoard";
+import { initialLiveBoardWindow } from "@/lib/sports/liveBoardPresentation";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export const metadata: Metadata = {
   title: "Live sports scores today — football, basketball and tennis",
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 export default async function LiveScoresPage() {
-  const board = await fetchLiveScoreBoard();
+  const board = await getCachedLiveScoreBoard();
 
   return (
     <main id="main" className="container">
@@ -30,7 +31,7 @@ export default async function LiveScoresPage() {
         </p>
       </div>
 
-      <LiveScoreBoardView initial={board} />
+      <LiveScoreBoardView initial={initialLiveBoardWindow(board)} />
 
       <section className="section">
         <div className="notice">

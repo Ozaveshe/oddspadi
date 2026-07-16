@@ -7,8 +7,8 @@ const mocks = vi.hoisted(() => ({
   getFixtures: vi.fn()
 }));
 
-vi.mock("@/lib/sports/liveScoreBoard", () => ({
-  fetchLiveScoreBoard: mocks.fetchLiveScoreBoard
+vi.mock("@/lib/sports/cachedLiveScoreBoard", () => ({
+  getCachedLiveScoreBoard: mocks.fetchLiveScoreBoard
 }));
 
 vi.mock("@/lib/sports/service", () => ({

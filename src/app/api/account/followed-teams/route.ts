@@ -2,6 +2,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 
 export const dynamic = "force-dynamic";
 
+const PRIVATE_READ_HEADERS = { "Cache-Control": "private, max-age=0, must-revalidate" };
+
 function teamRows(rows: Array<{ team: unknown }> | null) {
   return (rows ?? []).flatMap(({ team }) => {
     const value = Array.isArray(team) ? team[0] : team;
@@ -25,14 +27,19 @@ export async function GET() {
   // visitors are a normal state, so keep that read out of the browser's error
   // console while mutations continue to require authentication.
   if (auth.error) {
-    if (auth.error.status === 401) return Response.json({ teams: [], authenticated: false });
+    if (auth.error.status === 401) {
+      return Response.json({ teams: [], authenticated: false }, { headers: PRIVATE_READ_HEADERS });
+    }
     return auth.error;
   }
   const { data, error } = await auth.supabase.from("op_followed_teams")
     .select("team:op_teams!op_followed_teams_team_id_fkey(id,external_id,name,sport,country,metadata)")
     .eq("user_id", auth.user.id).order("created_at");
   if (error) return Response.json({ error: error.message }, { status: 400 });
-  return Response.json({ teams: teamRows(data as Array<{ team: unknown }> | null), authenticated: true });
+  return Response.json(
+    { teams: teamRows(data as Array<{ team: unknown }> | null), authenticated: true },
+    { headers: PRIVATE_READ_HEADERS }
+  );
 }
 
 export async function POST(request: Request) {

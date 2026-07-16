@@ -105,6 +105,7 @@ export type SupabaseTrainingCorpusCensus = {
 };
 
 const TRAINING_SPORTS: TrainingSport[] = ["football", "basketball", "tennis"];
+const TRAINING_CENSUS_READ_TIMEOUT_MS = 3_000;
 const MINIMUM_RECOMMENDED_FINISHED_FIXTURES = 1000;
 const ZERO_COUNTS: SupabaseTrainingCorpusSportCounts[] = TRAINING_SPORTS.map((sport) => ({
   sport,
@@ -348,7 +349,12 @@ type CountFilter = {
   operator?: CountOperator;
 };
 
-async function countRows(table: string, filters: CountFilter[], env: EnvLike): Promise<{ count: number; error: string | null }> {
+async function countRows(
+  table: string,
+  filters: CountFilter[],
+  env: EnvLike,
+  abortSignal: AbortSignal
+): Promise<{ count: number; error: string | null }> {
   const client = getSupabaseServerClient(env);
   if (!client) return { count: 0, error: "Supabase server client is not available." };
   let query = client.from(table).select("id", { count: "exact", head: true });
@@ -364,13 +370,14 @@ async function countRows(table: string, filters: CountFilter[], env: EnvLike): P
       query = query.eq(filter.column, typeof filter.value === "string" ? filter.value : "");
     }
   }
-  const { count, error } = await query;
+  const { count, error } = await query.abortSignal(abortSignal);
   return { count: count ?? 0, error: error?.message ?? null };
 }
 
 async function readFeatureQualityCounts(
   sport: TrainingSport,
-  env: EnvLike
+  env: EnvLike,
+  abortSignal: AbortSignal
 ): Promise<{ complete: number; completeLive: number; proxy: number; errors: string[] }> {
   const required = strictTrainingFeatureJsonColumns(sport).map((column) => ({ column, operator: "not-null" as const }));
   const [complete, completeLive, proxy] = await Promise.all([
@@ -378,17 +385,17 @@ async function readFeatureQualityCounts(
       { column: "sport", value: sport },
       { column: "source", value: "demo_seed", operator: "neq" },
       ...required
-    ], env),
+    ], env, abortSignal),
     countRows("op_training_feature_snapshots", [
       { column: "sport", value: sport },
       { column: "split", value: "live" },
       { column: "source", value: "demo_seed", operator: "neq" },
       ...required
-    ], env),
+    ], env, abortSignal),
     countRows("op_training_feature_snapshots", [
       { column: "sport", value: sport },
       { column: "source", value: "demo_seed" }
-    ], env)
+    ], env, abortSignal)
   ]);
   return {
     complete: complete.count,
@@ -398,26 +405,30 @@ async function readFeatureQualityCounts(
   };
 }
 
-async function readSportCounts(sport: TrainingSport, env: EnvLike): Promise<{ counts: SupabaseTrainingCorpusSportCounts; errors: string[] }> {
+async function readSportCounts(
+  sport: TrainingSport,
+  env: EnvLike,
+  abortSignal: AbortSignal
+): Promise<{ counts: SupabaseTrainingCorpusSportCounts; errors: string[] }> {
   const reads = await Promise.all([
-    countRows("op_fixtures", [{ column: "sport", value: sport }], env),
-    countRows("op_fixtures", [{ column: "sport", value: sport }, { column: "status", value: "finished" }], env),
+    countRows("op_fixtures", [{ column: "sport", value: sport }], env, abortSignal),
+    countRows("op_fixtures", [{ column: "sport", value: sport }, { column: "status", value: "finished" }], env, abortSignal),
     sport === "football"
       ? countRows("op_fixtures", [
           { column: "sport", value: "football" },
           { column: "league_external_id", value: [EPL_2026_SEASON.leagueId, `api-football:${EPL_2026_SEASON.leagueId}`], operator: "in" },
           { column: "season", value: EPL_2026_SEASON.providerSeason }
-        ], env)
+        ], env, abortSignal)
       : Promise.resolve({ count: 0, error: null }),
-    countRows("op_odds_snapshots", [{ column: "sport", value: sport }], env),
-    countRows("op_odds_snapshots", [{ column: "sport", value: sport }, { column: "market", value: "match_winner" }], env),
-    countRows("op_raw_provider_payloads", [{ column: "sport", value: sport }], env),
-    countRows("op_player_match_performances", [{ column: "sport", value: sport }, { column: "source_kind", value: "real" }], env),
-    countRows("op_training_feature_snapshots", [{ column: "sport", value: sport }], env),
-    countRows("op_training_feature_snapshots", [{ column: "sport", value: sport }, { column: "split", value: "live" }], env),
-    countRows("op_training_feature_snapshots", [{ column: "sport", value: sport }, { column: "label", operator: "not-null" }], env),
-    readFeatureQualityCounts(sport, env),
-    countRows("op_backtest_runs", [{ column: "sport", value: sport }, { column: "status", value: "completed" }], env)
+    countRows("op_odds_snapshots", [{ column: "sport", value: sport }], env, abortSignal),
+    countRows("op_odds_snapshots", [{ column: "sport", value: sport }, { column: "market", value: "match_winner" }], env, abortSignal),
+    countRows("op_raw_provider_payloads", [{ column: "sport", value: sport }], env, abortSignal),
+    countRows("op_player_match_performances", [{ column: "sport", value: sport }, { column: "source_kind", value: "real" }], env, abortSignal),
+    countRows("op_training_feature_snapshots", [{ column: "sport", value: sport }], env, abortSignal),
+    countRows("op_training_feature_snapshots", [{ column: "sport", value: sport }, { column: "split", value: "live" }], env, abortSignal),
+    countRows("op_training_feature_snapshots", [{ column: "sport", value: sport }, { column: "label", operator: "not-null" }], env, abortSignal),
+    readFeatureQualityCounts(sport, env, abortSignal),
+    countRows("op_backtest_runs", [{ column: "sport", value: sport }, { column: "status", value: "completed" }], env, abortSignal)
   ]);
   const quality = reads[10] as Awaited<ReturnType<typeof readFeatureQualityCounts>>;
   const rowReads = reads.filter((_, index) => index !== 10) as Array<{ count: number; error: string | null }>;
@@ -452,10 +463,13 @@ function countValue(value: unknown): number {
   return Number.isFinite(count) && count >= 0 ? Math.trunc(count) : 0;
 }
 
-async function readPlayerPerformanceCounts(env: EnvLike): Promise<{ counts: Map<TrainingSport, number>; errors: string[] }> {
+async function readPlayerPerformanceCounts(
+  env: EnvLike,
+  abortSignal: AbortSignal
+): Promise<{ counts: Map<TrainingSport, number>; errors: string[] }> {
   const client = getSupabaseServerClient(env);
   if (client) {
-    const { data, error } = await client.rpc("op_player_performance_corpus_counts");
+    const { data, error } = await client.rpc("op_player_performance_corpus_counts").abortSignal(abortSignal);
     if (!error && Array.isArray(data)) {
       const rows = data as Array<Record<string, unknown>>;
       const counts = new Map<TrainingSport, number>();
@@ -474,7 +488,7 @@ async function readPlayerPerformanceCounts(env: EnvLike): Promise<{ counts: Map<
     read: await countRows("op_player_match_performances", [
       { column: "sport", value: sport },
       { column: "source_kind", value: "real" }
-    ], env)
+    ], env, abortSignal)
   })));
   return {
     counts: new Map(reads.map(({ sport, read }) => [sport, read.count])),
@@ -489,10 +503,10 @@ function attachPlayerPerformanceCounts(
   return counts.map((row) => ({ ...row, playerPerformanceRows: playerCounts.get(row.sport) ?? 0 }));
 }
 
-async function readSnapshotRpcCounts(env: EnvLike): Promise<SupabaseTrainingCorpusSportCounts[] | null> {
+async function readSnapshotRpcCounts(env: EnvLike, abortSignal: AbortSignal): Promise<SupabaseTrainingCorpusSportCounts[] | null> {
   const client = getSupabaseServerClient(env);
   if (!client) return null;
-  const { data, error } = await client.rpc("op_training_snapshot_counts");
+  const { data, error } = await client.rpc("op_training_snapshot_counts").abortSignal(abortSignal);
   if (error || !Array.isArray(data)) return null;
 
   const rows = data as Array<Record<string, unknown>>;
@@ -525,10 +539,10 @@ async function readSnapshotRpcCounts(env: EnvLike): Promise<SupabaseTrainingCorp
   });
 }
 
-async function readRpcCounts(env: EnvLike): Promise<SupabaseTrainingCorpusSportCounts[] | null> {
+async function readRpcCounts(env: EnvLike, abortSignal: AbortSignal): Promise<SupabaseTrainingCorpusSportCounts[] | null> {
   const client = getSupabaseServerClient(env);
   if (!client) return null;
-  const { data, error } = await client.rpc("op_training_corpus_census");
+  const { data, error } = await client.rpc("op_training_corpus_census").abortSignal(abortSignal);
   if (error || !Array.isArray(data)) return null;
 
   const rows = data as Array<Record<string, unknown>>;
@@ -565,17 +579,18 @@ function censusCacheTtlMs(env: EnvLike): number {
 }
 
 async function loadCorpusCounts(env: EnvLike): Promise<CorpusCountsRead> {
-  const snapshotRpcCounts = await readSnapshotRpcCounts(env);
+  const abortSignal = AbortSignal.timeout(TRAINING_CENSUS_READ_TIMEOUT_MS);
+  const snapshotRpcCounts = await readSnapshotRpcCounts(env, abortSignal);
   if (snapshotRpcCounts) {
-    const playerCounts = await readPlayerPerformanceCounts(env);
+    const playerCounts = await readPlayerPerformanceCounts(env, abortSignal);
     return { counts: attachPlayerPerformanceCounts(snapshotRpcCounts, playerCounts.counts), errors: playerCounts.errors };
   }
 
-  const rpcCounts = await readRpcCounts(env);
+  const rpcCounts = await readRpcCounts(env, abortSignal);
   if (rpcCounts) {
     const [quality, playerCounts] = await Promise.all([
-      Promise.all(TRAINING_SPORTS.map((sport) => readFeatureQualityCounts(sport, env))),
-      readPlayerPerformanceCounts(env)
+      Promise.all(TRAINING_SPORTS.map((sport) => readFeatureQualityCounts(sport, env, abortSignal))),
+      readPlayerPerformanceCounts(env, abortSignal)
     ]);
     return {
       counts: attachPlayerPerformanceCounts(rpcCounts.map((row, index) => ({
@@ -589,7 +604,7 @@ async function loadCorpusCounts(env: EnvLike): Promise<CorpusCountsRead> {
     };
   }
 
-  const reads = await Promise.all(TRAINING_SPORTS.map((sport) => readSportCounts(sport, env)));
+  const reads = await Promise.all(TRAINING_SPORTS.map((sport) => readSportCounts(sport, env, abortSignal)));
   return {
     counts: reads.map((read) => read.counts),
     errors: reads.flatMap((read) => read.errors)

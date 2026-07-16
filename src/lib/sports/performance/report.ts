@@ -19,6 +19,8 @@ import {
   settledPublicPicks
 } from "./analytics";
 
+const HISTORICAL_EVIDENCE_READ_TIMEOUT_MS = 3_500;
+
 export type EnginePerformanceWarning = {
   id: "ledger-unavailable" | "small-sample" | "settlement-backlog" | "provider-gap" | "negative-roi" | "calibration-gap" | "data-quality-coverage";
   severity: "info" | "watch" | "action";
@@ -186,7 +188,7 @@ export function auditBacktestOddsCoverage(configValue: unknown) {
 
 export async function getHistoricalEngineEvidence() {
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
-  const census = await readSupabaseTrainingCorpusCensus({ origin }).catch((error: unknown) => ({
+  const censusPromise = readSupabaseTrainingCorpusCensus({ origin }).catch((error: unknown) => ({
     status: "failed" as const,
     summary: error instanceof Error ? error.message : "Training corpus census failed.",
     totals: { fixtures: 0, finishedFixtures: 0, oddsSnapshots: 0, featureSnapshots: 0, completeFeatureSnapshots: 0, completedBacktests: 0 },
@@ -194,6 +196,7 @@ export async function getHistoricalEngineEvidence() {
   }));
   const client = getSupabaseServerClient();
   if (!client) {
+    const census = await censusPromise;
     return {
       source: "unavailable" as const,
       census,
@@ -210,23 +213,27 @@ export async function getHistoricalEngineEvidence() {
     };
   }
 
-  const [backtests, models, calibrationRuns, calibrationCandidates, calibrationPromotions, availability, lineups, playerPerformances] = await Promise.all([
+  const abortSignal = AbortSignal.timeout(HISTORICAL_EVIDENCE_READ_TIMEOUT_MS);
+  const [census, backtests, models, calibrationRuns, calibrationCandidates, calibrationPromotions, availability, lineups, playerPerformances] = await Promise.all([
+    censusPromise,
     client
       .from("op_backtest_runs")
       .select("sport,model_key,engine_version,status,data_source,sample_size,test_size,pick_count,brier_score,log_loss,yield,closing_line_value,calibration_error,config,created_at")
       .eq("status", "completed")
       .order("created_at", { ascending: false })
-      .limit(30),
+      .limit(30)
+      .abortSignal(abortSignal),
     client
       .from("op_model_versions")
       .select("sport,model_key,version_label,is_active,metrics,updated_at")
-      .order("sport", { ascending: true }),
-    client.from("op_calibration_runs").select("id", { count: "exact", head: true }),
-    client.from("op_calibration_candidates").select("id,metrics").order("created_at", { ascending: false }).limit(100),
-    client.from("op_calibration_promotions").select("id,status,expires_at").order("approved_at", { ascending: false }).limit(100),
-    client.from("op_player_availability_snapshots").select("id", { count: "exact", head: true }),
-    client.from("op_lineup_snapshots").select("id", { count: "exact", head: true }),
-    client.from("op_player_match_performances").select("id", { count: "exact", head: true })
+      .order("sport", { ascending: true })
+      .abortSignal(abortSignal),
+    client.from("op_calibration_runs").select("id", { count: "exact", head: true }).abortSignal(abortSignal),
+    client.from("op_calibration_candidates").select("id,metrics").order("created_at", { ascending: false }).limit(100).abortSignal(abortSignal),
+    client.from("op_calibration_promotions").select("id,status,expires_at").order("approved_at", { ascending: false }).limit(100).abortSignal(abortSignal),
+    client.from("op_player_availability_snapshots").select("id", { count: "exact", head: true }).abortSignal(abortSignal),
+    client.from("op_lineup_snapshots").select("id", { count: "exact", head: true }).abortSignal(abortSignal),
+    client.from("op_player_match_performances").select("id", { count: "exact", head: true }).abortSignal(abortSignal)
   ]);
   const errors = [...new Set(
     [backtests.error, models.error, calibrationRuns.error, calibrationCandidates.error, calibrationPromotions.error, availability.error, lineups.error, playerPerformances.error]
