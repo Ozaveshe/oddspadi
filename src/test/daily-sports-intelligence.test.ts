@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
 import { ProviderBackedSportsDataProvider } from "@/lib/sports/providers/providerBackedProvider";
 import type { Match, Prediction, ValueEdge } from "@/lib/sports/types";
@@ -12,7 +12,7 @@ import {
   normalizeOddsSnapshots,
   utcDateWindow
 } from "@/lib/sports/intelligence/canonical";
-import { classifyProviderRunStatus, productionPredictionFilters, runDailyEngine } from "@/lib/sports/intelligence/pipeline";
+import { classifyProviderRunStatus, productionPredictionFilters, refreshOdds, runDailyEngine } from "@/lib/sports/intelligence/pipeline";
 import type { CanonicalDecision, CanonicalFixture, SlatePublicStatus } from "@/lib/sports/intelligence/types";
 
 async function providerMatch({
@@ -218,6 +218,25 @@ describe("production daily sports intelligence", () => {
     expect(result.slate.fixtures[0]?.fixture.providerFixtureId).toBe("9001");
     expect(result.rejectedMockFixtures).toBe(0);
     expect(result.skippedOverlap).toBe(false);
+  });
+
+  it("keeps the odds-refresh stage bounded by skipping model generation", async () => {
+    const match = await providerMatch();
+    const getPredictions = vi.fn();
+    const result = await refreshOdds({
+      now: new Date("2026-07-13T12:05:00.000Z"),
+      sports: ["football"],
+      persist: false,
+      env: { NODE_ENV: "test", API_FOOTBALL_KEY: "configured" },
+      dependencies: {
+        getFixtures: async () => [match],
+        getPredictions
+      }
+    });
+
+    expect(result.slate.summary.fixturesFound).toBe(1);
+    expect(result.slate.summary.predictionsGenerated).toBe(0);
+    expect(getPredictions).not.toHaveBeenCalled();
   });
 
   it("publishes a fresh positive-edge, positive-EV selection as a value pick", async () => {
