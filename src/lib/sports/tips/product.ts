@@ -56,6 +56,22 @@ export type YesterdayResultsProduct = {
   summary: HistorySummary;
 };
 
+export type YesterdayDecisionAuditProduct = {
+  date: string;
+  generatedAt: string;
+  source: "stored" | "unavailable";
+  reason?: string;
+  rows: SlateFixture[];
+  summary: {
+    fixtures: number;
+    analysed: number;
+    valuePicks: number;
+    leans: number;
+    watchlist: number;
+    abstentions: number;
+  };
+};
+
 export function isProviderBackedSlateFixture(row: SlateFixture): boolean {
   const provider = row.fixture.provider.trim().toLowerCase();
   return Boolean(row.fixture.providerFixtureId && provider && !provider.includes("mock") && !provider.includes("demo"));
@@ -246,5 +262,27 @@ export async function getYesterdayResultsProduct({ now = new Date() }: { now?: D
     reason: history.reason,
     items,
     summary: getHistorySummary(items)
+  };
+}
+
+export async function getYesterdayDecisionAuditProduct({ now = new Date() }: { now?: Date } = {}): Promise<YesterdayDecisionAuditProduct> {
+  const slate = await getDailySlate({ now, ensure: false, dayOffset: -1, maxFixtureAgeMs: 72 * 60 * 60 * 1000, includeSuspended: true });
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - DAY_MS).toISOString().slice(0, 10);
+  const rows = slate.fixtures.filter(isProviderBackedSlateFixture).map((row) => normalizeExpiredTip(row, now));
+  const unavailable = slate.provider.status === "failed" || slate.provider.status === "unavailable";
+  return {
+    date,
+    generatedAt: slate.generatedAt,
+    source: unavailable ? "unavailable" : "stored",
+    reason: unavailable ? slate.provider.errors[0] ?? "Yesterday's stored decision audit could not be read." : undefined,
+    rows,
+    summary: {
+      fixtures: rows.length,
+      analysed: rows.filter((row) => row.decisionSummary.allMarketAnalyses.length > 0).length,
+      valuePicks: rows.filter((row) => row.publicStatus === "value_pick").length,
+      leans: rows.filter((row) => row.publicStatus === "lean").length,
+      watchlist: rows.filter((row) => row.publicStatus === "watchlist" || row.publicStatus === "stale").length,
+      abstentions: rows.filter((row) => noPickStatus(row.publicStatus)).length
+    }
   };
 }

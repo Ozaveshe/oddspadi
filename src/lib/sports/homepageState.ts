@@ -6,6 +6,7 @@ export type HomepageProviderState = ProviderRunStatus;
 
 export type HomepageMatchdayState = {
   fixtureCount: number;
+  liveBoardFixtureCount: number;
   liveCount: number;
   upcomingCount: number;
   finishedCount: number;
@@ -39,24 +40,21 @@ export function deriveHomepageMatchdayState(
   const engineFixtureCount = daily?.summary.fixturesFound ?? 0;
   const usesLiveFallback = boardFixtures.length > 0 && engineFixtureCount === 0;
   const rawProviderState: ProviderRunStatus = daily?.slate.provider.status ?? "unavailable";
-  const providerState: ProviderRunStatus = usesLiveFallback && rawProviderState !== "running"
-    ? "partial"
-    : rawProviderState;
   const displayedFixtures = usesLiveFallback ? boardFixtures : [];
 
   return {
-    fixtureCount: usesLiveFallback ? boardFixtures.length : engineFixtureCount,
+    fixtureCount: engineFixtureCount,
+    liveBoardFixtureCount: boardFixtures.length,
     liveCount: displayedFixtures.filter((fixture) => fixture.phase === "live").length,
     upcomingCount: displayedFixtures.filter((fixture) => fixture.phase === "upcoming").length,
     finishedCount: displayedFixtures.filter((fixture) => fixture.phase === "finished").length,
     analysedCount: daily?.summary.fixturesAnalysed ?? 0,
     valuePickCount: daily?.summary.valuePicks ?? 0,
     watchlistCount: daily?.summary.watchlist ?? 0,
-    providerState,
-    providerLabel: usesLiveFallback ? "live-only" : rawProviderState,
-    sourceLabel: usesLiveFallback ? "Live score feed" : "Prediction engine",
-    lastUpdatedAt: daily?.slate.provider.lastRun?.finishedAt
-      ?? (boardFixtures.length ? liveBoard?.generatedAt ?? null : null),
+    providerState: rawProviderState,
+    providerLabel: rawProviderState,
+    sourceLabel: "Prediction engine",
+    lastUpdatedAt: daily?.slate.provider.lastRun?.finishedAt ?? null,
     usesLiveFallback,
     featuredFixture: usesLiveFallback ? boardFixtures[0] ?? null : null,
     previewFixtures: usesLiveFallback ? boardFixtures.slice(0, 3) : []

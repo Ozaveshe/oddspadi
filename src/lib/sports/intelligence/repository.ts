@@ -2,12 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DecisionSummary, Match } from "@/lib/sports/types";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { refreshCanonicalDecision } from "@/lib/sports/prediction/canonicalDecision";
-import { buildSportsSlate } from "./canonical";
+import { buildSportsSlate, isStoredFixtureFresh, reconcileStoredFixtureStatus } from "./canonical";
 import type {
   CanonicalDecision,
   CanonicalFixture,
   CanonicalOddsSnapshot,
   FixtureOddsHistory,
+  ProviderRunClaim,
   ProviderRunLog,
   ProviderRunStatus,
   SportsSlate
@@ -102,7 +103,7 @@ export async function startProviderRun({
   startedAt: string;
   sport?: string;
   client?: SupabaseClient | null;
-}): Promise<ProviderRunLog> {
+}): Promise<ProviderRunClaim> {
   const base: ProviderRunLog = {
     runId: null,
     providerName,
@@ -116,16 +117,16 @@ export async function startProviderRun({
     valuePicksPublished: 0,
     errors: client ? [] : ["OddsPadi Supabase server storage is not configured in this runtime."]
   };
-  if (!client) return base;
-  const staleCutoff = new Date(new Date(startedAt).getTime() - 2 * 60 * 60_000).toISOString();
+  if (!client) return { run: base, acquired: false };
+  const staleCutoff = new Date(new Date(startedAt).getTime() - 15 * 60_000).toISOString();
   const { error: staleRunCleanupError } = await client
     .from("op_provider_ingestion_runs")
     .update({
       status: "failed",
       completed_at: startedAt,
       finished_at: startedAt,
-      error_message: "Provider run exceeded the two-hour completion window and was closed as stale.",
-      errors: ["Provider run exceeded the two-hour completion window and was closed as stale."],
+      error_message: "Provider run exceeded the 15-minute completion window and was closed as stale.",
+      errors: ["Provider run exceeded the 15-minute completion window and was closed as stale."],
       metadata: { pipelineStatus: "failed", staleRunClosedAt: startedAt }
     })
     .eq("status", "running")
@@ -148,7 +149,26 @@ export async function startProviderRun({
     })
     .select("id")
     .single();
-  return error || !text(data?.id) ? { ...base, status: "failed", errors: [error?.message ?? "Provider run log insert did not return an ID."] } : { ...base, runId: String(data.id) };
+  if (!error && text(data?.id)) return { run: { ...base, runId: String(data.id) }, acquired: true };
+  if (error?.code === "23505") {
+    const { data: active } = await client
+      .from("op_provider_ingestion_runs")
+      .select("id,provider,ingestion_type,job_type,status,started_at,completed_at,finished_at,rows_received,fixtures_found,odds_found,predictions_generated,value_picks_published,error_message,errors,metadata,created_at")
+      .eq("job_type", jobType)
+      .eq("status", "running")
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const existing = active ? runLogFromRow(active as Record<string, unknown>) : base;
+    return {
+      run: { ...existing, errors: [...existing.errors, `Skipped overlapping ${jobType} run; an active receipt already owns this job.`] },
+      acquired: false
+    };
+  }
+  return {
+    run: { ...base, status: "failed", errors: [error?.message ?? "Provider run log insert did not return an ID."] },
+    acquired: false
+  };
 }
 
 export async function finishProviderRun(
@@ -579,13 +599,19 @@ export async function readStoredSlate({
   from,
   toExclusive,
   jobTypes,
-  client = getSupabaseServerClient()
+  client = getSupabaseServerClient(),
+  now = new Date(),
+  maxFixtureAgeMs,
+  includeSuspended = false
 }: {
   scope: SportsSlate["scope"];
   from: string;
   toExclusive: string;
   jobTypes: string[];
   client?: SupabaseClient | null;
+  now?: Date;
+  maxFixtureAgeMs: number;
+  includeSuspended?: boolean;
 }): Promise<SportsSlate | null> {
   if (!client) return null;
   const { data, error } = await client
@@ -596,10 +622,13 @@ export async function readStoredSlate({
     .order("kickoff_at", { ascending: true })
     .limit(1000);
   if (error) throw new Error(`Stored fixture read failed: ${error.message}`);
-  const fixtureRows = ((data ?? []) as FixtureRow[]).filter((row) => {
+  const providerRows = ((data ?? []) as FixtureRow[]).filter((row) => {
     const metadata = record(row.metadata);
     return !String(row.provider).toLowerCase().includes("mock") && metadata.sourceKind !== "demo" && metadata.sourceKind !== "mock";
   });
+  const eligibleRows = includeSuspended ? providerRows : providerRows.filter((row) => row.status !== "suspended");
+  const staleRows = eligibleRows.filter((row) => !isStoredFixtureFresh(text(row.last_synced_at), now, maxFixtureAgeMs));
+  const fixtureRows = eligibleRows.filter((row) => isStoredFixtureFresh(text(row.last_synced_at), now, maxFixtureAgeMs));
   const databaseFixtureIds = fixtureRows.map((row) => String(row.id));
   const [
     { data: odds, error: oddsError },
@@ -681,13 +710,24 @@ export async function readStoredSlate({
     kickoffAt: String(row.kickoff_at),
     homeTeam: { id: String(row.home_team_external_id), name: text(row.home_team_name) ?? "Home" },
     awayTeam: { id: String(row.away_team_external_id), name: text(row.away_team_name) ?? "Away" },
-    status: row.status as CanonicalFixture["status"],
+    status: reconcileStoredFixtureStatus({
+      status: row.status as Match["status"],
+      kickoffAt: String(row.kickoff_at),
+      lastSyncedAt: text(row.last_synced_at),
+      homeScore: number(row.home_score),
+      awayScore: number(row.away_score)
+    }, now, maxFixtureAgeMs),
     score: number(row.home_score) !== null && number(row.away_score) !== null ? { home: number(row.home_score) as number, away: number(row.away_score) as number } : null,
     provider: String(row.provider),
     lastSyncedAt: text(row.last_synced_at) ?? String(row.kickoff_at),
     dataQuality: number(row.data_quality) ?? 0
   }));
-  const providerStatus = lastRun?.status ?? (fixtures.length ? "completed" : "empty");
+  const staleReason = staleRows.length
+    ? `${staleRows.length} stored fixture${staleRows.length === 1 ? " was" : "s were"} excluded because provider sync was older than ${Math.round(maxFixtureAgeMs / 60_000)} minutes.`
+    : null;
+  const providerStatus = staleRows.length
+    ? fixtures.length ? "partial" : "failed"
+    : lastRun?.status ?? (fixtures.length ? "completed" : "empty");
   return buildSportsSlate({
     scope,
     fixtures,
@@ -696,7 +736,7 @@ export async function readStoredSlate({
     decisionSummariesByFixture,
     range: { from: from.slice(0, 10), to: new Date(new Date(toExclusive).getTime() - 1).toISOString().slice(0, 10) },
     providerStatus,
-    providerErrors: lastRun?.errors ?? [],
+    providerErrors: [...(lastRun?.errors ?? []), ...(staleReason ? [staleReason] : [])],
     lastRun
   });
 }

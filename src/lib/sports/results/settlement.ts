@@ -306,7 +306,17 @@ export async function runPublicPickSettlement({
   const emptyTotals = { pendingRead: 0, settled: 0, voided: 0, waitingKickoff: 0, live: 0, awaitingScore: 0, awaitingMarket: 0, providerMissing: 0, manualReview: 0, failed: 0 };
   if (!client) return { status: "unavailable", generatedAt, totals: emptyTotals, errors: ["OddsPadi Supabase server storage is not configured."], items: [] };
   const safeLimit = Math.max(1, Math.min(1000, Math.trunc(limit)));
-  const run = persist ? await startProviderRun({ providerName: "configured-sports-providers", jobType: "settle-results", startedAt: generatedAt, client }) : null;
+  const claim = persist ? await startProviderRun({ providerName: "configured-sports-providers", jobType: "settle-results", startedAt: generatedAt, client }) : null;
+  const run = claim?.run ?? null;
+  if (claim && !claim.acquired) {
+    return {
+      status: "empty",
+      generatedAt,
+      totals: emptyTotals,
+      errors: run?.errors ?? ["Skipped overlapping settle-results run."],
+      items: []
+    };
+  }
   const { data, error } = await client.from("op_public_picks")
     .select("id,fixture_id,sport,kickoff_at,market,selection,market_line,odds,model_probability,implied_probability,value_edge,status,settlement_status,result,final_status_observed_at,closing_odds")
     .not("settlement_status", "in", "(settled,void)")

@@ -15,7 +15,8 @@ import { TeamCrest } from "@/components/odds/TeamCrest";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { AddToSlipButton } from "@/components/odds/AddToSlipButton";
 import { formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
-import { getCachedMatchPrediction } from "@/lib/sports/prediction/cachedPublicReads";
+import { getCachedMatchPrediction, getCachedStoredFixtureAnalysis } from "@/lib/sports/prediction/cachedPublicReads";
+import { StoredFixtureAnalysisView } from "@/components/odds/StoredFixtureAnalysisView";
 import { ShareBar } from "@/components/share/ShareBar";
 import { FollowTeamButton } from "@/components/account/FollowTeamButton";
 import Link from "next/link";
@@ -50,7 +51,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { matchId: rawMatchId } = await params;
   const matchId = decodeMatchId(rawMatchId);
   const row = await getCachedMatchPrediction(matchId);
-  if (!row) return { title: "Match Prediction" };
+  if (!row) {
+    const stored = await getCachedStoredFixtureAnalysis(matchId);
+    if (stored.status !== "ready") return { title: "Match Prediction" };
+    const title = `${stored.analysis.homeTeam.name} vs ${stored.analysis.awayTeam.name} — Stored Analysis`;
+    const url = `/predictions/${encodeURIComponent(matchId)}`;
+    return { title, alternates: { canonical: url }, openGraph: { type: "article", url: `${siteUrl}${url}`, title: `${title} | OddsPadi` } };
+  }
   const title = `${row.match.homeTeam.name} vs ${row.match.awayTeam.name} — Prediction & Analysis`;
   const description = `Model-led analysis for ${row.match.homeTeam.name} vs ${row.match.awayTeam.name} (${row.match.league.name}): probabilities vs odds, value edge, confidence and risk, with traceable evidence.`;
   const url = `/predictions/${encodeURIComponent(matchId)}`;
@@ -67,7 +74,11 @@ export default async function MatchDetailPage({ params }: PageProps) {
   const { matchId: rawMatchId } = await params;
   const matchId = decodeMatchId(rawMatchId);
   const row = await getCachedMatchPrediction(matchId);
-  if (!row) notFound();
+  if (!row) {
+    const stored = await getCachedStoredFixtureAnalysis(matchId);
+    if (stored.status === "missing") notFound();
+    return <StoredFixtureAnalysisView read={stored} />;
+  }
 
   const { match, prediction, oddsHistory } = row;
   const displayDecision = prediction.decision;

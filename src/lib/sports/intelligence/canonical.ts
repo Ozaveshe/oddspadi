@@ -18,6 +18,7 @@ import type {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_FUTURE_LIVE_CLOCK_SKEW_MS = 15 * 60 * 1000;
+export const DEFAULT_STORED_FIXTURE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 function finiteDate(value: string | undefined, fallback: Date): Date {
   const parsed = value ? new Date(value) : fallback;
@@ -66,6 +67,35 @@ export function normalizeFutureLiveMatchStatus(
     return "scheduled";
   }
   return match.status;
+}
+
+export function isStoredFixtureFresh(
+  lastSyncedAt: string | null | undefined,
+  now = new Date(),
+  maxAgeMs = DEFAULT_STORED_FIXTURE_MAX_AGE_MS
+): boolean {
+  const syncedAt = lastSyncedAt ? Date.parse(lastSyncedAt) : Number.NaN;
+  return Number.isFinite(syncedAt) && syncedAt <= now.getTime() + MAX_FUTURE_LIVE_CLOCK_SKEW_MS && now.getTime() - syncedAt <= maxAgeMs;
+}
+
+export function reconcileStoredFixtureStatus(
+  fixture: {
+    status: Match["status"];
+    kickoffAt: string;
+    lastSyncedAt: string | null | undefined;
+    homeScore: number | null;
+    awayScore: number | null;
+  },
+  now = new Date(),
+  maxAgeMs = DEFAULT_STORED_FIXTURE_MAX_AGE_MS
+): Match["status"] {
+  const normalized = normalizeFutureLiveMatchStatus({ status: fixture.status, kickoffTime: fixture.kickoffAt }, now);
+  if (normalized !== "live") return normalized;
+  const kickoff = Date.parse(fixture.kickoffAt);
+  const hasScore = fixture.homeScore !== null && fixture.awayScore !== null;
+  const longPast = Number.isFinite(kickoff) && kickoff < now.getTime() - maxAgeMs;
+  if (!hasScore && (longPast || !isStoredFixtureFresh(fixture.lastSyncedAt, now, maxAgeMs))) return "suspended";
+  return normalized;
 }
 
 export function normalizeCanonicalFixture(match: Match, now = new Date()): CanonicalFixture {

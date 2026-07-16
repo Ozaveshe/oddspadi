@@ -83,28 +83,28 @@ export default async function HomePage() {
         <aside className="home-matchday-brief" aria-label="Matchday at a glance">
           <span className="section-kicker">Matchday at a glance</span>
           <strong>{matchday.fixtureCount}</strong>
-          <span>real fixtures visible today</span>
+          <span>prediction fixtures ready today</span>
           <div>
             {matchday.usesLiveFallback ? <>
+              <span>{matchday.liveBoardFixtureCount} score-board fixtures</span>
               <span>{matchday.liveCount} live</span>
               <span>{matchday.upcomingCount} upcoming</span>
-              <span>{matchday.finishedCount} final</span>
             </> : <>
               <span>{matchday.analysedCount} analysed</span>
               <span>{matchday.valuePickCount} value picks</span>
               <span>{matchday.watchlistCount} watchlist</span>
             </>}
           </div>
-          <small className="home-matchday-source">Source: {matchday.sourceLabel}</small>
+          <small className="home-matchday-source">Prediction source: {matchday.sourceLabel}</small>
           <Link className="text-link" href={matchday.usesLiveFallback ? "/live-scores" : "/predictions/today"}>Open today&apos;s board →</Link>
         </aside>
       </section>
 
       <section className="home-engine-strip" aria-label="Latest engine status">
-        <div><span>Fixtures visible</span><strong>{matchday.fixtureCount}</strong></div>
+        <div><span>Prediction fixtures</span><strong>{matchday.fixtureCount}</strong></div>
         <div><span>Tips published</span><strong>{matchday.valuePickCount}</strong></div>
         <div><span>Watchlist</span><strong>{matchday.watchlistCount}</strong></div>
-        <div><span>{matchday.usesLiveFallback ? "Live update" : "Last run"}</span><strong>{lastRun ? new Date(lastRun).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Waiting"}</strong></div>
+        <div><span>Last engine run</span><strong>{lastRun ? new Date(lastRun).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Waiting"}</strong></div>
         <div><span>Provider health</span><strong className={`engine-health status-${matchday.providerState}`}>{matchday.providerLabel}</strong><Link className="engine-audit-link" href="/engine/performance">Audit evidence →</Link></div>
       </section>
 

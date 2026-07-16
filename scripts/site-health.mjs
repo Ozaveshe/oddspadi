@@ -45,12 +45,82 @@ async function checkJson(path, validate, label = path, options = {}) {
   }
 }
 
+function tipsFixtures(payload) {
+  return Array.isArray(payload?.data?.slate?.fixtures) ? payload.data.slate.fixtures : [];
+}
+
+function tipsFreshnessProblem(payload) {
+  if (!payload?.success || !payload?.data?.slate) return "bad tips payload";
+  const providerStatus = payload.data.slate.provider?.status;
+  if (!["completed", "empty"].includes(providerStatus)) return `provider status is ${providerStatus ?? "missing"}`;
+  const now = Date.now();
+  const stale = tipsFixtures(payload).filter((row) => {
+    const syncedAt = Date.parse(row?.fixture?.lastSyncedAt ?? "");
+    return !Number.isFinite(syncedAt) || now - syncedAt > 6 * 60 * 60_000;
+  });
+  if (stale.length) return `${stale.length} fixture(s) exceed the six-hour freshness boundary`;
+  const impossibleLive = tipsFixtures(payload).filter((row) => {
+    const fixture = row?.fixture;
+    const kickoff = Date.parse(fixture?.kickoffAt ?? "");
+    return fixture?.status === "live" && Number.isFinite(kickoff) && kickoff > now + 15 * 60_000;
+  });
+  return impossibleLive.length ? `${impossibleLive.length} future fixture(s) are incorrectly marked live` : null;
+}
+
+async function checkLatestRun(path, maxAgeMs, label) {
+  return checkJson(path, (payload) => {
+    const run = payload?.data;
+    if (!run) return "no stored run receipt";
+    if (!["completed", "partial", "empty"].includes(run.status)) return `latest status is ${run.status ?? "missing"}`;
+    const finishedAt = Date.parse(run.finishedAt ?? "");
+    if (!Number.isFinite(finishedAt)) return "latest run has no valid completion time";
+    const ageMs = Date.now() - finishedAt;
+    return ageMs > maxAgeMs ? `latest completion is ${(ageMs / 3_600_000).toFixed(1)}h old` : null;
+  }, label);
+}
+
+async function checkFixtureAnalysisLinks(payload, label) {
+  const fixtureIds = [...new Set(tipsFixtures(payload).map((row) => row?.fixture?.fixtureId).filter(Boolean))];
+  const failures = [];
+  for (let index = 0; index < fixtureIds.length; index += 4) {
+    const batch = fixtureIds.slice(index, index + 4);
+    const results = await Promise.all(batch.map(async (fixtureId) => {
+      try {
+        const response = await fetch(`${site}/predictions/${encodeURIComponent(fixtureId)}`, { signal: AbortSignal.timeout(30_000) });
+        const text = await response.text();
+        return response.ok && !text.includes("That page has left the pitch") ? null : `${fixtureId} (${response.status})`;
+      } catch (error) {
+        return `${fixtureId} (${String(error)})`;
+      }
+    }));
+    failures.push(...results.filter(Boolean));
+  }
+  report(!failures.length, label, failures.length ? failures.slice(0, 5).join(", ") : `${fixtureIds.length} checked`);
+}
+
 console.log(`OddsPadi health sweep against ${site}\n`);
 
 await checkPage("/", { maxMs: 6000 });
 await checkPage("/predictions", { maxMs: 6000 });
+await checkPage("/predictions/history", { maxMs: 6000 });
 await checkPage("/news");
 await checkPage("/community");
+
+const todayTips = await checkJson("/api/tips/today", tipsFreshnessProblem, "api today's tips freshness");
+await checkJson("/api/tips/tomorrow", tipsFreshnessProblem, "api tomorrow's tips freshness");
+const weeklyTips = await checkJson("/api/tips/week", (payload) => {
+  const problem = tipsFreshnessProblem(payload);
+  if (problem) return problem;
+  if (payload?.data?.days?.length !== 7) return "weekly product does not contain seven days";
+  return tipsFixtures(payload).length ? null : "weekly product has no provider-backed fixtures";
+}, "api weekly tips freshness");
+if (todayTips) await checkFixtureAnalysisLinks(todayTips, "analysis links from today's tips");
+if (weeklyTips) await checkFixtureAnalysisLinks(weeklyTips, "analysis links from weekly radar");
+
+await checkLatestRun("/api/cron/import-fixtures", 26 * 60 * 60_000, "scheduled fixture import receipt");
+await checkLatestRun("/api/cron/refresh-odds", 4 * 60 * 60_000, "scheduled odds refresh receipt");
+await checkLatestRun("/api/cron/run-daily-engine", 26 * 60 * 60_000, "scheduled daily engine receipt");
+await checkLatestRun("/api/cron/generate-weekly-predictions", 26 * 60 * 60_000, "scheduled weekly engine receipt");
 
 await checkJson(
   "/api/health",

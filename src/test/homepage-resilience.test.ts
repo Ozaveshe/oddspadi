@@ -22,7 +22,7 @@ function fixture(id: string, phase: LiveBoardFixture["phase"]): LiveBoardFixture
 }
 
 describe("homepage matchday resilience", () => {
-  it("uses real live-board coverage when the prediction repository is unavailable", () => {
+  it("keeps live-board coverage visible without counting it as prediction-ready", () => {
     const board: LiveScoreBoard = {
       generatedAt: "2026-07-16T10:30:00.000Z",
       date: "2026-07-16",
@@ -35,13 +35,14 @@ describe("homepage matchday resilience", () => {
 
     const state = deriveHomepageMatchdayState(null, board);
 
-    expect(state.fixtureCount).toBe(2);
-    expect(state.providerState).toBe("partial");
-    expect(state.providerLabel).toBe("live-only");
-    expect(state.sourceLabel).toBe("Live score feed");
+    expect(state.fixtureCount).toBe(0);
+    expect(state.liveBoardFixtureCount).toBe(2);
+    expect(state.providerState).toBe("unavailable");
+    expect(state.providerLabel).toBe("unavailable");
+    expect(state.sourceLabel).toBe("Prediction engine");
     expect(state.featuredFixture?.id).toBe("live-1");
     expect(state.previewFixtures).toHaveLength(2);
-    expect(state.lastUpdatedAt).toBe(board.generatedAt);
+    expect(state.lastUpdatedAt).toBeNull();
   });
 
   it("does not invent matchday coverage when both sources are empty", () => {
@@ -67,7 +68,8 @@ describe("homepage matchday resilience", () => {
 
     expect(state.featuredFixture?.phase).toBe(phase);
     expect(state.liveCount).toBe(0);
-    expect(state.fixtureCount).toBe(1);
+    expect(state.fixtureCount).toBe(0);
+    expect(state.liveBoardFixtureCount).toBe(1);
   });
 
   it("keeps engine totals separate from a simultaneously available live board", () => {
@@ -83,6 +85,7 @@ describe("homepage matchday resilience", () => {
     const state = deriveHomepageMatchdayState(daily, board);
 
     expect(state.fixtureCount).toBe(4);
+    expect(state.liveBoardFixtureCount).toBe(1);
     expect(state.liveCount + state.upcomingCount + state.finishedCount).toBe(0);
     expect(state.providerState).toBe("running");
     expect(state.usesLiveFallback).toBe(false);

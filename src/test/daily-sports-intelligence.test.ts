@@ -7,6 +7,7 @@ import { buildCanonicalDecision, oddsSnapshotsFromMatch } from "@/lib/sports/pre
 import {
   buildCanonicalDecisions,
   buildSportsSlate,
+  isStoredFixtureFresh,
   normalizeCanonicalFixture,
   normalizeOddsSnapshots,
   utcDateWindow
@@ -174,6 +175,14 @@ describe("production daily sports intelligence", () => {
     expect(normalizeCanonicalFixture({ ...futureLive, kickoffTime: "2026-07-15T01:50:00.000Z" }, now).status).toBe("live");
   });
 
+  it("enforces the stored fixture freshness boundary", () => {
+    const now = new Date("2026-07-16T12:00:00.000Z");
+    expect(isStoredFixtureFresh("2026-07-16T07:00:00.000Z", now)).toBe(true);
+    expect(isStoredFixtureFresh("2026-07-16T05:59:59.000Z", now)).toBe(false);
+    expect(isStoredFixtureFresh("2026-07-16T13:00:00.000Z", now)).toBe(false);
+    expect(isStoredFixtureFresh(null, now)).toBe(false);
+  });
+
   it("blocks mock fallback fixtures in production public reads", async () => {
     const provider = new ProviderBackedSportsDataProvider({ env: { NODE_ENV: "production" } });
     expect(await provider.getFixtures("2026-07-13", "football")).toEqual([]);
@@ -208,6 +217,7 @@ describe("production daily sports intelligence", () => {
     expect(result.slate.summary.predictionsGenerated).toBe(1);
     expect(result.slate.fixtures[0]?.fixture.providerFixtureId).toBe("9001");
     expect(result.rejectedMockFixtures).toBe(0);
+    expect(result.skippedOverlap).toBe(false);
   });
 
   it("publishes a fresh positive-edge, positive-EV selection as a value pick", async () => {

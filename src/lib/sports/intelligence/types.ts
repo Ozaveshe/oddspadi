@@ -113,6 +113,11 @@ export type ProviderRunLog = {
   errors: string[];
 };
 
+export type ProviderRunClaim = {
+  run: ProviderRunLog;
+  acquired: boolean;
+};
+
 export type SlateFixture = {
   fixture: CanonicalFixture;
   odds: CanonicalOddsSnapshot[];
@@ -161,4 +166,5 @@ export type PipelineRunResult = {
   slate: SportsSlate;
   rejectedMockFixtures: number;
   persisted: boolean;
+  skippedOverlap: boolean;
 };

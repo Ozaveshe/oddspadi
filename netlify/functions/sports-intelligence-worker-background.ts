@@ -27,6 +27,35 @@ async function callStage(siteUrl: string, path: string, token: string): Promise<
   }
 }
 
+type LatestRun = { status?: unknown; startedAt?: unknown; finishedAt?: unknown } | null;
+
+export function shouldRunFullCycle({ requested, now, fullRunHour, latestWeeklyRun }: { requested: boolean; now: Date; fullRunHour: number; latestWeeklyRun: LatestRun }): boolean {
+  if (requested) return true;
+  if (now.getUTCHours() < fullRunHour) return false;
+  const timestamp = typeof latestWeeklyRun?.finishedAt === "string"
+    ? latestWeeklyRun.finishedAt
+    : typeof latestWeeklyRun?.startedAt === "string"
+      ? latestWeeklyRun.startedAt
+      : null;
+  const status = typeof latestWeeklyRun?.status === "string" ? latestWeeklyRun.status : null;
+  const sameUtcDay = timestamp?.slice(0, 10) === now.toISOString().slice(0, 10);
+  return !(sameUtcDay && ["running", "completed", "partial", "empty"].includes(status ?? ""));
+}
+
+async function readLatestWeeklyRun(siteUrl: string): Promise<LatestRun> {
+  try {
+    const response = await fetch(new URL("/api/cron/generate-weekly-predictions", siteUrl), {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(15_000)
+    });
+    if (!response.ok) return null;
+    const payload = await response.json() as { data?: LatestRun };
+    return payload.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function sportsIntelligenceWorker(request: Request, context: Context): Promise<Response> {
   const siteUrl = clean(Netlify.env.get("ODDSPADI_SITE_URL")) ?? clean(context.site.url) ?? clean(Netlify.env.get("URL"));
   const token = clean(Netlify.env.get("ODDSPADI_ADMIN_TOKEN"));
@@ -39,7 +68,9 @@ export default async function sportsIntelligenceWorker(request: Request, context
   const fullRunHour = Number.isInteger(configuredFullRunHour) && configuredFullRunHour >= 0 && configuredFullRunHour <= 23
     ? configuredFullRunHour
     : 2;
-  const fullCycle = requestedFullCycle || new Date().getUTCHours() === fullRunHour;
+  const now = new Date();
+  const latestWeeklyRun = requestedFullCycle ? null : await readLatestWeeklyRun(siteUrl);
+  const fullCycle = shouldRunFullCycle({ requested: requestedFullCycle, now, fullRunHour, latestWeeklyRun });
   const stages = [];
   if (fullCycle) stages.push(await callStage(siteUrl, "/api/cron/import-fixtures", token));
   stages.push(await callStage(siteUrl, "/api/cron/refresh-odds", token));

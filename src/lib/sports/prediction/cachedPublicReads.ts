@@ -3,9 +3,11 @@ import type { Sport } from "@/lib/sports/types";
 import { getMatchPrediction, getPredictions, uniqueCountries, uniqueLeagues } from "@/lib/sports/service";
 import { getPublicPredictionHistory } from "@/lib/sports/prediction/history";
 import { toPredictionListRow, type PredictionListRow } from "@/lib/sports/prediction/listRow";
+import { readStoredFixtureAnalysis } from "@/lib/sports/intelligence/storedFixture";
 
 type MemoryEntry<T> = { expiresAt: number; promise: Promise<T> };
 const matchPredictionCache = new Map<string, MemoryEntry<Awaited<ReturnType<typeof getMatchPrediction>>>>();
+const storedFixtureCache = new Map<string, MemoryEntry<Awaited<ReturnType<typeof readStoredFixtureAnalysis>>>>();
 
 export type PredictionsPageData = { leagues: string[]; countries: string[]; rows: PredictionListRow[] };
 
@@ -72,6 +74,10 @@ function cachePromise<T>(cache: Map<string, MemoryEntry<T>>, key: string, ttl: n
 
 export function getCachedMatchPrediction(matchId: string) {
   return cachePromise(matchPredictionCache, matchId, 180_000, () => getMatchPrediction(matchId));
+}
+
+export function getCachedStoredFixtureAnalysis(matchId: string) {
+  return cachePromise(storedFixtureCache, matchId, 180_000, () => readStoredFixtureAnalysis(matchId));
 }
 
 export const getCachedPublicPredictionHistory = unstable_cache(

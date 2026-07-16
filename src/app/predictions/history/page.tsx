@@ -9,8 +9,9 @@ import {
   getHistorySummary,
   getHistoryWindowSummaries
 } from "@/lib/sports/prediction/history";
-import { getYesterdayResultsProduct } from "@/lib/sports/tips/product";
+import { getYesterdayDecisionAuditProduct, getYesterdayResultsProduct } from "@/lib/sports/tips/product";
 import { formatYesterdayResultsPost } from "@/lib/sports/tips/social";
+import { SlateFixtureCard } from "@/components/odds/IntelligenceSlate";
 
 export const revalidate = 300;
 
@@ -48,7 +49,11 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
     confidence: single(params.confidence) ?? "all",
     edge: (single(params.edge) ?? "all") as "all" | "positive" | "negative"
   };
-  const [ledger, yesterday] = await Promise.all([getCachedPublicPredictionHistory(), getYesterdayResultsProduct()]);
+  const [ledger, yesterday, yesterdayAudit] = await Promise.all([
+    getCachedPublicPredictionHistory(),
+    getYesterdayResultsProduct(),
+    getYesterdayDecisionAuditProduct()
+  ]);
   const history = filterPublicPredictionHistory(ledger.items, filters);
   const summary = getHistorySummary(history);
   const windows = getHistoryWindowSummaries(ledger.items);
@@ -96,6 +101,20 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
         <strong className="results-window-total">{window.summary.totalPublicPicks} pick{window.summary.totalPublicPicks === 1 ? "" : "s"}</strong>
         <span className="small muted">{window.summary.settled} settled · {formatPercent(window.summary.accuracy)} accuracy</span>
       </article>)}
+    </section>
+
+    <section className="section" aria-labelledby="yesterday-audit-title">
+      <div className="section-title"><div><span className="section-kicker">Decision audit · {yesterdayAudit.date}</span><h2 id="yesterday-audit-title">Yesterday&apos;s complete engine record</h2></div><span className="badge scheduled">{yesterdayAudit.summary.fixtures}</span></div>
+      <p className="muted">This audit is separate from the accuracy ledger below. It includes every stored provider fixture and abstention; only picks that were actually published can affect accuracy or ROI.</p>
+      <div className="results-proof-strip">
+        <div><span>Fixtures</span><strong>{yesterdayAudit.summary.fixtures}</strong></div>
+        <div><span>Analysed</span><strong>{yesterdayAudit.summary.analysed}</strong></div>
+        <div><span>Value picks</span><strong>{yesterdayAudit.summary.valuePicks}</strong></div>
+        <div><span>Leans</span><strong>{yesterdayAudit.summary.leans}</strong></div>
+        <div><span>Watchlist</span><strong>{yesterdayAudit.summary.watchlist}</strong></div>
+        <div><span>Abstentions</span><strong>{yesterdayAudit.summary.abstentions}</strong></div>
+      </div>
+      {yesterdayAudit.source === "unavailable" ? <div className="empty-state compact"><h3>Yesterday&apos;s stored audit is unavailable</h3><p className="muted">{yesterdayAudit.reason}</p></div> : yesterdayAudit.rows.length ? <div className="intelligence-grid">{yesterdayAudit.rows.map((row) => <SlateFixtureCard key={row.fixture.fixtureId} row={row} compact asOf={yesterdayAudit.generatedAt} />)}</div> : <div className="empty-state compact"><h3>No provider-backed decisions were stored yesterday</h3><p className="muted">The empty audit remains separate from the published-pick ledger.</p></div>}
     </section>
 
     <section className="grid-2 section" aria-label="Results scorecard">

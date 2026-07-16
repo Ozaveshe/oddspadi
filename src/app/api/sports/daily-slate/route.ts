@@ -3,4 +3,4 @@ import { getDailySlate } from "@/lib/sports/intelligence/pipeline";
 
 export const dynamic = "force-dynamic";
 
-export const GET = withApiHandler(async () => apiSuccess(await getDailySlate(), publicCacheInit(60)));
+export const GET = withApiHandler(async () => apiSuccess(await getDailySlate({ ensure: false }), publicCacheInit(60)));

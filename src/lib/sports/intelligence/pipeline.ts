@@ -190,9 +190,25 @@ async function executePipeline({
   const startedAt = now.toISOString();
   const storageReady = getSupabaseRuntimeStatus(env).serverWriteReady;
   const shouldPersist = persist && storageReady;
-  let run = shouldPersist
+  const claim = shouldPersist
     ? await startProviderRun({ providerName: "configured-sports-providers", jobType, startedAt })
-    : emptyRun(jobType, startedAt);
+    : null;
+  let run = claim?.run ?? emptyRun(jobType, startedAt);
+  if (shouldPersist && !claim?.acquired) {
+    const slate = buildSportsSlate({
+      scope,
+      fixtures: [],
+      oddsByFixture: new Map(),
+      decisionsByFixture: new Map(),
+      decisionSummariesByFixture: new Map(),
+      range: { from: dates[0], to: dates.at(-1) ?? dates[0] },
+      providerStatus: run.status,
+      providerErrors: run.errors,
+      lastRun: run,
+      generatedAt: startedAt
+    });
+    return { run, slate, rejectedMockFixtures: 0, persisted: false, skippedOverlap: true };
+  }
   const collected = await collectFixtures({ dates, sports, generateDecisions, dependencies });
   const providerIssues = getRecentSportsProviderIssues(startedAt).map((issue) => `${issue.provider}${issue.path}: ${issue.reason}`);
   const errors = [...new Set([...collected.errors, ...providerIssues])];
@@ -291,7 +307,8 @@ async function executePipeline({
     run,
     slate,
     rejectedMockFixtures: collected.rejectedMockFixtures,
-    persisted: shouldPersist && (fixtures.length === 0 || fixtureIds.size === fixtures.length) && !errors.some((error) => error.startsWith("Storage:"))
+    persisted: shouldPersist && (fixtures.length === 0 || fixtureIds.size === fixtures.length) && !errors.some((error) => error.startsWith("Storage:")),
+    skippedOverlap: false
   };
 }
 
@@ -434,14 +451,25 @@ function buildReadOnlySlate({
   });
 }
 
-export async function getDailySlate({ now = new Date(), ensure = true, dayOffset = 0 }: { now?: Date; ensure?: boolean; dayOffset?: number } = {}): Promise<SportsSlate> {
+export async function getDailySlate({
+  now = new Date(),
+  ensure = true,
+  dayOffset = 0,
+  env = process.env,
+  maxFixtureAgeMs: requestedMaxFixtureAgeMs,
+  includeSuspended = false
+}: { now?: Date; ensure?: boolean; dayOffset?: number; env?: Record<string, string | undefined>; maxFixtureAgeMs?: number; includeSuspended?: boolean } = {}): Promise<SportsSlate> {
   const date = utcDateWindow(now, 1, dayOffset)[0];
+  const maxFixtureAgeMs = requestedMaxFixtureAgeMs ?? configuredNumber(env, "ODDSPADI_STORED_FIXTURE_MAX_AGE_MINUTES", 360, 30, 1440) * 60_000;
   try {
     const stored = await readStoredSlate({
       scope: "daily",
       from: isoDayStart(date),
       toExclusive: isoDayAfter(date),
-      jobTypes: ["run-daily-engine", "refresh-odds"]
+      jobTypes: ["run-daily-engine", "refresh-odds"],
+      now,
+      maxFixtureAgeMs,
+      includeSuspended
     });
     if (stored && (stored.summary.predictionsGenerated > 0 || !ensure)) return stored;
     if (!ensure) return buildReadOnlySlate({
@@ -458,17 +486,24 @@ export async function getDailySlate({ now = new Date(), ensure = true, dayOffset
       reason: `The stored daily engine run could not be read: ${error instanceof Error ? error.message : "unknown repository error"}`
     });
   }
-  return (await runDailyEngine({ now, dayOffset, persist: getSupabaseRuntimeStatus().serverWriteReady })).slate;
+  return (await runDailyEngine({ now, dayOffset, persist: getSupabaseRuntimeStatus(env).serverWriteReady, env })).slate;
 }
 
-export async function getWeeklySlate({ now = new Date(), ensure = true }: { now?: Date; ensure?: boolean } = {}): Promise<SportsSlate> {
+export async function getWeeklySlate({
+  now = new Date(),
+  ensure = true,
+  env = process.env
+}: { now?: Date; ensure?: boolean; env?: Record<string, string | undefined> } = {}): Promise<SportsSlate> {
   const dates = utcDateWindow(now, 7);
+  const maxFixtureAgeMs = configuredNumber(env, "ODDSPADI_STORED_FIXTURE_MAX_AGE_MINUTES", 360, 30, 1440) * 60_000;
   try {
     const stored = await readStoredSlate({
       scope: "weekly",
       from: isoDayStart(dates[0]),
       toExclusive: isoDayAfter(dates.at(-1) ?? dates[0]),
-      jobTypes: ["generate-weekly-predictions", "refresh-odds", "run-daily-engine"]
+      jobTypes: ["generate-weekly-predictions", "refresh-odds", "run-daily-engine"],
+      now,
+      maxFixtureAgeMs
     });
     if (stored && (stored.summary.predictionsGenerated > 0 || !ensure)) return stored;
     if (!ensure) return buildReadOnlySlate({
@@ -485,5 +520,5 @@ export async function getWeeklySlate({ now = new Date(), ensure = true }: { now?
       reason: `The stored weekly engine run could not be read: ${error instanceof Error ? error.message : "unknown repository error"}`
     });
   }
-  return (await generateWeeklyPredictions({ now, persist: getSupabaseRuntimeStatus().serverWriteReady })).slate;
+  return (await generateWeeklyPredictions({ now, persist: getSupabaseRuntimeStatus(env).serverWriteReady, env })).slate;
 }
