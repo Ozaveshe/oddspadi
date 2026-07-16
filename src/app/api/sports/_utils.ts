@@ -33,13 +33,14 @@ export function withApiHandler<A extends unknown[]>(handler: (request: Request, 
     try {
       return await handler(request, ...args);
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "unexpected error";
       try {
         console.error(`[api] ${new URL(request.url).pathname} failed:`, error);
       } catch {
         console.error("[api] request failed:", error);
       }
-      return apiError(`Something went wrong on our side: ${detail}`, 500);
+      // Keep provider, database, and configuration detail in server logs. A
+      // public 500 must not reveal table names, credentials, or upstream URLs.
+      return apiError("Something went wrong on our side.", 500);
     }
   };
 }
