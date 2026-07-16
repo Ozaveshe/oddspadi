@@ -25,10 +25,13 @@ async function timedFetch(path, options = {}) {
 async function checkPage(path, { maxMs = 4000, maxBytes = 1_500_000 } = {}) {
   try {
     const { response, ms } = await timedFetch(path);
-    const bytes = (await response.arrayBuffer()).byteLength;
+    const body = await response.text();
+    const bytes = Buffer.byteLength(body);
     report(response.ok && ms <= maxMs && bytes <= maxBytes, `page ${path}`, `${response.status}, ${ms}ms, ${(bytes / 1024).toFixed(0)}KB`);
+    return { response, ms, bytes, body };
   } catch (error) {
     report(false, `page ${path}`, String(error));
+    return null;
   }
 }
 
@@ -111,10 +114,31 @@ async function checkFixtureAnalysisLinks(payload, label) {
   report(!failures.length, label, failures.length ? failures.slice(0, 5).join(", ") : `${fixtureIds.length} checked`);
 }
 
+function checkTipsSurfaceConsistency(page, payload, label) {
+  if (!page || !payload) return;
+  const providerStatus = payload?.data?.slate?.provider?.status ?? "missing";
+  const fixtures = tipsFixtures(payload);
+  const renderedUnavailable = /stored provider slate is unavailable|No stored provider response was read/i.test(page.body);
+  const firstFixture = fixtures[0]?.fixture;
+  const firstMatchRendered = !firstFixture || [
+    firstFixture.fixtureId,
+    firstFixture.homeTeam?.name,
+    firstFixture.awayTeam?.name
+  ].filter(Boolean).some((value) => page.body.includes(value));
+  const problem = ["completed", "empty"].includes(providerStatus) && renderedUnavailable
+    ? `HTML is unavailable while API provider status is ${providerStatus} with ${fixtures.length} fixture(s)`
+    : fixtures.length && !firstMatchRendered
+      ? `HTML does not contain the API's first fixture (${firstFixture?.fixtureId ?? "unknown"})`
+      : null;
+  report(!problem, label, problem ?? `${fixtures.length} fixture(s), provider ${providerStatus}`);
+}
+
 console.log(`OddsPadi health sweep against ${site}\n`);
 
-await checkPage("/", { maxMs: 6000 });
-await checkPage("/predictions", { maxMs: 6000 });
+const homePage = await checkPage("/", { maxMs: 6000 });
+const predictionsPage = await checkPage("/predictions", { maxMs: 6000 });
+const todayPage = await checkPage("/predictions/today", { maxMs: 6000 });
+const weeklyPage = await checkPage("/predictions/week", { maxMs: 6000 });
 await checkPage("/predictions/history", { maxMs: 6000 });
 await checkPage("/news");
 await checkPage("/community");
@@ -128,6 +152,10 @@ const weeklyTips = await checkJson("/api/tips/week", (payload) => {
   if (payload?.data?.days?.length !== 7) return "weekly product does not contain seven days";
   return tipsFixtures(payload).length ? null : "weekly product has no provider-backed fixtures";
 }, "api weekly tips freshness");
+checkTipsSurfaceConsistency(homePage, todayTips, "homepage matches today's tips API");
+checkTipsSurfaceConsistency(predictionsPage, todayTips, "predictions page matches today's tips API");
+checkTipsSurfaceConsistency(todayPage, todayTips, "today page matches today's tips API");
+checkTipsSurfaceConsistency(weeklyPage, weeklyTips, "weekly page matches weekly tips API");
 if (todayTips) await checkFixtureAnalysisLinks(todayTips, "analysis links from today's tips");
 if (weeklyTips) await checkFixtureAnalysisLinks(weeklyTips, "analysis links from weekly radar");
 
