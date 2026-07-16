@@ -1,10 +1,9 @@
 import { getSupabaseRuntimeStatus, getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Sport } from "@/lib/sports/types";
-import { benchmarkModelIdentityReceipt } from "@/lib/sports/prediction/modelIdentity";
+import { benchmarkModelIdentityReceipt, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 import { strictTrainingFeatureJsonColumns } from "./featureQuality";
 import {
   BASKETBALL_BACKTEST_MODEL_KEY,
-  runBasketballBacktest,
   type BasketballBacktestConfig,
   type BasketballBacktestResult,
   type HistoricalBasketballFixture,
@@ -28,16 +27,26 @@ import type { HistoricalFootballFixtureInput } from "./historicalIngestion";
 import { readStoredPlayerMatchPerformancesForFixtureIds } from "./playerPerformance";
 import {
   TENNIS_BACKTEST_MODEL_KEY,
-  runTennisBacktest,
   type HistoricalTennisMatch,
   type HistoricalTennisOddsQuote,
   type TennisBacktestConfig,
   type TennisBacktestResult
 } from "./tennisBacktest";
+import {
+  runBasketballRuntimeReplay,
+  runTennisRuntimeReplay,
+  twoWayRuntimeReplayIdentityReceipt,
+  type TwoWayRuntimeReplayResult
+} from "./twoWayRuntimeReplay";
 
 type DbNumeric = number | string | null;
 type TrainingSport = Extract<Sport, "football" | "basketball" | "tennis">;
-type HistoricalBacktestResult = FootballBacktestResult | FootballRuntimeReplayResult | BasketballBacktestResult | TennisBacktestResult;
+type HistoricalBacktestResult =
+  | FootballBacktestResult
+  | FootballRuntimeReplayResult
+  | BasketballBacktestResult
+  | TennisBacktestResult
+  | TwoWayRuntimeReplayResult;
 type HistoricalBacktestConfig = FootballBacktestConfig | BasketballBacktestConfig | TennisBacktestConfig;
 
 type FixtureRow = {
@@ -1387,22 +1396,22 @@ function runBacktestForSport(
   fixtures: Array<HistoricalFootballFixture | HistoricalBasketballFixture | HistoricalTennisMatch>,
   config: HistoricalBacktestConfig
 ): HistoricalBacktestResult {
-  if (sport === "basketball") return runBasketballBacktest(fixtures as HistoricalBasketballFixture[], config as BasketballBacktestConfig);
-  if (sport === "tennis") return runTennisBacktest(fixtures as HistoricalTennisMatch[], config as TennisBacktestConfig);
+  if (sport === "basketball") return runBasketballRuntimeReplay(fixtures as HistoricalBasketballFixture[], config as BasketballBacktestConfig);
+  if (sport === "tennis") return runTennisRuntimeReplay(fixtures as HistoricalTennisMatch[], config as TennisBacktestConfig);
   return runFootballBacktest(fixtures as HistoricalFootballFixture[], config as FootballBacktestConfig);
 }
 
-function isFootballRuntimeReplayResult(result: HistoricalBacktestResult): result is FootballRuntimeReplayResult {
-  return result.sport === "football" && "featureContract" in result && "executionHash" in result;
+function isRuntimeReplayResult(result: HistoricalBacktestResult): result is FootballRuntimeReplayResult | TwoWayRuntimeReplayResult {
+  return "featureContract" in result && "executionHash" in result;
 }
 
 function modelIdentityForResult(result: HistoricalBacktestResult): Record<string, string | number> {
-  if (!isFootballRuntimeReplayResult(result)) return benchmarkModelIdentityReceipt(result.sport);
-  return footballRuntimeReplayIdentityReceipt(result);
+  if (!isRuntimeReplayResult(result)) return benchmarkModelIdentityReceipt(result.sport);
+  return result.sport === "football" ? footballRuntimeReplayIdentityReceipt(result) : twoWayRuntimeReplayIdentityReceipt(result);
 }
 
 function backtestInsertPayload(result: HistoricalBacktestResult, includeDemo: boolean): Record<string, unknown> {
-  const runtimeReplay = isFootballRuntimeReplayResult(result);
+  const runtimeReplay = isRuntimeReplayResult(result);
   return {
     sport: result.sport,
     model_key: result.modelKey,
@@ -1519,11 +1528,14 @@ export async function runAndStoreHistoricalBacktest({
   }
 
   const result = runBacktestForSport(sport, fixtures, config);
-  if (result.status !== "completed") {
+  if (result.status !== "completed" || result.sampleSize < minSample) {
     return {
       status: "no-data",
       configured: true,
-      reason: result.notes[0] ?? "No completed historical backtest was produced.",
+      reason:
+        result.sampleSize < minSample
+          ? `Only ${result.sampleSize} ${sport} fixture(s) satisfy the runtime feature contract; ${minSample} are required.`
+          : result.notes[0] ?? "No completed historical backtest was produced.",
       result
     };
   }
@@ -1615,5 +1627,11 @@ export async function runAndStoreFootballRuntimeReplay({
 export function trainingModelKey(sport: TrainingSport = "football"): string {
   if (sport === "basketball") return BASKETBALL_BACKTEST_MODEL_KEY;
   if (sport === "tennis") return TENNIS_BACKTEST_MODEL_KEY;
+  return FOOTBALL_BACKTEST_MODEL_KEY;
+}
+
+export function historicalBacktestExecutionModelKey(sport: TrainingSport = "football"): string {
+  if (sport === "basketball") return runtimeModelKey("basketball");
+  if (sport === "tennis") return runtimeModelKey("tennis");
   return FOOTBALL_BACKTEST_MODEL_KEY;
 }
