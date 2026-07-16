@@ -1,6 +1,11 @@
 import { decisionCurlCommand } from "@/lib/sports/prediction/decisionUrls";
 import type { MultiSportCorpusPlan, TrainingCorpusSport } from "@/lib/sports/training/multiSportCorpusPlan";
-import { runAndStoreHistoricalBacktest, trainingModelKey, type BacktestRunStoreResult, type TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
+import {
+  historicalBacktestExecutionModelKey,
+  runAndStoreHistoricalBacktest,
+  type BacktestRunStoreResult,
+  type TrainingDataSnapshot
+} from "@/lib/sports/training/trainingRepository";
 
 export type MultiSportBacktestRunStatus = "preview" | "ready-to-run" | "admin-required" | "stored" | "no-data" | "blocked-storage" | "failed";
 export type MultiSportBacktestJobStatus =
@@ -254,7 +259,7 @@ export async function buildMultiSportBacktestRun({
     const job: MultiSportBacktestJob = {
       sport: sportPlan.sport,
       status,
-      modelKey: sportPlan.backtestModelKey ?? trainingModelKey(sportPlan.sport),
+      modelKey: historicalBacktestExecutionModelKey(sportPlan.sport),
       selected: isSelected,
       runAttempted: Boolean(result),
       storageStatus: snapshot.storage?.status ?? "unknown",
