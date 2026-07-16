@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
+import { isAllowedPushEndpoint, isValidPushKey } from "@/lib/security/pushSubscription";
 export const dynamic = "force-dynamic";
 
 async function authClient() { const supabase = await createSupabaseServerClient(); if (!supabase) return { response: Response.json({ error: "Push notifications are not configured." }, { status: 503 }) }; const { data: { user } } = await supabase.auth.getUser(); if (!user) return { response: Response.json({ error: "Sign in to manage notifications." }, { status: 401 }) }; return { supabase, user }; }
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
   if (!count) return Response.json({ error: "Follow a team before enabling match alerts." }, { status: 400 });
   const payload = (await request.json().catch(() => null)) as PushSubscriptionJSON | null;
   const endpoint = payload?.endpoint; const p256dh = payload?.keys?.p256dh; const auth = payload?.keys?.auth;
-  if (!endpoint || !p256dh || !auth || endpoint.length > 2048) return Response.json({ error: "Invalid push subscription." }, { status: 400 });
+  if (!isAllowedPushEndpoint(endpoint) || !isValidPushKey(p256dh, 40, 256) || !isValidPushKey(auth, 8, 128)) return Response.json({ error: "Invalid push subscription." }, { status: 400 });
   const { error } = await ctx.supabase.from("op_push_subscriptions").upsert({ user_id: ctx.user.id, endpoint, p256dh, auth, user_agent: request.headers.get("user-agent"), updated_at: new Date().toISOString() }, { onConflict: "endpoint" });
   if (error) return Response.json({ error: error.message }, { status: 400 }); return Response.json({ ok: true }, { status: 201 });
 }
