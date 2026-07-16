@@ -2,6 +2,7 @@ import type { TrainingReadiness, TrainingReadinessSport, TrainingReadinessStatus
 import type { StoredBacktestRun, TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
 import type { Sport } from "@/lib/sports/types";
 import { historicalModelCompatibility } from "@/lib/sports/prediction/modelIdentity";
+import { inspectRuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 
 type CandidateSport = Extract<Sport, "football" | "basketball" | "tennis">;
 
@@ -277,7 +278,7 @@ function buildCandidate({
 }): ShadowTrainingCandidate {
   const sport = isCandidateSport(snapshot.sport) ? snapshot.sport : "football";
   const backtest = snapshot.latestBacktest;
-  const demoOnly = Boolean(backtest?.dataSource.toLowerCase().includes("demo")) || snapshot.counts.realFinishedFixtures === 0;
+  const demoOnly = !inspectRuntimeBacktestEvidence(sport, backtest).realDataOnly || snapshot.counts.realFinishedFixtures === 0;
   const weights = learnedWeights(sport, backtest);
   const gates = candidateGates({ readiness, snapshot, backtest, weights, demoOnly });
   const status = candidateStatus({ readiness, snapshot, backtest, demoOnly });

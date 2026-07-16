@@ -57,7 +57,9 @@ export function inspectRuntimeBacktestEvidence(
   const compatibility = isDecisionModelSport(sport)
     ? historicalModelCompatibility({ sport, evidenceModelKey: backtest.modelKey, config: backtest.config })
     : "unsupported-sport";
-  const normalizedDataSource = backtest.dataSource.trim().toLowerCase();
+  const normalizedDataSource = typeof backtest.dataSource === "string"
+    ? backtest.dataSource.trim().toLowerCase()
+    : "";
   const realDataOnly = normalizedDataSource.includes("real-only") && !normalizedDataSource.includes("demo-included");
   const exactRuntimeParity = completed && compatibility === "exact-runtime-parity" && realDataOnly;
 

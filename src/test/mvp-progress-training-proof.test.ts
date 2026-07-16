@@ -42,6 +42,7 @@ describe("MVP progress training proof", () => {
         id: "runtime-backtest-1",
         modelKey: runtimeModelKey("football"),
         status: "completed",
+        dataSource: "supabase:op_fixtures:real-only:runtime-entrypoint",
         sampleSize: 3800,
         testSize: 1140,
         calibrationError: 0.024306,
