@@ -5,7 +5,7 @@ import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import type { SlateFixture } from "@/lib/sports/intelligence/types";
 import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
 
-export const revalidate = 120;
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Today's Sports Value Picks",

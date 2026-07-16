@@ -14,7 +14,7 @@ import { formatYesterdayResultsPost } from "@/lib/sports/tips/social";
 import { SlateFixtureCard } from "@/components/odds/IntelligenceSlate";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "OddsPadi Results — Accuracy & Settlement",

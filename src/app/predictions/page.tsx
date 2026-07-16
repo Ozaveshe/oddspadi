@@ -6,7 +6,7 @@ import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
 import { filterDailyTipsProductBySport } from "@/lib/sports/tips/product";
 import type { Sport } from "@/lib/sports/types";
 
-export const revalidate = 120;
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Today's Provider-Backed Sports Predictions",

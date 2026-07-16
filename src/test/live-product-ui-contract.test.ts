@@ -74,6 +74,22 @@ describe("live OddsPadi product UI contract", () => {
     }
   });
 
+  it("renders volatile tips surfaces per request so a cached provider failure can recover", () => {
+    for (const path of [
+      "src/app/page.tsx",
+      "src/app/predictions/page.tsx",
+      "src/app/predictions/today/page.tsx",
+      "src/app/predictions/tomorrow/page.tsx",
+      "src/app/predictions/week/page.tsx",
+      "src/app/predictions/value-picks/page.tsx",
+      "src/app/predictions/history/page.tsx"
+    ]) {
+      const page = source(path);
+      expect(page).toContain('export const dynamic = "force-dynamic";');
+      expect(page).not.toMatch(/export const revalidate\s*=/);
+    }
+  });
+
   it("shows leans, watchlist, and no-pick reasons on the empty value-picks state", () => {
     const valuePicks = source("src/app/predictions/value-picks/page.tsx");
     expect(valuePicks).toContain("No published value picks right now");

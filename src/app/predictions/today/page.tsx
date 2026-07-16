@@ -3,7 +3,7 @@ import { DailyTipsPageView } from "@/components/odds/DailyTipsPageView";
 import { fetchLiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
 
-export const revalidate = 120;
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Today's OddsPadi Tips — Value, Leans & Watchlist",

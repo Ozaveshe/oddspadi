@@ -6,7 +6,7 @@ import { TipsSharePreview } from "@/components/odds/TipsSharePreview";
 import { getCachedWeeklyTipsProduct } from "@/lib/sports/tips/publicReads";
 import { formatWeeklyRadarPost } from "@/lib/sports/tips/social";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Weekly Sports Predictions — Next 7 Days",
