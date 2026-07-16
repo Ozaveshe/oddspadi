@@ -1,10 +1,12 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { publicReadAbortSignal } from "@/lib/supabase/publicReadClient";
 
 export const dynamic = "force-dynamic";
 
 // op_feed_post_likes doubles as a many-to-many join between posts and profiles,
 // so the author embed must name its FK or PostgREST rejects it as ambiguous.
 const POST_SELECT = "id, author_id, body, match_id, created_at, author:op_profiles!op_feed_posts_author_id_fkey(username, display_name, avatar_url), likes:op_feed_post_likes(user_id), comments:op_feed_comments!op_feed_comments_post_id_fkey(count)";
+const COMMUNITY_READ_UNAVAILABLE_NOTE = "Community posts are temporarily unavailable. Please try again shortly.";
 
 export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
@@ -17,12 +19,12 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
       .limit(21);
     if (cursor) query = query.lt("created_at", cursor);
-    const { data, error } = await query;
-    if (error) return Response.json({ posts: [], note: error.message });
+    const { data, error } = await query.abortSignal(publicReadAbortSignal());
+    if (error) return Response.json({ posts: [], note: COMMUNITY_READ_UNAVAILABLE_NOTE });
     const rows = data ?? [];
     return Response.json({ posts: rows.slice(0, 20), nextCursor: rows.length > 20 ? rows[19]?.created_at : null });
   } catch {
-    return Response.json({ posts: [] });
+    return Response.json({ posts: [], note: COMMUNITY_READ_UNAVAILABLE_NOTE });
   }
 }
 
