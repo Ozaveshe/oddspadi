@@ -88,6 +88,12 @@ describe("live OddsPadi product UI contract", () => {
       expect(page).toContain('export const dynamic = "force-dynamic";');
       expect(page).not.toMatch(/export const revalidate\s*=/);
     }
+
+    const health = source("scripts/site-health.mjs");
+    expect(health).toContain("checkTipsSurfaceConsistency");
+    expect(health).toContain('const todayPage = await checkPage("/predictions/today"');
+    expect(health).toContain('const weeklyPage = await checkPage("/predictions/week"');
+    expect(health).toContain("HTML is unavailable while API provider status is");
   });
 
   it("shows leans, watchlist, and no-pick reasons on the empty value-picks state", () => {
