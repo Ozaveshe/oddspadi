@@ -19,11 +19,11 @@ export const premierLeague2026Baseline = {
   competition: "Premier League",
   country: "England",
   targetSeason: "2026/27",
-  revision: 3,
-  publishedAt: "2026-07-15",
+  revision: 4,
+  publishedAt: "2026-07-16",
   sourceAsOf: "2026-05-24T15:00:00Z",
-  evidenceCheckedAt: "2026-07-15",
-  previousRevision: { revision: 2, publishedAt: "2026-07-13", sourceAsOf: "2026-05-24T15:00:00Z" },
+  evidenceCheckedAt: "2026-07-16",
+  previousRevision: { revision: 3, publishedAt: "2026-07-15", sourceAsOf: "2026-05-24T15:00:00Z" },
   source: "OddsPadi normalized API-Football standings snapshots",
   sourceLeagueId: "api-football:39",
   model: "returning-team Monte Carlo baseline v1",
@@ -35,8 +35,8 @@ export const premierLeague2026Baseline = {
   seasonEnds: "2027-05-30",
   openingFixture: "Arsenal v Coventry City, 21 August 2026 at 20:00 BST",
   scheduleState: "The official fixture list now includes UK broadcast times for Matchweeks 2–5 through 20 September; listed fixtures remain subject to change.",
-  transferState: "The summer window is open from 15 June to 1 September 2026; confirmed deal effects remain unmodelled.",
-  managerState: "Seven confirmed post-baseline appointments are logged; Fulham remains blank on the official manager register. Appointment and vacancy effects remain unmodelled.",
+  transferState: "The summer window is open from 15 June until 23:00 BST on 1 September 2026; confirmed deal effects remain unmodelled, and this revision does not encode a deal-level squad snapshot.",
+  managerState: "Eight confirmed post-baseline appointments are logged. The Premier League's 13 July line-up confirms all 20 clubs, including Álvaro Arbeloa at Fulham; manager effects remain unmodelled.",
   confirmedManagerChangesSinceBaseline: [
     "Andoni Iraola — Liverpool (4 June 2026)",
     "Pierre Sage — Crystal Palace (15 June 2026)",
@@ -44,13 +44,16 @@ export const premierLeague2026Baseline = {
     "Enzo Maresca — Manchester City (29 June 2026)",
     "Marco Rose — Bournemouth (1 July 2026)",
     "Xabi Alonso — Chelsea (1 July 2026)",
-    "Oliver Glasner — Nottingham Forest (6 July 2026)"
+    "Oliver Glasner — Nottingham Forest (6 July 2026)",
+    "Álvaro Arbeloa — Fulham (7 July 2026)"
   ],
   officialSources: [
-    { label: "Premier League confirms 2026/27 clubs", url: "https://www.premierleague.com/en/news/4673099/the-202627-premier-league-season-officially-starts/", checkedAt: "2026-07-15" },
-    { label: "All 380 fixtures and current broadcast selections", url: "https://www.premierleague.com/en/news/4675097/all-380-fixtures-for-202627-premier-league-season/", checkedAt: "2026-07-15" },
-    { label: "Premier League manager register", url: "https://www.premierleague.com/en/managers", checkedAt: "2026-07-15" },
-    { label: "Premier League summer transfer register", url: "https://www.premierleague.com/en/transfers/2026-27/summer", checkedAt: "2026-07-15" }
+    { label: "Premier League confirms 2026/27 clubs", url: "https://www.premierleague.com/en/news/4673099/the-202627-premier-league-season-officially-starts/", checkedAt: "2026-07-16" },
+    { label: "All 380 fixtures and current broadcast selections", url: "https://www.premierleague.com/en/news/4675097/all-380-fixtures-for-202627-premier-league-season/", checkedAt: "2026-07-16" },
+    { label: "Premier League manager line-up complete", url: "https://www.premierleague.com/en/news/4679012/manager-line-up-complete-for-202627-season", checkedAt: "2026-07-16" },
+    { label: "Fulham appoint Álvaro Arbeloa", url: "https://www.fulhamfc.com/news/2026/july/07/alvaro-arbeloa-appointed-fulham-head-coach/", checkedAt: "2026-07-16" },
+    { label: "Premier League summer window dates", url: "https://www.premierleague.com/en/news/4664145/when-does-summer-2026-premier-league-transfer-window-open-and-close", checkedAt: "2026-07-16" },
+    { label: "Premier League summer transfer register", url: "https://www.premierleague.com/en/transfers/2026-27/summer", checkedAt: "2026-07-16" }
   ],
   teams: [
     ["Arsenal", 1, 38, 85, 71, 27], ["Manchester City", 2, 38, 78, 77, 35],

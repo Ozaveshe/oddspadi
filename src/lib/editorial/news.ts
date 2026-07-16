@@ -33,24 +33,24 @@ export const newsStories: NewsStory[] = [
   },
   {
     slug: "basketball-summer-league-matchday-watchlist",
-    title: "NBA Summer League July 15 desk: eight official games, no pick claim",
-    excerpt: "The NBA lists eight Las Vegas games from 3:30 to 10:30 p.m. ET; a fresh OddsPadi engine read was unavailable, so this is a schedule-and-format briefing only.",
+    title: "NBA Summer League July 16 desk: seven official games, no pick claim",
+    excerpt: "The NBA lists seven Las Vegas games from 4 to 10 p.m. ET on the last preliminary-slate day; a fresh OddsPadi engine read was unavailable, so this is a schedule-and-format briefing only.",
     category: "Matchday briefing",
     sport: "Basketball",
     publishedAt: "2026-07-12",
-    updatedAt: "2026-07-15",
+    updatedAt: "2026-07-16",
     sourceAsOf: "2026-07-14T04:27:25Z",
-    revision: 4,
+    revision: 5,
     readMinutes: 4,
     body: [
-      "The NBA's official schedule lists eight Las Vegas Summer League games for Wednesday, July 15: Indiana–Minnesota at 3:30 p.m. ET, Orlando–Philadelphia at 4 p.m., New Orleans–Cleveland at 5:30 p.m., Phoenix–Detroit at 6 p.m., Milwaukee–Charlotte at 7:30 p.m., Boston–Sacramento at 8 p.m., Utah–San Antonio at 9:30 p.m. and Washington–LA Clippers at 10:30 p.m.",
-      "The league's format makes this more than a loose exhibition list. After each team has played four games, the top four records advance to the July 18 semifinals; head-to-head, point differential and total points are among the published tiebreakers. The championship follows on July 19.",
-      "This editorial run could not complete a fresh OddsPadi database read. The last successfully verified engine snapshot remains July 14 at 04:27:25 UTC, and that earlier state cannot be carried forward to today's slate. This article therefore makes no model pick and does not claim that the eight fixtures are stored; check the public predictions page nearer tip-off for a current evidence-backed status."
+      "The NBA's official schedule lists seven Las Vegas Summer League games for Thursday, July 16: Dallas–Oklahoma City at 4 p.m. ET, Brooklyn–Houston at 4:30 p.m., LA Lakers–Chicago at 6 p.m., Golden State–New York at 7 p.m., Memphis–Atlanta at 8 p.m., Toronto–Miami at 9 p.m. and Portland–Denver at 10 p.m.",
+      "This is the last day of the first-four-game stage. After each team has completed that stage, the top four records advance to the July 18 semifinals; the other 26 teams play a fifth consolation game from July 17–19, and the championship follows on July 19. The published tiebreak order starts with head-to-head for a two-team tie, then point differential and total points.",
+      "Three bounded reads against the verified OddsPadi project timed out during this editorial run. The last successfully verified engine snapshot remains July 14 at 04:27:25 UTC, and that earlier state cannot be carried forward to today's slate. This article therefore makes no model pick and does not claim that the seven fixtures are stored or have a current decision or outcome; check the public predictions page nearer tip-off for a current evidence-backed status."
     ],
     sources: [
-      { label: "Official NBA Summer League schedule PDF", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-15" },
-      { label: "Official 2026 Summer League format and tiebreakers", url: "https://www.nba.com/news/2026-summer-league-format", checkedAt: "2026-07-15" },
-      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-15" }
+      { label: "Official NBA Summer League schedule PDF", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-16" },
+      { label: "Official 2026 Summer League format and tiebreakers", url: "https://www.nba.com/news/2026-summer-league-format", checkedAt: "2026-07-16" },
+      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-16" }
     ]
   },
   {

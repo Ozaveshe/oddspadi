@@ -4,6 +4,14 @@ import { GET as getJsonFeed } from "@/app/news/feed.json/route";
 import { getNewsStories, newsStories } from "@/lib/editorial/news";
 
 describe("Matchday Desk syndication feeds", () => {
+  it("keeps the current matchday revision source-dated and honest about unavailable storage evidence", () => {
+    const story = newsStories.find((item) => item.slug === "basketball-summer-league-matchday-watchlist");
+    expect(story?.revision).toBe(5);
+    expect(story?.updatedAt).toBe("2026-07-16");
+    expect(story?.sources?.every((source) => source.checkedAt === "2026-07-16")).toBe(true);
+    expect(story?.body.join(" ")).toContain("does not claim that the seven fixtures are stored");
+  });
+
   it("keeps curated desk stories available when the public database is not configured", async () => {
     expect(await getNewsStories()).toEqual(newsStories);
   });

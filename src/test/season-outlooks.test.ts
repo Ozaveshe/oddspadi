@@ -13,12 +13,13 @@ describe("upcoming season outlooks", () => {
 
   it("keeps source and missing-input provenance attached", () => {
     expect(premierLeague2026Baseline.sourceAsOf).toBe("2026-05-24T15:00:00Z");
-    expect(premierLeague2026Baseline.revision).toBe(3);
-    expect(premierLeague2026Baseline.previousRevision.revision).toBe(2);
+    expect(premierLeague2026Baseline.revision).toBe(4);
+    expect(premierLeague2026Baseline.previousRevision.revision).toBe(3);
     expect(premierLeague2026Baseline.caveat).toContain("Promoted-team strength");
     expect(premierLeague2026Baseline.caveat).toContain("manager effects");
     expect(premierLeague2026Baseline.model).toContain("baseline");
     expect(premierLeague2026Baseline.scheduleState).toContain("Matchweeks 2–5");
-    expect(premierLeague2026Baseline.managerState).toContain("Fulham remains blank");
+    expect(premierLeague2026Baseline.managerState).toContain("all 20 clubs");
+    expect(premierLeague2026Baseline.confirmedManagerChangesSinceBaseline).toContain("Álvaro Arbeloa — Fulham (7 July 2026)");
   });
 });
