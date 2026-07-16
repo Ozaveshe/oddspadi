@@ -1,5 +1,6 @@
 import { decisionCurlCommand } from "@/lib/sports/prediction/decisionUrls";
 import type { MultiSportCorpusPlan, TrainingCorpusSport } from "@/lib/sports/training/multiSportCorpusPlan";
+import { inspectRuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 import {
   historicalBacktestExecutionModelKey,
   runAndStoreHistoricalBacktest,
@@ -37,6 +38,20 @@ export type MultiSportBacktestJob = {
   realFinishedFixtures: number;
   realOddsSnapshots: number;
   backtestRuns: number;
+  latestBacktest: {
+    id: string;
+    modelKey: string;
+    status: string;
+    dataSource: string;
+    sampleSize: number;
+    brierScore: number | null;
+    logLoss: number | null;
+    calibrationError: number | null;
+    createdAt: string;
+    compatibility: string;
+    exactRuntimeParity: boolean;
+    realDataOnly: boolean;
+  } | null;
   minSample: number;
   limit: number;
   includeDemo: boolean;
@@ -256,6 +271,7 @@ export async function buildMultiSportBacktestRun({
     const baseStatus = initialStatus({ runRequested, adminAuthorized, selected: isSelected, snapshot, minSample, includeDemo });
     const status = result ? statusFromResult(result) : baseStatus;
     const resultInfo = resultSummary(result);
+    const latestEvidence = inspectRuntimeBacktestEvidence(sportPlan.sport, snapshot.latestBacktest);
     const job: MultiSportBacktestJob = {
       sport: sportPlan.sport,
       status,
@@ -267,6 +283,22 @@ export async function buildMultiSportBacktestRun({
       realFinishedFixtures: snapshot.counts.realFinishedFixtures,
       realOddsSnapshots: snapshot.counts.realOddsSnapshots,
       backtestRuns: snapshot.counts.backtestRuns,
+      latestBacktest: snapshot.latestBacktest
+        ? {
+            id: snapshot.latestBacktest.id,
+            modelKey: snapshot.latestBacktest.modelKey,
+            status: snapshot.latestBacktest.status,
+            dataSource: snapshot.latestBacktest.dataSource,
+            sampleSize: snapshot.latestBacktest.sampleSize,
+            brierScore: snapshot.latestBacktest.brierScore,
+            logLoss: snapshot.latestBacktest.logLoss,
+            calibrationError: snapshot.latestBacktest.calibrationError,
+            createdAt: snapshot.latestBacktest.createdAt,
+            compatibility: latestEvidence.compatibility,
+            exactRuntimeParity: latestEvidence.exactRuntimeParity,
+            realDataOnly: latestEvidence.realDataOnly
+          }
+        : null,
       minSample,
       limit,
       includeDemo,
