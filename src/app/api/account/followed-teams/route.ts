@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const auth = await authClient(); if (auth.error) return auth.error;
   const payload = (await request.json().catch(() => ({}))) as { teamId?: unknown };
   const teamId = typeof payload.teamId === "string" ? payload.teamId : "";
@@ -55,6 +57,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const auth = await authClient(); if (auth.error) return auth.error;
   const teamId = new URL(request.url).searchParams.get("teamId") ?? "";
   if (!teamId) return Response.json({ error: "Choose a team to unfollow." }, { status: 400 });

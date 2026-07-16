@@ -1,9 +1,11 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 export const dynamic = "force-dynamic";
 
 async function authClient() { const supabase = await createSupabaseServerClient(); if (!supabase) return { response: Response.json({ error: "Push notifications are not configured." }, { status: 503 }) }; const { data: { user } } = await supabase.auth.getUser(); if (!user) return { response: Response.json({ error: "Sign in to manage notifications." }, { status: 401 }) }; return { supabase, user }; }
 
 export async function POST(request: Request) {
+  const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const ctx = await authClient(); if (ctx.response) return ctx.response;
   const { count } = await ctx.supabase.from("op_followed_teams").select("team_id", { count: "exact", head: true }).eq("user_id", ctx.user.id);
   if (!count) return Response.json({ error: "Follow a team before enabling match alerts." }, { status: 400 });
@@ -15,6 +17,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const ctx = await authClient(); if (ctx.response) return ctx.response; const endpoint = new URL(request.url).searchParams.get("endpoint") ?? "";
   if (!endpoint) return Response.json({ error: "Missing subscription." }, { status: 400 });
   const { error } = await ctx.supabase.from("op_push_subscriptions").delete().eq("endpoint", endpoint).eq("user_id", ctx.user.id);

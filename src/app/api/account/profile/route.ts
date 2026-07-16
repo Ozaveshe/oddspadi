@@ -1,8 +1,10 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const supabase = await createSupabaseServerClient();
   if (!supabase) return Response.json({ error: "Profiles are not configured." }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();

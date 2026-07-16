@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ async function authenticated() {
 }
 
 export async function POST(request: Request) {
+  const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const auth = await authenticated(); if (auth.response) return auth.response;
   const payload = (await request.json().catch(() => ({}))) as { postId?: unknown };
   const postId = typeof payload.postId === "string" ? payload.postId : "";
@@ -21,6 +23,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const auth = await authenticated(); if (auth.response) return auth.response;
   const postId = new URL(request.url).searchParams.get("postId") ?? "";
   if (!postId) return Response.json({ error: "Missing post." }, { status: 400 });

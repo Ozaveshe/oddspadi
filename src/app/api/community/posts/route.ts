@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { publicReadAbortSignal } from "@/lib/supabase/publicReadClient";
+import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const supabase = await createSupabaseServerClient();
   if (!supabase) return Response.json({ error: "Community is not enabled yet." }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
@@ -42,6 +44,7 @@ export async function DELETE(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const supabase = await createSupabaseServerClient();
   if (!supabase) return Response.json({ error: "Community is not enabled yet." }, { status: 503 });
 
