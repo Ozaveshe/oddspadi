@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { publicReadAbortSignal } from "@/lib/supabase/publicReadClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable, reportDatabaseError } from "@/lib/security/databaseError";
+import { cleanExternalIdentifier, isIsoTimestampCursor, isUuid } from "@/lib/security/inputValidation";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
   if (!supabase) return Response.json({ posts: [] });
   try {
     const cursor = new URL(request.url).searchParams.get("cursor");
+    if (cursor && !isIsoTimestampCursor(cursor)) return Response.json({ error: "Invalid cursor." }, { status: 400 });
     let query = supabase
       .from("op_feed_posts")
       .select(POST_SELECT)
@@ -40,7 +42,7 @@ export async function DELETE(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to delete a post." }, { status: 401 });
   const postId = new URL(request.url).searchParams.get("postId") ?? "";
-  if (!postId) return Response.json({ error: "Missing post." }, { status: 400 });
+  if (!isUuid(postId)) return Response.json({ error: "Missing post." }, { status: 400 });
   // RLS is the final ownership check; author_id also avoids ambiguous success.
   const { error } = await supabase.from("op_feed_posts").delete().eq("id", postId).eq("author_id", user.id);
   if (error) return databaseUnavailable("community post delete", error, "Could not delete that post right now.");
@@ -62,7 +64,7 @@ export async function POST(request: Request) {
   if (!body || body.length > 2000) {
     return Response.json({ error: "A post must be between 1 and 2000 characters." }, { status: 400 });
   }
-  const matchId = typeof payload.matchId === "string" && payload.matchId ? payload.matchId.slice(0, 80) : null;
+  const matchId = cleanExternalIdentifier(payload.matchId);
 
   // RLS enforces author_id = auth.uid() on insert.
   const { data, error } = await supabase

@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
+import { isUuid } from "@/lib/security/inputValidation";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
   const categoryId = typeof payload.categoryId === "string" ? payload.categoryId : "";
   const title = typeof payload.title === "string" ? payload.title.trim() : "";
   const body = typeof payload.body === "string" ? payload.body.trim() : "";
-  if (!categoryId) return Response.json({ error: "Missing category." }, { status: 400 });
+  if (!isUuid(categoryId)) return Response.json({ error: "Missing category." }, { status: 400 });
   if (title.length < 3 || title.length > 160) return Response.json({ error: "Title must be 3–160 characters." }, { status: 400 });
   if (body.length < 1 || body.length > 8000) return Response.json({ error: "Post must be 1–8000 characters." }, { status: 400 });
 

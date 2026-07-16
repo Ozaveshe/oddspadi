@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const ctx = await authClient(); if (ctx.response) return ctx.response; const endpoint = new URL(request.url).searchParams.get("endpoint") ?? "";
-  if (!endpoint) return Response.json({ error: "Missing subscription." }, { status: 400 });
+  if (!isAllowedPushEndpoint(endpoint)) return Response.json({ error: "Missing subscription." }, { status: 400 });
   const { error } = await ctx.supabase.from("op_push_subscriptions").delete().eq("endpoint", endpoint).eq("user_id", ctx.user.id);
   if (error) return databaseUnavailable("push subscription delete", error, "Could not disable alerts right now."); return Response.json({ ok: true });
 }

@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { databaseUnavailable } from "@/lib/security/databaseError";
+import { escapeIlikePattern } from "@/lib/security/inputValidation";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export async function GET(request: Request) {
   if (query.length < 2) return Response.json({ teams: [] });
   const { data, error } = await supabase.from("op_teams")
     .select("id,external_id,name,sport,country,metadata")
-    .ilike("name", `%${query}%`).order("name").limit(20);
+    .ilike("name", `%${escapeIlikePattern(query)}%`).order("name").limit(20);
   if (error) return databaseUnavailable("account team search", error, "Team search is temporarily unavailable.");
   return Response.json({ teams: (data ?? []).map((team) => ({
     id: team.id, externalId: team.external_id, name: team.name, sport: team.sport, country: team.country,

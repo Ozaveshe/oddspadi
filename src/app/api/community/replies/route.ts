@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
+import { isUuid } from "@/lib/security/inputValidation";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
   const payload = (await request.json().catch(() => ({}))) as { threadId?: unknown; body?: unknown };
   const threadId = typeof payload.threadId === "string" ? payload.threadId : "";
   const body = typeof payload.body === "string" ? payload.body.trim() : "";
-  if (!threadId) return Response.json({ error: "Missing thread." }, { status: 400 });
+  if (!isUuid(threadId)) return Response.json({ error: "Missing thread." }, { status: 400 });
   if (body.length < 1 || body.length > 8000) return Response.json({ error: "Reply must be 1–8000 characters." }, { status: 400 });
 
   // RLS also blocks replies on locked threads and enforces author_id = auth.uid().

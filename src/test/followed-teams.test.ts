@@ -8,6 +8,8 @@ vi.mock("@/lib/supabase/serverAuthClient", () => ({
 import { GET as readFollowedTeams, POST as followTeam } from "@/app/api/account/followed-teams/route";
 import { normalizeTeamName } from "@/lib/account/followedTeams";
 
+const TEAM_ID = "123e4567-e89b-42d3-a456-426614174001";
+
 function request(teamId: unknown) {
   return new Request("http://127.0.0.1:3031/api/account/followed-teams", {
     method: "POST",
@@ -36,7 +38,7 @@ describe("followed teams", () => {
 
   it("rejects signed-out follow attempts", async () => {
     const { from } = client(null);
-    const response = await followTeam(request("team-1"));
+    const response = await followTeam(request(TEAM_ID));
     expect(response.status).toBe(401);
     expect(from).not.toHaveBeenCalled();
   });
@@ -51,14 +53,14 @@ describe("followed teams", () => {
 
   it("inserts a follow under the authenticated user's identity", async () => {
     const { from, insert } = client();
-    const response = await followTeam(request("team-1"));
+    const response = await followTeam(request(TEAM_ID));
     expect(response.status).toBe(201);
     expect(from).toHaveBeenCalledWith("op_followed_teams");
-    expect(insert).toHaveBeenCalledWith({ user_id: "user-1", team_id: "team-1" });
+    expect(insert).toHaveBeenCalledWith({ user_id: "user-1", team_id: TEAM_ID });
   });
 
   it("treats an existing follow as an idempotent success", async () => {
     client("user-1", { code: "23505", message: "duplicate key" });
-    expect((await followTeam(request("team-1"))).status).toBe(201);
+    expect((await followTeam(request(TEAM_ID))).status).toBe(201);
   });
 });

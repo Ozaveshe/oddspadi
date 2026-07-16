@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
+import { isUuid } from "@/lib/security/inputValidation";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
   if (bio.length > 500) return Response.json({ error: "Bio must be 500 characters or fewer." }, { status: 400 });
   let favouriteTeam: string | null = null;
   if (favouriteTeamRequested && favouriteTeamId) {
+    if (!isUuid(favouriteTeamId)) return Response.json({ error: "Choose a team from the search results." }, { status: 400 });
     const { data: team, error: teamError } = await supabase.from("op_teams").select("name").eq("id", favouriteTeamId).maybeSingle();
     if (teamError) return databaseUnavailable("profile favourite team lookup", teamError, "Could not verify that team right now.");
     if (!team) return Response.json({ error: "Choose a team from the search results." }, { status: 400 });

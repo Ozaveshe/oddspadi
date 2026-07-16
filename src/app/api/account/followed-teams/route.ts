@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
+import { isUuid } from "@/lib/security/inputValidation";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
   const auth = await authClient(); if (auth.error) return auth.error;
   const payload = (await request.json().catch(() => ({}))) as { teamId?: unknown };
   const teamId = typeof payload.teamId === "string" ? payload.teamId : "";
-  if (!teamId) return Response.json({ error: "Choose a team to follow." }, { status: 400 });
+  if (!isUuid(teamId)) return Response.json({ error: "Choose a team to follow." }, { status: 400 });
   const { error } = await auth.supabase.from("op_followed_teams").insert({ user_id: auth.user.id, team_id: teamId });
   // Following an already-followed team is an idempotent success. Avoiding an
   // upsert also means the public API never needs UPDATE privileges on the join.
@@ -61,7 +62,7 @@ export async function DELETE(request: Request) {
   const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const auth = await authClient(); if (auth.error) return auth.error;
   const teamId = new URL(request.url).searchParams.get("teamId") ?? "";
-  if (!teamId) return Response.json({ error: "Choose a team to unfollow." }, { status: 400 });
+  if (!isUuid(teamId)) return Response.json({ error: "Choose a team to unfollow." }, { status: 400 });
   const { error } = await auth.supabase.from("op_followed_teams").delete().eq("user_id", auth.user.id).eq("team_id", teamId);
   if (error) return databaseUnavailable("unfollow team", error, "Could not unfollow that team right now.");
   return Response.json({ ok: true });
