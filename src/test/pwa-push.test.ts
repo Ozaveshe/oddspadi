@@ -19,6 +19,21 @@ describe("PWA and push foundation", () => {
     expect(worker).toContain("/offline");
   });
 
+  it("never caches authenticated pages or API responses", () => {
+    const worker = readFileSync("public/sw.js", "utf8");
+    expect(worker).not.toContain("DATA_CACHE");
+    expect(worker).toContain('if (request.mode === "navigate")');
+    expect(worker).toContain('caches.match("/offline")');
+    expect(worker).toContain('url.pathname.startsWith("/_next/static/")');
+  });
+
+  it("constrains push notification navigation to this origin", () => {
+    const worker = readFileSync("public/sw.js", "utf8");
+    expect(worker).toContain("function safeNotificationPath(value)");
+    expect(worker).toContain("url.origin !== self.location.origin");
+    expect(worker).toContain("safeNotificationPath(event.notification.data?.url)");
+  });
+
   it("keeps push copy responsible", () => {
     const worker = readFileSync("netlify/functions/push-notification-worker-background.ts", "utf8").toLowerCase();
     expect(worker).not.toContain("sure odds");
