@@ -146,6 +146,32 @@ for (const sport of ["football", "basketball", "tennis"]) {
   }, `governed ${sport} learning receipt`);
 }
 
+await checkJson("/api/sports/decision/training/multi-sport-backtest-run?sport=all&minSample=30&limit=50000", (payload) => {
+  if (!payload?.success || !Array.isArray(payload?.data?.jobs)) return "runtime backtest preview is unavailable";
+  const jobs = payload.data.jobs;
+  const problems = [];
+  for (const sport of ["football", "basketball", "tennis"]) {
+    const backtest = jobs.find((job) => job?.sport === sport)?.latestBacktest;
+    if (!backtest) {
+      problems.push(`${sport}: no stored runtime replay`);
+      continue;
+    }
+    if (!backtest.exactRuntimeParity || !backtest.realDataOnly) {
+      problems.push(`${sport}: ${backtest.compatibility ?? "incompatible"}/${backtest.dataSource ?? "unknown source"}`);
+      continue;
+    }
+    const createdAt = Date.parse(backtest.createdAt ?? "");
+    if (!Number.isFinite(createdAt)) {
+      problems.push(`${sport}: invalid runtime replay timestamp`);
+      continue;
+    }
+    const ageMs = Date.now() - createdAt;
+    if (ageMs > 8 * 24 * 60 * 60_000) problems.push(`${sport}: runtime replay is ${(ageMs / 86_400_000).toFixed(1)}d old`);
+    if (backtest.sampleSize < 30) problems.push(`${sport}: runtime replay sample is ${backtest.sampleSize}`);
+  }
+  return problems.length ? problems.join("; ") : null;
+}, "weekly exact-runtime model evidence");
+
 await checkJson(
   "/api/health",
   (payload) => {
