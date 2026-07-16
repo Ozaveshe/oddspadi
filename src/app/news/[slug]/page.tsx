@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getNewsStory, getNewsStories } from "@/lib/editorial/news";
 import { LocalTime } from "@/components/odds/LocalTime";
 import { ShareBar } from "@/components/share/ShareBar";
+import { serializeJsonLd } from "@/lib/security/jsonLd";
 
 export const revalidate = 21_600;
 
@@ -29,8 +30,8 @@ export default async function StoryPage({ params }: { params: Promise<{ slug: st
     { "@type": "ListItem", position: 3, name: story.title, item: `https://oddspadi.com/news/${story.slug}` }
   ] };
   return <main id="main" className="container story-page">
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(articleJsonLd) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }} />
     <Link className="text-link" href="/news">← Back to the Matchday Desk</Link>
     <article className="story-article">
       <div className="story-meta"><span>{story.category}</span><span>{story.sport}</span><time dateTime={story.publishedAt}>{story.publishedAt.slice(0, 10)}</time><span>{story.readMinutes} min read</span>{story.revision ? <span>Revision {story.revision}</span> : null}</div>

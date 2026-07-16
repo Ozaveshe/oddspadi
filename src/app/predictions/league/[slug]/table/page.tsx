@@ -10,6 +10,7 @@ import {
   storedLeagueTable,
 } from "@/lib/sports/leagueStandings";
 import { sportsProvider } from "@/lib/sports/service";
+import { serializeJsonLd } from "@/lib/security/jsonLd";
 
 export const revalidate = 10800;
 
@@ -71,7 +72,7 @@ export default async function LeagueTablePage({ params }: Props) {
     <main id="main" className="container">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <div className="page-heading">
         <div className="meta">

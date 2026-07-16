@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ReplyForm } from "@/components/community/ForumComposers";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { serializeJsonLd } from "@/lib/security/jsonLd";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +117,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
 
   return (
     <main id="main" className="container">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
       <div className="page-heading">
         <div className="meta">
           <Link className="inline-link" href={`/forums/${slug}`}>

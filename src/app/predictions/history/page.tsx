@@ -12,6 +12,7 @@ import {
 import { getYesterdayDecisionAuditProduct, getYesterdayResultsProduct } from "@/lib/sports/tips/product";
 import { formatYesterdayResultsPost } from "@/lib/sports/tips/social";
 import { SlateFixtureCard } from "@/components/odds/IntelligenceSlate";
+import { serializeJsonLd } from "@/lib/security/jsonLd";
 
 export const revalidate = 300;
 
@@ -81,7 +82,7 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
   };
 
   return <main id="main" className="container">
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetJsonLd) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(datasetJsonLd) }} />
     <div className="page-heading">
       <h1>Public results — <span className="accent">published picks only</span></h1>
       <p>Internal model runs, demos, watchlists, and negative-edge analyses never count toward this record. Every unresolved pick shows exactly what it is waiting for.</p>

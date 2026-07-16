@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { buildPremierLeague2026Projection, premierLeague2026Baseline, seasonCoverageQueue } from "@/lib/sports/prediction/seasonOutlooks";
+import { serializeJsonLd } from "@/lib/security/jsonLd";
 
 export const revalidate = 21_600;
 
@@ -23,7 +24,7 @@ export default function SeasonOutlooksPage() {
     creator: { "@type": "Organization", name: "OddsPadi" }
   };
   return <main id="main" className="container season-page">
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetJsonLd) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(datasetJsonLd) }} />
     <header className="page-heading season-hero">
       <span className="section-kicker">Revision {String(premierLeague2026Baseline.revision).padStart(2, "0")} · published {premierLeague2026Baseline.publishedAt}</span>
       <h1>Upcoming seasons, <span className="accent">without fake certainty.</span></h1>

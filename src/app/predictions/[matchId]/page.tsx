@@ -19,6 +19,7 @@ import { getCachedMatchPrediction, getCachedStoredFixtureAnalysis } from "@/lib/
 import { StoredFixtureAnalysisView } from "@/components/odds/StoredFixtureAnalysisView";
 import { ShareBar } from "@/components/share/ShareBar";
 import { FollowTeamButton } from "@/components/account/FollowTeamButton";
+import { serializeJsonLd } from "@/lib/security/jsonLd";
 import Link from "next/link";
 import { leagueSlugFromProviderId } from "@/lib/sports/leagueStandings";
 import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
@@ -142,7 +143,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
 
   return (
     <main id="main" className="container" data-analytics-match-id={match.id} data-analytics-sport={match.sport} data-analytics-league={match.league.name}>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
 
       <div className="page-heading">
         <div className="meta">
