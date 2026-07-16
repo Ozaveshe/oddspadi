@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { DailyTipsPageView } from "@/components/odds/DailyTipsPageView";
 import { getCachedTomorrowTipsProduct } from "@/lib/sports/tips/publicReads";
 
-export const revalidate = 180;
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Tomorrow's OddsPadi Tips — Early Leans & Watchlist",
