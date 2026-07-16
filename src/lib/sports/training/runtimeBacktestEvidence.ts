@@ -12,6 +12,7 @@ export type RuntimeBacktestEvidence = {
   compatibility: HistoricalModelCompatibility | "unsupported-sport" | "missing";
   completed: boolean;
   exactRuntimeParity: boolean;
+  realDataOnly: boolean;
   playerFormFixtures: number | null;
   eligibleFixtures: number | null;
   playerFormCoverage: number | null;
@@ -41,6 +42,7 @@ export function inspectRuntimeBacktestEvidence(
       compatibility: "missing",
       completed: false,
       exactRuntimeParity: false,
+      realDataOnly: false,
       playerFormFixtures: null,
       eligibleFixtures: null,
       playerFormCoverage: null,
@@ -55,13 +57,16 @@ export function inspectRuntimeBacktestEvidence(
   const compatibility = isDecisionModelSport(sport)
     ? historicalModelCompatibility({ sport, evidenceModelKey: backtest.modelKey, config: backtest.config })
     : "unsupported-sport";
-  const exactRuntimeParity = completed && compatibility === "exact-runtime-parity";
+  const normalizedDataSource = backtest.dataSource.trim().toLowerCase();
+  const realDataOnly = normalizedDataSource.includes("real-only") && !normalizedDataSource.includes("demo-included");
+  const exactRuntimeParity = completed && compatibility === "exact-runtime-parity" && realDataOnly;
 
   if (sport !== "football") {
     return {
       compatibility,
       completed,
       exactRuntimeParity,
+      realDataOnly,
       playerFormFixtures: null,
       eligibleFixtures: null,
       playerFormCoverage: null,
@@ -103,6 +108,7 @@ export function inspectRuntimeBacktestEvidence(
     compatibility,
     completed,
     exactRuntimeParity,
+    realDataOnly,
     playerFormFixtures,
     eligibleFixtures,
     playerFormCoverage,

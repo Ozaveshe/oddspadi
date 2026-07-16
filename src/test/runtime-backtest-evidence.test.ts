@@ -58,6 +58,26 @@ describe("runtime backtest evidence", () => {
     expect(evidence.exactRuntimeParity).toBe(false);
   });
 
+  it("never treats a demo-included runtime receipt as production evidence", () => {
+    const evidence = inspectRuntimeBacktestEvidence("basketball", run({
+      sport: "basketball",
+      modelKey: runtimeModelKey("basketball"),
+      dataSource: "supabase:op_fixtures:demo-included:runtime-entrypoint",
+      config: {
+        modelIdentity: runtimeModelIdentityReceipt("basketball", {
+          featureContractStatus: "passed",
+          evaluatedFixtures: 360,
+          entrypointInvocations: 360,
+          executionHash: "fnv1a-demo-runtime"
+        })
+      }
+    }));
+
+    expect(evidence.compatibility).toBe("exact-runtime-parity");
+    expect(evidence.realDataOnly).toBe(false);
+    expect(evidence.exactRuntimeParity).toBe(false);
+  });
+
   it("requires governed player-form coverage for exact-runtime football evidence", () => {
     const ready = inspectRuntimeBacktestEvidence("football", run());
     const sparse = inspectRuntimeBacktestEvidence("football", run({
