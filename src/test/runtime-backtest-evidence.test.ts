@@ -78,6 +78,18 @@ describe("runtime backtest evidence", () => {
     expect(evidence.exactRuntimeParity).toBe(false);
   });
 
+  it("fails closed when a legacy receipt has no data-source provenance", () => {
+    const legacyRun: Partial<StoredBacktestRun> = { ...run() };
+    delete legacyRun.dataSource;
+
+    const evidence = inspectRuntimeBacktestEvidence("football", legacyRun as StoredBacktestRun);
+
+    expect(evidence.completed).toBe(true);
+    expect(evidence.compatibility).toBe("exact-runtime-parity");
+    expect(evidence.realDataOnly).toBe(false);
+    expect(evidence.exactRuntimeParity).toBe(false);
+  });
+
   it("requires governed player-form coverage for exact-runtime football evidence", () => {
     const ready = inspectRuntimeBacktestEvidence("football", run());
     const sparse = inspectRuntimeBacktestEvidence("football", run({

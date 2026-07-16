@@ -144,6 +144,7 @@ function liveMetricBlockers(
     if (compatibility === "incompatible") blockers.push("backtest model identity is incompatible with the live runtime model");
   }
   if (backtest.status !== "completed") blockers.push("backtest is not completed");
+  if (!evidence.realDataOnly) blockers.push("backtest source is not verified as real-only runtime evidence");
   if (backtest.sampleSize < snapshot.readiness.minimumRecommendedFixtures) blockers.push("sample is below the minimum recommendation");
   if (backtest.brierScore === null || backtest.logLoss === null) blockers.push("proper scoring metrics are missing");
   if (backtest.calibrationError === null || !backtest.calibrationBuckets.length || backtest.calibrationError > 0.08) {
@@ -217,7 +218,7 @@ export function buildDecisionLearningProfileFromSnapshot(
     promotionMatchesBacktest && promotedBucketSample >= snapshot.readiness.minimumRecommendedFixtures
       ? promotedCalibrationBuckets
       : calibrationBuckets(backtest);
-  const demoOnly = Boolean(backtest?.dataSource.includes("demo")) || snapshot.counts.realFinishedFixtures === 0;
+  const demoOnly = Boolean(backtest?.dataSource?.includes("demo")) || snapshot.counts.realFinishedFixtures === 0;
   const promotionApproved = requireDurablePromotion ? promotionMatchesBacktest : promotionMatchesBacktest || hasExplicitLivePromotion(backtest);
   const metricBlockers = liveMetricBlockers(snapshot, backtest, runtimeEvidence);
   const shadowReady = snapshot.status === "ready" && Boolean(backtest) && snapshot.readiness.readyForTraining && !demoOnly;

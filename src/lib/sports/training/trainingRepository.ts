@@ -497,7 +497,7 @@ function mapLatestBacktest(data: Record<string, unknown> | null): StoredBacktest
     modelKey: String(data.model_key),
     engineVersion: String(data.engine_version),
     status: data.status as StoredBacktestRun["status"],
-    dataSource: String(data.data_source),
+    dataSource: typeof data.data_source === "string" ? data.data_source : "",
     sampleSize: Number(data.sample_size ?? 0),
     trainSize: Number(data.train_size ?? 0),
     testSize: Number(data.test_size ?? 0),
