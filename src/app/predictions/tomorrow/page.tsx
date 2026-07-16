@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { DailyTipsPageView } from "@/components/odds/DailyTipsPageView";
-import { getDailyTipsProduct } from "@/lib/sports/tips/product";
+import { getCachedTomorrowTipsProduct } from "@/lib/sports/tips/publicReads";
 
 export const revalidate = 180;
 
@@ -11,5 +11,5 @@ export const metadata: Metadata = {
 };
 
 export default async function TomorrowTipsPage() {
-  return <DailyTipsPageView product={await getDailyTipsProduct({ day: "tomorrow" })} />;
+  return <DailyTipsPageView product={await getCachedTomorrowTipsProduct()} />;
 }

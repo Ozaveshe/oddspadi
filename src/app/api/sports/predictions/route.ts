@@ -30,6 +30,7 @@ export const GET = withApiHandler(async (request: Request) => {
   });
   // view=summary strips the decision dossier from each row — card/list UIs
   // only need the summary and the full payload is megabytes on busy days.
-  if (url.searchParams.get("view") === "summary") return apiSuccess(data.map(toPredictionListRow), publicCacheInit(60));
-  return apiSuccess(data, publicCacheInit(60));
+  const cache = publicCacheInit(60, ["date", "sport", "confidence", "league", "country", "q", "publicHistory", "historical", "view"]);
+  if (url.searchParams.get("view") === "summary") return apiSuccess(data.map(toPredictionListRow), cache);
+  return apiSuccess(data, cache);
 });

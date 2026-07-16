@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getNewsStories } from "@/lib/editorial/news";
-import { getSupabasePublicReadClient } from "@/lib/supabase/publicReadClient";
+import { getSupabasePublicReadClient, publicReadAbortSignal } from "@/lib/supabase/publicReadClient";
 
 export const revalidate = 21_600;
 
@@ -18,11 +18,11 @@ export const metadata: Metadata = {
 };
 
 type WeeklyRecap = { week_start: string; week_end: string; graded_count: number; wins: number; losses: number; pushes: number; voids: number; accuracy: number | string; roi: number | string; best_call: string | null };
-async function weeklyRecaps(): Promise<WeeklyRecap[]> { const db = getSupabasePublicReadClient(); if (!db) return []; const { data } = await db.from("op_weekly_prediction_recaps").select("week_start,week_end,graded_count,wins,losses,pushes,voids,accuracy,roi,best_call").order("week_start", { ascending: false }).limit(6); return (data ?? []) as WeeklyRecap[]; }
+async function weeklyRecaps(): Promise<WeeklyRecap[]> { const db = getSupabasePublicReadClient(); if (!db) return []; const { data, error } = await db.from("op_weekly_prediction_recaps").select("week_start,week_end,graded_count,wins,losses,pushes,voids,accuracy,roi,best_call").order("week_start", { ascending: false }).limit(6).abortSignal(publicReadAbortSignal()); return error ? [] : (data ?? []) as WeeklyRecap[]; }
 
 export default async function NewsPage() {
-  const recaps = await weeklyRecaps();
-  const [lead, ...rest] = await getNewsStories();
+  const [recaps, stories] = await Promise.all([weeklyRecaps(), getNewsStories()]);
+  const [lead, ...rest] = stories;
   return (
     <main id="main" className="container editorial-page">
       <header className="page-heading editorial-heading">

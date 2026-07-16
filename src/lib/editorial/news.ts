@@ -1,4 +1,4 @@
-import { getSupabasePublicReadClient } from "@/lib/supabase/publicReadClient";
+import { getSupabasePublicReadClient, publicReadAbortSignal } from "@/lib/supabase/publicReadClient";
 
 export type NewsStory = {
   slug: string;
@@ -33,23 +33,24 @@ export const newsStories: NewsStory[] = [
   },
   {
     slug: "basketball-summer-league-matchday-watchlist",
-    title: "NBA Summer League July 14 desk: six stored games, no public picks",
-    excerpt: "All six official Las Vegas games are now stored, but every latest OddsPadi decision is suspended—so this remains a fixture watch, not a prediction card.",
+    title: "NBA Summer League July 15 desk: eight official games, no pick claim",
+    excerpt: "The NBA lists eight Las Vegas games from 3:30 to 10:30 p.m. ET; a fresh OddsPadi engine read was unavailable, so this is a schedule-and-format briefing only.",
     category: "Matchday briefing",
     sport: "Basketball",
     publishedAt: "2026-07-12",
-    updatedAt: "2026-07-14",
+    updatedAt: "2026-07-15",
     sourceAsOf: "2026-07-14T04:27:25Z",
-    revision: 3,
+    revision: 4,
     readMinutes: 4,
     body: [
-      "The NBA's official schedule lists six Las Vegas Summer League games for Tuesday, July 14: Philadelphia–Houston, Sacramento–Brooklyn, Memphis–Golden State, Washington–Chicago, Denver–Oklahoma City and LA Clippers–L.A. Lakers.",
-      "OddsPadi storage contains all six fixtures. Their 20:00–02:00 UTC tip-off window crosses into July 15 UTC, which is why a calendar-day-only query can split the slate. The latest stored decision summary for every game is suspended and says the fixture is not eligible for a new public pre-match decision, so there is no model pick to publish honestly.",
-      "The stored fixture labels are useful for schedule coverage, but they are not a substitute for usable prices and an eligible decision. Summer League rotations and availability can also move quickly. Treat this as a dated fixture watch and check the public predictions page nearer tip-off for any evidence-backed status change."
+      "The NBA's official schedule lists eight Las Vegas Summer League games for Wednesday, July 15: Indiana–Minnesota at 3:30 p.m. ET, Orlando–Philadelphia at 4 p.m., New Orleans–Cleveland at 5:30 p.m., Phoenix–Detroit at 6 p.m., Milwaukee–Charlotte at 7:30 p.m., Boston–Sacramento at 8 p.m., Utah–San Antonio at 9:30 p.m. and Washington–LA Clippers at 10:30 p.m.",
+      "The league's format makes this more than a loose exhibition list. After each team has played four games, the top four records advance to the July 18 semifinals; head-to-head, point differential and total points are among the published tiebreakers. The championship follows on July 19.",
+      "This editorial run could not complete a fresh OddsPadi database read. The last successfully verified engine snapshot remains July 14 at 04:27:25 UTC, and that earlier state cannot be carried forward to today's slate. This article therefore makes no model pick and does not claim that the eight fixtures are stored; check the public predictions page nearer tip-off for a current evidence-backed status."
     ],
     sources: [
-      { label: "Official 2026 NBA Summer League schedule", url: "https://www.nba.com/news/2026-nba-summer-league-schedule", checkedAt: "2026-07-14" },
-      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-14" }
+      { label: "Official NBA Summer League schedule PDF", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-15" },
+      { label: "Official 2026 Summer League format and tiebreakers", url: "https://www.nba.com/news/2026-summer-league-format", checkedAt: "2026-07-15" },
+      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-15" }
     ]
   },
   {
@@ -86,7 +87,7 @@ function generatedStory(row: EditorialStoryRow): NewsStory | null {
 export async function getNewsStories(): Promise<NewsStory[]> {
   const db = getSupabasePublicReadClient();
   if (!db) return newsStories;
-  const { data, error } = await db.from("op_editorial_stories").select("slug,title,excerpt,category,sport,published_at,updated_at,source_as_of,revision,read_minutes,body,sources").order("published_at", { ascending: false }).limit(100);
+  const { data, error } = await db.from("op_editorial_stories").select("slug,title,excerpt,category,sport,published_at,updated_at,source_as_of,revision,read_minutes,body,sources").order("published_at", { ascending: false }).limit(100).abortSignal(publicReadAbortSignal());
   if (error) return newsStories;
   const generated = (data as EditorialStoryRow[] ?? []).map(generatedStory).filter((story): story is NewsStory => Boolean(story));
   const generatedSlugs = new Set(generated.map((story) => story.slug));

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildSportsSlate } from "@/lib/sports/intelligence/canonical";
 import type { CanonicalDecision, CanonicalFixture, CanonicalOddsSnapshot, SlateFixture, SlatePublicStatus, SportsSlate } from "@/lib/sports/intelligence/types";
-import { buildDailyTipsProduct, buildWeeklyTipsProduct, type YesterdayResultsProduct } from "@/lib/sports/tips/product";
+import { buildDailyTipsProduct, buildWeeklyTipsProduct, filterDailyTipsProductBySport, type YesterdayResultsProduct } from "@/lib/sports/tips/product";
 import { formatDailyTipsForTelegram, formatDailyTipsForWhatsApp, formatValuePickPost, formatWeeklyRadarPost, formatYesterdayResultsPost } from "@/lib/sports/tips/social";
 import type { DecisionMarketAnalysis, DecisionSummary } from "@/lib/sports/types";
 
@@ -41,9 +41,9 @@ function decisionSummary(fixtureId: string, status: SlatePublicStatus, expiresAt
   };
 }
 
-function fixtureRow(id: string, status: SlatePublicStatus, options: { provider?: string; kickoffAt?: string; expiresAt?: string } = {}): SlateFixture {
+function fixtureRow(id: string, status: SlatePublicStatus, options: { provider?: string; kickoffAt?: string; expiresAt?: string; sport?: CanonicalFixture["sport"] } = {}): SlateFixture {
   const fixture: CanonicalFixture = {
-    fixtureId: id, providerFixtureId: id, sport: "football", league: "Premier League", leagueId: "39", country: "England", season: "2026",
+    fixtureId: id, providerFixtureId: id, sport: options.sport ?? "football", league: "Premier League", leagueId: "39", country: "England", season: "2026",
     kickoffAt: options.kickoffAt ?? "2026-07-14T18:00:00.000Z", homeTeam: { id: "h", name: "Home FC" }, awayTeam: { id: "a", name: "Away FC" },
     status: "scheduled", score: null, provider: options.provider ?? "api-football", lastSyncedAt: GENERATED_AT, dataQuality: 0.88
   };
@@ -73,6 +73,20 @@ describe("Daily Tips and Weekly Predictions product layer", () => {
     expect(product.sections.leans).toHaveLength(1);
     expect(product.sections.watchlist).toHaveLength(1);
     expect(product.sections.noPicks).toHaveLength(1);
+  });
+
+  it("filters every daily slate section and summary to the requested sport", () => {
+    const product = buildDailyTipsProduct(slate([
+      fixtureRow("football-1", "lean"),
+      fixtureRow("basketball-1", "watchlist", { sport: "basketball" })
+    ]));
+
+    const basketball = filterDailyTipsProductBySport(product, "basketball");
+
+    expect(basketball.sections.schedule.map((row) => row.fixture.fixtureId)).toEqual(["basketball-1"]);
+    expect(basketball.slate.fixtures.every((row) => row.fixture.sport === "basketball")).toBe(true);
+    expect(basketball.summary).toMatchObject({ fixturesFound: 1, watchlist: 1, leans: 0 });
+    expect(basketball.slate.summary).toMatchObject({ fixturesFound: 1, watchlist: 1, leansPublished: 0 });
   });
 
   it("renders a complete seven-day grouping even when some dates have no fixtures", () => {

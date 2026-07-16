@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { buildFootballBoardFromPayloads, liveBoardFixtureFromMatch, mergeLiveBoardCoverage } from "@/lib/sports/liveScoreBoard";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildFootballBoardFromPayloads, liveBoardFixtureFromMatch, mergeLiveBoardCoverage, resolveRepositoryCoverage } from "@/lib/sports/liveScoreBoard";
 import type { Match } from "@/lib/sports/types";
 
 function providerMatch(sport: "basketball" | "tennis", kind: "provider" | "mock" = "provider"): Match {
@@ -18,6 +18,10 @@ function providerMatch(sport: "basketball" | "tennis", kind: "provider" | "mock"
 }
 
 describe("multi-sport live board", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("normalizes provider-backed basketball and tennis fixtures with visual metadata", () => {
     const basketball = liveBoardFixtureFromMatch(providerMatch("basketball"));
     const tennis = liveBoardFixtureFromMatch(providerMatch("tennis"));
@@ -52,5 +56,15 @@ describe("multi-sport live board", () => {
 
     expect(mergeLiveBoardCoverage(football, [duplicateStoredFootball, storedBasketball!]).map((fixture) => fixture.sport))
       .toEqual(["football", "basketball"]);
+  });
+
+  it("fails open with an explicit timeout state when stored coverage stalls", async () => {
+    vi.useFakeTimers();
+    const stalled = new Promise<never>(() => undefined);
+    const resultPromise = resolveRepositoryCoverage(stalled, 50);
+
+    await vi.advanceTimersByTimeAsync(50);
+
+    await expect(resultPromise).resolves.toEqual({ fixtures: [], unavailableReason: "timeout" });
   });
 });

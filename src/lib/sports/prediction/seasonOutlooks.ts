@@ -19,11 +19,11 @@ export const premierLeague2026Baseline = {
   competition: "Premier League",
   country: "England",
   targetSeason: "2026/27",
-  revision: 2,
-  publishedAt: "2026-07-13",
+  revision: 3,
+  publishedAt: "2026-07-15",
   sourceAsOf: "2026-05-24T15:00:00Z",
-  evidenceCheckedAt: "2026-07-13",
-  previousRevision: { revision: 1, publishedAt: "2026-07-12", sourceAsOf: "2026-05-24T15:00:00Z" },
+  evidenceCheckedAt: "2026-07-15",
+  previousRevision: { revision: 2, publishedAt: "2026-07-13", sourceAsOf: "2026-05-24T15:00:00Z" },
   source: "OddsPadi normalized API-Football standings snapshots",
   sourceLeagueId: "api-football:39",
   model: "returning-team Monte Carlo baseline v1",
@@ -34,7 +34,9 @@ export const premierLeague2026Baseline = {
   seasonStarts: "2026-08-21",
   seasonEnds: "2027-05-30",
   openingFixture: "Arsenal v Coventry City, 21 August 2026 at 20:00 BST",
+  scheduleState: "The official fixture list now includes UK broadcast times for Matchweeks 2–5 through 20 September; listed fixtures remain subject to change.",
   transferState: "The summer window is open from 15 June to 1 September 2026; confirmed deal effects remain unmodelled.",
+  managerState: "Seven confirmed post-baseline appointments are logged; Fulham remains blank on the official manager register. Appointment and vacancy effects remain unmodelled.",
   confirmedManagerChangesSinceBaseline: [
     "Andoni Iraola — Liverpool (4 June 2026)",
     "Pierre Sage — Crystal Palace (15 June 2026)",
@@ -45,10 +47,10 @@ export const premierLeague2026Baseline = {
     "Oliver Glasner — Nottingham Forest (6 July 2026)"
   ],
   officialSources: [
-    { label: "Premier League confirms 2026/27 clubs", url: "https://www.premierleague.com/en/news/4673099/the-202627-premier-league-season-officially-starts/", checkedAt: "2026-07-13" },
-    { label: "All 380 Premier League fixtures", url: "https://www.premierleague.com/en/news/4675097/all-380-fixtures-for-202627-premier-league-season/", checkedAt: "2026-07-13" },
-    { label: "Premier League manager register", url: "https://www.premierleague.com/en/managers", checkedAt: "2026-07-13" },
-    { label: "Premier League summer transfer register", url: "https://www.premierleague.com/en/transfers/2026-27/summer", checkedAt: "2026-07-13" }
+    { label: "Premier League confirms 2026/27 clubs", url: "https://www.premierleague.com/en/news/4673099/the-202627-premier-league-season-officially-starts/", checkedAt: "2026-07-15" },
+    { label: "All 380 fixtures and current broadcast selections", url: "https://www.premierleague.com/en/news/4675097/all-380-fixtures-for-202627-premier-league-season/", checkedAt: "2026-07-15" },
+    { label: "Premier League manager register", url: "https://www.premierleague.com/en/managers", checkedAt: "2026-07-15" },
+    { label: "Premier League summer transfer register", url: "https://www.premierleague.com/en/transfers/2026-27/summer", checkedAt: "2026-07-15" }
   ],
   teams: [
     ["Arsenal", 1, 38, 85, 71, 27], ["Manchester City", 2, 38, 78, 77, 35],

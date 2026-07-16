@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ProviderRunStrip, WeeklySlateSections } from "@/components/odds/IntelligenceSlate";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { TipsSharePreview } from "@/components/odds/TipsSharePreview";
-import { getWeeklyTipsProduct } from "@/lib/sports/tips/product";
+import { getCachedWeeklyTipsProduct } from "@/lib/sports/tips/publicReads";
 import { formatWeeklyRadarPost } from "@/lib/sports/tips/social";
 
 export const revalidate = 300;
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 export default async function WeeklyPredictionsPage() {
-  const product = await getWeeklyTipsProduct();
+  const product = await getCachedWeeklyTipsProduct();
   return (
     <main id="main" className="container">
       <div className="page-heading tips-heading">

@@ -1,4 +1,7 @@
+import * as React from "react";
 import Link from "next/link";
+import { LiveCoverageFallback } from "@/components/live/MatchdayFallback";
+import type { LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import { LocalTime } from "@/components/odds/LocalTime";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import type { SlateFixture, SlatePublicStatus, SportsSlate } from "@/lib/sports/intelligence/types";
@@ -140,18 +143,27 @@ function SlateSection({ title, eyebrow, rows, empty, asOf, compact = false }: { 
   );
 }
 
-export function DailyTipsSections({ product }: { product: DailyTipsProduct }) {
+export function DailyTipsSections({ product, fallbackBoard = null }: { product: DailyTipsProduct; fallbackBoard?: LiveScoreBoard | null }) {
   const dayLabel = product.day === "today" ? "Today" : "Tomorrow";
   if (!product.sections.schedule.length) {
+    if (fallbackBoard?.fixtures.length) return <LiveCoverageFallback board={fallbackBoard} />;
+    const storedSlateUnavailable = product.slate.provider.status === "failed" || product.slate.provider.status === "unavailable";
     return (
       <section className="section intelligence-empty-slate" aria-labelledby="empty-slate-title">
         <div className="intelligence-empty-copy">
           <span className="section-kicker">No synthetic fill</span>
-          <h2 id="empty-slate-title">Nothing real to analyse yet</h2>
-          <p>
-            The provider returned no fixtures for {product.day}. OddsPadi has withheld every prediction instead of
-            filling the page with sample matches or invented prices.
-          </p>
+          <h2 id="empty-slate-title">{storedSlateUnavailable ? "The stored provider slate is unavailable" : "Nothing real to analyse yet"}</h2>
+          {storedSlateUnavailable ? (
+            <p>
+              OddsPadi could not read the latest stored provider response for {product.day}. Every prediction is
+              withheld until that receipt is available; this state does not mean the upstream provider returned no fixtures.
+            </p>
+          ) : (
+            <p>
+              The provider returned no fixtures for {product.day}. OddsPadi has withheld every prediction instead of
+              filling the page with sample matches or invented prices.
+            </p>
+          )}
           <div className="intelligence-empty-actions">
             <Link className="button primary" href="/predictions/week">Check the weekly radar</Link>
             <Link className="button" href="/predictions/history">Review settled results</Link>
@@ -159,13 +171,14 @@ export function DailyTipsSections({ product }: { product: DailyTipsProduct }) {
         </div>
         <div>
           <dl className="intelligence-empty-ledger">
-            <div><dt>Fixtures</dt><dd>0 provider rows</dd></div>
-            <div><dt>Verified odds</dt><dd>0 snapshots</dd></div>
+            <div><dt>Fixtures</dt><dd>{storedSlateUnavailable ? "Not read" : "0 provider rows"}</dd></div>
+            <div><dt>Verified odds</dt><dd>{storedSlateUnavailable ? "Not read" : "0 snapshots"}</dd></div>
             <div><dt>Public decision</dt><dd>Withheld</dd></div>
           </dl>
           <p className="small muted intelligence-empty-next">
-            The next provider run will rebuild this slate. Until then, the weekly radar and results ledger remain
-            available without implying that today&apos;s feed is healthy.
+            {storedSlateUnavailable
+              ? "The next successful stored-receipt read will rebuild this slate. Until then, the weekly radar and results ledger remain available without implying that today’s feed is healthy."
+              : "The next provider run will rebuild this slate. Until then, the weekly radar and results ledger remain available without implying that today’s feed is healthy."}
           </p>
         </div>
       </section>

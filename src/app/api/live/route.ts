@@ -8,7 +8,10 @@ export async function GET(request: Request) {
   return Response.json(board, {
     headers: {
       // Let the CDN absorb polling traffic: one origin hit per 30s window.
-      "Cache-Control": "public, max-age=0, s-maxage=30, stale-while-revalidate=60"
+      "Cache-Control": "public, max-age=0, s-maxage=30, stale-while-revalidate=60",
+      // Netlify's durable Next.js cache otherwise collapses every requested
+      // date onto the first cached board for this pathname.
+      "Netlify-Vary": "query=date"
     }
   });
 }

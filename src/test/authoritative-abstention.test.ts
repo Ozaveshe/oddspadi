@@ -66,4 +66,31 @@ describe("authoritative public-pick abstention", () => {
       getPredictions({ date: "2026-08-21", sport: "basketball", providerMode: "live", storageMode: "preview" })
     ).resolves.toEqual([]);
   });
+
+  it("does not treat a future provider fixture as live in the public prediction service", async () => {
+    const [mockMatch] = await mockSportsDataProvider.getFixtures("2099-07-16", "basketball");
+    const futureProviderMatch = {
+      ...mockMatch,
+      id: "api-basketball:future-live",
+      kickoffTime: "2099-07-16T23:30:00.000Z",
+      status: "live" as const,
+      dataSource: {
+        ...mockMatch.dataSource,
+        kind: "provider" as const,
+        fixtureProvider: "api-basketball",
+        fixtureProviderId: "future-live"
+      }
+    };
+    getFixturesMock.mockResolvedValue([futureProviderMatch]);
+
+    const [row] = await getPredictions({
+      date: "2099-07-16",
+      sport: "basketball",
+      providerMode: "live",
+      storageMode: "preview"
+    });
+
+    expect(row.match.status).toBe("scheduled");
+    expect(row.prediction.canonicalDecision.engineStatus).not.toBe("suspended");
+  });
 });

@@ -46,7 +46,9 @@ export default function SeasonOutlooksPage() {
           <div><dt>Confirmed promoted</dt><dd>{premierLeague2026Baseline.confirmedPromoted.join(", ")}</dd></div>
           <div><dt>Opening fixture</dt><dd>{premierLeague2026Baseline.openingFixture}</dd></div>
         </dl>
+        <p className="small"><strong>Schedule state:</strong> {premierLeague2026Baseline.scheduleState}</p>
         <p className="small"><strong>Transfer state:</strong> {premierLeague2026Baseline.transferState}</p>
+        <p className="small"><strong>Manager state:</strong> {premierLeague2026Baseline.managerState}</p>
         <p className="small"><strong>Manager changes logged, not modelled:</strong> {premierLeague2026Baseline.confirmedManagerChangesSinceBaseline.join("; ")}.</p>
         <div className="season-sources"><strong>Official checks</strong>{premierLeague2026Baseline.officialSources.map(source => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.label} · checked {source.checkedAt} ↗</a>)}</div>
       </div>

@@ -190,6 +190,7 @@ const EXCLUDED_NAME_PATTERN = /friendl/i;
 
 const BOARD_TTL_MS = 30_000;
 const MAX_FIXTURES = 500;
+const REPOSITORY_COVERAGE_TIMEOUT_MS = 5_000;
 
 /** NaN from an invalid kickoff makes Array.sort's comparator inconsistent
  *  (order becomes engine-dependent); park unparseable dates at the end. */
@@ -483,25 +484,24 @@ function metadataText(metadata: Record<string, unknown> | null, key: string): st
 
 async function readStoredFixturesForDate(date: string): Promise<LiveBoardFixture[]> {
   const client = getSupabaseServerClient();
-  if (!client) return [];
+  if (!client) throw new Error("Supabase server client is unavailable.");
   const from = `${date}T00:00:00.000Z`;
   const untilDate = new Date(`${date}T00:00:00.000Z`);
   untilDate.setUTCDate(untilDate.getUTCDate() + 1);
   const { data, error } = await client.from("op_fixtures")
     .select("id,sport,external_id,league_external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,country,metadata")
     .gte("kickoff_at", from).lt("kickoff_at", untilDate.toISOString()).order("kickoff_at").limit(MAX_FIXTURES);
-  if (error) {
-    console.warn(`[live-board] stored fixture read failed — ${error.message}`);
-    return [];
-  }
+  if (error) throw new Error(`Stored fixture read failed: ${error.message}`);
   if (!data?.length) return [];
   const rows = (data as RepositoryFixture[]).filter((row) => row.sport === "football" || row.sport === "basketball" || row.sport === "tennis");
   const leagueIds = [...new Set(rows.map((row) => row.league_external_id).filter((id): id is string => Boolean(id)))];
   const teamIds = [...new Set(rows.flatMap((row) => [row.home_team_external_id, row.away_team_external_id]))];
-  const [{ data: leagues }, { data: teams }] = await Promise.all([
-    leagueIds.length ? client.from("op_leagues").select("external_id,name,country,metadata").in("external_id", leagueIds) : Promise.resolve({ data: [] }),
-    teamIds.length ? client.from("op_teams").select("external_id,name,country,metadata").in("external_id", teamIds) : Promise.resolve({ data: [] })
+  const [{ data: leagues, error: leagueError }, { data: teams, error: teamError }] = await Promise.all([
+    leagueIds.length ? client.from("op_leagues").select("external_id,name,country,metadata").in("external_id", leagueIds) : Promise.resolve({ data: [], error: null }),
+    teamIds.length ? client.from("op_teams").select("external_id,name,country,metadata").in("external_id", teamIds) : Promise.resolve({ data: [], error: null })
   ]);
+  if (leagueError) throw new Error(`Stored league read failed: ${leagueError.message}`);
+  if (teamError) throw new Error(`Stored team read failed: ${teamError.message}`);
   const leagueMap = new Map((leagues as RepositoryNamedEntity[] | null ?? []).map((row) => [row.external_id, row]));
   const teamMap = new Map((teams as RepositoryNamedEntity[] | null ?? []).map((row) => [row.external_id, row]));
   return rows.flatMap((row) => {
@@ -541,6 +541,33 @@ async function storedFixturesForDate(date: string): Promise<LiveBoardFixture[]> 
   return promise;
 }
 
+export type RepositoryCoverageResult = {
+  fixtures: LiveBoardFixture[];
+  unavailableReason: "timeout" | "error" | null;
+};
+
+export async function resolveRepositoryCoverage(
+  source: Promise<LiveBoardFixture[]>,
+  timeoutMs = REPOSITORY_COVERAGE_TIMEOUT_MS
+): Promise<RepositoryCoverageResult> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const guardedSource = source
+    .then((fixtures) => ({ fixtures, unavailableReason: null }) satisfies RepositoryCoverageResult)
+    .catch((error: unknown) => {
+      console.warn(`[live-board] stored fixture supplement failed — ${error instanceof Error ? error.message : "unknown error"}`);
+      return { fixtures: [], unavailableReason: "error" } satisfies RepositoryCoverageResult;
+    });
+  const timedOut = new Promise<RepositoryCoverageResult>((resolve) => {
+    timeout = setTimeout(() => resolve({ fixtures: [], unavailableReason: "timeout" }), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([guardedSource, timedOut]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 export function mergeLiveBoardCoverage(
   providerFixtures: LiveBoardFixture[],
   repositoryFixtures: LiveBoardFixture[]
@@ -553,16 +580,17 @@ export function mergeLiveBoardCoverage(
 }
 
 async function fetchLiveScoreBoardUncached(date: string): Promise<LiveScoreBoard> {
-  const [football, basketballMatches, tennisMatches] = await Promise.all([
+  const [football, basketballMatches, tennisMatches, repositoryCoverage] = await Promise.all([
     fetchFootballLiveScoreBoard(date),
     timedFixtures(date, "basketball"),
-    timedFixtures(date, "tennis")
+    timedFixtures(date, "tennis"),
+    resolveRepositoryCoverage(storedFixturesForDate(date))
   ]);
   const extraFixtures = [...basketballMatches, ...tennisMatches]
     .map(liveBoardFixtureFromMatch)
     .filter((fixture): fixture is LiveBoardFixture => Boolean(fixture));
   const providerFixtures = [...football.fixtures, ...extraFixtures];
-  const repositoryFixtures = await storedFixturesForDate(date);
+  const repositoryFixtures = repositoryCoverage.fixtures;
   const fixtures = mergeLiveBoardCoverage(providerFixtures, repositoryFixtures).sort((a, b) => {
     const phaseDiff = phaseOrder(a.phase) - phaseOrder(b.phase);
     if (phaseDiff !== 0) return phaseDiff;
@@ -585,11 +613,15 @@ async function fetchLiveScoreBoardUncached(date: string): Promise<LiveScoreBoard
     sportCounts,
     availableSports,
     fixtures,
-    note: repositoryFixtures.some((fixture) => !providerFixtures.some((provider) => provider.sport === fixture.sport))
+    note: repositoryCoverage.unavailableReason
       ? providerFixtures.length
-        ? "Live provider coverage is supplemented with normalized stored fixtures for unavailable sports."
-        : "Showing the latest normalized fixtures stored by the OddsPadi ingestion engine."
-      : fixtures.length ? undefined : "No provider-backed or stored score feeds returned fixtures for this date."
+        ? `Showing provider coverage only; the stored fixture supplement ${repositoryCoverage.unavailableReason === "timeout" ? "timed out" : "is temporarily unavailable"}.`
+        : `Live providers returned no fixtures and the stored fixture fallback ${repositoryCoverage.unavailableReason === "timeout" ? "timed out" : "is temporarily unavailable"}.`
+      : repositoryFixtures.some((fixture) => !providerFixtures.some((provider) => provider.sport === fixture.sport))
+        ? providerFixtures.length
+          ? "Live provider coverage is supplemented with normalized stored fixtures for unavailable sports."
+          : "Showing the latest normalized fixtures stored by the OddsPadi ingestion engine."
+        : fixtures.length ? undefined : "No provider-backed or stored score feeds returned fixtures for this date."
   };
 }
 

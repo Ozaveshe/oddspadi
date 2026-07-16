@@ -12,13 +12,17 @@ describe("live OddsPadi product UI contract", () => {
     expect(home).toContain("home-engine-strip");
     expect(home).toContain("Daily Tips Preview");
     expect(home).toContain("<LiveTicker initial={liveBoard}");
-    expect(home).toContain("getDailyTipsProduct({ ensure: false })");
-    expect(home).toContain("getWeeklyTipsProduct({ ensure: false })");
+    expect(home).toContain("getCachedTodayTipsProduct()");
+    expect(home).toContain("getCachedWeeklyTipsProduct()");
+    expect(home).toContain("deriveHomepageMatchdayState(daily, liveBoard)");
+    expect(home).toContain("matchday.featuredFixture");
+    expect(home).toContain("matchday.previewFixtures");
     expect(home).not.toMatch(/loading\.\.\.|loading forever|spinner/i);
   });
 
   it("keeps the visual system editorial instead of glossy and preserves empty-state CTA contrast", () => {
     const styles = source("src/app/globals.css");
+    const layout = source("src/app/layout.tsx");
     expect(styles).toContain(".hero h1 .accent");
     expect(styles).toContain("color: var(--green);");
     expect(styles).not.toContain("linear-gradient(96deg, var(--green)");
@@ -26,6 +30,8 @@ describe("live OddsPadi product UI contract", () => {
     expect(styles).toContain("background: var(--green-strong);");
     expect(styles).toContain(".home-today-best .empty-state .button");
     expect(styles).toContain("background: var(--surface-2); color: var(--text);");
+    expect(styles).not.toContain(".section > .section-title,");
+    expect(layout).toContain("data-scroll-behavior=\"smooth\"");
   });
 
   it("keeps the daily tips surface useful even without a published value pick", () => {
@@ -35,6 +41,8 @@ describe("live OddsPadi product UI contract", () => {
     expect(slate).toContain("Watchlist");
     expect(slate).toContain("No-Pick Matches");
     expect(slate).toContain("if (!product.sections.schedule.length)");
+    expect(slate).toContain("fallbackBoard?.fixtures.length");
+    expect(slate).toContain("<LiveCoverageFallback board={fallbackBoard}");
     expect(slate).toContain("Nothing real to analyse yet");
     expect(slate).toContain("0 provider rows");
     expect(slate).toContain("Public decision</dt><dd>Withheld");
@@ -45,6 +53,25 @@ describe("live OddsPadi product UI contract", () => {
     expect(slate).toContain("Social previews remain hidden");
     const weekly = source("src/app/predictions/week/page.tsx");
     expect(weekly).toContain("product.summary.fixturesFound > 0");
+  });
+
+  it("keeps anonymous tips routes read-only and shared-cache backed", () => {
+    const reads = source("src/lib/sports/tips/publicReads.ts");
+    expect(reads).toContain("getDailyTipsProduct({ day: \"today\", ensure: false })");
+    expect(reads).toContain("getDailyTipsProduct({ day: \"tomorrow\", ensure: false })");
+    expect(reads).toContain("getWeeklyTipsProduct({ ensure: false })");
+    for (const path of [
+      "src/app/predictions/page.tsx",
+      "src/app/predictions/today/page.tsx",
+      "src/app/predictions/tomorrow/page.tsx",
+      "src/app/predictions/week/page.tsx",
+      "src/app/predictions/value-picks/page.tsx",
+      "src/app/api/tips/today/route.ts",
+      "src/app/api/tips/tomorrow/route.ts",
+      "src/app/api/tips/week/route.ts"
+    ]) {
+      expect(source(path)).not.toMatch(/get(?:Daily|Weekly)TipsProduct\(/);
+    }
   });
 
   it("shows leans, watchlist, and no-pick reasons on the empty value-picks state", () => {

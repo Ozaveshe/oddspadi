@@ -53,7 +53,10 @@ export function isProviderBackedMatch(match: Match): boolean {
   );
 }
 
-function canonicalFixtureStatus(match: Match, now: Date): CanonicalFixture["status"] {
+export function normalizeFutureLiveMatchStatus(
+  match: Pick<Match, "status" | "kickoffTime">,
+  now = new Date()
+): Match["status"] {
   const kickoff = Date.parse(match.kickoffTime);
   if (
     match.status === "live" &&
@@ -79,7 +82,7 @@ export function normalizeCanonicalFixture(match: Match, now = new Date()): Canon
     kickoffAt: match.kickoffTime,
     homeTeam: { id: match.homeTeam.id, name: match.homeTeam.name, logo: match.homeTeam.logo },
     awayTeam: { id: match.awayTeam.id, name: match.awayTeam.name, logo: match.awayTeam.logo },
-    status: canonicalFixtureStatus(match, now),
+    status: normalizeFutureLiveMatchStatus(match, now),
     score: match.score ? { ...match.score } : null,
     provider: match.dataSource?.fixtureProvider ?? "unknown",
     lastSyncedAt: syncedAt,

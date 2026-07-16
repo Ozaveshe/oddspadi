@@ -219,6 +219,31 @@ export function getHistoryWindowSummaries(items: PublicPredictionHistoryItem[], 
 
 type PublicHistoryCacheEntry = { expiresAt: number; promise: Promise<PublicPredictionHistory> };
 const publicHistoryCache = new Map<string, PublicHistoryCacheEntry>();
+export const PUBLIC_HISTORY_READ_TIMEOUT_MS = 3_500;
+
+function publicHistoryReadAbortSignal(): AbortSignal {
+  return AbortSignal.timeout(PUBLIC_HISTORY_READ_TIMEOUT_MS);
+}
+
+function errorMessage(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) return String(error.message ?? "");
+  return "";
+}
+
+export function publicHistoryRepositoryFailureReason(error: unknown): string {
+  const message = errorMessage(error).replace(/\s+/g, " ").trim();
+  if (!message) return "The public pick repository could not be read.";
+  if (/<(?:!doctype|html)|\b522\b|timed? out|timeout|aborterror|operation was aborted/i.test(message)) {
+    return "The public pick repository timed out before returning a response.";
+  }
+  if (/connection (?:closed|terminated)|fetch failed/i.test(message)) {
+    return "The public pick repository connection closed before returning a response.";
+  }
+  const detail = message.length > 240 ? `${message.slice(0, 240)}...` : message;
+  return `The public pick repository could not be read: ${detail}`;
+}
 
 function cacheTtl(env: Record<string, string | undefined>): number {
   const parsed = Number.parseInt(env.ODDSPADI_PUBLIC_HISTORY_CACHE_TTL_MS ?? "300000", 10);
@@ -229,21 +254,30 @@ async function readPublicPredictionHistory(env: Record<string, string | undefine
   const client = getSupabaseServerClient(env);
   if (!client) return { items: [], source: "unavailable", reason: "The public pick repository is not configured for this runtime.", generatedAt: new Date().toISOString() };
   const baseColumns = "id,fixture_id,sport,league,country,home_team,away_team,kickoff_at,market,selection,selection_label,odds,model_version,model_probability,implied_probability,no_vig_probability,value_edge,expected_value,confidence,risk,published_at,status,settlement_status,result,settlement_reason,settled_at,closing_odds,closing_line_value,provider,created_at";
-  const primary = await client.from("op_public_picks")
-    .select(`${baseColumns},data_quality`)
-    .order("published_at", { ascending: false })
-    .limit(1000);
-  let data: unknown[] | null = primary.data;
-  let error = primary.error;
-  // Keep the dashboard readable during a code-before-migration rollout. Older
-  // rows remain explicitly unscored; no data-quality value is inferred.
-  if (error && /data_quality|column.*not found|schema cache/i.test(error.message)) {
-    const fallback = await client.from("op_public_picks").select(baseColumns).order("published_at", { ascending: false }).limit(1000);
-    data = fallback.data;
-    error = fallback.error;
+  try {
+    const primary = await client.from("op_public_picks")
+      .select(`${baseColumns},data_quality`)
+      .order("published_at", { ascending: false })
+      .limit(1000)
+      .abortSignal(publicHistoryReadAbortSignal());
+    let data: unknown[] | null = primary.data;
+    let error = primary.error;
+    // Keep the dashboard readable during a code-before-migration rollout. Older
+    // rows remain explicitly unscored; no data-quality value is inferred.
+    if (error && /data_quality|column.*not found|schema cache/i.test(error.message)) {
+      const fallback = await client.from("op_public_picks")
+        .select(baseColumns)
+        .order("published_at", { ascending: false })
+        .limit(1000)
+        .abortSignal(publicHistoryReadAbortSignal());
+      data = fallback.data;
+      error = fallback.error;
+    }
+    if (error) return { items: [], source: "unavailable", reason: publicHistoryRepositoryFailureReason(error), generatedAt: new Date().toISOString() };
+    return { items: ((data ?? []) as PublicPickRow[]).map(publicHistoryItemFromPublicPickRow), source: "live", accessPath: "private-public-pick-repository", generatedAt: new Date().toISOString() };
+  } catch (error) {
+    return { items: [], source: "unavailable", reason: publicHistoryRepositoryFailureReason(error), generatedAt: new Date().toISOString() };
   }
-  if (error) return { items: [], source: "unavailable", reason: `The public pick repository could not be read: ${error.message}`, generatedAt: new Date().toISOString() };
-  return { items: ((data ?? []) as PublicPickRow[]).map(publicHistoryItemFromPublicPickRow), source: "live", accessPath: "private-public-pick-repository", generatedAt: new Date().toISOString() };
 }
 
 export async function getPublicPredictionHistory(env: Record<string, string | undefined> = process.env): Promise<PublicPredictionHistory> {

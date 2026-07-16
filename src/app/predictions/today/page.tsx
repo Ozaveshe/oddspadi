@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DailyTipsPageView } from "@/components/odds/DailyTipsPageView";
-import { getDailyTipsProduct } from "@/lib/sports/tips/product";
+import { fetchLiveScoreBoard } from "@/lib/sports/liveScoreBoard";
+import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
 
 export const revalidate = 120;
 
@@ -16,5 +17,6 @@ export const metadata: Metadata = {
 };
 
 export default async function DailyTipsPage() {
-  return <DailyTipsPageView product={await getDailyTipsProduct({ day: "today" })} />;
+  const [product, liveBoard] = await Promise.all([getCachedTodayTipsProduct(), fetchLiveScoreBoard()]);
+  return <DailyTipsPageView product={product} fallbackBoard={liveBoard} />;
 }

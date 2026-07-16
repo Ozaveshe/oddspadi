@@ -2,10 +2,11 @@ import Link from "next/link";
 import { DailyTipsSections, ProviderRunStrip } from "@/components/odds/IntelligenceSlate";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { TipsSharePreview } from "@/components/odds/TipsSharePreview";
+import type { LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import type { DailyTipsProduct } from "@/lib/sports/tips/product";
 import { formatDailyTipsForTelegram, formatDailyTipsForWhatsApp, formatValuePickPost } from "@/lib/sports/tips/social";
 
-export function DailyTipsPageView({ product }: { product: DailyTipsProduct }) {
+export function DailyTipsPageView({ product, fallbackBoard = null }: { product: DailyTipsProduct; fallbackBoard?: LiveScoreBoard | null }) {
   const isToday = product.day === "today";
   const heading = isToday ? "Today’s OddsPadi Tips" : "Tomorrow’s OddsPadi Tips";
   const formats = [
@@ -28,7 +29,7 @@ export function DailyTipsPageView({ product }: { product: DailyTipsProduct }) {
         </nav>
       </div>
       <ProviderRunStrip slate={product.slate} />
-      <DailyTipsSections product={product} />
+      <DailyTipsSections product={product} fallbackBoard={fallbackBoard} />
       <TipsSharePreview formats={formats} />
       <PredictionDisclaimer />
     </main>

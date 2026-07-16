@@ -11,12 +11,12 @@ export function apiSuccess<T>(data: T, init?: ResponseInit) {
  * one cached copy across visitors (the same pattern /api/live uses), so client
  * polling and page hydration stop re-running the provider pipeline.
  */
-export function publicCacheInit(sMaxAgeSeconds: number): ResponseInit {
-  return {
-    headers: {
-      "Cache-Control": `public, s-maxage=${sMaxAgeSeconds}, stale-while-revalidate=${sMaxAgeSeconds * 5}`
-    }
+export function publicCacheInit(sMaxAgeSeconds: number, varyQueryKeys: readonly string[] = []): ResponseInit {
+  const headers: Record<string, string> = {
+    "Cache-Control": `public, s-maxage=${sMaxAgeSeconds}, stale-while-revalidate=${sMaxAgeSeconds * 5}`
   };
+  if (varyQueryKeys.length) headers["Netlify-Vary"] = `query=${varyQueryKeys.join("|")}`;
+  return { headers };
 }
 
 export function apiError(error: string, status = 400) {

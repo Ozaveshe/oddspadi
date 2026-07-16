@@ -38,6 +38,7 @@ import {
   buildPredictionEvidenceHash,
   resolveCanonicalDecisionForMatchDetail
 } from "./prediction/decisionSnapshotIdentity";
+import { normalizeFutureLiveMatchStatus } from "./intelligence/canonical";
 
 export const sports: Array<{ id: Sport; label: string; active: boolean }> = [
   { id: "football", label: "Football", active: true },
@@ -361,7 +362,12 @@ export async function getPredictions(filters: PredictionFilters = {}) {
     fixtureProvider.getFixtures(date, sport),
     getPublicHistoricalTrainingEvidenceForPredictions({ ...filters, sport })
   ]);
-  const visibleMatches = filters.providerMode === "live" ? matches.filter((match) => match.dataSource?.kind === "provider") : matches;
+  const now = new Date();
+  const visibleMatches = (filters.providerMode === "live" ? matches.filter((match) => match.dataSource?.kind === "provider") : matches)
+    .map((match) => {
+      const status = normalizeFutureLiveMatchStatus(match, now);
+      return status === match.status ? match : { ...match, status };
+    });
   const rows = visibleMatches.map((match) => ({
     match,
     prediction: buildPrediction(match, { learningProfile, caseMemoryBank, publicHistoricalTrainingEvidence })

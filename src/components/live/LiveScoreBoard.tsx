@@ -116,17 +116,19 @@ type LeagueGroup = {
   liveCount: number;
 };
 
-function groupByLeague(fixtures: LiveBoardFixture[]): LeagueGroup[] {
+export function groupByLeague(fixtures: LiveBoardFixture[]): LeagueGroup[] {
   const groups: LeagueGroup[] = [];
-  let current: LeagueGroup | null = null;
+  const groupsByKey = new Map<string, LeagueGroup>();
   for (const fixture of fixtures) {
-    const key = `${fixture.sport}:${fixture.league.id}:${fixture.league.name}`;
-    if (!current || current.key !== key) {
-      current = { key, league: fixture.league, fixtures: [], liveCount: 0 };
-      groups.push(current);
+    const key = `${fixture.sport}:${fixture.league.id}:${fixture.league.country}:${fixture.league.name}`;
+    let group = groupsByKey.get(key);
+    if (!group) {
+      group = { key, league: fixture.league, fixtures: [], liveCount: 0 };
+      groupsByKey.set(key, group);
+      groups.push(group);
     }
-    current.fixtures.push(fixture);
-    if (fixture.phase === "live") current.liveCount += 1;
+    group.fixtures.push(fixture);
+    if (fixture.phase === "live") group.liveCount += 1;
   }
   return groups;
 }

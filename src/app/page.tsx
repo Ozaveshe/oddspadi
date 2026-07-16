@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MatchdayFixtureCard } from "@/components/live/MatchdayFallback";
 import { LiveTicker } from "@/components/live/LiveTicker";
 import { SlateFixtureCard } from "@/components/odds/IntelligenceSlate";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
+import { deriveHomepageMatchdayState, getWeeklyEmptyState } from "@/lib/sports/homepageState";
 import { fetchLiveScoreBoard } from "@/lib/sports/liveScoreBoard";
-import { getDailyTipsProduct, getWeeklyTipsProduct, getYesterdayResultsProduct } from "@/lib/sports/tips/product";
+import {
+  getCachedTodayTipsProduct,
+  getCachedWeeklyTipsProduct,
+  getCachedYesterdayResultsProduct
+} from "@/lib/sports/tips/publicReads";
 
 export const revalidate = 60;
 
@@ -38,19 +44,28 @@ function weekdayLabel(date: string, firstDate: string): string {
 
 export default async function HomePage() {
   const [daily, weekly, yesterday, liveBoard] = await Promise.all([
-    withTimeout(getDailyTipsProduct({ ensure: false }), 2_500, null),
-    withTimeout(getWeeklyTipsProduct({ ensure: false }), 2_500, null),
-    withTimeout(getYesterdayResultsProduct(), 2_500, null),
+    withTimeout(getCachedTodayTipsProduct(), 2_500, null),
+    withTimeout(getCachedWeeklyTipsProduct(), 2_500, null),
+    withTimeout(getCachedYesterdayResultsProduct(), 2_500, null),
     withTimeout(fetchLiveScoreBoard(), 2_500, null)
   ]);
+  const matchday = deriveHomepageMatchdayState(daily, liveBoard);
+  const weeklyHasFixtures = weekly?.days.some((day) => day.fixtures.length > 0) ?? false;
   const todayBest = daily?.sections.valuePicks[0] ?? daily?.sections.leans[0] ?? daily?.sections.watchlist[0] ?? null;
   const tipsPreview = daily
     ? [...daily.sections.valuePicks, ...daily.sections.leans, ...daily.sections.watchlist, ...daily.sections.noPicks, ...daily.sections.schedule]
         .filter((row, index, rows) => rows.findIndex((candidate) => candidate.fixture.fixtureId === row.fixture.fixtureId) === index)
         .slice(0, 3)
     : [];
-  const providerStatus = daily?.slate.provider.status ?? "unavailable";
-  const lastRun = daily?.slate.provider.lastRun?.finishedAt;
+  const lastRun = matchday.lastUpdatedAt;
+  const featuredTitle = matchday.featuredFixture?.phase === "live"
+    ? "A live match worth following"
+    : matchday.featuredFixture?.phase === "upcoming"
+      ? "An upcoming match to follow"
+      : matchday.featuredFixture?.phase === "finished"
+        ? "A final result from today"
+        : "A match on today’s board";
+  const weeklyEmpty = getWeeklyEmptyState(weekly?.slate.provider.status ?? null, Boolean(liveBoard?.fixtures.length));
 
   return (
     <main id="main" className="container home-product">
@@ -67,29 +82,40 @@ export default async function HomePage() {
         </div>
         <aside className="home-matchday-brief" aria-label="Matchday at a glance">
           <span className="section-kicker">Matchday at a glance</span>
-          <strong>{daily?.summary.fixturesFound ?? 0}</strong>
-          <span>fixtures on today&apos;s provider slate</span>
-          <div><span>{liveBoard?.counts.live ?? 0} live now</span><span>{daily?.summary.fixturesAnalysed ?? 0} analysed</span></div>
-          <Link className="text-link" href="/predictions/today">Open the full schedule →</Link>
+          <strong>{matchday.fixtureCount}</strong>
+          <span>real fixtures visible today</span>
+          <div>
+            {matchday.usesLiveFallback ? <>
+              <span>{matchday.liveCount} live</span>
+              <span>{matchday.upcomingCount} upcoming</span>
+              <span>{matchday.finishedCount} final</span>
+            </> : <>
+              <span>{matchday.analysedCount} analysed</span>
+              <span>{matchday.valuePickCount} value picks</span>
+              <span>{matchday.watchlistCount} watchlist</span>
+            </>}
+          </div>
+          <small className="home-matchday-source">Source: {matchday.sourceLabel}</small>
+          <Link className="text-link" href={matchday.usesLiveFallback ? "/live-scores" : "/predictions/today"}>Open today&apos;s board →</Link>
         </aside>
       </section>
 
       <section className="home-engine-strip" aria-label="Latest engine status">
-        <div><span>Fixtures scanned</span><strong>{daily?.summary.fixturesAnalysed ?? 0}</strong></div>
-        <div><span>Tips published</span><strong>{daily?.summary.valuePicks ?? 0}</strong></div>
-        <div><span>Watchlist</span><strong>{daily?.summary.watchlist ?? 0}</strong></div>
-        <div><span>Last run</span><strong>{lastRun ? new Date(lastRun).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Waiting"}</strong></div>
-        <div><span>Provider health</span><strong className={`engine-health status-${providerStatus}`}>{providerStatus}</strong><Link className="engine-audit-link" href="/engine/performance">Audit evidence →</Link></div>
+        <div><span>Fixtures visible</span><strong>{matchday.fixtureCount}</strong></div>
+        <div><span>Tips published</span><strong>{matchday.valuePickCount}</strong></div>
+        <div><span>Watchlist</span><strong>{matchday.watchlistCount}</strong></div>
+        <div><span>{matchday.usesLiveFallback ? "Live update" : "Last run"}</span><strong>{lastRun ? new Date(lastRun).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Waiting"}</strong></div>
+        <div><span>Provider health</span><strong className={`engine-health status-${matchday.providerState}`}>{matchday.providerLabel}</strong><Link className="engine-audit-link" href="/engine/performance">Audit evidence →</Link></div>
       </section>
 
       <section className="section home-today-best">
-        <div className="section-title"><div><span className="section-kicker">Today&apos;s Best</span><h2>The clearest read right now</h2></div><Link className="button small-btn" href="/predictions/today">All tips</Link></div>
-        {todayBest ? <SlateFixtureCard row={todayBest} asOf={daily?.generatedAt} /> : <div className="empty-state"><h3>No decision highlight is ready yet</h3><p className="muted">The full provider schedule and no-pick explanations remain available. OddsPadi will not force a selection to fill this space.</p><Link className="button small-btn" href="/predictions/today">See today&apos;s schedule</Link></div>}
+        <div className="section-title"><div><span className="section-kicker">{matchday.featuredFixture ? "Today's best available coverage" : "Today's Best"}</span><h2>{matchday.featuredFixture ? featuredTitle : "The clearest read right now"}</h2></div><Link className="button small-btn" href={matchday.featuredFixture ? "/live-scores" : "/predictions/today"}>{matchday.featuredFixture ? "Match board" : "All tips"}</Link></div>
+        {todayBest ? <SlateFixtureCard row={todayBest} asOf={daily?.generatedAt} /> : matchday.featuredFixture ? <MatchdayFixtureCard fixture={matchday.featuredFixture} featured /> : <div className="empty-state"><h3>No decision highlight is ready yet</h3><p className="muted">The full provider schedule and no-pick explanations remain available. OddsPadi will not force a selection to fill this space.</p><Link className="button small-btn" href="/predictions/today">See today&apos;s schedule</Link></div>}
       </section>
 
       <section className="section">
-        <div className="section-title"><div><span className="section-kicker">Daily Tips Preview</span><h2>Three matches worth opening</h2></div><Link className="text-link" href="/predictions/today">View all daily tips →</Link></div>
-        {tipsPreview.length ? <div className="intelligence-grid home-tips-preview">{tipsPreview.map((row) => <SlateFixtureCard key={row.fixture.fixtureId} row={row} compact asOf={daily?.generatedAt} />)}</div> : <div className="empty-state compact"><h3>The daily board is waiting for provider data</h3><p className="muted">Provider health is shown above. No seeded cards are substituted.</p></div>}
+        <div className="section-title"><div><span className="section-kicker">{matchday.previewFixtures.length ? "Matchday preview" : "Daily Tips Preview"}</span><h2>{matchday.previewFixtures.length ? "Real fixtures on today’s board" : "Three matches worth opening"}</h2></div><Link className="text-link" href={matchday.previewFixtures.length ? "/live-scores" : "/predictions/today"}>{matchday.previewFixtures.length ? "View the match board" : "View all daily tips"} →</Link></div>
+        {tipsPreview.length ? <div className="intelligence-grid home-tips-preview">{tipsPreview.map((row) => <SlateFixtureCard key={row.fixture.fixtureId} row={row} compact asOf={daily?.generatedAt} />)}</div> : matchday.previewFixtures.length ? <div className="matchday-fallback-grid">{matchday.previewFixtures.map((fixture) => <MatchdayFixtureCard fixture={fixture} key={fixture.id} />)}</div> : <div className="empty-state compact"><h3>The daily board is waiting for provider data</h3><p className="muted">Provider health is shown above. No seeded cards are substituted.</p></div>}
       </section>
 
       <section className="section" id="live">
@@ -111,9 +137,9 @@ export default async function HomePage() {
       <section className="section home-weekly-radar">
         <div className="section-title"><div><span className="section-kicker">Weekly Radar</span><h2>The next seven days</h2></div><Link className="button small-btn" href="/predictions/week">Open weekly predictions</Link></div>
         <p>Weekly predictions start preliminary and get refreshed as odds, injuries, lineups, and results change.</p>
-        <div className="home-week-days">
-          {(weekly?.days ?? []).map((day) => <Link href="/predictions/week" key={day.date}><span>{weekdayLabel(day.date, weekly?.slate.range.from ?? day.date)}</span><strong>{day.fixtures.length}</strong><small>{day.counts.valuePick} value · {day.counts.ready} ready</small></Link>)}
-        </div>
+        {weekly && weeklyHasFixtures ? <div className="home-week-days">
+          {weekly.days.map((day) => <Link href="/predictions/week" key={day.date}><span>{weekdayLabel(day.date, weekly.slate.range.from)}</span><strong>{day.fixtures.length}</strong><small>{day.counts.valuePick} value · {day.counts.ready} ready</small></Link>)}
+        </div> : <div className="home-weekly-empty"><strong>{weeklyEmpty.title}</strong><span>{weeklyEmpty.detail}</span>{weeklyEmpty.showLiveLink ? <Link className="text-link" href="/live-scores">Follow live matches →</Link> : null}</div>}
       </section>
 
       <section className="section home-how">

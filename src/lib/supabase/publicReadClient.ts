@@ -1,6 +1,12 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabasePublicConfig } from "@/lib/supabase/publicConfig";
 
+export const PUBLIC_READ_TIMEOUT_MS = 3_500;
+
+export function publicReadAbortSignal(): AbortSignal {
+  return AbortSignal.timeout(PUBLIC_READ_TIMEOUT_MS);
+}
+
 export function getSupabasePublicReadClient(): SupabaseClient | null {
   const config = supabasePublicConfig();
   if (!config) return null;

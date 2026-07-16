@@ -1,5 +1,6 @@
 import { getDailySlate, getWeeklySlate } from "@/lib/sports/intelligence/pipeline";
 import type { SlateFixture, SlatePublicStatus, SportsSlate } from "@/lib/sports/intelligence/types";
+import type { Sport } from "@/lib/sports/types";
 import {
   getHistorySummary,
   getPublicPredictionHistory,
@@ -142,6 +143,16 @@ export function buildDailyTipsProduct(
     },
     sections: { schedule, valuePicks, leans, watchlist, allAnalysed, noPicks }
   };
+}
+
+export function filterDailyTipsProductBySport(product: DailyTipsProduct, sport: Sport): DailyTipsProduct {
+  return buildDailyTipsProduct(
+    {
+      ...product.slate,
+      fixtures: product.slate.fixtures.filter((row) => row.fixture.sport === sport)
+    },
+    { day: product.day, asOf: new Date(product.generatedAt) }
+  );
 }
 
 function inclusiveDates(from: string, to: string): string[] {
