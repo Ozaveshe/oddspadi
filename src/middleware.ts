@@ -19,10 +19,11 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet, headers) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          Object.entries(headers).forEach(([name, value]) => response.headers.set(name, value));
         }
       }
     });
@@ -41,6 +42,8 @@ export const config = {
     // all navigations; public pages never read the session, so they skip it.
     "/account/:path*",
     "/community/:path*",
-    "/forums/:path*"
+    "/forums/:path*",
+    "/api/account/:path*",
+    "/api/community/:path*"
   ]
 };
