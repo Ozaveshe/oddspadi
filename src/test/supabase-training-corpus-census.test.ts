@@ -1,8 +1,54 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { buildSupabaseTrainingCorpusCensus } from "@/lib/sports/training/supabaseTrainingCorpusCensus";
+const serverState = vi.hoisted(() => ({ signals: [] as Array<{ rpc: string; signal: AbortSignal }> }));
+
+vi.mock("@/lib/supabase/server", () => ({
+  ODDSPADI_SUPABASE_PROJECT_REF: "wncwtzqipnoqwmqlznqn",
+  getSupabaseRuntimeStatus: () => ({
+    projectRef: "wncwtzqipnoqwmqlznqn",
+    urlProjectRef: "wncwtzqipnoqwmqlznqn",
+    serverWriteReady: true,
+    targetMatchesExpected: true
+  }),
+  getSupabaseServerClient: () => ({
+    rpc(name: string) {
+      return {
+        abortSignal(signal: AbortSignal) {
+          serverState.signals.push({ rpc: name, signal });
+          if (name === "op_training_snapshot_counts") {
+            return Promise.resolve({ data: ["football", "basketball", "tennis"].map((sport) => ({ sport })), error: null });
+          }
+          if (name === "op_player_performance_corpus_counts") {
+            return Promise.resolve({ data: ["football", "basketball", "tennis"].map((sport) => ({ sport, player_performance_rows: 0 })), error: null });
+          }
+          return Promise.resolve({ data: null, error: { message: "unexpected RPC" } });
+        }
+      };
+    }
+  })
+}));
+
+import { buildSupabaseTrainingCorpusCensus, readSupabaseTrainingCorpusCensus } from "@/lib/sports/training/supabaseTrainingCorpusCensus";
 
 describe("Supabase training corpus census", () => {
+  it("gives sequential census RPC stages independent timeout signals", async () => {
+    serverState.signals.length = 0;
+
+    const census = await readSupabaseTrainingCorpusCensus({
+      env: { SUPABASE_URL: "https://wncwtzqipnoqwmqlznqn.supabase.co", SUPABASE_SECRET_KEY: "test-only" },
+      origin: "https://oddspadi.com",
+      fresh: true,
+      now: new Date("2026-07-17T01:45:00.000Z")
+    });
+
+    expect(census.status).toBe("empty-corpus");
+    expect(serverState.signals.map(({ rpc }) => rpc)).toEqual([
+      "op_training_snapshot_counts",
+      "op_player_performance_corpus_counts"
+    ]);
+    expect(serverState.signals[0].signal).not.toBe(serverState.signals[1].signal);
+  });
+
   it("reports real player-performance rows as a first-class corpus lane", () => {
     const census = buildSupabaseTrainingCorpusCensus({
       counts: [{

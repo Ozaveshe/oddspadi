@@ -139,6 +139,10 @@ type CensusCacheEntry = {
 
 let censusCache: CensusCacheEntry | null = null;
 
+function censusReadSignal(): AbortSignal {
+  return AbortSignal.timeout(TRAINING_CENSUS_READ_TIMEOUT_MS);
+}
+
 function stableHash(value: unknown): string {
   const text = JSON.stringify(value);
   let hash = 2166136261;
@@ -483,12 +487,15 @@ async function readPlayerPerformanceCounts(
     }
   }
 
+  // The RPC may have exhausted or aborted its own deadline. A fallback table
+  // count must receive a fresh bounded budget instead of inheriting a dead signal.
+  const fallbackSignal = censusReadSignal();
   const reads = await Promise.all(TRAINING_SPORTS.map(async (sport) => ({
     sport,
     read: await countRows("op_player_match_performances", [
       { column: "sport", value: sport },
       { column: "source_kind", value: "real" }
-    ], env, abortSignal)
+    ], env, fallbackSignal)
   })));
   return {
     counts: new Map(reads.map(({ sport, read }) => [sport, read.count])),
@@ -579,18 +586,17 @@ function censusCacheTtlMs(env: EnvLike): number {
 }
 
 async function loadCorpusCounts(env: EnvLike): Promise<CorpusCountsRead> {
-  const abortSignal = AbortSignal.timeout(TRAINING_CENSUS_READ_TIMEOUT_MS);
-  const snapshotRpcCounts = await readSnapshotRpcCounts(env, abortSignal);
+  const snapshotRpcCounts = await readSnapshotRpcCounts(env, censusReadSignal());
   if (snapshotRpcCounts) {
-    const playerCounts = await readPlayerPerformanceCounts(env, abortSignal);
+    const playerCounts = await readPlayerPerformanceCounts(env, censusReadSignal());
     return { counts: attachPlayerPerformanceCounts(snapshotRpcCounts, playerCounts.counts), errors: playerCounts.errors };
   }
 
-  const rpcCounts = await readRpcCounts(env, abortSignal);
+  const rpcCounts = await readRpcCounts(env, censusReadSignal());
   if (rpcCounts) {
     const [quality, playerCounts] = await Promise.all([
-      Promise.all(TRAINING_SPORTS.map((sport) => readFeatureQualityCounts(sport, env, abortSignal))),
-      readPlayerPerformanceCounts(env, abortSignal)
+      Promise.all(TRAINING_SPORTS.map((sport) => readFeatureQualityCounts(sport, env, censusReadSignal()))),
+      readPlayerPerformanceCounts(env, censusReadSignal())
     ]);
     return {
       counts: attachPlayerPerformanceCounts(rpcCounts.map((row, index) => ({
@@ -604,7 +610,7 @@ async function loadCorpusCounts(env: EnvLike): Promise<CorpusCountsRead> {
     };
   }
 
-  const reads = await Promise.all(TRAINING_SPORTS.map((sport) => readSportCounts(sport, env, abortSignal)));
+  const reads = await Promise.all(TRAINING_SPORTS.map((sport) => readSportCounts(sport, env, censusReadSignal())));
   return {
     counts: reads.map((read) => read.counts),
     errors: reads.flatMap((read) => read.errors)
