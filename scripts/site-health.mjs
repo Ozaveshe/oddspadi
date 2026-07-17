@@ -48,7 +48,7 @@ async function checkJson(path, validate, label = path, options = {}) {
   }
 }
 
-async function checkRssFreshness(path, maxAgeMs = 36 * 60 * 60_000) {
+async function checkRssFreshness(path, maxAgeMs = 30 * 60 * 60_000) {
   try {
     const { response, ms } = await timedFetch(path);
     const body = await response.text();

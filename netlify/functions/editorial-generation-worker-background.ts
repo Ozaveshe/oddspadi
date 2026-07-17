@@ -4,6 +4,7 @@ import { generateEditorialStories, type EditorialOutcome, type GeneratedEditoria
 import { polishEditorialStories } from "../../src/lib/editorial/aiPolish";
 import {
   buildStoredSlateEditorialOutcomes,
+  generateFreshFixtureDeskStory,
   mergeEditorialOutcomes,
   type StoredEditorialDecisionSummary,
   type StoredEditorialFixture
@@ -38,6 +39,10 @@ export async function runEditorialGeneration({ scheduleToken, adminToken, supaba
   );
   const sourceRows = mergeEditorialOutcomes((outcomes ?? []) as EditorialOutcome[], storedOutcomes);
   const drafts = generateEditorialStories(sourceRows, now);
+  if (!drafts.some((story) => story.generator === "daily-slate")) {
+    const fixtureDesk = generateFreshFixtureDeskStory((fixtures ?? []) as StoredEditorialFixture[], now);
+    if (fixtureDesk) drafts.unshift(fixtureDesk);
+  }
   const changed = drafts.filter((story) => prior.get(story.slug)?.data_fingerprint !== story.dataFingerprint).map((story) => ({ ...story, revision: (prior.get(story.slug)?.revision ?? 0) + 1 }));
   if (!changed.length) return Response.json({ success: true, generated: 0, unchanged: drafts.length, slugs: [] });
   // Optional prose pass: keeps the deterministic facts, upgrades the writing.

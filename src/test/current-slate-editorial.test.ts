@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildStoredSlateEditorialOutcomes,
+  generateFreshFixtureDeskStory,
   mergeEditorialOutcomes,
   type StoredEditorialDecisionSummary,
   type StoredEditorialFixture
@@ -57,5 +58,21 @@ describe("current slate editorial inputs", () => {
     const stored = buildStoredSlateEditorialOutcomes([fixture], [summary], now);
     const publicRow = { ...stored[0], id: "public-row" } as EditorialOutcome;
     expect(mergeEditorialOutcomes([publicRow], stored)).toEqual([publicRow]);
+  });
+
+  it("builds a fixture-only daily desk without inventing a model reading", () => {
+    const story = generateFreshFixtureDeskStory([fixture], now);
+    expect(story).toEqual(expect.objectContaining({
+      slug: "daily-slate-2026-07-17",
+      generator: "daily-slate",
+      title: "Matchday fixture desk: 1 upcoming fixture"
+    }));
+    expect(story?.body.join(" ")).toContain("No model probability, price or selection has been invented");
+    expect(story?.body.join(" ")).toContain("Public action remains withheld");
+    expect(story?.body.join(" ")).not.toContain("61%");
+  });
+
+  it("refuses stale fixture evidence for the fixture-only daily desk", () => {
+    expect(generateFreshFixtureDeskStory([{ ...fixture, last_synced_at: "2026-07-16T20:00:00.000Z" }], now)).toBeNull();
   });
 });

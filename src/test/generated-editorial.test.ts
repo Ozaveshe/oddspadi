@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { generateEditorialStories, type EditorialOutcome } from "@/lib/editorial/generatedStories";
 import { runEditorialGeneration } from "../../netlify/functions/editorial-generation-worker-background";
 
@@ -33,5 +35,12 @@ describe("editorial worker boundary", () => {
   it("rejects requests without the matching schedule token before database access", async () => {
     const response = await runEditorialGeneration({ scheduleToken: "wrong", adminToken: "right", supabaseUrl: null, supabaseKey: null, now });
     expect(response.status).toBe(401);
+  });
+
+  it("keeps every emitted generator accepted by the editorial table", () => {
+    const migration = readFileSync(join(process.cwd(), "supabase/migrations/20260717005500_allow_daily_slate_editorial_stories.sql"), "utf8");
+    for (const generator of ["daily-slate", "weekend-preview", "results-recap", "value-picks-watch", "model-vs-market"]) {
+      expect(migration).toContain(`'${generator}'`);
+    }
   });
 });
