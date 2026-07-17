@@ -105,7 +105,7 @@ export type FootballBacktestBreakdown = {
 };
 
 export type FootballLearnedWeightsProvenance = {
-  source: "training-window" | "defaults-no-training-data";
+  source: "training-window" | "training-validation-window" | "defaults-no-training-data";
   sampleSize: number;
   pickCount: number;
   windowStart: string | null;
@@ -551,10 +551,11 @@ export function footballDecisionLearnedWeights(
 export function buildFootballLearnedWeightsProvenance(
   results: FootballBacktestFixtureResult[],
   summary: FootballEvaluationSummary,
-  holdoutWindowStart: string | null
+  holdoutWindowStart: string | null,
+  source: "training-window" | "training-validation-window" = "training-window"
 ): FootballLearnedWeightsProvenance {
   return {
-    source: results.length ? "training-window" : "defaults-no-training-data",
+    source: results.length ? source : "defaults-no-training-data",
     sampleSize: results.length,
     pickCount: summary.pickCount,
     windowStart: results[0]?.kickoffAt ?? null,
@@ -573,8 +574,8 @@ function resultNotes(
   >
 ): string[] {
   return [
-    result.learnedWeightsProvenance.source === "training-window"
-      ? `Learned decision weights use only ${result.learnedWeightsProvenance.sampleSize} chronological training fixture(s); holdout outcomes remain evaluation-only.`
+    result.learnedWeightsProvenance.source === "training-window" || result.learnedWeightsProvenance.source === "training-validation-window"
+      ? `Learned decision weights use only ${result.learnedWeightsProvenance.sampleSize} chronological ${result.learnedWeightsProvenance.source === "training-validation-window" ? "training-validation" : "training"} fixture(s); holdout outcomes remain evaluation-only.`
       : "Learned decision weights use conservative defaults because no chronological training fixture was available.",
     result.sampleSize < 200 ? "Historical sample is thin; import multiple seasons before trusting calibration." : "",
     result.testSize < 50 ? "Holdout set is small; backtest metrics are directional only." : "",

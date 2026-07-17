@@ -116,6 +116,22 @@ function readySnapshot(): TrainingDataSnapshot {
           source: "chronological-training-window",
           status: "active",
           allowedConfidenceBands: ["medium"]
+        },
+        probabilityCalibrationPolicy: {
+          version: "temperature-scaling-v1",
+          source: "chronological-training-window",
+          status: "active",
+          temperature: 1.2,
+          fitSampleSize: 588,
+          validationSampleSize: 252,
+          fitWindowStart: "2023-01-01T12:00:00.000Z",
+          fitWindowEnd: "2024-12-31T12:00:00.000Z",
+          validationWindowStart: "2025-01-01T12:00:00.000Z",
+          validationWindowEnd: "2025-06-30T12:00:00.000Z",
+          holdoutWindowStart: "2025-07-01T12:00:00.000Z",
+          baselineValidation: { sampleSize: 252, brierScore: 0.21, logLoss: 0.62 },
+          calibratedValidation: { sampleSize: 252, brierScore: 0.205, logLoss: 0.615 },
+          reason: "validated-proper-score-improvement"
         }
       },
       notes: [],
@@ -296,6 +312,78 @@ describe("calibration promotion safety", () => {
     expect(profile.economicSelectionPolicyStatus).toBe("abstain");
     expect(profile.allowedConfidenceBands).toEqual([]);
     expect(profile.reason).toContain("training-only economic selection policy abstains");
+  });
+
+  it("accepts a validated identity policy but blocks an invalid or thin probability policy", () => {
+    const snapshot = readySnapshot();
+    snapshot.latestBacktest = {
+      ...snapshot.latestBacktest!,
+      config: {
+        ...snapshot.latestBacktest!.config,
+        probabilityCalibrationPolicy: {
+          ...snapshot.latestBacktest!.config?.probabilityCalibrationPolicy as Record<string, unknown>,
+          status: "identity",
+          temperature: 1,
+          reason: "validation-did-not-improve",
+          calibratedValidation: { sampleSize: 252, brierScore: 0.21, logLoss: 0.62 }
+        }
+      }
+    };
+
+    const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(profile.active).toBe(true);
+    expect(profile.probabilityTemperaturePolicy).toMatchObject({ status: "identity", temperature: 1 });
+
+    snapshot.latestBacktest = {
+      ...snapshot.latestBacktest!,
+      config: {
+        ...snapshot.latestBacktest!.config,
+        probabilityCalibrationPolicy: {
+          ...snapshot.latestBacktest!.config?.probabilityCalibrationPolicy as Record<string, unknown>,
+          validationSampleSize: 0,
+          reason: "insufficient-training-sample"
+        }
+      }
+    };
+    const blocked = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(blocked.active).toBe(false);
+    expect(blocked.probabilityTemperaturePolicy).toBeNull();
+    expect(blocked.reason).toContain("lacks a valid training-only probability calibration policy");
+  });
+
+  it("accepts learned weights sourced from the complete prospective training-validation window", () => {
+    const snapshot = readySnapshot();
+    snapshot.latestBacktest = {
+      ...snapshot.latestBacktest!,
+      config: {
+        ...snapshot.latestBacktest!.config,
+        learnedWeightsProvenance: {
+          source: "training-validation-window",
+          sampleSize: 252,
+          pickCount: 40,
+          windowStart: "2025-01-01T12:00:00.000Z",
+          windowEnd: "2025-06-30T12:00:00.000Z",
+          holdoutWindowStart: "2025-07-01T12:00:00.000Z",
+          yield: 0.03,
+          brierScore: 0.2,
+          closingLineValue: 0.01
+        }
+      }
+    };
+
+    const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(profile.active).toBe(true);
   });
 
   it("allows only pending-to-final settlement and never rewrites a final label", () => {

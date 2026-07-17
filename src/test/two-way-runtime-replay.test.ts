@@ -68,6 +68,13 @@ describe("basketball and tennis exact runtime replay", () => {
     });
     expect(result.economicSelectionComparison.selected.pickCount).toBe(result.pickCount);
     expect(result.economicSelectionComparison.baseline.pickCount).toBeGreaterThanOrEqual(result.pickCount);
+    expect(result.probabilityCalibrationPolicy).toMatchObject({
+      source: "chronological-training-window",
+      status: "identity",
+      temperature: 1,
+      reason: "insufficient-training-sample"
+    });
+    expect(result.probabilityCalibrationComparison.baseline.sampleSize).toBe(result.testSize);
     expect(result.notes).toEqual(expect.arrayContaining([
       expect.stringContaining("set the holdout minimum edge")
     ]));
@@ -88,6 +95,7 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(last(away).actualOutcome).toBe("away");
     expect(home.learnedWeights).toEqual(away.learnedWeights);
     expect(home.selectionPolicy).toEqual(away.selectionPolicy);
+    expect(home.probabilityCalibrationPolicy).toEqual(away.probabilityCalibrationPolicy);
   });
 
   it("fails closed for neutral basketball rows", () => {
@@ -119,6 +127,7 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(last(home).actualOutcome).toBe("home");
     expect(last(away).actualOutcome).toBe("away");
     expect(home.selectionPolicy).toEqual(away.selectionPolicy);
+    expect(home.probabilityCalibrationPolicy).toEqual(away.probabilityCalibrationPolicy);
     expect(historicalModelCompatibility({
       sport: "tennis",
       evidenceModelKey: home.modelKey,

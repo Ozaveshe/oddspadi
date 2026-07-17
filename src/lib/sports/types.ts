@@ -395,6 +395,8 @@ export interface DecisionSummary {
 
 export interface LearnedProbabilityCalibrationAdjustment {
   status: "applied" | "inactive" | "insufficient-evidence";
+  method?: "temperature-scaling" | "bucket-residual" | "none";
+  temperature?: number | null;
   source: string | null;
   modelKey: string | null;
   bucketCount: number;
@@ -402,6 +404,41 @@ export interface LearnedProbabilityCalibrationAdjustment {
   calibratedMarkets: string[];
   meanAbsoluteShift: number;
   summary: string;
+}
+
+export interface ProbabilityCalibrationScoreSummary {
+  sampleSize: number;
+  brierScore: number | null;
+  logLoss: number | null;
+}
+
+export interface ProbabilityTemperatureScalingPolicy {
+  version: "temperature-scaling-v1";
+  source: "chronological-training-window";
+  status: "active" | "identity";
+  temperature: number;
+  fitSampleSize: number;
+  validationSampleSize: number;
+  fitWindowStart: string | null;
+  fitWindowEnd: string | null;
+  validationWindowStart: string | null;
+  validationWindowEnd: string | null;
+  holdoutWindowStart: string | null;
+  baselineValidation: ProbabilityCalibrationScoreSummary;
+  calibratedValidation: ProbabilityCalibrationScoreSummary;
+  reason:
+    | "validated-proper-score-improvement"
+    | "insufficient-training-sample"
+    | "invalid-chronology"
+    | "identity-won-fit"
+    | "validation-did-not-improve";
+}
+
+export interface ProbabilityCalibrationComparison {
+  baseline: ProbabilityCalibrationScoreSummary;
+  calibrated: ProbabilityCalibrationScoreSummary;
+  brierDelta: number | null;
+  logLossDelta: number | null;
 }
 
 export interface Prediction {
@@ -1428,6 +1465,7 @@ export interface DecisionLearningProfile {
   homeAdvantageElo: number | null;
   economicSelectionPolicyStatus?: "active" | "abstain" | null;
   allowedConfidenceBands?: ConfidenceLevel[] | null;
+  probabilityTemperaturePolicy?: ProbabilityTemperatureScalingPolicy | null;
   brierScore: number | null;
   logLoss?: number | null;
   calibrationError?: number | null;

@@ -114,15 +114,111 @@ function economicSelectionPolicy(backtest: StoredBacktestRun | null): {
   return { status, allowedConfidenceBands: validContract ? allowedConfidenceBands : null };
 }
 
+function probabilityTemperaturePolicy(
+  backtest: StoredBacktestRun | null
+): NonNullable<DecisionLearningProfile["probabilityTemperaturePolicy"]> | null {
+  if (!backtest) return null;
+  const policy = record(backtest.config?.probabilityCalibrationPolicy);
+  const baseline = record(policy.baselineValidation);
+  const calibrated = record(policy.calibratedValidation);
+  const status = policy.status === "active" || policy.status === "identity" ? policy.status : null;
+  const temperature = finiteNumber(policy.temperature);
+  const fitSampleSize = finiteNumber(policy.fitSampleSize);
+  const validationSampleSize = finiteNumber(policy.validationSampleSize);
+  const fitWindowStart = typeof policy.fitWindowStart === "string" ? policy.fitWindowStart : null;
+  const fitWindowEnd = typeof policy.fitWindowEnd === "string" ? policy.fitWindowEnd : null;
+  const validationWindowStart = typeof policy.validationWindowStart === "string" ? policy.validationWindowStart : null;
+  const validationWindowEnd = typeof policy.validationWindowEnd === "string" ? policy.validationWindowEnd : null;
+  const holdoutWindowStart = typeof policy.holdoutWindowStart === "string" ? policy.holdoutWindowStart : null;
+  const baselineBrier = finiteNumber(baseline.brierScore);
+  const baselineLogLoss = finiteNumber(baseline.logLoss);
+  const calibratedBrier = finiteNumber(calibrated.brierScore);
+  const calibratedLogLoss = finiteNumber(calibrated.logLoss);
+  const reason = policy.reason;
+  const validReason =
+    reason === "validated-proper-score-improvement" ||
+    reason === "insufficient-training-sample" ||
+    reason === "invalid-chronology" ||
+    reason === "identity-won-fit" ||
+    reason === "validation-did-not-improve";
+  const validContract =
+    policy.version === "temperature-scaling-v1" &&
+    policy.source === "chronological-training-window" &&
+    status !== null &&
+    temperature !== null && temperature >= 0.5 && temperature <= 3 &&
+    fitSampleSize !== null && fitSampleSize >= 0 && Number.isInteger(fitSampleSize) &&
+    validationSampleSize !== null && validationSampleSize >= 0 && Number.isInteger(validationSampleSize) &&
+    fitSampleSize + validationSampleSize === backtest.trainSize &&
+    validReason;
+  if (!validContract) return null;
+
+  const chronologyValid = Boolean(
+    fitWindowStart && fitWindowEnd && validationWindowStart && validationWindowEnd && holdoutWindowStart &&
+    Number.isFinite(Date.parse(fitWindowStart)) &&
+    Date.parse(fitWindowStart) <= Date.parse(fitWindowEnd) &&
+    Date.parse(fitWindowEnd) < Date.parse(validationWindowStart) &&
+    Date.parse(validationWindowStart) <= Date.parse(validationWindowEnd) &&
+    Date.parse(validationWindowEnd) < Date.parse(holdoutWindowStart)
+  );
+  const metricsValid =
+    fitSampleSize >= 40 && validationSampleSize >= 20 &&
+    finiteNumber(baseline.sampleSize) === validationSampleSize &&
+    finiteNumber(calibrated.sampleSize) === validationSampleSize &&
+    baselineBrier !== null && calibratedBrier !== null && baselineLogLoss !== null && calibratedLogLoss !== null;
+  if (!chronologyValid || !metricsValid) return null;
+
+  if (status === "active") {
+    const improvementValid =
+      baselineLogLoss! - calibratedLogLoss! >= 0.0005 - 0.000001 &&
+      calibratedBrier! - baselineBrier! <= 0.00025 + 0.000001;
+    if (!improvementValid || Math.abs(temperature - 1) < 0.000001 || reason !== "validated-proper-score-improvement") return null;
+  } else if (
+    Math.abs(temperature - 1) >= 0.000001 ||
+    (reason !== "identity-won-fit" && reason !== "validation-did-not-improve")
+  ) {
+    return null;
+  }
+
+  return {
+    version: "temperature-scaling-v1",
+    source: "chronological-training-window",
+    status,
+    temperature,
+    fitSampleSize,
+    validationSampleSize,
+    fitWindowStart,
+    fitWindowEnd,
+    validationWindowStart,
+    validationWindowEnd,
+    holdoutWindowStart,
+    baselineValidation: {
+      sampleSize: finiteNumber(baseline.sampleSize) ?? 0,
+      brierScore: baselineBrier,
+      logLoss: baselineLogLoss
+    },
+    calibratedValidation: {
+      sampleSize: finiteNumber(calibrated.sampleSize) ?? 0,
+      brierScore: calibratedBrier,
+      logLoss: calibratedLogLoss
+    },
+    reason: reason as NonNullable<DecisionLearningProfile["probabilityTemperaturePolicy"]>["reason"]
+  };
+}
+
 function footballLearningProvenanceBlocker(backtest: StoredBacktestRun): string | null {
   const provenance = record(backtest.config?.learnedWeightsProvenance);
-  if (provenance.source !== "training-window") {
+  if (provenance.source !== "training-window" && provenance.source !== "training-validation-window") {
     return "learned weights lack training-window-only provenance";
   }
 
   const sampleSize = finiteNumber(provenance.sampleSize);
-  if (sampleSize === null || sampleSize <= 0 || sampleSize !== backtest.trainSize) {
-    return "learned-weight provenance does not cover the complete training window";
+  const expectedSampleSize = provenance.source === "training-validation-window"
+    ? probabilityTemperaturePolicy(backtest)?.validationSampleSize ?? null
+    : backtest.trainSize;
+  if (sampleSize === null || sampleSize <= 0 || expectedSampleSize === null || sampleSize !== expectedSampleSize) {
+    return provenance.source === "training-validation-window"
+      ? "learned-weight provenance does not cover the complete prospective training-validation window"
+      : "learned-weight provenance does not cover the complete training window";
   }
 
   const windowStart = typeof provenance.windowStart === "string" ? Date.parse(provenance.windowStart) : Number.NaN;
@@ -170,6 +266,10 @@ function liveMetricBlockers(
   if (backtest.yield === null || backtest.yield <= 0) blockers.push("holdout yield is not positive");
   if (backtest.closingLineValue === null || backtest.closingLineValue <= 0) blockers.push("closing-line value is not positive");
   if (evidence.compatibility === "exact-runtime-parity") {
+    const calibrationPolicy = probabilityTemperaturePolicy(backtest);
+    if (!calibrationPolicy) {
+      blockers.push("runtime replay lacks a valid training-only probability calibration policy");
+    }
     const policy = economicSelectionPolicy(backtest);
     if (policy.status === null || policy.allowedConfidenceBands === null) {
       blockers.push("runtime replay lacks a training-only economic selection policy");
@@ -247,6 +347,7 @@ export function buildDecisionLearningProfileFromSnapshot(
   const promotionApproved = requireDurablePromotion ? promotionMatchesBacktest : promotionMatchesBacktest || hasExplicitLivePromotion(backtest);
   const metricBlockers = liveMetricBlockers(snapshot, backtest, runtimeEvidence);
   const selectionPolicy = economicSelectionPolicy(backtest);
+  const temperaturePolicy = probabilityTemperaturePolicy(backtest);
   const shadowReady = snapshot.status === "ready" && Boolean(backtest) && snapshot.readiness.readyForTraining && !demoOnly;
   const active = shadowReady && promotionApproved && metricBlockers.length === 0;
   const status: DecisionLearningProfile["status"] =
@@ -283,6 +384,7 @@ export function buildDecisionLearningProfileFromSnapshot(
     homeAdvantageElo: learnedValue(backtest, "homeAdvantageElo"),
     economicSelectionPolicyStatus: selectionPolicy.status,
     allowedConfidenceBands: selectionPolicy.allowedConfidenceBands,
+    probabilityTemperaturePolicy: temperaturePolicy,
     brierScore: backtest?.brierScore ?? null,
     logLoss: backtest?.logLoss ?? null,
     calibrationError: backtest?.calibrationError ?? null,

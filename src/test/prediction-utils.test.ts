@@ -13627,6 +13627,22 @@ describe("prediction utilities", () => {
                 status: "active",
                 allowedConfidenceBands: ["medium"]
               },
+              probabilityCalibrationPolicy: {
+                version: "temperature-scaling-v1",
+                source: "chronological-training-window",
+                status: "active",
+                temperature: 1.2,
+                fitSampleSize: 588,
+                validationSampleSize: 252,
+                fitWindowStart: "2022-08-01T00:00:00.000Z",
+                fitWindowEnd: "2024-12-31T00:00:00.000Z",
+                validationWindowStart: "2025-01-01T00:00:00.000Z",
+                validationWindowEnd: "2025-06-30T00:00:00.000Z",
+                holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+                baselineValidation: { sampleSize: 252, brierScore: 0.21, logLoss: 0.62 },
+                calibratedValidation: { sampleSize: 252, brierScore: 0.205, logLoss: 0.615 },
+                reason: "validated-proper-score-improvement"
+              },
               promotion: {
                 status: "approved",
                 scope: "live-guardrails",

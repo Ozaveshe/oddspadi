@@ -4,6 +4,7 @@ import type {
   LearnedProbabilityCalibrationAdjustment,
   PredictionMarket
 } from "@/lib/sports/types";
+import { applyProbabilityTemperatureScaling } from "./probabilityTemperatureScaling";
 
 const MIN_PROBABILITY = 0.005;
 const MAX_PROBABILITY = 0.995;
@@ -60,12 +61,60 @@ function normalize(probabilities: Record<string, number>): Record<string, number
   return Object.fromEntries(Object.entries(probabilities).map(([selection, probability]) => [selection, probability / total]));
 }
 
+function usableTemperaturePolicy(profile: DecisionLearningProfile | undefined) {
+  const policy = profile?.probabilityTemperaturePolicy;
+  const baseline = policy?.baselineValidation;
+  const calibrated = policy?.calibratedValidation;
+  const validationMetricsValid = Boolean(
+    baseline && calibrated &&
+    baseline.sampleSize === policy?.validationSampleSize &&
+    calibrated.sampleSize === policy?.validationSampleSize &&
+    typeof baseline.brierScore === "number" && Number.isFinite(baseline.brierScore) &&
+    typeof baseline.logLoss === "number" && Number.isFinite(baseline.logLoss) &&
+    typeof calibrated.brierScore === "number" && Number.isFinite(calibrated.brierScore) &&
+    typeof calibrated.logLoss === "number" && Number.isFinite(calibrated.logLoss)
+  );
+  if (
+    policy?.version !== "temperature-scaling-v1" ||
+    policy.source !== "chronological-training-window" ||
+    (policy.status !== "active" && policy.status !== "identity") ||
+    !Number.isFinite(policy.temperature) ||
+    policy.temperature < 0.5 ||
+    policy.temperature > 3 ||
+    policy.fitSampleSize < 40 ||
+    policy.validationSampleSize < 20 ||
+    !validationMetricsValid ||
+    !policy.fitWindowEnd ||
+    !policy.validationWindowStart ||
+    !policy.validationWindowEnd ||
+    !policy.holdoutWindowStart ||
+    ![policy.fitWindowEnd, policy.validationWindowStart, policy.validationWindowEnd, policy.holdoutWindowStart]
+      .every((value) => Number.isFinite(Date.parse(value))) ||
+    Date.parse(policy.fitWindowEnd) >= Date.parse(policy.validationWindowStart) ||
+    Date.parse(policy.validationWindowEnd) >= Date.parse(policy.holdoutWindowStart) ||
+    (policy.status === "active" && policy.reason !== "validated-proper-score-improvement") ||
+    (policy.status === "active" && Math.abs(policy.temperature - 1) < 0.000001) ||
+    (policy.status === "active" && baseline!.logLoss! - calibrated!.logLoss! < 0.0005 - 0.000001) ||
+    (policy.status === "active" && calibrated!.brierScore! - baseline!.brierScore! > 0.00025 + 0.000001) ||
+    (policy.status === "identity" && policy.reason !== "identity-won-fit" && policy.reason !== "validation-did-not-improve") ||
+    (policy.status === "identity" && Math.abs(policy.temperature - 1) >= 0.000001) ||
+    (policy.status === "identity" && (
+      Math.abs(baseline!.logLoss! - calibrated!.logLoss!) > 0.000001 ||
+      Math.abs(baseline!.brierScore! - calibrated!.brierScore!) > 0.000001
+    ))
+  ) return null;
+  return policy;
+}
+
 function baseAdjustment(profile: DecisionLearningProfile | undefined): LearnedProbabilityCalibrationAdjustment {
   const buckets = usableBuckets(profile);
+  const temperaturePolicy = usableTemperaturePolicy(profile);
   const totalBucketSample = buckets.reduce((sum, bucket) => sum + bucket.sampleSize, 0);
   if (!profile?.active) {
     return {
       status: "inactive",
+      method: "none",
+      temperature: null,
       source: profile?.source ?? null,
       modelKey: null,
       bucketCount: buckets.length,
@@ -75,9 +124,27 @@ function baseAdjustment(profile: DecisionLearningProfile | undefined): LearnedPr
       summary: "Probability calibration remains inactive until a real-data backtest receives explicit live-guardrail promotion."
     };
   }
+  if (temperaturePolicy) {
+    return {
+      status: "applied",
+      method: temperaturePolicy.status === "active" ? "temperature-scaling" : "none",
+      temperature: temperaturePolicy.temperature,
+      source: profile.source,
+      modelKey: null,
+      bucketCount: buckets.length,
+      totalBucketSample,
+      calibratedMarkets: [],
+      meanAbsoluteShift: 0,
+      summary: temperaturePolicy.status === "active"
+        ? `Validated temperature scaling (${temperaturePolicy.temperature.toFixed(3)}) is ready to calibrate match-winner probabilities before market-prior blending.`
+        : "Chronological fit/validation retained the identity probability transform; no extra calibration shift is applied before market-prior blending."
+    };
+  }
   if (buckets.length < 2 || totalBucketSample < profile.minimumRecommendedFixtures) {
     return {
       status: "insufficient-evidence",
+      method: "none",
+      temperature: null,
       source: profile.source,
       modelKey: null,
       bucketCount: buckets.length,
@@ -89,6 +156,8 @@ function baseAdjustment(profile: DecisionLearningProfile | undefined): LearnedPr
   }
   return {
     status: "applied",
+    method: "bucket-residual",
+    temperature: null,
     source: profile.source,
     modelKey: null,
     bucketCount: buckets.length,
@@ -118,6 +187,8 @@ export function applyLearnedProbabilityCalibration({
       markets,
       adjustment: {
         status: "inactive",
+        method: "none",
+        temperature: null,
         source: profile?.source ?? null,
         modelKey,
         bucketCount: buckets.length,
@@ -130,22 +201,27 @@ export function applyLearnedProbabilityCalibration({
   }
   const adjustment = { ...baseAdjustment(profile), modelKey };
   if (adjustment.status !== "applied") return { markets, adjustment };
+  if (adjustment.method === "none") return { markets, adjustment };
 
   const buckets = usableBuckets(profile);
   const shifts: number[] = [];
   const calibratedMarkets: string[] = [];
   const adjustedMarkets = markets.map((market) => {
     if (market.marketId !== "match_winner") return market;
-    const updated = Object.fromEntries(
-      Object.entries(market.probabilities).map(([selection, probability]) => {
-        if (!Number.isFinite(probability) || probability <= 0 || probability >= 1) return [selection, probability];
-        const bucket = closestBucket(probability, buckets);
-        if (!bucket) return [selection, probability];
-        const calibrated = calibratedProbability(probability, bucket);
-        shifts.push(Math.abs(calibrated - probability));
-        return [selection, calibrated];
-      })
-    ) as Record<string, number>;
+    const updated = adjustment.method === "temperature-scaling" && adjustment.temperature
+      ? applyProbabilityTemperatureScaling(market.probabilities, adjustment.temperature)
+      : Object.fromEntries(
+          Object.entries(market.probabilities).map(([selection, probability]) => {
+            if (!Number.isFinite(probability) || probability <= 0 || probability >= 1) return [selection, probability];
+            const bucket = closestBucket(probability, buckets);
+            if (!bucket) return [selection, probability];
+            return [selection, calibratedProbability(probability, bucket)];
+          })
+        ) as Record<string, number>;
+    for (const [selection, probability] of Object.entries(updated)) {
+      const original = market.probabilities[selection];
+      if (typeof original === "number" && Number.isFinite(probability)) shifts.push(Math.abs(probability - original));
+    }
     calibratedMarkets.push(market.marketId);
     return { ...market, probabilities: normalize(updated) };
   });
@@ -156,7 +232,9 @@ export function applyLearnedProbabilityCalibration({
       ...adjustment,
       calibratedMarkets,
       meanAbsoluteShift,
-      summary: `Applied a ${buckets.length}-bucket promoted calibration curve to match-winner probabilities; mean absolute pre-normalization shift ${(meanAbsoluteShift * 100).toFixed(2)} percentage points.`
+      summary: adjustment.method === "temperature-scaling"
+        ? `Applied validated temperature scaling ${adjustment.temperature?.toFixed(3)} to match-winner probabilities; mean absolute shift ${(meanAbsoluteShift * 100).toFixed(2)} percentage points.`
+        : `Applied a ${buckets.length}-bucket promoted calibration curve to match-winner probabilities; mean absolute pre-normalization shift ${(meanAbsoluteShift * 100).toFixed(2)} percentage points.`
     }
   };
 }

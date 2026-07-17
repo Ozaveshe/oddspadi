@@ -4,7 +4,19 @@ import { modelBasketballMatch } from "@/lib/sports/prediction/basketballModel";
 import { decisionModelIdentity, runtimeModelIdentityReceipt } from "@/lib/sports/prediction/modelIdentity";
 import { tennisModelRatingFromElo } from "@/lib/sports/prediction/historicalTennisStrength";
 import { modelTennisMatch } from "@/lib/sports/prediction/tennisModel";
-import type { Match, OddsMarket } from "@/lib/sports/types";
+import {
+  applyProbabilityTemperaturePolicy,
+  buildProbabilityCalibrationComparison,
+  learnProbabilityTemperaturePolicy,
+  probabilityPolicyValidationRows,
+  strictChronologicalSplitIndex
+} from "@/lib/sports/prediction/probabilityTemperatureScaling";
+import type {
+  Match,
+  OddsMarket,
+  ProbabilityCalibrationComparison,
+  ProbabilityTemperatureScalingPolicy
+} from "@/lib/sports/types";
 import type { HistoricalBasketballFixture, HistoricalBasketballOddsQuote } from "./basketballBacktest";
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "./probabilityCalibration";
 import type { HistoricalTennisMatch, HistoricalTennisOddsQuote } from "./tennisBacktest";
@@ -101,6 +113,8 @@ export type TwoWayRuntimeReplayResult = {
   learnedWeights: Record<string, number>;
   selectionPolicy: EconomicSelectionPolicy;
   economicSelectionComparison: EconomicSelectionComparison;
+  probabilityCalibrationPolicy: ProbabilityTemperatureScalingPolicy;
+  probabilityCalibrationComparison: ProbabilityCalibrationComparison;
   config: ResolvedConfig;
   notes: string[];
   results: TwoWayRuntimeReplayFixtureResult[];
@@ -140,6 +154,11 @@ type Prepared = {
   actualOutcome: TwoWayOutcome;
   match: Match;
   odds: Array<HistoricalBasketballOddsQuote | HistoricalTennisOddsQuote>;
+};
+
+type ModeledPrepared = {
+  prepared: Prepared;
+  probabilities: Record<TwoWayOutcome, number>;
 };
 
 const CHRONOLOGY_VERSION: Record<RuntimeReplaySport, string> = {
@@ -595,26 +614,53 @@ function run(
   rejections: TwoWayRuntimeReplayResult["rejections"],
   resolved: ResolvedConfig
 ): TwoWayRuntimeReplayResult {
-  const trainSize = prepared.length ? Math.min(prepared.length - 1, Math.max(0, Math.floor(prepared.length * resolved.trainRatio))) : 0;
+  const trainSize = prepared.length
+    ? strictChronologicalSplitIndex(prepared, Math.floor(prepared.length * resolved.trainRatio))
+    : 0;
   const trainingRows = prepared.slice(0, trainSize);
   const holdoutRows = prepared.slice(trainSize);
   const model = sport === "basketball" ? modelBasketballMatch : modelTennisMatch;
-  const evaluateRows = (rows: Prepared[], selectionConfig: ResolvedConfig) => rows.flatMap((item) => {
+  const modelRows = (rows: Prepared[]): ModeledPrepared[] => rows.flatMap((item) => {
     const modeled = model(item.match);
     const market = modeled.markets.find((candidate) => candidate.marketId === "match_winner");
     const home = market?.probabilities.home;
     const away = market?.probabilities.away;
     return typeof home === "number" && typeof away === "number" && Number.isFinite(home) && Number.isFinite(away)
-      ? [evaluate(item, { home, away }, selectionConfig)]
+      ? [{ prepared: item, probabilities: { home, away } }]
       : [];
   });
-  const trainingResults = evaluateRows(trainingRows, resolved);
-  const trainingSummary = summary(trainingResults);
+  const evaluateRows = (
+    rows: readonly ModeledPrepared[],
+    selectionConfig: ResolvedConfig,
+    calibrationPolicy?: ProbabilityTemperatureScalingPolicy
+  ) => rows.map((row) => evaluate(
+    row.prepared,
+    calibrationPolicy ? applyProbabilityTemperaturePolicy(row.probabilities, calibrationPolicy) as Record<TwoWayOutcome, number> : row.probabilities,
+    selectionConfig
+  ));
+  const modeledTraining = modelRows(trainingRows);
+  const modeledHoldout = modelRows(holdoutRows);
+  const rawTrainingResults = evaluateRows(modeledTraining, resolved);
+  const probabilityCalibrationPolicy = learnProbabilityTemperaturePolicy({
+    trainingRows: rawTrainingResults,
+    holdoutWindowStart: holdoutRows[0]?.kickoffAt ?? null
+  });
+  const trainingResults = evaluateRows(modeledTraining, resolved, probabilityCalibrationPolicy);
+  const selectionTrainingResults = probabilityPolicyValidationRows(trainingResults, probabilityCalibrationPolicy);
+  const usedTrainingValidation =
+    probabilityCalibrationPolicy.validationSampleSize >= 20 &&
+    selectionTrainingResults.length === probabilityCalibrationPolicy.validationSampleSize;
+  const trainingSummary = summary(selectionTrainingResults);
   const minimumEdge = clamp(resolved.minEdge + ((trainingSummary.yield ?? 0) < 0 ? 0.015 : 0), 0.02, 0.09);
   const holdoutSelectionConfig = { ...resolved, minEdge: minimumEdge };
-  const policyTrainingResults = applyMinimumEdgeToResults(trainingResults, minimumEdge);
+  const policyTrainingResults = applyMinimumEdgeToResults(selectionTrainingResults, minimumEdge);
   const selectionPolicy = learnEconomicSelectionPolicy(policyTrainingResults);
-  const baselineResults = evaluateRows(holdoutRows, holdoutSelectionConfig);
+  const rawHoldoutResults = evaluateRows(modeledHoldout, holdoutSelectionConfig);
+  const baselineResults = evaluateRows(modeledHoldout, holdoutSelectionConfig, probabilityCalibrationPolicy);
+  const probabilityCalibrationComparison = buildProbabilityCalibrationComparison({
+    baselineRows: rawHoldoutResults,
+    calibratedRows: baselineResults
+  });
   const results = applyEconomicSelectionPolicy(baselineResults, selectionPolicy);
   const economicSelectionComparison = buildEconomicSelectionComparison(baselineResults, results);
   const holdoutSummary = summary(results);
@@ -650,7 +696,9 @@ function run(
       minimumModelProbability: holdoutSelectionConfig.minModelProbability,
       economicPolicy: selectionPolicy,
       comparison: economicSelectionComparison
-    }
+    },
+    probabilityCalibrationPolicy,
+    probabilityCalibrationComparison
   });
   return {
     sport,
@@ -678,14 +726,19 @@ function run(
     calibrationBuckets: holdoutSummary.calibrationBuckets,
     marketBreakdown: holdoutSummary.marketBreakdown,
     confidenceBreakdown: holdoutSummary.confidenceBreakdown,
-    learnedWeights: { minimumEdge: round(minimumEdge, 4)!, trainingSampleSize: trainingResults.length, trainingBrierScore: trainingSummary.brierScore ?? 0 },
+    learnedWeights: { minimumEdge: round(minimumEdge, 4)!, trainingSampleSize: selectionTrainingResults.length, trainingBrierScore: trainingSummary.brierScore ?? 0 },
     selectionPolicy,
     economicSelectionComparison,
+    probabilityCalibrationPolicy,
+    probabilityCalibrationComparison,
     config: resolved,
     notes: [
       `Executed ${results.length} chronological holdout fixture(s) through ${identity.runtimeEntrypoint}.`,
       `All Elo, form, rest, scoring, and surface features were calculated before each result updated team or player state.`,
-      `${trainingResults.length} training-window fixture(s) set the holdout minimum edge to ${holdoutSelectionConfig.minEdge.toFixed(4)}; holdout outcomes did not tune it.`,
+      `${selectionTrainingResults.length} ${usedTrainingValidation ? "prospective training-validation" : "training-window fallback"} fixture(s) set the holdout minimum edge to ${holdoutSelectionConfig.minEdge.toFixed(4)}; holdout outcomes did not tune it.`,
+      probabilityCalibrationPolicy.status === "active"
+        ? `Training fit/validation evidence activated temperature ${probabilityCalibrationPolicy.temperature.toFixed(3)}; it was frozen before holdout and changed holdout log loss by ${probabilityCalibrationComparison.logLossDelta ?? "n/a"}.`
+        : `Training fit/validation evidence kept identity calibration (${probabilityCalibrationPolicy.reason}); holdout probabilities were not tuned.`,
       selectionPolicy.status === "active"
         ? `Training-only economic evidence admitted ${selectionPolicy.allowedConfidenceBands.join(", ")} confidence band(s); the policy was applied unchanged to holdout.`
         : `Training-only economic evidence admitted no confidence band, so the holdout selection policy abstained.`,

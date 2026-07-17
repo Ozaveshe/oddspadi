@@ -69,6 +69,11 @@ export type MultiSportBacktestJob = {
     allowedConfidenceBands: string[];
     baselinePickCount: number | null;
     baselineYield: number | null;
+    probabilityCalibrationPolicyStatus: "active" | "identity" | null;
+    probabilityTemperature: number | null;
+    baselineHoldoutLogLoss: number | null;
+    calibratedHoldoutLogLoss: number | null;
+    holdoutLogLossDelta: number | null;
     reason: string | null;
   };
   nextAction: string;
@@ -143,6 +148,11 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
       allowedConfidenceBands: [],
       baselinePickCount: null,
       baselineYield: null,
+      probabilityCalibrationPolicyStatus: null,
+      probabilityTemperature: null,
+      baselineHoldoutLogLoss: null,
+      calibratedHoldoutLogLoss: null,
+      holdoutLogLossDelta: null,
       reason: null
     };
   }
@@ -161,6 +171,11 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
     allowedConfidenceBands: runtimeResult?.selectionPolicy.allowedConfidenceBands ?? [],
     baselinePickCount: runtimeResult?.economicSelectionComparison.baseline.pickCount ?? null,
     baselineYield: runtimeResult?.economicSelectionComparison.baseline.yield ?? null,
+    probabilityCalibrationPolicyStatus: runtimeResult?.probabilityCalibrationPolicy.status ?? null,
+    probabilityTemperature: runtimeResult?.probabilityCalibrationPolicy.temperature ?? null,
+    baselineHoldoutLogLoss: runtimeResult?.probabilityCalibrationComparison.baseline.logLoss ?? null,
+    calibratedHoldoutLogLoss: runtimeResult?.probabilityCalibrationComparison.calibrated.logLoss ?? null,
+    holdoutLogLossDelta: runtimeResult?.probabilityCalibrationComparison.logLossDelta ?? null,
     reason: result.status === "stored" ? null : result.reason
   };
 }

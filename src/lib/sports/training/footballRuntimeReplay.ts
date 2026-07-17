@@ -8,7 +8,19 @@ import {
   buildMatchContextAdjustment,
   coreModelContextCategories
 } from "@/lib/sports/prediction/contextAdjustment";
-import type { Match, MatchContextSignal } from "@/lib/sports/types";
+import {
+  applyProbabilityTemperaturePolicy,
+  buildProbabilityCalibrationComparison,
+  learnProbabilityTemperaturePolicy,
+  probabilityPolicyValidationRows,
+  strictChronologicalSplitIndex
+} from "@/lib/sports/prediction/probabilityTemperatureScaling";
+import type {
+  Match,
+  MatchContextSignal,
+  ProbabilityCalibrationComparison,
+  ProbabilityTemperatureScalingPolicy
+} from "@/lib/sports/types";
 import {
   buildFootballLearnedWeightsProvenance,
   evaluateFootballPrediction,
@@ -84,6 +96,8 @@ export type FootballRuntimeReplayResult = Omit<FootballBacktestResult, "config" 
   learnedWeights: FootballDecisionLearnedWeights;
   selectionPolicy: EconomicSelectionPolicy;
   economicSelectionComparison: EconomicSelectionComparison;
+  probabilityCalibrationPolicy: ProbabilityTemperatureScalingPolicy;
+  probabilityCalibrationComparison: ProbabilityCalibrationComparison;
   featureContract: FootballRuntimeFeatureContract;
   executionHash: string;
   rejections: FootballRuntimeReplayRejection[];
@@ -107,6 +121,12 @@ type PreparedRuntimeFixture = {
   source: HistoricalFootballFixtureInput;
   match: Match;
   evaluationFixture: HistoricalFootballFixture;
+};
+
+type ModeledRuntimeFixture = {
+  prepared: PreparedRuntimeFixture;
+  probabilities: Record<FootballOutcome, number>;
+  expectedGoals: FootballBacktestFixtureResult["expectedGoals"];
 };
 
 const RUNTIME_MODEL_KEY = runtimeModelKey("football");
@@ -434,8 +454,8 @@ function runtimeNotes(
 ): string[] {
   return [
     `Executed ${contract.entrypointInvocations} holdout fixture(s) through the football runtime model and residual context adjustment with ${contract.version}.`,
-    weightProvenance.source === "training-window"
-      ? `Learned decision weights use only ${contract.trainingEvaluatedFixtures} chronological training fixture(s); holdout outcomes remain evaluation-only.`
+    weightProvenance.source === "training-window" || weightProvenance.source === "training-validation-window"
+      ? `Learned decision weights use only ${weightProvenance.sampleSize} chronological ${weightProvenance.source === "training-validation-window" ? "training-validation" : "training"} fixture(s); holdout outcomes remain evaluation-only.`
       : "Learned decision weights use conservative defaults because no chronological training fixture was available.",
     contract.rejectedFixtures
       ? `${contract.rejectedFixtures} source fixture(s) were excluded by the fail-closed runtime feature contract.`
@@ -500,7 +520,7 @@ export function runFootballRuntimeReplay(
 
   prepared.sort((left, right) => Date.parse(left.source.kickoffAt) - Date.parse(right.source.kickoffAt));
   const trainSize = prepared.length
-    ? Math.min(prepared.length - 1, Math.max(0, Math.floor(prepared.length * config.trainRatio)))
+    ? strictChronologicalSplitIndex(prepared.map((fixture) => ({ kickoffAt: fixture.source.kickoffAt })), Math.floor(prepared.length * config.trainRatio))
     : 0;
   const training = prepared.slice(0, trainSize);
   const holdout = prepared.slice(trainSize);
@@ -512,11 +532,10 @@ export function runFootballRuntimeReplay(
     minEdge: config.minEdge,
     minModelProbability: config.minModelProbability
   });
-  const evaluatePreparedFixture = (
+  const modelPreparedFixture = (
     fixture: PreparedRuntimeFixture,
-    phase: "training" | "holdout",
-    selectionConfig: ReturnType<typeof resolveFootballBacktestConfig>
-  ): FootballBacktestFixtureResult | null => {
+    phase: "training" | "holdout"
+  ): ModeledRuntimeFixture | null => {
     const historicalClock = new Date(fixture.source.kickoffAt);
     const modeled = modelFootballMatch(fixture.match, { now: historicalClock });
     const contextAdjustment = buildMatchContextAdjustment(fixture.match, {
@@ -530,23 +549,45 @@ export function runFootballRuntimeReplay(
       rejections.push({ fixtureExternalId: fixture.source.externalId, reasons: [`${phase} runtime match-winner output invalid`] });
       return null;
     }
+    return { prepared: fixture, probabilities, expectedGoals: modeled.diagnostics.expectedGoals };
+  };
+  const evaluateModeledFixture = (
+    modeled: ModeledRuntimeFixture,
+    selectionConfig: ReturnType<typeof resolveFootballBacktestConfig>,
+    calibrationPolicy?: ProbabilityTemperatureScalingPolicy
+  ): FootballBacktestFixtureResult => {
+    const probabilities = calibrationPolicy
+      ? applyProbabilityTemperaturePolicy(modeled.probabilities, calibrationPolicy) as Record<FootballOutcome, number>
+      : modeled.probabilities;
     return evaluateFootballPrediction({
-      fixture: fixture.evaluationFixture,
+      fixture: modeled.prepared.evaluationFixture,
       probabilities,
-      expectedGoals: modeled.diagnostics.expectedGoals,
+      expectedGoals: modeled.expectedGoals,
       config: selectionConfig
     });
   };
 
-  const trainingResults: FootballBacktestFixtureResult[] = [];
   let trainingEntrypointInvocations = 0;
+  const modeledTraining: ModeledRuntimeFixture[] = [];
   for (const fixture of training) {
     trainingEntrypointInvocations += 1;
-    const evaluation = evaluatePreparedFixture(fixture, "training", evaluationConfig);
-    if (evaluation) trainingResults.push(evaluation);
+    const modeled = modelPreparedFixture(fixture, "training");
+    if (modeled) modeledTraining.push(modeled);
   }
+  const rawTrainingResults = modeledTraining.map((modeled) => evaluateModeledFixture(modeled, evaluationConfig));
+  const probabilityCalibrationPolicy = learnProbabilityTemperaturePolicy({
+    trainingRows: rawTrainingResults,
+    holdoutWindowStart: holdout[0]?.source.kickoffAt ?? null
+  });
+  const trainingResults = modeledTraining.map((modeled) =>
+    evaluateModeledFixture(modeled, evaluationConfig, probabilityCalibrationPolicy)
+  );
+  const selectionTrainingResults = probabilityPolicyValidationRows(trainingResults, probabilityCalibrationPolicy);
+  const usedTrainingValidation =
+    probabilityCalibrationPolicy.validationSampleSize >= 20 &&
+    selectionTrainingResults.length === probabilityCalibrationPolicy.validationSampleSize;
 
-  const trainingSummary = summarizeFootballEvaluation(trainingResults);
+  const trainingSummary = summarizeFootballEvaluation(selectionTrainingResults);
   const learnedWeightsCandidate = footballDecisionLearnedWeights({
     pickCount: trainingSummary.pickCount,
     yield: trainingSummary.yield,
@@ -562,16 +603,24 @@ export function runFootballRuntimeReplay(
     ...evaluationConfig,
     minEdge: learnedWeights.minimumEdge
   };
-  const policyTrainingResults = applyMinimumEdgeToResults(trainingResults, holdoutEvaluationConfig.minEdge);
+  const policyTrainingResults = applyMinimumEdgeToResults(selectionTrainingResults, holdoutEvaluationConfig.minEdge);
   const selectionPolicy = learnEconomicSelectionPolicy(policyTrainingResults);
 
-  const results: FootballBacktestFixtureResult[] = [];
   let entrypointInvocations = 0;
+  const modeledHoldout: ModeledRuntimeFixture[] = [];
   for (const fixture of holdout) {
     entrypointInvocations += 1;
-    const evaluation = evaluatePreparedFixture(fixture, "holdout", holdoutEvaluationConfig);
-    if (evaluation) results.push(evaluation);
+    const modeled = modelPreparedFixture(fixture, "holdout");
+    if (modeled) modeledHoldout.push(modeled);
   }
+  const rawHoldoutResults = modeledHoldout.map((modeled) => evaluateModeledFixture(modeled, holdoutEvaluationConfig));
+  const results = modeledHoldout.map((modeled) =>
+    evaluateModeledFixture(modeled, holdoutEvaluationConfig, probabilityCalibrationPolicy)
+  );
+  const probabilityCalibrationComparison = buildProbabilityCalibrationComparison({
+    baselineRows: rawHoldoutResults,
+    calibratedRows: results
+  });
 
   const selectedResults = applyEconomicSelectionPolicy(results, selectionPolicy);
   const economicSelectionComparison = buildEconomicSelectionComparison(results, selectedResults);
@@ -581,7 +630,8 @@ export function runFootballRuntimeReplay(
   const weightProvenance = buildFootballLearnedWeightsProvenance(
     selectedTrainingResults,
     selectedTrainingSummary,
-    selectedResults[0]?.kickoffAt ?? null
+    selectedResults[0]?.kickoffAt ?? null,
+    usedTrainingValidation ? "training-validation-window" : "training-window"
   );
   const contract: FootballRuntimeFeatureContract = {
     status:
@@ -635,6 +685,8 @@ export function runFootballRuntimeReplay(
       economicPolicy: selectionPolicy,
       comparison: economicSelectionComparison
     },
+    probabilityCalibrationPolicy,
+    probabilityCalibrationComparison,
     learnedWeightsProvenance: weightProvenance
   });
 
@@ -668,11 +720,16 @@ export function runFootballRuntimeReplay(
     learnedWeights,
     selectionPolicy,
     economicSelectionComparison,
+    probabilityCalibrationPolicy,
+    probabilityCalibrationComparison,
     learnedWeightsProvenance: weightProvenance,
     config,
     notes: [
       ...runtimeNotes(contract, summary, weightProvenance),
-      `Holdout selection used the training-derived minimum edge ${holdoutEvaluationConfig.minEdge.toFixed(4)}; holdout outcomes could not tune it.`,
+      `Holdout selection used the ${usedTrainingValidation ? "prospective training-validation" : "training-window fallback"} minimum edge ${holdoutEvaluationConfig.minEdge.toFixed(4)}; holdout outcomes could not tune it.`,
+      probabilityCalibrationPolicy.status === "active"
+        ? `Training fit/validation evidence activated temperature ${probabilityCalibrationPolicy.temperature.toFixed(3)}; it was frozen before holdout and changed holdout log loss by ${probabilityCalibrationComparison.logLossDelta ?? "n/a"}.`
+        : `Training fit/validation evidence kept identity calibration (${probabilityCalibrationPolicy.reason}); holdout probabilities were not tuned.`,
       selectionPolicy.status === "active"
         ? `Training-only economic evidence admitted ${selectionPolicy.allowedConfidenceBands.join(", ")} confidence band(s); the policy was applied unchanged to holdout.`
         : `Training-only economic evidence admitted no confidence band, so the holdout selection policy abstained.`

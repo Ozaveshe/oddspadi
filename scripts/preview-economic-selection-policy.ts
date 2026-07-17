@@ -52,7 +52,9 @@ async function main(): Promise<void> {
       calibrationError: result.calibrationError,
       minimumEdge: result.learnedWeights.minimumEdge,
       selectionPolicy: "selectionPolicy" in result ? result.selectionPolicy : null,
-      economicSelectionComparison: "economicSelectionComparison" in result ? result.economicSelectionComparison : null
+      economicSelectionComparison: "economicSelectionComparison" in result ? result.economicSelectionComparison : null,
+      probabilityCalibrationPolicy: "probabilityCalibrationPolicy" in result ? result.probabilityCalibrationPolicy : null,
+      probabilityCalibrationComparison: "probabilityCalibrationComparison" in result ? result.probabilityCalibrationComparison : null
     }));
   }
 }

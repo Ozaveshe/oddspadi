@@ -1456,7 +1456,9 @@ function backtestInsertPayload(result: HistoricalBacktestResult, includeDemo: bo
             featureContract: result.featureContract,
             executionHash: result.executionHash,
             selectionPolicy: result.selectionPolicy,
-            economicSelectionComparison: result.economicSelectionComparison
+            economicSelectionComparison: result.economicSelectionComparison,
+            probabilityCalibrationPolicy: result.probabilityCalibrationPolicy,
+            probabilityCalibrationComparison: result.probabilityCalibrationComparison
           }
         : {}),
       modelIdentity: modelIdentityForResult(result)
@@ -1515,6 +1517,14 @@ export async function runAndStoreHistoricalBacktest({
   config?: HistoricalBacktestConfig;
   includeDemo?: boolean;
 } = {}): Promise<BacktestRunStoreResult> {
+  if (sport === "football") {
+    return runAndStoreFootballRuntimeReplay({
+      minSample,
+      limit,
+      config: config as FootballRuntimeReplayConfig,
+      includeDemo
+    });
+  }
   const runtime = getSupabaseRuntimeStatus();
   if (!runtime.serverWriteReady) {
     return {
@@ -1672,5 +1682,5 @@ export function trainingModelKey(sport: TrainingSport = "football"): string {
 export function historicalBacktestExecutionModelKey(sport: TrainingSport = "football"): string {
   if (sport === "basketball") return runtimeModelKey("basketball");
   if (sport === "tennis") return runtimeModelKey("tennis");
-  return FOOTBALL_BACKTEST_MODEL_KEY;
+  return runtimeModelKey("football");
 }

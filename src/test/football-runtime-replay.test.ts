@@ -106,8 +106,15 @@ describe("football exact runtime replay", () => {
     });
     expect(result.economicSelectionComparison.selected.pickCount).toBe(result.pickCount);
     expect(result.economicSelectionComparison.baseline.pickCount).toBeGreaterThanOrEqual(result.pickCount);
+    expect(result.probabilityCalibrationPolicy).toMatchObject({
+      source: "chronological-training-window",
+      status: "identity",
+      temperature: 1,
+      reason: "insufficient-training-sample"
+    });
+    expect(result.probabilityCalibrationComparison.baseline.sampleSize).toBe(result.testSize);
     expect(result.notes).toEqual(expect.arrayContaining([
-      expect.stringContaining("Holdout selection used the training-derived minimum edge")
+      expect.stringContaining("Holdout selection used the training-window fallback minimum edge")
     ]));
     expect(result.learnedWeights).not.toHaveProperty("homeAdvantageElo");
     expect(historicalModelCompatibility({
@@ -129,6 +136,7 @@ describe("football exact runtime replay", () => {
     expect(homeWin.learnedWeights).toEqual(awayWin.learnedWeights);
     expect(homeWin.learnedWeightsProvenance).toEqual(awayWin.learnedWeightsProvenance);
     expect(homeWin.selectionPolicy).toEqual(awayWin.selectionPolicy);
+    expect(homeWin.probabilityCalibrationPolicy).toEqual(awayWin.probabilityCalibrationPolicy);
   });
 
   it("fails closed for neutral venues the runtime Match contract cannot represent", () => {
