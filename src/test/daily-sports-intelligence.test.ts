@@ -251,6 +251,30 @@ describe("production daily sports intelligence", () => {
     expect(getPredictions).not.toHaveBeenCalled();
   });
 
+  it("reports sport coverage loss when a configured provider silently falls back to mocks", async () => {
+    const football = await providerMatch();
+    const tennis = (await mockSportsDataProvider.getFixtures("2026-07-13", "tennis"))[0];
+    const result = await refreshOdds({
+      now: new Date("2026-07-13T12:05:00.000Z"),
+      sports: ["football", "tennis"],
+      persist: false,
+      env: { NODE_ENV: "test", API_FOOTBALL_KEY: "configured", API_TENNIS_KEY: "configured" },
+      dependencies: {
+        getFixtures: async (_date, sport) => sport === "football" ? [football] : [tennis],
+        getPredictions: async () => []
+      }
+    });
+
+    expect(result.run.status).toBe("partial");
+    expect(result.run.errors).toContain(
+      "tennis: no provider-backed fixtures returned across 2 requested day(s); rejected 1 fallback mock fixture(s)."
+    );
+    expect(result.sportCoverage).toEqual([
+      { sport: "football", requestedDates: 2, providerBackedFixtures: 1, rejectedMockFixtures: 0 },
+      { sport: "tennis", requestedDates: 2, providerBackedFixtures: 0, rejectedMockFixtures: 1 }
+    ]);
+  });
+
   it("publishes a fresh positive-edge, positive-EV selection as a value pick", async () => {
     const now = new Date("2026-07-13T12:05:00.000Z");
     const match = await providerMatch();

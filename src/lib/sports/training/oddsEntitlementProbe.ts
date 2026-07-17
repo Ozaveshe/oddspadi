@@ -224,7 +224,7 @@ function summaryFor(status: OddsEntitlementProbeStatus, totals: OddsEntitlementP
 }
 
 function nextActionFor(status: OddsEntitlementProbeStatus, primaryTarget: OddsEntitlementTarget): string {
-  if (status === "historical-odds-ready") return "Run basketball-odds-attach with dryRun=1, review matched fixture IDs, then use dryRun=0 only after operator approval.";
+  if (status === "historical-odds-ready") return "Plan basketball-odds-backfill with run=0, then execute a quota-bounded dry run before enabling storage.";
   if (status === "historical-plan-blocked") return primaryTarget.reason ?? "Upgrade The Odds API to include historical odds, then rerun this entitlement probe.";
   if (status === "admin-required") return "Re-run with run=1 and x-oddspadi-admin-token.";
   if (status === "missing-provider-key") return "Set THE_ODDS_API_KEY or ODDS_API_KEY before probing odds entitlement.";
@@ -279,7 +279,7 @@ export async function buildOddsEntitlementProbe({
     errors: targets.filter((target) => target.status === "error").length
   };
   const status = statusFor({ providerConfigured, runRequested, adminAuthorized, primaryTarget, totals });
-  const attachmentVerifyUrl = `/api/sports/decision/training/basketball-odds-attach?date=${encodeURIComponent(primaryTarget.date)}&regions=us&limit=25&dryRun=1`;
+  const attachmentVerifyUrl = `/api/sports/decision/training/basketball-odds-backfill?from=${encodeURIComponent(primaryTarget.date)}&to=${encodeURIComponent(primaryTarget.date)}&regions=us&maxJobs=1&maxCredits=10&run=0`;
   const route = "/api/sports/decision/training/odds-entitlement-probe?run=1";
 
   return {
@@ -314,7 +314,7 @@ export async function buildOddsEntitlementProbe({
     },
     proofUrls: [
       "/api/sports/decision/training/odds-entitlement-probe",
-      "/api/sports/decision/training/basketball-odds-attach",
+      "/api/sports/decision/training/basketball-odds-backfill",
       "/api/sports/decision/training/provider-sync"
     ],
     locks: [

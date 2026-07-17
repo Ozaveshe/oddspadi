@@ -16844,6 +16844,7 @@ describe("prediction utilities", () => {
     );
     const fixtures: BasketballStoredFixtureCandidate[] = [
       {
+        fixtureId: "11111111-1111-4111-8111-111111111111",
         fixtureExternalId: "nba-team-totals:0022401004",
         provider: "nba_team_totals_csv",
         kickoffAt: "2025-01-15T20:00:00Z",
@@ -16862,6 +16863,7 @@ describe("prediction utilities", () => {
     expect(result.unmatchedEvents).toHaveLength(0);
     expect(rows).toHaveLength(2);
     expect(rows.map((row) => row.fixture_external_id)).toEqual(["nba-team-totals:0022401004", "nba-team-totals:0022401004"]);
+    expect(rows.every((row) => row.fixture_id === "11111111-1111-4111-8111-111111111111")).toBe(true);
     expect(rows.every((row) => row.provider === "the_odds_api" && row.market === "match_winner")).toBe(true);
     expect(rows.reduce((sum, row) => sum + Number(row.margin_adjusted_probability), 0)).toBeCloseTo(1, 5);
   });
@@ -22888,7 +22890,7 @@ describe("prediction utilities", () => {
     expect(probe.primaryTarget.entitlementSignal).toBe("paid-plan-required");
     expect(probe.targets.every((target) => target.status === "blocked")).toBe(true);
     expect(probe.attachmentDryRun.ready).toBe(false);
-    expect(probe.attachmentDryRun.verifyUrl).toContain("/api/sports/decision/training/basketball-odds-attach");
+    expect(probe.attachmentDryRun.verifyUrl).toContain("/api/sports/decision/training/basketball-odds-backfill");
     expect(probe.nextAction).toContain("Historical odds are only available");
     expect(probe.controls.canRunProviderDryRun).toBe(true);
     expect(probe.controls.canAttachBasketballOdds).toBe(false);
@@ -25345,10 +25347,10 @@ describe("prediction utilities", () => {
     expect(attachment?.sport).toBe("basketball");
     expect(attachment?.status).toBe("ready");
     expect(attachment?.canRunNow).toBe(true);
-    expect(attachment?.verifyUrl).toContain("/api/sports/decision/training/basketball-odds-attach");
+    expect(attachment?.verifyUrl).toContain("/api/sports/decision/training/basketball-odds-backfill");
     expect(attachment?.command).toContain("-X POST");
     expect(attachment?.expectedEvidence).toContain("match existing finished NBA fixtures");
-    expect(queue.proofUrls).toContain("/api/sports/decision/training/basketball-odds-attach");
+    expect(queue.proofUrls).toContain("/api/sports/decision/training/basketball-odds-backfill");
   });
 
   it("summarizes engine capacity without confusing OpenAI readiness for provider readiness", async () => {

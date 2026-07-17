@@ -139,22 +139,21 @@ function basketballOddsAttachmentStep(
   origin: string
 ): FirstCorpusImportQueueStep | null {
   const basketball = census.sports.find((row) => row.sport === "basketball");
-  if (!basketball || basketball.finishedFixtures <= 0 || basketball.matchWinnerOddsSnapshots > 0) return null;
+  if (!basketball || basketball.finishedFixtures <= 0 || basketball.matchWinnerOddsSnapshots >= basketball.finishedFixtures) return null;
 
-  const date = "2024-02-01T12:00:00Z";
-  const verifyUrl = `/api/sports/decision/training/basketball-odds-attach?date=${encodeURIComponent(date)}&regions=us&limit=25&dryRun=1`;
+  const verifyUrl = "/api/sports/decision/training/basketball-odds-backfill?from=2023-10-24&to=2024-04-13&regions=us&maxJobs=7&maxCredits=70&run=0";
   const configured = Boolean(oddsJob?.configured);
   return step({
     id: "basketball-historical-odds-attachment",
     kind: "provider-odds-attachment",
-    label: "Attach NBA historical moneyline odds",
+    label: "Checkpoint NBA historical moneyline odds",
     sport: "basketball",
     status: configured ? "ready" : "blocked",
     targetTables: ["op_odds_snapshots", "op_raw_provider_payloads", "op_provider_ingestion_runs"],
     command: `${decisionCurlCommand(`${origin}${verifyUrl}`)} -X POST -H "x-oddspadi-admin-token: $env:ODDSPADI_ADMIN_TOKEN"`,
     verifyUrl,
     expectedEvidence:
-      "The Odds API basketball_nba historical h2h odds match existing finished NBA fixtures by team/date and preview op_odds_snapshots rows without rewriting fixtures.",
+      "The plan skips completed receipt dates, caps provider credits, and checkpoints NBA historical h2h odds that match existing finished NBA fixtures without rewriting them.",
     blocker: configured ? null : oddsJob?.missingEnv.join(", ") || "THE_ODDS_API_KEY or ODDS_API_KEY",
     canRunNow: configured
   });
@@ -289,7 +288,7 @@ export function buildFirstCorpusImportQueue({
       "/api/sports/decision/training/provider-corpus-dry-run-queue",
       "/api/sports/decision/training/provider-sync",
       "/api/sports/decision/training/historical-provider-storage-receipt",
-      "/api/sports/decision/training/basketball-odds-attach",
+      "/api/sports/decision/training/basketball-odds-backfill",
       "/api/sports/decision/provider-batch-manifest",
       "/api/sports/decision/training/football-provider-feature-materializer",
       "/api/sports/decision/training/multi-sport-backtest-run",

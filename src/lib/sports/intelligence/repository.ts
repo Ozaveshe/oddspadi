@@ -216,7 +216,8 @@ export async function startProviderRun({
 export async function finishProviderRun(
   run: ProviderRunLog,
   update: Omit<ProviderRunLog, "runId" | "providerName" | "jobType" | "startedAt">,
-  client: SupabaseClient | null = getSupabaseServerClient()
+  client: SupabaseClient | null = getSupabaseServerClient(),
+  diagnostics?: Record<string, unknown>
 ): Promise<ProviderRunLog> {
   const finished = { ...run, ...update };
   if (!client || !run.runId) return finished;
@@ -234,7 +235,7 @@ export async function finishProviderRun(
       value_picks_published: update.valuePicksPublished,
       error_message: update.errors[0] ?? null,
       errors: update.errors,
-      metadata: { pipelineStatus: update.status }
+      metadata: { pipelineStatus: update.status, ...(diagnostics ?? {}) }
     })
     .eq("id", run.runId);
   return error ? { ...finished, status: "partial", errors: [...finished.errors, `Run log update failed: ${error.message}`] } : finished;

@@ -354,7 +354,7 @@ function trainingNextActions(
   if (status === "schema-error") return ["Apply the local OddsPadi Supabase migrations to the proven OddsPadi project, then rerun this training snapshot."];
   if (status === "ready" && sport === "basketball" && (counts?.realFinishedFixtures ?? 0) > 0 && (counts?.realOddsSnapshots ?? 0) === 0) {
     return [
-      "Run /api/sports/decision/training/basketball-odds-attach with dryRun=1 after The Odds API historical plan is upgraded.",
+      "Plan /api/sports/decision/training/basketball-odds-backfill with run=0, then execute a quota-bounded checkpoint after The Odds API historical plan is upgraded.",
       "Review matched fixture IDs and odds-row counts, then attach NBA moneyline odds with dryRun=0 before rerunning basketball backtests."
     ];
   }

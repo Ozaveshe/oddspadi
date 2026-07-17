@@ -39,6 +39,19 @@ worker accepts `stored` only when census readback is evidence-ready, and accepts
 player-stat payload must cover at least 11 participants with minutes for each
 team; incomplete payloads fail the lane and are not stored as player history.
 
+### Basketball odds-history checkpoints
+
+`POST /api/sports/decision/training/basketball-odds-backfill` restores the
+operator path for attaching historical NBA moneylines to the existing finished
+fixture corpus. It is plan-only by default (`run=0`): completed receipt dates are
+skipped, the next unfinished date is returned as `nextCursor`, and no provider
+request is made. Execution requires `run=1`; `dryRun=1` still calls the paid
+provider but does not write rows. Keep `regions=us`, `maxJobs=7`, and
+`maxCredits=70` for a normal checkpoint. The historical h2h endpoint costs an
+estimated 10 credits per region per date, and the route refuses to exceed the
+explicit credit ceiling. Storage receipts report provider quota headers plus
+`fixtures_found`, `odds_found`, and `rows_written` separately.
+
 The identity worker uses the same server-only API-Football key as the fixture
 pipeline. It batches by league and season (maximum eight competitions), keeps
 continental competitions labelled `World`, and resolves each club's actual
