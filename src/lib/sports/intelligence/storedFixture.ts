@@ -1,16 +1,16 @@
 import type { DecisionSummary, MatchStatus, Sport } from "@/lib/sports/types";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { DEFAULT_STORED_FIXTURE_MAX_AGE_MS, isStoredFixtureFresh, reconcileStoredFixtureStatus } from "./canonical";
-import { readFixtureOddsHistory, readLatestDecisionSummary } from "./repository";
+import { readFixtureOddsHistory, readLatestDecisionSummary, storedFixtureArtwork } from "./repository";
 import type { FixtureOddsHistory } from "./types";
 
 export type StoredFixtureAnalysis = {
   fixtureId: string;
   sport: Sport;
-  league: { id: string; name: string; country: string };
+  league: { id: string; name: string; country: string; logo: string | null; flag: string | null };
   kickoffAt: string;
-  homeTeam: { id: string; name: string };
-  awayTeam: { id: string; name: string };
+  homeTeam: { id: string; name: string; logo: string | null; country: string | null };
+  awayTeam: { id: string; name: string; logo: string | null; country: string | null };
   status: MatchStatus;
   score: { home: number; away: number } | null;
   provider: string;
@@ -66,10 +66,21 @@ export async function readStoredFixtureAnalysis(
     return { status: "unavailable", analysis: null, reason: "The stored fixture receipt is incomplete or non-production and cannot support a public analysis page." };
   }
 
-  const [summary, oddsHistory] = await Promise.all([
+  const homeTeamId = cleanText(row.home_team_external_id) ?? `${fixtureId}:home`;
+  const awayTeamId = cleanText(row.away_team_external_id) ?? `${fixtureId}:away`;
+  const leagueId = cleanText(row.league_external_id) ?? "unknown";
+  const [{ data: teams, error: teamError }, { data: leagues, error: leagueError }, summary, oddsHistory] = await Promise.all([
+    client.from("op_teams").select("sport,provider,external_id,country,metadata").in("external_id", [homeTeamId, awayTeamId]).limit(10),
+    client.from("op_leagues").select("sport,provider,external_id,country,metadata").eq("external_id", leagueId).limit(5),
     readLatestDecisionSummary(fixtureId, client),
     readFixtureOddsHistory(fixtureId, client)
   ]);
+  if (teamError || leagueError) console.warn("[sports-intelligence] stored fixture identity enrichment unavailable; using fixture receipt fallbacks");
+  const artwork = storedFixtureArtwork({
+    fixture: row,
+    teams: (teamError ? [] : teams ?? []) as Array<Record<string, unknown> & { sport: string; provider: string; external_id: string }>,
+    leagues: (leagueError ? [] : leagues ?? []) as Array<Record<string, unknown> & { sport: string; provider: string; external_id: string }>
+  });
   const homeScore = finiteNumber(row.home_score);
   const awayScore = finiteNumber(row.away_score);
   const rawStatus = cleanText(row.status) as MatchStatus | null;
@@ -88,13 +99,15 @@ export async function readStoredFixtureAnalysis(
       fixtureId,
       sport: rowSport,
       league: {
-        id: cleanText(row.league_external_id) ?? "unknown",
+        id: leagueId,
         name: cleanText(row.league_name) ?? "Competition",
-        country: cleanText(row.country) ?? "World"
+        country: cleanText(row.country) ?? "World",
+        logo: artwork.leagueLogo,
+        flag: artwork.leagueFlag
       },
       kickoffAt,
-      homeTeam: { id: cleanText(row.home_team_external_id) ?? `${fixtureId}:home`, name: homeName },
-      awayTeam: { id: cleanText(row.away_team_external_id) ?? `${fixtureId}:away`, name: awayName },
+      homeTeam: { id: homeTeamId, name: homeName, logo: artwork.homeLogo, country: artwork.homeCountry },
+      awayTeam: { id: awayTeamId, name: awayName, logo: artwork.awayLogo, country: artwork.awayCountry },
       status,
       score: homeScore !== null && awayScore !== null ? { home: homeScore, away: awayScore } : null,
       provider,

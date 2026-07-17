@@ -175,6 +175,18 @@ describe("production daily sports intelligence", () => {
     expect(normalizeCanonicalFixture({ ...futureLive, kickoffTime: "2026-07-15T01:50:00.000Z" }, now).status).toBe("live");
   });
 
+  it("preserves team-specific countries instead of replacing them with the competition country", async () => {
+    const match = {
+      ...(await providerMatch()),
+      league: { id: "api-football:3", name: "UEFA Europa League", country: "World", strength: 0.9 },
+      homeTeam: { ...(await providerMatch()).homeTeam, country: "Ireland" },
+      awayTeam: { ...(await providerMatch()).awayTeam, country: "Bulgaria" }
+    };
+    const fixture = normalizeCanonicalFixture(match);
+    expect(fixture.homeTeam.country).toBe("Ireland");
+    expect(fixture.awayTeam.country).toBe("Bulgaria");
+  });
+
   it("enforces the stored fixture freshness boundary", () => {
     const now = new Date("2026-07-16T12:00:00.000Z");
     expect(isStoredFixtureFresh("2026-07-16T07:00:00.000Z", now)).toBe(true);

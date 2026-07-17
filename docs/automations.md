@@ -12,6 +12,7 @@ project `wncwtzqipnoqwmqlznqn`.
 | `decision-cycle-sweep` | `5,35 * * * *` | Football decision/prediction capture |
 | `multi-sport-decision-cycle-sweep` | `20 */2 * * *` | Basketball/tennis capture |
 | `sports-intelligence-sweep` | `25 */2 * * *` | Refreshes the canonical multi-sport intelligence pipeline and daily/weekly public slates |
+| `sports-identity-enrichment-sweep` | `10 3 * * *` | Resolves upcoming club countries/crests and domestic odds-only competition countries, then records a serialized receipt |
 | `football-settlement-sweep` | `*/30 * * * *` | Grades finished football picks |
 | `football-corpus-refresh-sweep` | `40 3 * * *` | Runs two independent EPL corpus lanes: refreshes the previous two complete UTC days with events/lineups/player statistics, then rotates through one bounded seven-day window of the most recently completed season to bootstrap historical player performances |
 | `multi-sport-settlement-sweep` | `50 * * * *` | Grades other sports |
@@ -36,6 +37,14 @@ worker accepts `stored` only when census readback is evidence-ready, and accepts
 `no-data` only for a genuinely quiet provider window. A finished fixture's
 player-stat payload must cover at least 11 participants with minutes for each
 team; incomplete payloads fail the lane and are not stored as player history.
+
+The identity worker uses the same server-only API-Football key as the fixture
+pipeline. It batches by league and season (maximum eight competitions), keeps
+continental competitions labelled `World`, and resolves each club's actual
+country from the provider team directory. Domestic The Odds API fallback
+fixtures receive a country from their competition key. Public cards render a
+deterministic flag from that stored country and a branded initials crest when
+the provider has no artwork.
 
 ## Scripts (run from the repo root)
 

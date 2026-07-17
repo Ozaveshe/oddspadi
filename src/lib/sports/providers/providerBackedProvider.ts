@@ -1331,7 +1331,7 @@ function oddsBackedFootballFixturesFromEvents(
     const rawLeagueName = cleanText(event.sport_title);
     const isEpl = sportKey.includes("soccer_epl") || rawLeagueName.toLowerCase() === "epl" || rawLeagueName.toLowerCase().includes("premier league");
     const leagueName = isEpl ? "Premier League" : rawLeagueName || "Football";
-    const country = isEpl ? "England" : "World";
+    const country = oddsCompetitionCountry(sportKey, leagueName);
     const strength = footballLeagueStrength(country, leagueName);
     const eventId = safeId(event.id, `${slug(homeName)}-${slug(awayName)}-${date}`);
     const homeId = `the-odds-api:${slug(homeName) || `home-${eventId}`}`;
@@ -1367,8 +1367,8 @@ function oddsBackedFootballFixturesFromEvents(
           strength
         },
         kickoffTime,
-        homeTeam: { id: homeId, name: homeName, rating: homeRating.rating, ratingEvidence: homeRating.evidence },
-        awayTeam: { id: awayId, name: awayName, rating: awayRating.rating, ratingEvidence: awayRating.evidence },
+        homeTeam: { id: homeId, name: homeName, country, rating: homeRating.rating, ratingEvidence: homeRating.evidence },
+        awayTeam: { id: awayId, name: awayName, country, rating: awayRating.rating, ratingEvidence: awayRating.evidence },
         venue: venue ?? undefined,
         status: "scheduled" as const,
         oddsMarkets,
@@ -1400,6 +1400,51 @@ function oddsBackedFootballFixturesFromEvents(
       } satisfies Match
     ];
   });
+}
+
+const ODDS_COMPETITION_COUNTRIES: Array<[RegExp, string]> = [
+  [/(^|_)epl(_|$)|england|efl|fa_cup/, "England"],
+  [/scotland/, "Scotland"],
+  [/brazil/, "Brazil"],
+  [/argentina/, "Argentina"],
+  [/usa|mls|nwsl/, "United States"],
+  [/mexico/, "Mexico"],
+  [/canada/, "Canada"],
+  [/france/, "France"],
+  [/germany/, "Germany"],
+  [/italy/, "Italy"],
+  [/spain/, "Spain"],
+  [/portugal/, "Portugal"],
+  [/netherlands/, "Netherlands"],
+  [/belgium/, "Belgium"],
+  [/denmark/, "Denmark"],
+  [/sweden/, "Sweden"],
+  [/norway/, "Norway"],
+  [/finland/, "Finland"],
+  [/poland/, "Poland"],
+  [/austria/, "Austria"],
+  [/switzerland/, "Switzerland"],
+  [/greece/, "Greece"],
+  [/turkey/, "Turkey"],
+  [/australia/, "Australia"],
+  [/japan/, "Japan"],
+  [/south_korea|korea/, "South Korea"],
+  [/china/, "China"],
+  [/india/, "India"],
+  [/south_africa/, "South Africa"],
+  [/egypt/, "Egypt"],
+  [/morocco/, "Morocco"],
+  [/nigeria/, "Nigeria"],
+  [/ghana/, "Ghana"]
+];
+
+/** Resolve domestic competition identity without pretending continental cups
+ * belong to a single country. Exported for the scheduled identity repair and
+ * regression tests. */
+export function oddsCompetitionCountry(sportKey: string, title = ""): string {
+  const value = `${sportKey} ${title}`.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  if (/uefa|champions_league|europa_league|conference_league|copa_libertadores|copa_sudamericana|fifa/.test(value)) return "World";
+  return ODDS_COMPETITION_COUNTRIES.find(([pattern]) => pattern.test(value))?.[1] ?? "World";
 }
 
 function basketballCountryForSportKey(sportKey: string): string {
@@ -1475,8 +1520,8 @@ function oddsBackedBasketballFixturesFromEvents(
           strength
         },
         kickoffTime,
-        homeTeam: { id: homeId, name: homeName, rating: homeRating.rating, ratingEvidence: homeRating.evidence },
-        awayTeam: { id: awayId, name: awayName, rating: awayRating.rating, ratingEvidence: awayRating.evidence },
+        homeTeam: { id: homeId, name: homeName, country, rating: homeRating.rating, ratingEvidence: homeRating.evidence },
+        awayTeam: { id: awayId, name: awayName, country, rating: awayRating.rating, ratingEvidence: awayRating.evidence },
         status: finalScore ? ("finished" as const) : ("scheduled" as const),
         score: finalScore ?? undefined,
         oddsMarkets,
@@ -2282,6 +2327,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
           homeTeam: {
             id: homeId,
             name: homeName,
+            country: country === "World" ? null : country,
             rating: homeRating.rating,
             ratingEvidence: homeRating.evidence,
             logo: cleanText(fixture.teams?.home?.logo) || null
@@ -2289,6 +2335,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
           awayTeam: {
             id: awayId,
             name: awayName,
+            country: country === "World" ? null : country,
             rating: awayRating.rating,
             ratingEvidence: awayRating.evidence,
             logo: cleanText(fixture.teams?.away?.logo) || null
@@ -2428,8 +2475,8 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
             flag: cleanText(game.country?.flag) || null
           },
           kickoffTime,
-          homeTeam: { id: homeId, name: homeName, rating: homeRating.rating, ratingEvidence: homeRating.evidence, logo: cleanText(game.teams?.home?.logo) || null },
-          awayTeam: { id: awayId, name: awayName, rating: awayRating.rating, ratingEvidence: awayRating.evidence, logo: cleanText(game.teams?.away?.logo) || null },
+          homeTeam: { id: homeId, name: homeName, country, rating: homeRating.rating, ratingEvidence: homeRating.evidence, logo: cleanText(game.teams?.home?.logo) || null },
+          awayTeam: { id: awayId, name: awayName, country, rating: awayRating.rating, ratingEvidence: awayRating.evidence, logo: cleanText(game.teams?.away?.logo) || null },
           status,
           score:
             status === "scheduled" || homeScore === null || awayScore === null

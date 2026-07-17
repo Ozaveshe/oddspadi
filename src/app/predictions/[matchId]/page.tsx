@@ -155,12 +155,12 @@ export default async function MatchDetailPage({ params }: PageProps) {
         <h1 className="match-title">
           <span className="team-inline">
             <TeamCrest name={match.homeTeam.name} logo={match.homeTeam.logo} size={34} />
-            {match.homeTeam.name}
+            <span>{match.homeTeam.name}<small className="team-country-line"><CountryFlag country={match.homeTeam.country} size={14} />{match.homeTeam.country ?? "Country pending"}</small></span>
           </span>
           <span className="accent">vs</span>
           <span className="team-inline">
             <TeamCrest name={match.awayTeam.name} logo={match.awayTeam.logo} size={34} />
-            {match.awayTeam.name}
+            <span>{match.awayTeam.name}<small className="team-country-line"><CountryFlag country={match.awayTeam.country} size={14} />{match.awayTeam.country ?? "Country pending"}</small></span>
           </span>
         </h1>
         {match.score ? (

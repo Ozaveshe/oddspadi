@@ -83,6 +83,22 @@ function tipsFreshnessProblem(payload) {
   return impossibleLive.length ? `${impossibleLive.length} future fixture(s) are incorrectly marked live` : null;
 }
 
+function tipsIdentityProblem(payload) {
+  const fixtures = tipsFixtures(payload)
+    .map((row) => row?.fixture)
+    .filter((fixture) => fixture && Date.parse(fixture.kickoffAt ?? "") >= Date.now());
+  if (!fixtures.length) return null;
+  const teams = fixtures.flatMap((fixture) => [fixture.homeTeam, fixture.awayTeam]).filter(Boolean);
+  const incomplete = teams.filter((team) => !team.id || !team.name);
+  if (incomplete.length) return `${incomplete.length} upcoming team identity row(s) are incomplete`;
+  const placeholderCountries = teams.filter((team) => !team.country || ["world", "unknown"].includes(String(team.country).trim().toLowerCase()));
+  const coverage = teams.length ? (teams.length - placeholderCountries.length) / teams.length : 1;
+  if (coverage < 0.9) return `${placeholderCountries.length}/${teams.length} upcoming teams still use placeholder countries`;
+  const crests = teams.filter((team) => typeof team.logo === "string" && team.logo.length > 0).length;
+  if (crests / teams.length < 0.35) return `provider crest coverage is ${crests}/${teams.length}`;
+  return null;
+}
+
 async function checkLatestRun(path, maxAgeMs, label) {
   return checkJson(path, (payload) => {
     const run = payload?.data;
@@ -152,6 +168,8 @@ const weeklyTips = await checkJson("/api/tips/week", (payload) => {
   if (payload?.data?.days?.length !== 7) return "weekly product does not contain seven days";
   return tipsFixtures(payload).length ? null : "weekly product has no provider-backed fixtures";
 }, "api weekly tips freshness");
+const identityProblem = tipsIdentityProblem(weeklyTips);
+report(!identityProblem, "upcoming fixture identity coverage", identityProblem ?? `${tipsFixtures(weeklyTips).length} fixture(s) with team names, countries/flags, and crest fallbacks`);
 checkTipsSurfaceConsistency(homePage, todayTips, "homepage matches today's tips API");
 checkTipsSurfaceConsistency(predictionsPage, todayTips, "predictions page matches today's tips API");
 checkTipsSurfaceConsistency(todayPage, todayTips, "today page matches today's tips API");
@@ -163,6 +181,7 @@ await checkLatestRun("/api/cron/import-fixtures", 26 * 60 * 60_000, "scheduled f
 await checkLatestRun("/api/cron/refresh-odds", 4 * 60 * 60_000, "scheduled odds refresh receipt");
 await checkLatestRun("/api/cron/run-daily-engine", 26 * 60 * 60_000, "scheduled daily engine receipt");
 await checkLatestRun("/api/cron/generate-weekly-predictions", 26 * 60 * 60_000, "scheduled weekly engine receipt");
+await checkLatestRun("/api/cron/enrich-fixture-identities", 30 * 60 * 60_000, "scheduled fixture identity receipt");
 
 for (const sport of ["football", "basketball", "tennis"]) {
   await checkJson(`/api/sports/decision/training/calibration?sport=${sport}`, (payload) => {

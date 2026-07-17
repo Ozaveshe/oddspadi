@@ -43,6 +43,12 @@ export interface Team {
   rating: number;
   /** Team crest URL from the fixture provider (API-Football), when available. */
   logo?: string | null;
+  /** Club/player country from the identity provider. Never infer this from a
+   *  continental competition when a team-specific country is available. */
+  country?: string | null;
+  /** Provider-hosted country flag, when supplied. The UI falls back to a
+   *  deterministic flag emoji from `country`. */
+  flag?: string | null;
   ratingEvidence?: {
     source: string;
     rawRating?: number | null;

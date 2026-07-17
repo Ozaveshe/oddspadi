@@ -2,6 +2,8 @@ import Link from "next/link";
 import { LocalTime } from "@/components/odds/LocalTime";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import type { StoredFixtureAnalysisRead } from "@/lib/sports/intelligence/storedFixture";
+import { CountryFlag } from "@/components/odds/CountryFlag";
+import { TeamCrest } from "@/components/odds/TeamCrest";
 
 export function StoredFixtureAnalysisView({ read }: { read: StoredFixtureAnalysisRead }) {
   if (read.status !== "ready") {
@@ -26,8 +28,12 @@ export function StoredFixtureAnalysisView({ read }: { read: StoredFixtureAnalysi
   return (
     <main id="main" className="container" data-analytics-match-id={analysis.fixtureId} data-analytics-sport={analysis.sport} data-analytics-league={analysis.league.name}>
       <div className="page-heading">
-        <div className="meta"><span className={`badge ${analysis.stale ? "no-value" : "scheduled"}`}>{analysis.stale ? "Archived receipt" : "Stored receipt"}</span><span>{analysis.league.name}</span><span>{analysis.league.country}</span><LocalTime iso={analysis.kickoffAt} variant="datetime" /></div>
-        <h1 className="match-title"><span>{analysis.homeTeam.name}</span><span className="accent">vs</span><span>{analysis.awayTeam.name}</span></h1>
+        <div className="meta"><span className={`badge ${analysis.stale ? "no-value" : "scheduled"}`}>{analysis.stale ? "Archived receipt" : "Stored receipt"}</span><span>{analysis.league.name}</span><span className="country-inline"><CountryFlag country={analysis.league.country} flag={analysis.league.flag} size={16} />{analysis.league.country}</span><LocalTime iso={analysis.kickoffAt} variant="datetime" /></div>
+        <h1 className="match-title">
+          <span className="team-inline"><TeamCrest name={analysis.homeTeam.name} logo={analysis.homeTeam.logo} size={34} /><span>{analysis.homeTeam.name}<small className="team-country-line"><CountryFlag country={analysis.homeTeam.country} size={14} />{analysis.homeTeam.country ?? "Country pending"}</small></span></span>
+          <span className="accent">vs</span>
+          <span className="team-inline"><TeamCrest name={analysis.awayTeam.name} logo={analysis.awayTeam.logo} size={34} /><span>{analysis.awayTeam.name}<small className="team-country-line"><CountryFlag country={analysis.awayTeam.country} size={14} />{analysis.awayTeam.country ?? "Country pending"}</small></span></span>
+        </h1>
         <p>This page is resolved from OddsPadi&apos;s stored provider and engine receipt because the upstream provider no longer returns the fixture. No model output is invented or silently rerun.</p>
       </div>
 

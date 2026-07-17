@@ -96,9 +96,9 @@ export function SlateFixtureCard({ row, compact = false, asOf }: { row: SlateFix
       </div>
       <div className="intelligence-matchline">
         <Link href={`/predictions/${encodeURIComponent(fixture.fixtureId)}`}>
-          <span className="intelligence-team"><TeamCrest name={fixture.homeTeam.name} logo={fixture.homeTeam.logo} size={30} /><strong>{fixture.homeTeam.name}</strong></span>
+          <span className="intelligence-team"><TeamCrest name={fixture.homeTeam.name} logo={fixture.homeTeam.logo} size={30} /><span className="intelligence-team-copy"><strong>{fixture.homeTeam.name}</strong><small><CountryFlag country={fixture.homeTeam.country} size={12} />{fixture.homeTeam.country ?? "Country pending"}</small></span></span>
           <span className="intelligence-versus">vs</span>
-          <span className="intelligence-team intelligence-team--away"><TeamCrest name={fixture.awayTeam.name} logo={fixture.awayTeam.logo} size={30} /><strong>{fixture.awayTeam.name}</strong></span>
+          <span className="intelligence-team intelligence-team--away"><TeamCrest name={fixture.awayTeam.name} logo={fixture.awayTeam.logo} size={30} /><span className="intelligence-team-copy"><strong>{fixture.awayTeam.name}</strong><small><CountryFlag country={fixture.awayTeam.country} size={12} />{fixture.awayTeam.country ?? "Country pending"}</small></span></span>
         </Link>
         <small><LocalTime iso={fixture.kickoffAt} /> · {fixture.provider}</small>
       </div>
