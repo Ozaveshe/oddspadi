@@ -7,5 +7,7 @@ describe("league table identity", () => {
 
     expect(source).toContain("<CountryFlag country={league.country}");
     expect(source).toContain("<TeamCrest name={row.teamName} logo={row.teamLogo}");
+    expect(source).toContain("Latest verified final table");
+    expect(source).toContain("provider table is not yet published");
   });
 });

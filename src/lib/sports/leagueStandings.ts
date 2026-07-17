@@ -3,10 +3,36 @@ import { predictionFootballLeagues, predictionLeagueBySlug, footballLeagueById }
 
 export type LeagueStandingRow = { position: number; previousPosition: number | null; movement: number | null; teamId: string; teamName: string; teamLogo?: string | null; teamCountry?: string | null; played: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number; goalDifference: number; points: number; form: string };
 export type LeagueTable = { slug: string; leagueId: string; leagueName: string; country: string; season: string; source: "api-football-standings" | "supabase-standings-snapshot"; updatedAt: string; rows: LeagueStandingRow[] };
+export type ResolvedLeagueTable = { table: LeagueTable | null; requestedSeason: string; displaySeason: string; historicalFallback: boolean };
 export const footballLeagues = predictionFootballLeagues;
 export function leagueBySlug(slug: string) { return predictionLeagueBySlug(slug); }
 export function leagueSlugFromProviderId(id: string) { return footballLeagueById(id)?.predictions ? footballLeagueById(id)?.slug ?? null : null; }
 export function currentFootballSeason(now = new Date()) { return String(now.getUTCMonth() >= 6 ? now.getUTCFullYear() : now.getUTCFullYear() - 1); }
+export function previousFootballSeason(season: string) { return String(Number(season) - 1); }
+
+export async function resolveVerifiedLeagueTable(
+  slug: string,
+  requestedSeason: string,
+  getCurrentTable: (slug: string, season: string) => Promise<LeagueTable | null>,
+  getStoredTable: (slug: string, season: string) => Promise<LeagueTable | null> = storedLeagueTable,
+): Promise<ResolvedLeagueTable> {
+  const current =
+    (await getCurrentTable(slug, requestedSeason).catch(() => null)) ??
+    (await getStoredTable(slug, requestedSeason).catch(() => null));
+
+  if (current) {
+    return { table: current, requestedSeason, displaySeason: current.season, historicalFallback: false };
+  }
+
+  const previousSeason = previousFootballSeason(requestedSeason);
+  const historical = await getStoredTable(slug, previousSeason).catch(() => null);
+  return {
+    table: historical,
+    requestedSeason,
+    displaySeason: historical?.season ?? requestedSeason,
+    historicalFallback: Boolean(historical),
+  };
+}
 
 function formString(value: unknown): string { if (Array.isArray(value)) return value.map(String).join("").slice(-6).toUpperCase(); if (typeof value === "string") return value.replace(/[^WDL]/gi, "").slice(-6).toUpperCase(); return ""; }
 export async function storedLeagueTable(slug: string, season: string): Promise<LeagueTable | null> {

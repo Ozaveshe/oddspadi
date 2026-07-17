@@ -7,7 +7,7 @@ import {
   footballLeagues,
   currentFootballSeason,
   leagueBySlug,
-  storedLeagueTable,
+  resolveVerifiedLeagueTable,
 } from "@/lib/sports/leagueStandings";
 import { sportsProvider } from "@/lib/sports/service";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
@@ -52,10 +52,12 @@ export default async function LeagueTablePage({ params }: Props) {
   const league = leagueBySlug(slug);
   if (!league) notFound();
 
-  const season = currentFootballSeason();
-  const table =
-    (await sportsProvider.getFootballLeagueTable(slug, season).catch(() => null)) ??
-    (await storedLeagueTable(slug, season).catch(() => null));
+  const requestedSeason = currentFootballSeason();
+  const { table, displaySeason, historicalFallback } = await resolveVerifiedLeagueTable(
+    slug,
+    requestedSeason,
+    (leagueSlug, season) => sportsProvider.getFootballLeagueTable(leagueSlug, season),
+  );
   const url = `${siteUrl}/predictions/league/${slug}/table`;
   const jsonLd = {
     "@context": "https://schema.org",
@@ -84,13 +86,17 @@ export default async function LeagueTablePage({ params }: Props) {
             {league.country}
           </span>
           <span>
-            {season}/{String(Number(season) + 1).slice(-2)}
+            {displaySeason}/{String(Number(displaySeason) + 1).slice(-2)}
           </span>
         </div>
         <h1>
           {league.leagueName} <span className="accent">table</span>
         </h1>
-        <p>Current standings, results record and recent form. Refreshed every few hours when provider data is available.</p>
+        <p>
+          {historicalFallback
+            ? `Latest verified final table. The ${requestedSeason}/${String(Number(requestedSeason) + 1).slice(-2)} provider table is not yet published.`
+            : "Current standings, results record and recent form. Refreshed every few hours when provider data is available."}
+        </p>
       </div>
 
       {table?.rows.length ? (
@@ -146,6 +152,7 @@ export default async function LeagueTablePage({ params }: Props) {
             </table>
           </div>
           <p className="muted small standings-source">
+            {historicalFallback ? "Latest verified final table. " : ""}
             Source: {table.source === "api-football-standings" ? "API-Football" : "latest stored OddsPadi snapshot"}. Updated{" "}
             {new Date(table.updatedAt).toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}.
           </p>
@@ -154,7 +161,7 @@ export default async function LeagueTablePage({ params }: Props) {
         <div className="empty-state">
           <h2>No verified table yet</h2>
           <p className="muted">
-            The provider has not published standings for this league and season, and OddsPadi has no current stored snapshot. We won&apos;t fill the table with estimates.
+            The provider has not published standings for this league and season, and OddsPadi has no current or previous-season stored snapshot. We won&apos;t fill the table with estimates.
           </p>
           <Link className="button primary" href="/predictions">Browse match predictions</Link>
         </div>
