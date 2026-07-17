@@ -70,6 +70,8 @@ export function storedFixtureArtwork({
   const league = leagues.find((row) => identityKey(row) === fixtureKey(fixture.league_external_id));
   const fixtureMetadata = record(fixture.metadata);
   return {
+    leagueName: text(league?.name) ?? text(fixture.league_name) ?? text(fixtureMetadata.leagueName),
+    leagueCountry: text(league?.country) ?? text(fixture.country),
     leagueLogo: text(record(league?.metadata).logo) ?? text(fixtureMetadata.leagueLogo),
     leagueFlag: text(record(league?.metadata).flag) ?? text(fixtureMetadata.leagueFlag),
     homeLogo: text(record(home?.metadata).logo),
@@ -759,11 +761,11 @@ export async function readStoredSlate({
       fixtureId: String(row.external_id),
       providerFixtureId: text(row.provider_fixture_id) ?? String(row.external_id),
       sport: row.sport as CanonicalFixture["sport"],
-      league: text(row.league_name) ?? text(record(row.metadata).leagueName) ?? "Competition",
+      league: text(row.league_name) ?? artwork.leagueName ?? "Competition",
       leagueId: text(row.league_external_id) ?? "unknown",
       leagueLogo: artwork.leagueLogo,
       leagueFlag: artwork.leagueFlag,
-      country: text(row.country) ?? "World",
+      country: artwork.leagueCountry ?? "World",
       season: text(row.season),
       kickoffAt: String(row.kickoff_at),
       homeTeam: { id: String(row.home_team_external_id), name: text(row.home_team_name) ?? "Home", logo: artwork.homeLogo, country: artwork.homeCountry },

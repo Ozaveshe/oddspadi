@@ -100,8 +100,8 @@ export async function readStoredFixtureAnalysis(
       sport: rowSport,
       league: {
         id: leagueId,
-        name: cleanText(row.league_name) ?? "Competition",
-        country: cleanText(row.country) ?? "World",
+        name: cleanText(row.league_name) ?? artwork.leagueName ?? "Competition",
+        country: artwork.leagueCountry ?? "World",
         logo: artwork.leagueLogo,
         flag: artwork.leagueFlag
       },

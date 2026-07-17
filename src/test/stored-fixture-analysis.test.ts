@@ -4,6 +4,8 @@ const getSupabaseServerClient = vi.hoisted(() => vi.fn());
 const readLatestDecisionSummary = vi.hoisted(() => vi.fn());
 const readFixtureOddsHistory = vi.hoisted(() => vi.fn());
 const storedFixtureArtwork = vi.hoisted(() => vi.fn(() => ({
+  leagueName: "Resolved League",
+  leagueCountry: "Resolved Country",
   leagueLogo: "https://cdn.test/league.png",
   leagueFlag: "https://cdn.test/flag.svg",
   homeLogo: "https://cdn.test/home.png",
@@ -84,6 +86,7 @@ describe("stored fixture analysis", () => {
     expect(result.analysis).toMatchObject({
       fixtureId: "api-basketball:494954",
       provider: "api-basketball",
+      league: { name: "Summer League" },
       status: "suspended",
       stale: true,
       score: null,

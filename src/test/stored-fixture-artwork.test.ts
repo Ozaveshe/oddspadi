@@ -28,11 +28,13 @@ describe("stored fixture artwork", () => {
         { sport: "football", provider: "api-football", external_id: "41", country: "Wales", metadata: { logo: "https://cdn.test/away.png" } }
       ],
       leagues: [
-        { sport: "football", provider: "api-football", external_id: "39", country: "England", metadata: { logo: "https://cdn.test/league.png", flag: "https://cdn.test/england.svg" } }
+        { sport: "football", provider: "api-football", external_id: "39", name: "Premier League", country: "England", metadata: { logo: "https://cdn.test/league.png", flag: "https://cdn.test/england.svg" } }
       ]
     });
 
     expect(artwork).toEqual({
+      leagueName: "Premier League",
+      leagueCountry: "England",
       leagueLogo: "https://cdn.test/league.png",
       leagueFlag: "https://cdn.test/england.svg",
       homeLogo: "https://cdn.test/home.png",

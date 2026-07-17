@@ -203,6 +203,24 @@ await checkLatestRun("/api/cron/refresh-odds", 4 * 60 * 60_000, "scheduled odds 
 await checkLatestRun("/api/cron/run-daily-engine", 26 * 60 * 60_000, "scheduled daily engine receipt");
 await checkLatestRun("/api/cron/generate-weekly-predictions", 26 * 60 * 60_000, "scheduled weekly engine receipt");
 await checkLatestRun("/api/cron/enrich-fixture-identities", 30 * 60 * 60_000, "scheduled fixture identity receipt");
+await checkJson("/api/cron/enrich-fixture-identities?view=coverage", (payload) => {
+  const coverage = payload?.data;
+  if (!coverage || coverage.status !== "ready") return coverage?.errors?.join(", ") || "future identity coverage is unavailable";
+  if (!coverage.complete) {
+    const broken = (coverage.providers ?? []).filter((provider) => [
+      provider.missingTeamRows,
+      provider.missingTeamCountries,
+      provider.missingTeamLogos,
+      provider.missingLeagueRows,
+      provider.missingLeagueNames,
+      provider.missingLeagueCountries,
+      provider.missingLeagueLogos,
+      provider.missingLeagueFlags
+    ].some((count) => Number(count) > 0));
+    return broken.map((provider) => `${provider.sport}/${provider.provider}: ${JSON.stringify(provider)}`).join("; ");
+  }
+  return coverage.fixturesInspected > 0 ? null : "no stored future fixtures were inspected";
+}, "stored future-season identity and artwork coverage");
 await checkLatestRun("/api/cron/run-model-learning", 30 * 60 * 60_000, "serialized model learning receipt", ["completed"]);
 
 for (const sport of ["football", "basketball", "tennis"]) {

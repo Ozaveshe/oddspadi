@@ -1,12 +1,18 @@
 import { apiError, apiSuccess, withApiHandler } from "@/app/api/sports/_utils";
 import { isCronAuthorized } from "@/lib/sports/intelligence/auth";
+import { readUpcomingIdentityCoverage } from "@/lib/sports/intelligence/identityCoverage";
 import { runUpcomingIdentityEnrichment } from "@/lib/sports/intelligence/identityEnrichment";
 import { readLatestProviderRun } from "@/lib/sports/intelligence/repository";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-export const GET = withApiHandler(async () => apiSuccess(await readLatestProviderRun(["enrich-fixture-identities"])));
+export const GET = withApiHandler(async (request: Request) => {
+  if (new URL(request.url).searchParams.get("view") === "coverage") {
+    return apiSuccess(await readUpcomingIdentityCoverage());
+  }
+  return apiSuccess(await readLatestProviderRun(["enrich-fixture-identities"]));
+});
 
 export const POST = withApiHandler(async (request: Request) => {
   if (!isCronAuthorized(request)) return apiError("Cron authorization failed.", 401);

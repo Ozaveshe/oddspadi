@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { readUpcomingIdentityCoverage } from "@/lib/sports/intelligence/identityCoverage";
 import { domesticCountryForFixture, enrichUpcomingFixtureIdentities, nationalTeamCountry } from "@/lib/sports/intelligence/identityEnrichment";
 import { oddsCompetitionCountry } from "@/lib/sports/providers/providerBackedProvider";
 import { flagEmoji } from "@/components/odds/CountryFlag";
@@ -7,7 +8,7 @@ import { flagEmoji } from "@/components/odds/CountryFlag";
 function fakeClient() {
   const fixtures = [
     {
-      provider: "api-football", sport: "football", external_id: "api-football:1",
+      provider: "api_football", sport: "football", external_id: "api-football:1",
       league_external_id: "api-football:3", league_name: "UEFA Europa League", season: "2026",
       home_team_external_id: "api-football:670", away_team_external_id: "api-football:853"
     },
@@ -23,15 +24,15 @@ function fakeClient() {
     }
   ];
   const teams = [
-    { provider: "api-football", sport: "football", external_id: "api-football:670", name: "Derry City", country: "World", metadata: { source: "fixture" } },
-    { provider: "api-football", sport: "football", external_id: "api-football:853", name: "CSKA Sofia", country: "World", metadata: {} },
+    { provider: "api_football", sport: "football", external_id: "api-football:670", name: "Derry City", country: "World", metadata: { source: "fixture" } },
+    { provider: "api_football", sport: "football", external_id: "api-football:853", name: "CSKA Sofia", country: "World", metadata: {} },
     { provider: "the-odds-api-events", sport: "football", external_id: "the-odds-api:flamengo", name: "Flamengo", country: "World", metadata: {} },
     { provider: "the-odds-api-events", sport: "football", external_id: "the-odds-api:palmeiras", name: "Palmeiras", country: "World", metadata: {} },
     { provider: "api-basketball", sport: "basketball", external_id: "api-basketball:4271", name: "China U17 W", country: "World", metadata: {} },
     { provider: "api-basketball", sport: "basketball", external_id: "api-basketball:4270", name: "Canada U17 W", country: "World", metadata: {} }
   ];
   const leagues = [
-    { provider: "api-football", sport: "football", external_id: "api-football:3", name: "UEFA Europa League", country: "World", metadata: {} },
+    { provider: "api_football", sport: "football", external_id: "api-football:3", name: "UEFA Europa League", country: "World", metadata: {} },
     { provider: "the-odds-api-events", sport: "football", external_id: "the-odds-api:soccer_brazil_campeonato", name: "Brazil Série A", country: "World", metadata: {} }
   ];
   const writes: Record<string, unknown[][]> = { op_teams: [], op_leagues: [] };
@@ -47,6 +48,7 @@ function fakeClient() {
             in: () => query,
             order: () => query,
             limit: () => query,
+            range: () => query,
             then(resolve: (value: unknown) => unknown) { return Promise.resolve(resolve({ data: rows[table] ?? [], error: null })); }
           };
           return query;
@@ -93,13 +95,19 @@ describe("sports identity enrichment", () => {
       client,
       env: { API_FOOTBALL_KEY: "server-only-test-key" },
       now: new Date("2026-07-17T00:00:00.000Z"),
-      fetchImpl: async () => new Response(JSON.stringify({ response: [
-        { team: { id: 670, name: "Derry City", country: "Ireland", logo: "https://media.api-sports.io/football/teams/670.png" } },
-        { team: { id: 853, name: "CSKA Sofia", country: "Bulgaria", logo: "https://media.api-sports.io/football/teams/853.png" } }
-      ] }), { status: 200, headers: { "content-type": "application/json" } })
+      fetchImpl: async (input) => {
+        const url = new URL(String(input));
+        const response = url.pathname.endsWith("/leagues")
+          ? { response: [{ league: { id: 3, name: "UEFA Europa League", logo: "https://media.api-sports.io/football/leagues/3.png" }, country: { name: "Europe", flag: null } }] }
+          : { response: [
+              { team: { id: 670, name: "Derry City", country: "Ireland", logo: "https://media.api-sports.io/football/teams/670.png" } },
+              { team: { id: 853, name: "CSKA Sofia", country: "Bulgaria", logo: "https://media.api-sports.io/football/teams/853.png" } }
+            ] };
+        return new Response(JSON.stringify(response), { status: 200, headers: { "content-type": "application/json" } });
+      }
     });
 
-    expect(result).toMatchObject({ status: "completed", fixturesInspected: 3, providerRequests: 1, teamRowsUpdated: 6, leagueRowsUpdated: 1 });
+    expect(result).toMatchObject({ status: "completed", fixturesInspected: 3, providerRequests: 2, teamRowsUpdated: 6, leagueRowsUpdated: 2 });
     const teamRows = writes.op_teams.flat() as Array<{ external_id: string; country: string; metadata: Record<string, unknown> }>;
     expect(teamRows.find((row) => row.external_id === "api-football:670")).toMatchObject({ country: "Ireland", metadata: { source: "fixture", logo: "https://media.api-sports.io/football/teams/670.png" } });
     expect(teamRows.find((row) => row.external_id === "api-football:853")).toMatchObject({ country: "Bulgaria" });
@@ -107,5 +115,21 @@ describe("sports identity enrichment", () => {
     expect(teamRows.find((row) => row.external_id === "api-basketball:4271")).toMatchObject({ country: "China" });
     expect(teamRows.find((row) => row.external_id === "api-basketball:4270")).toMatchObject({ country: "Canada" });
     expect((writes.op_leagues.flat() as Array<{ country: string }>)[0]?.country).toBe("Brazil");
+    expect(writes.op_leagues.flat()).toContainEqual(expect.objectContaining({
+      provider: "api_football",
+      external_id: "api-football:3",
+      metadata: { logo: "https://media.api-sports.io/football/leagues/3.png" }
+    }));
+  });
+
+  it("reports full-horizon provider artwork gaps instead of only checking the visible week", async () => {
+    const { client } = fakeClient();
+    const coverage = await readUpcomingIdentityCoverage({ client, now: new Date("2026-07-17T00:00:00.000Z") });
+
+    expect(coverage).toMatchObject({ status: "ready", complete: false, horizonDays: 400, fixturesInspected: 3 });
+    expect(coverage.providers.find((provider) => provider.provider === "api_football")).toMatchObject({
+      missingTeamLogos: 2,
+      missingLeagueLogos: 1
+    });
   });
 });

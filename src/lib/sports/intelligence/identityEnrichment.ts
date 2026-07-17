@@ -2,37 +2,31 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { oddsCompetitionCountry } from "@/lib/sports/providers/providerBackedProvider";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { finishProviderRun, startProviderRun } from "./repository";
+import {
+  type FixtureIdentityRow,
+  identityKey,
+  isApiFootballProvider,
+  readUpcomingIdentitySnapshot,
+  type StoredIdentityRow
+} from "./identityStore";
 
-const UPCOMING_DAYS = 8;
 const MAX_API_FOOTBALL_LEAGUES = 8;
 const MAX_PROVIDER_BODY_BYTES = 2_000_000;
 const PROVIDER_TIMEOUT_MS = 12_000;
-
-type FixtureIdentityRow = {
-  provider: string;
-  sport: string;
-  external_id: string;
-  league_external_id: string | null;
-  league_name: string | null;
-  season: string | null;
-  home_team_external_id: string;
-  away_team_external_id: string;
-};
-
-type StoredIdentityRow = {
-  provider: string;
-  sport: string;
-  external_id: string;
-  name: string;
-  country: string | null;
-  metadata: Record<string, unknown> | null;
-};
 
 type ApiFootballTeam = {
   id: string;
   name: string;
   country: string | null;
   logo: string | null;
+};
+
+type ApiFootballLeague = {
+  id: string;
+  name: string;
+  country: string | null;
+  logo: string | null;
+  flag: string | null;
 };
 
 export type IdentityEnrichmentResult = {
@@ -77,10 +71,6 @@ function validSeason(value: string | null): string | null {
   return value && /^\d{4}$/.test(value) ? value : null;
 }
 
-function identityKey(row: Pick<StoredIdentityRow, "provider" | "sport" | "external_id">): string {
-  return `${row.provider}:${row.sport}:${row.external_id}`;
-}
-
 const NATIONAL_TEAM_COUNTRIES: Record<string, string> = {
   australia: "Australia",
   canada: "Canada",
@@ -121,6 +111,23 @@ function parseApiFootballTeams(value: unknown): ApiFootballTeam[] {
   });
 }
 
+function parseApiFootballLeague(value: unknown): ApiFootballLeague | null {
+  const response = record(value).response;
+  const item = Array.isArray(response) ? record(response[0]) : {};
+  const league = record(item.league);
+  const country = record(item.country);
+  const id = clean(String(league.id ?? ""));
+  const name = clean(league.name);
+  if (!id || !name) return null;
+  return {
+    id: `api-football:${id}`,
+    name,
+    country: clean(country.name),
+    logo: clean(league.logo),
+    flag: clean(country.flag)
+  };
+}
+
 async function readBoundedJson(response: Response): Promise<unknown> {
   const advertised = Number(response.headers.get("content-length"));
   if (Number.isFinite(advertised) && advertised > MAX_PROVIDER_BODY_BYTES) {
@@ -159,6 +166,28 @@ async function fetchLeagueTeams({
   return parseApiFootballTeams(await readBoundedJson(response));
 }
 
+async function fetchLeagueIdentity({
+  league,
+  season,
+  apiKey,
+  fetchImpl
+}: {
+  league: string;
+  season: string;
+  apiKey: string;
+  fetchImpl: typeof fetch;
+}): Promise<ApiFootballLeague | null> {
+  const endpoint = new URL("https://v3.football.api-sports.io/leagues");
+  endpoint.searchParams.set("id", league);
+  endpoint.searchParams.set("season", season);
+  const response = await fetchImpl(endpoint, {
+    headers: { "x-apisports-key": apiKey, accept: "application/json" },
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
+  });
+  if (!response.ok) throw new Error(`API-Football league identity request returned HTTP ${response.status}.`);
+  return parseApiFootballLeague(await readBoundedJson(response));
+}
+
 export function domesticCountryForFixture(fixture: Pick<FixtureIdentityRow, "provider" | "league_external_id" | "league_name">): string | null {
   if (fixture.provider !== "the-odds-api-events") return null;
   const sportKey = fixture.league_external_id?.replace(/^the-odds-api:/, "") ?? "";
@@ -183,38 +212,20 @@ export async function enrichUpcomingFixtureIdentities({
   };
   if (!client) return emptyResult;
 
-  const until = new Date(now.getTime() + UPCOMING_DAYS * 86_400_000).toISOString();
-  const { data: fixtureData, error: fixtureError } = await client
-    .from("op_fixtures")
-    .select("provider,sport,external_id,league_external_id,league_name,season,home_team_external_id,away_team_external_id")
-    .gte("kickoff_at", now.toISOString())
-    .lt("kickoff_at", until)
-    .in("status", ["scheduled", "not_started"])
-    .order("kickoff_at", { ascending: true })
-    .limit(1000);
-  if (fixtureError) return { ...emptyResult, status: "unavailable", errors: [`Upcoming fixture identity read failed: ${fixtureError.message}`] };
-
-  const fixtures = (fixtureData ?? []) as FixtureIdentityRow[];
-  if (!fixtures.length) return emptyResult;
-  const teamIds = [...new Set(fixtures.flatMap((fixture) => [fixture.home_team_external_id, fixture.away_team_external_id]))];
-  const leagueIds = [...new Set(fixtures.map((fixture) => fixture.league_external_id).filter((value): value is string => Boolean(value)))];
-  const [{ data: teamData, error: teamError }, { data: leagueData, error: leagueError }] = await Promise.all([
-    client.from("op_teams").select("provider,sport,external_id,name,country,metadata").in("external_id", teamIds).limit(2000),
-    client.from("op_leagues").select("provider,sport,external_id,name,country,metadata").in("external_id", leagueIds).limit(1000)
-  ]);
-  if (teamError || leagueError) {
-    return {
-      ...emptyResult,
-      status: "unavailable",
-      fixturesInspected: fixtures.length,
-      errors: [`Stored identity read failed: ${teamError?.message ?? leagueError?.message}`]
-    };
+  let snapshot: Awaited<ReturnType<typeof readUpcomingIdentitySnapshot>>;
+  try {
+    snapshot = await readUpcomingIdentitySnapshot(client, now);
+  } catch (error) {
+    return { ...emptyResult, status: "unavailable", errors: [error instanceof Error ? error.message : "Upcoming fixture identity read failed."] };
   }
-
-  const teams = (teamData ?? []) as StoredIdentityRow[];
-  const leagues = (leagueData ?? []) as StoredIdentityRow[];
+  const { fixtures, teams, leagues } = snapshot;
+  if (!fixtures.length) return emptyResult;
   const teamByKey = new Map(teams.map((team) => [identityKey(team), team]));
   const leagueByKey = new Map(leagues.map((league) => [identityKey(league), league]));
+  const teamsByExternalId = new Map<string, StoredIdentityRow[]>();
+  for (const team of teams) teamsByExternalId.set(team.external_id, [...(teamsByExternalId.get(team.external_id) ?? []), team]);
+  const leaguesByExternalId = new Map<string, StoredIdentityRow[]>();
+  for (const league of leagues) leaguesByExternalId.set(league.external_id, [...(leaguesByExternalId.get(league.external_id) ?? []), league]);
   const teamUpdates = new Map<string, StoredIdentityRow>();
   const leagueUpdates = new Map<string, StoredIdentityRow>();
   const errors: string[] = [];
@@ -240,9 +251,23 @@ export async function enrichUpcomingFixtureIdentities({
 
   const apiKey = firstEnv(env, ["API_FOOTBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"]);
   const groups = [...new Map(fixtures.flatMap((fixture) => {
-    if (fixture.provider !== "api-football") return [];
+    if (!isApiFootballProvider(fixture.provider)) return [];
     const league = providerNumericId(fixture.league_external_id);
     const season = validSeason(fixture.season);
+    const storedLeague = fixture.league_external_id
+      ? leagueByKey.get(`${fixture.provider}:${fixture.sport}:${fixture.league_external_id}`)
+      : null;
+    const leagueCountry = clean(storedLeague?.country)?.toLowerCase();
+    const leagueNeedsIdentity = !storedLeague
+      || !clean(storedLeague.name)
+      || !clean(storedLeague.country)
+      || !clean(record(storedLeague.metadata).logo)
+      || Boolean(leagueCountry && !["world", "europe", "unknown"].includes(leagueCountry) && !clean(record(storedLeague.metadata).flag));
+    const teamNeedsIdentity = [fixture.home_team_external_id, fixture.away_team_external_id].some((externalId) => {
+      const stored = teamByKey.get(`${fixture.provider}:${fixture.sport}:${externalId}`);
+      return !stored || !clean(stored.country) || !clean(record(stored.metadata).logo);
+    });
+    if (!leagueNeedsIdentity && !teamNeedsIdentity) return [];
     return league && season ? [[`${league}:${season}`, { league, season }]] as const : [];
   })).values()].slice(0, MAX_API_FOOTBALL_LEAGUES);
   let providerRequests = 0;
@@ -255,16 +280,34 @@ export async function enrichUpcomingFixtureIdentities({
       try {
         const providerTeams = await fetchLeagueTeams({ ...group, apiKey, fetchImpl });
         for (const providerTeam of providerTeams) {
-          const stored = teamByKey.get(`api-football:football:${providerTeam.id}`);
-          if (!stored) continue;
-          teamUpdates.set(identityKey(stored), {
-            ...stored,
-            country: providerTeam.country ?? stored.country,
-            metadata: {
-              ...record(stored.metadata),
-              ...(providerTeam.logo ? { logo: providerTeam.logo } : {})
-            }
-          });
+          for (const stored of teamsByExternalId.get(providerTeam.id) ?? []) {
+            if (stored.sport !== "football" || !isApiFootballProvider(stored.provider)) continue;
+            teamUpdates.set(identityKey(stored), {
+              ...stored,
+              country: providerTeam.country ?? stored.country,
+              metadata: {
+                ...record(stored.metadata),
+                ...(providerTeam.logo ? { logo: providerTeam.logo } : {})
+              }
+            });
+          }
+        }
+        const providerLeague = await fetchLeagueIdentity({ ...group, apiKey, fetchImpl });
+        providerRequests += 1;
+        if (providerLeague) {
+          for (const stored of leaguesByExternalId.get(providerLeague.id) ?? []) {
+            if (stored.sport !== "football" || !isApiFootballProvider(stored.provider)) continue;
+            leagueUpdates.set(identityKey(stored), {
+              ...stored,
+              name: providerLeague.name,
+              country: providerLeague.country ?? stored.country,
+              metadata: {
+                ...record(stored.metadata),
+                ...(providerLeague.logo ? { logo: providerLeague.logo } : {}),
+                ...(providerLeague.flag ? { flag: providerLeague.flag } : {})
+              }
+            });
+          }
         }
       } catch (error) {
         errors.push(`${group.league}/${group.season}: ${error instanceof Error ? error.message : "identity request failed"}`);
