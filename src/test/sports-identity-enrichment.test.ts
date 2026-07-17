@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { domesticCountryForFixture, enrichUpcomingFixtureIdentities } from "@/lib/sports/intelligence/identityEnrichment";
+import { domesticCountryForFixture, enrichUpcomingFixtureIdentities, nationalTeamCountry } from "@/lib/sports/intelligence/identityEnrichment";
 import { oddsCompetitionCountry } from "@/lib/sports/providers/providerBackedProvider";
 import { flagEmoji } from "@/components/odds/CountryFlag";
 
@@ -15,13 +15,20 @@ function fakeClient() {
       provider: "the-odds-api-events", sport: "football", external_id: "the-odds-api:2",
       league_external_id: "the-odds-api:soccer_brazil_campeonato", league_name: "Brazil Série A", season: "2026",
       home_team_external_id: "the-odds-api:flamengo", away_team_external_id: "the-odds-api:palmeiras"
+    },
+    {
+      provider: "api-basketball", sport: "basketball", external_id: "api-basketball:3",
+      league_external_id: "api-basketball:293", league_name: "World Championship U17 Women", season: "2025",
+      home_team_external_id: "api-basketball:4271", away_team_external_id: "api-basketball:4270"
     }
   ];
   const teams = [
     { provider: "api-football", sport: "football", external_id: "api-football:670", name: "Derry City", country: "World", metadata: { source: "fixture" } },
     { provider: "api-football", sport: "football", external_id: "api-football:853", name: "CSKA Sofia", country: "World", metadata: {} },
     { provider: "the-odds-api-events", sport: "football", external_id: "the-odds-api:flamengo", name: "Flamengo", country: "World", metadata: {} },
-    { provider: "the-odds-api-events", sport: "football", external_id: "the-odds-api:palmeiras", name: "Palmeiras", country: "World", metadata: {} }
+    { provider: "the-odds-api-events", sport: "football", external_id: "the-odds-api:palmeiras", name: "Palmeiras", country: "World", metadata: {} },
+    { provider: "api-basketball", sport: "basketball", external_id: "api-basketball:4271", name: "China U17 W", country: "World", metadata: {} },
+    { provider: "api-basketball", sport: "basketball", external_id: "api-basketball:4270", name: "Canada U17 W", country: "World", metadata: {} }
   ];
   const leagues = [
     { provider: "api-football", sport: "football", external_id: "api-football:3", name: "UEFA Europa League", country: "World", metadata: {} },
@@ -67,6 +74,17 @@ describe("sports identity enrichment", () => {
     expect(flagEmoji("Ukraine")).toBe("🇺🇦");
     expect(flagEmoji("World")).toBe("🌍");
     expect(flagEmoji(null)).toBe("🌍");
+    expect(flagEmoji("Puerto-Rico")).toBe("🇵🇷");
+    expect(flagEmoji("Northern-Ireland")).toBe("🇬🇧");
+    expect(flagEmoji("Vietnam")).toBe("🇻🇳");
+  });
+
+  it("infers only clearly labelled provider national youth teams", () => {
+    expect(nationalTeamCountry("China U17 W")).toBe("China");
+    expect(nationalTeamCountry("Czech-Republic U17 Women")).toBe("Czech Republic");
+    expect(nationalTeamCountry("New Zealand U17 W")).toBe("New Zealand");
+    expect(nationalTeamCountry("China Dragons")).toBeNull();
+    expect(nationalTeamCountry("Canada FC")).toBeNull();
   });
 
   it("enriches API-Football teams and domestic odds-only identities in one bounded run", async () => {
@@ -81,11 +99,13 @@ describe("sports identity enrichment", () => {
       ] }), { status: 200, headers: { "content-type": "application/json" } })
     });
 
-    expect(result).toMatchObject({ status: "completed", fixturesInspected: 2, providerRequests: 1, teamRowsUpdated: 4, leagueRowsUpdated: 1 });
+    expect(result).toMatchObject({ status: "completed", fixturesInspected: 3, providerRequests: 1, teamRowsUpdated: 6, leagueRowsUpdated: 1 });
     const teamRows = writes.op_teams.flat() as Array<{ external_id: string; country: string; metadata: Record<string, unknown> }>;
     expect(teamRows.find((row) => row.external_id === "api-football:670")).toMatchObject({ country: "Ireland", metadata: { source: "fixture", logo: "https://media.api-sports.io/football/teams/670.png" } });
     expect(teamRows.find((row) => row.external_id === "api-football:853")).toMatchObject({ country: "Bulgaria" });
     expect(teamRows.find((row) => row.external_id === "the-odds-api:flamengo")).toMatchObject({ country: "Brazil" });
+    expect(teamRows.find((row) => row.external_id === "api-basketball:4271")).toMatchObject({ country: "China" });
+    expect(teamRows.find((row) => row.external_id === "api-basketball:4270")).toMatchObject({ country: "Canada" });
     expect((writes.op_leagues.flat() as Array<{ country: string }>)[0]?.country).toBe("Brazil");
   });
 });

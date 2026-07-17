@@ -12,12 +12,19 @@ const countryCodes: Record<string, string> = {
   hungary: "HU", cyprus: "CY", israel: "IL", georgia: "GE", armenia: "AM",
   azerbaijan: "AZ", kazakhstan: "KZ", iceland: "IS", albania: "AL", kosovo: "XK",
   montenegro: "ME", "north macedonia": "MK", bosnia: "BA", "bosnia and herzegovina": "BA",
-  "south korea": "KR", china: "CN", "saudi arabia": "SA", qatar: "QA", emirates: "AE"
+  "south korea": "KR", china: "CN", "saudi arabia": "SA", qatar: "QA", emirates: "AE",
+  chile: "CL", colombia: "CO", "dominican republic": "DO", "faroe islands": "FO",
+  gibraltar: "GI", "ivory coast": "CI", latvia: "LV", lebanon: "LB", lithuania: "LT",
+  "new zealand": "NZ", philippines: "PH", "puerto rico": "PR", vietnam: "VN"
 };
 
+function normalizedCountry(country: string): string {
+  return country.trim().toLowerCase().replaceAll("_", " ").replaceAll("-", " ").replace(/\s+/g, " ");
+}
+
 export function flagEmoji(country?: string | null): string {
-  if (!country || ["world", "europe"].includes(country.trim().toLowerCase())) return String.fromCodePoint(0x1f30d);
-  const code = countryCodes[country.trim().toLowerCase()];
+  if (!country || ["world", "europe"].includes(normalizedCountry(country))) return String.fromCodePoint(0x1f30d);
+  const code = countryCodes[normalizedCountry(country)];
   if (!code) return String.fromCodePoint(0x1f3f3);
   return [...code].map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0))).join("");
 }

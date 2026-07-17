@@ -81,6 +81,34 @@ function identityKey(row: Pick<StoredIdentityRow, "provider" | "sport" | "extern
   return `${row.provider}:${row.sport}:${row.external_id}`;
 }
 
+const NATIONAL_TEAM_COUNTRIES: Record<string, string> = {
+  australia: "Australia",
+  canada: "Canada",
+  china: "China",
+  colombia: "Colombia",
+  "czech republic": "Czech Republic",
+  czechia: "Czech Republic",
+  egypt: "Egypt",
+  germany: "Germany",
+  italy: "Italy",
+  "ivory coast": "Ivory Coast",
+  japan: "Japan",
+  latvia: "Latvia",
+  mexico: "Mexico",
+  "new zealand": "New Zealand",
+  slovenia: "Slovenia",
+  spain: "Spain",
+  usa: "USA",
+  "united states": "USA"
+};
+
+export function nationalTeamCountry(name: string): string | null {
+  const normalized = name.trim().toLowerCase().replaceAll("_", " ").replaceAll("-", " ").replace(/\s+/g, " ");
+  const marker = normalized.match(/\s+(?:u\s?\d{2}|under\s?\d{2})(?:\s+(?:women|men|w|m))?$/);
+  if (!marker) return null;
+  return NATIONAL_TEAM_COUNTRIES[normalized.slice(0, marker.index).trim()] ?? null;
+}
+
 function parseApiFootballTeams(value: unknown): ApiFootballTeam[] {
   const response = record(value).response;
   if (!Array.isArray(response)) return [];
@@ -202,6 +230,12 @@ export async function enrichUpcomingFixtureIdentities({
       const team = teamByKey.get(`${fixture.provider}:${fixture.sport}:${externalId}`);
       if (team) teamUpdates.set(identityKey(team), { ...team, country, metadata: record(team.metadata) });
     }
+  }
+
+  for (const team of teams) {
+    if (team.country && !["world", "europe", "unknown"].includes(team.country.trim().toLowerCase())) continue;
+    const country = nationalTeamCountry(team.name);
+    if (country) teamUpdates.set(identityKey(team), { ...team, country, metadata: record(team.metadata) });
   }
 
   const apiKey = firstEnv(env, ["API_FOOTBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"]);
