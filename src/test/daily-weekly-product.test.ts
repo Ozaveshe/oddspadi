@@ -4,7 +4,7 @@ import { buildSportsSlate } from "@/lib/sports/intelligence/canonical";
 import type { CanonicalDecision, CanonicalFixture, CanonicalOddsSnapshot, SlateFixture, SlatePublicStatus, SportsSlate } from "@/lib/sports/intelligence/types";
 import { buildDailyTipsProduct, buildWeeklyTipsProduct, filterDailyTipsProductBySport, type YesterdayResultsProduct } from "@/lib/sports/tips/product";
 import { formatDailyTipsForTelegram, formatDailyTipsForWhatsApp, formatValuePickPost, formatWeeklyRadarPost, formatYesterdayResultsPost } from "@/lib/sports/tips/social";
-import { partitionDailyTipsSections } from "@/components/odds/IntelligenceSlate";
+import { partitionDailyTipsSections, partitionWeeklyTipsDay } from "@/components/odds/IntelligenceSlate";
 import type { DecisionMarketAnalysis, DecisionSummary } from "@/lib/sports/types";
 
 const GENERATED_AT = "2026-07-14T10:00:00.000Z";
@@ -111,6 +111,22 @@ describe("Daily Tips and Weekly Predictions product layer", () => {
     const product = buildWeeklyTipsProduct(slate([fixtureRow("day-1", "preliminary"), fixtureRow("day-3", "ready", { kickoffAt: "2026-07-16T18:00:00.000Z" })], "weekly"));
     expect(product.days).toHaveLength(7);
     expect(product.days.map((day) => day.date)).toEqual(["2026-07-14", "2026-07-15", "2026-07-16", "2026-07-17", "2026-07-18", "2026-07-19", "2026-07-20"]);
+  });
+
+  it("puts reviewed weekly decisions before a distinct provider evidence queue", () => {
+    const waiting = fixtureRow("week-waiting", "preliminary");
+    waiting.decisionSummary = { ...waiting.decisionSummary, allMarketAnalyses: [] };
+    const product = buildWeeklyTipsProduct(slate([
+      waiting,
+      fixtureRow("week-abstain", "no_clear_value"),
+      fixtureRow("week-watch", "watchlist")
+    ], "weekly"));
+
+    const partitions = partitionWeeklyTipsDay(product.days[0]);
+
+    expect(partitions.reviewed.map((row) => row.fixture.fixtureId)).toEqual(["week-watch", "week-abstain"]);
+    expect(partitions.waitingForEvidence.map((row) => row.fixture.fixtureId)).toEqual(["week-waiting"]);
+    expect(partitions.waitingForEvidence.map((row) => row.fixture.fixtureId)).not.toContain("week-watch");
   });
 
   it("moves weekly preliminary analysis to ready with fresh odds and stale after expiry", () => {

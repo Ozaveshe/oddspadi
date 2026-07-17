@@ -55,7 +55,11 @@ describe("live OddsPadi product UI contract", () => {
     expect(slate).toContain("0 generated");
     expect(slate).toContain("Social previews remain hidden");
     const weekly = source("src/app/predictions/week/page.tsx");
+    expect(weekly).toContain("WeeklyDecisionOverview");
     expect(weekly).toContain("product.summary.fixturesFound > 0");
+    expect(slate).toContain("Reviewed decisions");
+    expect(slate).toContain("provider fixture");
+    expect(slate).toContain("awaiting review");
   });
 
   it("keeps anonymous tips routes read-only and shared-cache backed", () => {

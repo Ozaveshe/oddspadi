@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ProviderRunStrip, WeeklySlateSections } from "@/components/odds/IntelligenceSlate";
+import { ProviderRunStrip, WeeklyDecisionOverview, WeeklySlateSections } from "@/components/odds/IntelligenceSlate";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { TipsSharePreview } from "@/components/odds/TipsSharePreview";
 import { getCachedWeeklyTipsProduct } from "@/lib/sports/tips/publicReads";
@@ -29,6 +29,7 @@ export default async function WeeklyPredictionsPage() {
         <p>Weekly predictions start preliminary and get refreshed as odds, injuries, lineups, and results change.</p>
         <nav className="intelligence-nav"><Link className="button" href="/predictions/today">Today&apos;s tips</Link><Link className="button" href="/predictions/tomorrow">Tomorrow&apos;s tips</Link><Link className="button" href="/predictions/history">Results</Link></nav>
       </div>
+      <WeeklyDecisionOverview product={product} />
       <ProviderRunStrip slate={product.slate} />
       <WeeklySlateSections product={product} />
       {product.summary.fixturesFound > 0 ? (

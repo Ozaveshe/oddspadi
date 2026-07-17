@@ -5,7 +5,7 @@ import type { LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import { LocalTime } from "@/components/odds/LocalTime";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import type { SlateFixture, SlatePublicStatus, SportsSlate } from "@/lib/sports/intelligence/types";
-import type { DailyTipsProduct, WeeklyTipsProduct, YesterdayResultsProduct } from "@/lib/sports/tips/product";
+import type { DailyTipsProduct, WeeklyTipsDay, WeeklyTipsProduct, YesterdayResultsProduct } from "@/lib/sports/tips/product";
 import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
@@ -173,7 +173,7 @@ export function DailyDecisionOverview({ product }: { product: DailyTipsProduct }
         </h2>
         <p>{waitingForEvidence.length} provider fixture{waitingForEvidence.length === 1 ? " is" : "s are"} still waiting for current odds or enough evidence. Reviewed decisions appear before that queue.</p>
       </div>
-      <nav className="daily-decision-jumps" aria-label="Jump to today's decision groups">
+      <nav className="daily-decision-jumps" aria-label={`Jump to ${product.day}'s decision groups`}>
         <a href="#daily-published"><strong>{published.length}</strong><span>Published</span></a>
         <a href="#daily-watchlist"><strong>{product.sections.watchlist.length}</strong><span>Watchlist</span></a>
         <a href="#daily-abstentions"><strong>{abstentions.length}</strong><span>Abstained</span></a>
@@ -261,6 +261,57 @@ function weeklyDayLabel(date: string, firstDate: string): string {
   return new Date(`${date}T12:00:00.000Z`).toLocaleDateString([], { weekday: "long" });
 }
 
+const WEEKLY_DECISION_PRIORITY: Record<SlatePublicStatus, number> = {
+  value_pick: 0,
+  lean: 1,
+  watchlist: 2,
+  stale: 3,
+  ready: 4,
+  no_clear_value: 5,
+  needs_review: 6,
+  preliminary: 7,
+  needs_data: 8,
+  suspended: 9,
+  settled: 10
+};
+
+export function partitionWeeklyTipsDay(group: WeeklyTipsDay) {
+  const reviewed = group.fixtures
+    .filter((row) => row.decisionSummary.allMarketAnalyses.length > 0)
+    .sort((left, right) => WEEKLY_DECISION_PRIORITY[left.publicStatus] - WEEKLY_DECISION_PRIORITY[right.publicStatus]);
+  const reviewedFixtureIds = new Set(reviewed.map((row) => row.fixture.fixtureId));
+  return {
+    reviewed,
+    waitingForEvidence: group.fixtures.filter((row) => !reviewedFixtureIds.has(row.fixture.fixtureId))
+  };
+}
+
+export function WeeklyDecisionOverview({ product }: { product: WeeklyTipsProduct }) {
+  if (!product.summary.fixturesFound) return null;
+  const rows = product.days.flatMap((group) => group.fixtures);
+  const reviewed = rows.filter((row) => row.decisionSummary.allMarketAnalyses.length > 0);
+  const published = reviewed.filter((row) => row.publicStatus === "value_pick" || row.publicStatus === "lean");
+  const watchlist = reviewed.filter((row) => row.publicStatus === "watchlist" || row.publicStatus === "stale");
+  const waiting = rows.length - reviewed.length;
+  return (
+    <section className="daily-decision-overview weekly-decision-overview" aria-labelledby="weekly-decision-overview-title">
+      <div className="daily-decision-overview-copy">
+        <span className="section-kicker">Seven-day decision board</span>
+        <h2 id="weekly-decision-overview-title">
+          {reviewed.length} reviewed across {rows.length} fixture{rows.length === 1 ? "" : "s"}.
+        </h2>
+        <p>{published.length ? `${published.length} public decision${published.length === 1 ? " is" : "s are"} ready.` : "No public pick has been forced."} Reviewed decisions lead each date; {waiting} provider fixture{waiting === 1 ? " remains" : "s remain"} in a separate evidence queue.</p>
+      </div>
+      <dl className="weekly-decision-metrics">
+        <div><dt>Reviewed</dt><dd>{reviewed.length}</dd></div>
+        <div><dt>Published</dt><dd>{published.length}</dd></div>
+        <div><dt>Watchlist</dt><dd>{watchlist.length}</dd></div>
+        <div><dt>Waiting</dt><dd>{waiting}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
 export function WeeklySlateSections({ product }: { product: WeeklyTipsProduct }) {
   const hasProviderFixtures = product.days.some((group) => group.fixtures.length > 0);
   if (!hasProviderFixtures) {
@@ -296,19 +347,37 @@ export function WeeklySlateSections({ product }: { product: WeeklyTipsProduct })
   }
   return (
     <div className="weekly-rundown">
-      {product.days.map((group) => (
-        <section className="section weekly-day" key={group.date}>
-          <div className="weekly-date">
-            <span className="section-kicker">{weeklyDayLabel(group.date, product.slate.range.from)}</span>
-            <time dateTime={group.date}>{new Date(`${group.date}T12:00:00Z`).toLocaleDateString([], { month: "short", day: "numeric" })}</time>
-            <span>{group.fixtures.length} fixture{group.fixtures.length === 1 ? "" : "s"}</span>
-            <div className="weekly-status-counts">
-              <span>{group.counts.preliminary} preliminary</span><span>{group.counts.ready} ready</span><span>{group.counts.valuePick} value</span><span>{group.counts.watchlist} watchlist</span><span>{group.counts.settled} settled</span>
+      {product.days.map((group) => {
+        const { reviewed, waitingForEvidence } = partitionWeeklyTipsDay(group);
+        return (
+          <section className="section weekly-day" key={group.date}>
+            <div className="weekly-date">
+              <span className="section-kicker">{weeklyDayLabel(group.date, product.slate.range.from)}</span>
+              <time dateTime={group.date}>{new Date(`${group.date}T12:00:00Z`).toLocaleDateString([], { month: "short", day: "numeric" })}</time>
+              <span>{group.fixtures.length} fixture{group.fixtures.length === 1 ? "" : "s"}</span>
+              <div className="weekly-status-counts">
+                <span>{reviewed.length} reviewed</span><span>{waitingForEvidence.length} waiting</span><span>{group.counts.valuePick} value</span><span>{group.counts.watchlist + group.counts.stale} watchlist</span>
+              </div>
             </div>
-          </div>
-          {group.fixtures.length ? <div className="intelligence-grid">{group.fixtures.map((row) => <SlateFixtureCard key={row.fixture.fixtureId} row={row} compact asOf={product.generatedAt} />)}</div> : <div className="weekly-empty-day"><strong>No provider fixture listed</strong><span>The day stays visible so the seven-day window is complete.</span></div>}
-        </section>
-      ))}
+            {group.fixtures.length ? (
+              <div className="weekly-day-content">
+                {reviewed.length ? (
+                  <>
+                    <div className="weekly-day-heading"><div><span className="section-kicker">Completed market review</span><h3>Reviewed decisions</h3></div><span className="badge scheduled">{reviewed.length}</span></div>
+                    <div className="intelligence-grid">{reviewed.map((row) => <SlateFixtureCard key={`reviewed-${row.fixture.fixtureId}`} row={row} compact asOf={product.generatedAt} />)}</div>
+                  </>
+                ) : <div className="weekly-review-pending"><strong>No completed market review yet</strong><span>Provider fixtures remain visible below, but they are not presented as predictions.</span></div>}
+                {waitingForEvidence.length ? (
+                  <details className="weekly-coverage-queue">
+                    <summary>Show {waitingForEvidence.length} provider fixture{waitingForEvidence.length === 1 ? "" : "s"} awaiting review</summary>
+                    <div className="intelligence-grid">{waitingForEvidence.map((row) => <SlateFixtureCard key={`waiting-${row.fixture.fixtureId}`} row={row} compact asOf={product.generatedAt} />)}</div>
+                  </details>
+                ) : <div className="weekly-queue-clear"><strong>Evidence queue clear</strong><span>Every listed fixture for this date has a completed market review.</span></div>}
+              </div>
+            ) : <div className="weekly-empty-day"><strong>No provider fixture listed</strong><span>The day stays visible so the seven-day window is complete.</span></div>}
+          </section>
+        );
+      })}
     </div>
   );
 }
