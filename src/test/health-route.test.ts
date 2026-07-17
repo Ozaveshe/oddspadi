@@ -81,4 +81,17 @@ describe("health route live-data readiness", () => {
       readiness: { storage: "unconfigured" }
     });
   });
+
+  it("accepts admin detail only through a timing-safe header check", async () => {
+    clearReadinessEnv();
+    process.env.ODDSPADI_ADMIN_TOKEN = "health-admin-token";
+
+    const queryResponse = GET(new Request("https://oddspadi.example/api/health?token=health-admin-token"));
+    expect(await queryResponse.json()).not.toHaveProperty("providers");
+
+    const headerResponse = GET(new Request("https://oddspadi.example/api/health", {
+      headers: { authorization: "Bearer health-admin-token" }
+    }));
+    expect(await headerResponse.json()).toHaveProperty("providers");
+  });
 });

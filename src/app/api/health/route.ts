@@ -1,4 +1,5 @@
 import { isConfiguredSecretValue } from "@/lib/env";
+import { isCronAuthorized } from "@/lib/sports/intelligence/auth";
 import { getSupabaseRuntimeStatus } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +12,8 @@ function anyConfigured(...keys: string[]): boolean {
  * Lightweight health/readiness endpoint.
  *
  * Public payload is safe (no secrets, no per-provider detail) and suitable for
- * uptime monitors. Supplying the admin token (Authorization: Bearer <token>, or
- * ?token=) additionally returns a per-provider configuration breakdown — the
+ * uptime monitors. Supplying the admin token in an Authorization bearer header
+ * additionally returns a per-provider configuration breakdown — the
  * quick config check that the archived ops console used to provide.
  */
 export function GET(request: Request) {
@@ -33,10 +34,7 @@ export function GET(request: Request) {
   // needs its private Supabase credential before it can read or write them.
   const liveDataReady = providerConfigured && storageConfigured;
 
-  const adminToken = process.env.ODDSPADI_ADMIN_TOKEN?.trim();
-  const url = new URL(request.url);
-  const presented = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim() || url.searchParams.get("token")?.trim();
-  const authorized = Boolean(adminToken && presented && presented === adminToken);
+  const authorized = isCronAuthorized(request);
 
   return Response.json(
     {
