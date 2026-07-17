@@ -15881,16 +15881,27 @@ describe("prediction utilities", () => {
   });
 
   it("returns a structured memory snapshot when Supabase is not configured", async () => {
-    const snapshot = await getDecisionMemorySnapshot({ limit: 3 });
+    const envKeys = [
+      "SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SECRET_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ] as const;
+    const previous = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+    for (const key of envKeys) delete process.env[key];
 
-    if (process.env.SUPABASE_SERVICE_ROLE_KEY && (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)) {
-      expect(["ready", "failed"]).toContain(snapshot.status);
-      return;
+    try {
+      const snapshot = await getDecisionMemorySnapshot({ limit: 3 });
+      expect(snapshot.status).toBe("not-configured");
+      expect(snapshot.recentRuns).toEqual([]);
+      expect(snapshot.learningLoop.readyForCalibration).toBe(false);
+    } finally {
+      for (const key of envKeys) {
+        const value = previous[key];
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
     }
-
-    expect(snapshot.status).toBe("not-configured");
-    expect(snapshot.recentRuns).toEqual([]);
-    expect(snapshot.learningLoop.readyForCalibration).toBe(false);
   });
 
   it("validates prediction outcome input for the learning loop", () => {
