@@ -5,6 +5,7 @@ import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import {
   footballLeagues,
+  featuredFootballLeagueTables,
   currentFootballSeason,
   leagueBySlug,
   resolveVerifiedLeagueTable,
@@ -98,6 +99,20 @@ export default async function LeagueTablePage({ params }: Props) {
             : "Current standings, results record and recent form. Refreshed every few hours when provider data is available."}
         </p>
       </div>
+
+      <nav className="league-table-switcher" aria-label="Major league tables">
+        {featuredFootballLeagueTables.map((featuredLeague) => (
+          <Link
+            aria-current={featuredLeague.slug === slug ? "page" : undefined}
+            className="league-table-switcher__link"
+            href={`/predictions/league/${featuredLeague.slug}/table`}
+            key={featuredLeague.slug}
+          >
+            <CountryFlag country={featuredLeague.country} size={18} />
+            <span>{featuredLeague.leagueName}</span>
+          </Link>
+        ))}
+      </nav>
 
       {table?.rows.length ? (
         <>

@@ -5,6 +5,7 @@ export type LeagueStandingRow = { position: number; previousPosition: number | n
 export type LeagueTable = { slug: string; leagueId: string; leagueName: string; country: string; season: string; source: "api-football-standings" | "supabase-standings-snapshot"; updatedAt: string; rows: LeagueStandingRow[] };
 export type ResolvedLeagueTable = { table: LeagueTable | null; requestedSeason: string; displaySeason: string; historicalFallback: boolean };
 export const footballLeagues = predictionFootballLeagues;
+export const featuredFootballLeagueTables = footballLeagues.filter((league) => league.tier === "top-five").slice(0, 5);
 export function leagueBySlug(slug: string) { return predictionLeagueBySlug(slug); }
 export function leagueSlugFromProviderId(id: string) { return footballLeagueById(id)?.predictions ? footballLeagueById(id)?.slug ?? null : null; }
 export function currentFootballSeason(now = new Date()) { return String(now.getUTCMonth() >= 6 ? now.getUTCFullYear() : now.getUTCFullYear() - 1); }
