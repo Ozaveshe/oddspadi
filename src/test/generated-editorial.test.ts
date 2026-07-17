@@ -38,7 +38,7 @@ describe("editorial worker boundary", () => {
   });
 
   it("keeps every emitted generator accepted by the editorial table", () => {
-    const migration = readFileSync(join(process.cwd(), "supabase/migrations/20260717005500_allow_daily_slate_editorial_stories.sql"), "utf8");
+    const migration = readFileSync(join(process.cwd(), "supabase/migrations/20260717013627_allow_daily_slate_editorial_stories.sql"), "utf8");
     for (const generator of ["daily-slate", "weekend-preview", "results-recap", "value-picks-watch", "model-vs-market"]) {
       expect(migration).toContain(`'${generator}'`);
     }
