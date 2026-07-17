@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildFootballBoardFromPayloads, liveBoardFixtureFromMatch, mergeLiveBoardCoverage, resolveRepositoryCoverage } from "@/lib/sports/liveScoreBoard";
+import { buildFootballBoardFromPayloads, liveBoardFixtureFromMatch, mergeLiveBoardCoverage, normalizeStoredLiveBoardState, resolveRepositoryCoverage } from "@/lib/sports/liveScoreBoard";
 import type { Match } from "@/lib/sports/types";
 
 function providerMatch(sport: "basketball" | "tennis", kind: "provider" | "mock" = "provider"): Match {
@@ -56,6 +56,41 @@ describe("multi-sport live board", () => {
 
     expect(mergeLiveBoardCoverage(football, [duplicateStoredFootball, storedBasketball!]).map((fixture) => fixture.sport))
       .toEqual(["football", "basketball"]);
+  });
+
+  it("withholds stale partial scores instead of presenting an old stored game as live", () => {
+    const state = normalizeStoredLiveBoardState({
+      status: "live",
+      last_synced_at: "2026-07-17T00:27:21.504Z",
+      home_score: 13,
+      away_score: 0,
+      elapsed: null
+    }, new Date("2026-07-17T04:10:00.000Z"));
+
+    expect(state).toEqual({
+      phase: "other",
+      statusShort: "STALE",
+      statusLabel: "Awaiting update",
+      elapsed: null,
+      goals: { home: null, away: null }
+    });
+  });
+
+  it("keeps a recently synchronized stored game live", () => {
+    const state = normalizeStoredLiveBoardState({
+      status: "live",
+      last_synced_at: "2026-07-17T04:00:00.000Z",
+      home_score: 48,
+      away_score: 44,
+      elapsed: 28
+    }, new Date("2026-07-17T04:10:00.000Z"));
+
+    expect(state).toMatchObject({
+      phase: "live",
+      statusShort: "LIVE",
+      statusLabel: "28'",
+      goals: { home: 48, away: 44 }
+    });
   });
 
   it("fails open with an explicit timeout state when stored coverage stalls", async () => {

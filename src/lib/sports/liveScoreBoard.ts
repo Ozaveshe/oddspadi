@@ -12,6 +12,7 @@ import { providerBackedSportsDataProvider } from "@/lib/sports/providers/provide
 import type { Match, Sport } from "@/lib/sports/types";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { configuredPredictionLeagueIds, footballLeaguePriority } from "@/lib/sports/footballLeagues";
+import { isStoredFixtureFresh } from "@/lib/sports/intelligence/canonical";
 
 export type LiveFixturePhase = "live" | "upcoming" | "finished" | "other";
 
@@ -191,6 +192,7 @@ const EXCLUDED_NAME_PATTERN = /friendl/i;
 const BOARD_TTL_MS = 30_000;
 const MAX_FIXTURES = 500;
 const REPOSITORY_COVERAGE_TIMEOUT_MS = 5_000;
+const STORED_LIVE_STATUS_MAX_AGE_MS = 20 * 60_000;
 
 /** NaN from an invalid kickoff makes Array.sort's comparator inconsistent
  *  (order becomes engine-dependent); park unparseable dates at the end. */
@@ -472,7 +474,7 @@ function timedFixtures(date: string, sport: (typeof MULTI_SPORTS)[number]): Prom
 type RepositoryFixture = {
   id: string; sport: string; external_id: string; league_external_id: string | null; kickoff_at: string; status: string;
   home_team_external_id: string; away_team_external_id: string; home_score: number | null; away_score: number | null;
-  country: string | null; metadata: Record<string, unknown> | null;
+  country: string | null; last_synced_at: string | null; metadata: Record<string, unknown> | null;
 };
 
 type RepositoryNamedEntity = { external_id: string; name: string; country?: string | null; metadata: Record<string, unknown> | null };
@@ -482,6 +484,46 @@ function metadataText(metadata: Record<string, unknown> | null, key: string): st
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+export function normalizeStoredLiveBoardState(
+  fixture: Pick<RepositoryFixture, "status" | "last_synced_at" | "home_score" | "away_score"> & { elapsed: number | null },
+  now = new Date(),
+  maxLiveAgeMs = STORED_LIVE_STATUS_MAX_AGE_MS
+): Pick<LiveBoardFixture, "phase" | "statusShort" | "statusLabel" | "elapsed" | "goals"> {
+  const status = fixture.status.toLowerCase();
+  const live = status === "live" || status === "in_play";
+  if (live && !isStoredFixtureFresh(fixture.last_synced_at, now, maxLiveAgeMs)) {
+    return {
+      phase: "other",
+      statusShort: "STALE",
+      statusLabel: "Awaiting update",
+      elapsed: null,
+      goals: { home: null, away: null }
+    };
+  }
+
+  const phase: LiveFixturePhase = live
+    ? "live"
+    : status === "finished" || status === "ft"
+      ? "finished"
+      : status === "scheduled" || status === "not_started"
+        ? "upcoming"
+        : "other";
+  return {
+    phase,
+    statusShort: phase === "live" ? "LIVE" : phase === "finished" ? "FT" : phase === "upcoming" ? "NS" : fixture.status,
+    statusLabel:
+      phase === "live"
+        ? (typeof fixture.elapsed === "number" ? `${fixture.elapsed}'` : "Live")
+        : phase === "finished"
+          ? "FT"
+          : phase === "upcoming"
+            ? "NS"
+            : fixture.status,
+    elapsed: fixture.elapsed,
+    goals: { home: fixture.home_score, away: fixture.away_score }
+  };
+}
+
 async function readStoredFixturesForDate(date: string): Promise<LiveBoardFixture[]> {
   const client = getSupabaseServerClient();
   if (!client) throw new Error("Supabase server client is unavailable.");
@@ -489,7 +531,7 @@ async function readStoredFixturesForDate(date: string): Promise<LiveBoardFixture
   const untilDate = new Date(`${date}T00:00:00.000Z`);
   untilDate.setUTCDate(untilDate.getUTCDate() + 1);
   const { data, error } = await client.from("op_fixtures")
-    .select("id,sport,external_id,league_external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,country,metadata")
+    .select("id,sport,external_id,league_external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,country,last_synced_at,metadata")
     .gte("kickoff_at", from).lt("kickoff_at", untilDate.toISOString()).order("kickoff_at").limit(MAX_FIXTURES);
   if (error) throw new Error(`Stored fixture read failed: ${error.message}`);
   if (!data?.length) return [];
@@ -504,24 +546,24 @@ async function readStoredFixturesForDate(date: string): Promise<LiveBoardFixture
   if (teamError) throw new Error(`Stored team read failed: ${teamError.message}`);
   const leagueMap = new Map((leagues as RepositoryNamedEntity[] | null ?? []).map((row) => [row.external_id, row]));
   const teamMap = new Map((teams as RepositoryNamedEntity[] | null ?? []).map((row) => [row.external_id, row]));
+  const now = new Date();
   return rows.flatMap((row) => {
     const sport = row.sport as LiveBoardFixture["sport"];
     const home = teamMap.get(row.home_team_external_id);
     const away = teamMap.get(row.away_team_external_id);
     if (!home?.name || !away?.name) return [];
     const league = row.league_external_id ? leagueMap.get(row.league_external_id) : undefined;
-    const status = row.status.toLowerCase();
-    const phase: LiveFixturePhase = status === "live" || status === "in_play" ? "live" : status === "finished" || status === "ft" ? "finished" : status === "scheduled" || status === "not_started" ? "upcoming" : "other";
     const elapsed = typeof row.metadata?.elapsed === "number" ? row.metadata.elapsed : null;
+    const state = normalizeStoredLiveBoardState({ ...row, elapsed }, now);
     return [{
-      id: row.id, matchId: row.external_id, sport, kickoff: row.kickoff_at, phase,
-      statusShort: phase === "live" ? "LIVE" : phase === "finished" ? "FT" : phase === "upcoming" ? "NS" : row.status,
-      statusLabel: phase === "live" ? (elapsed ? `${elapsed}'` : "Live") : phase === "finished" ? "FT" : phase === "upcoming" ? "NS" : row.status,
-      elapsed,
+      id: row.id, matchId: row.external_id, sport, kickoff: row.kickoff_at, phase: state.phase,
+      statusShort: state.statusShort,
+      statusLabel: state.statusLabel,
+      elapsed: state.elapsed,
       league: { id: Number.parseInt((row.league_external_id ?? "").replace(/\D+/g, ""), 10) || 0, name: league?.name ?? "Competition", country: league?.country ?? row.country ?? "World", logo: metadataText(league?.metadata ?? null, "logo"), flag: metadataText(league?.metadata ?? null, "flag"), round: metadataText(row.metadata, "round") },
-      home: { id: null, name: home.name, logo: metadataText(home.metadata, "logo"), winner: phase === "finished" && row.home_score !== null && row.away_score !== null ? row.home_score > row.away_score : null },
-      away: { id: null, name: away.name, logo: metadataText(away.metadata, "logo"), winner: phase === "finished" && row.home_score !== null && row.away_score !== null ? row.away_score > row.home_score : null },
-      goals: { home: row.home_score, away: row.away_score }, analysis: true
+      home: { id: null, name: home.name, logo: metadataText(home.metadata, "logo"), winner: state.phase === "finished" && state.goals.home !== null && state.goals.away !== null ? state.goals.home > state.goals.away : null },
+      away: { id: null, name: away.name, logo: metadataText(away.metadata, "logo"), winner: state.phase === "finished" && state.goals.home !== null && state.goals.away !== null ? state.goals.away > state.goals.home : null },
+      goals: state.goals, analysis: true
     } satisfies LiveBoardFixture];
   });
 }
