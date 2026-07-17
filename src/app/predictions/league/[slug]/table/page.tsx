@@ -4,24 +4,20 @@ import { notFound } from "next/navigation";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import {
-  footballLeagues,
   featuredFootballLeagueTables,
   currentFootballSeason,
   leagueBySlug,
   resolveVerifiedLeagueTable,
+  storedLeagueTable,
 } from "@/lib/sports/leagueStandings";
 import { sportsProvider } from "@/lib/sports/service";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 
-export const revalidate = 10800;
+export const dynamic = "force-dynamic";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
 
 type Props = { params: Promise<{ slug: string }> };
-
-export function generateStaticParams() {
-  return footballLeagues.map(({ slug }) => ({ slug }));
-}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const league = leagueBySlug((await params).slug);
@@ -54,10 +50,15 @@ export default async function LeagueTablePage({ params }: Props) {
   if (!league) notFound();
 
   const requestedSeason = currentFootballSeason();
+  const isFeaturedLeague = featuredFootballLeagueTables.some((featuredLeague) => featuredLeague.slug === slug);
   const { table, displaySeason, historicalFallback } = await resolveVerifiedLeagueTable(
     slug,
     requestedSeason,
     (leagueSlug, season) => sportsProvider.getFootballLeagueTable(leagueSlug, season),
+    storedLeagueTable,
+    isFeaturedLeague
+      ? (leagueSlug, season) => sportsProvider.getFootballLeagueTable(leagueSlug, season)
+      : undefined,
   );
   const url = `${siteUrl}/predictions/league/${slug}/table`;
   const jsonLd = {

@@ -16,17 +16,35 @@ export async function resolveVerifiedLeagueTable(
   requestedSeason: string,
   getCurrentTable: (slug: string, season: string) => Promise<LeagueTable | null>,
   getStoredTable: (slug: string, season: string) => Promise<LeagueTable | null> = storedLeagueTable,
+  getHistoricalProviderTable?: (slug: string, season: string) => Promise<LeagueTable | null>,
 ): Promise<ResolvedLeagueTable> {
-  const current =
-    (await getCurrentTable(slug, requestedSeason).catch(() => null)) ??
-    (await getStoredTable(slug, requestedSeason).catch(() => null));
+  const providerCurrent = await getCurrentTable(slug, requestedSeason).catch(() => null);
+  const storedCurrent = providerCurrent?.rows.length
+    ? null
+    : await getStoredTable(slug, requestedSeason).catch(() => null);
+  const current = providerCurrent?.rows.length
+    ? providerCurrent
+    : storedCurrent?.rows.length
+      ? storedCurrent
+      : null;
 
   if (current) {
     return { table: current, requestedSeason, displaySeason: current.season, historicalFallback: false };
   }
 
   const previousSeason = previousFootballSeason(requestedSeason);
-  const historical = await getStoredTable(slug, previousSeason).catch(() => null);
+  const providerHistorical =
+    (getHistoricalProviderTable
+      ? await getHistoricalProviderTable(slug, previousSeason).catch(() => null)
+      : null);
+  const storedHistorical = providerHistorical?.rows.length
+    ? null
+    : await getStoredTable(slug, previousSeason).catch(() => null);
+  const historical = providerHistorical?.rows.length
+    ? providerHistorical
+    : storedHistorical?.rows.length
+      ? storedHistorical
+      : null;
   return {
     table: historical,
     requestedSeason,

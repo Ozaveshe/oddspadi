@@ -9,10 +9,23 @@ describe("football league standings", () => {
     const provider = new ProviderBackedSportsDataProvider({ env: { API_FOOTBALL_KEY: "test" }, fetchImpl, now: () => new Date("2026-07-13T00:00:00Z") }); const first = await provider.getFootballLeagueTable("premier-league", "2026"); const second = await provider.getFootballLeagueTable("premier-league", "2026");
     expect(first).toMatchObject({ source: "api-football-standings", leagueName: "Premier League", rows: [{ position: 1, teamName: "Arsenal", played: 5, wins: 4, goalDifference: 7, points: 12, form: "WWDLW" }] }); expect(second).toEqual(first); expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+  it("does not cache an empty provider table", async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async () => {
+      calls += 1;
+      const standings = calls === 1 ? [] : [{ rank: 1, team: { id: 42, name: "Arsenal" }, points: 0, all: { played: 0, win: 0, draw: 0, lose: 0, goals: { for: 0, against: 0 } } }];
+      return new Response(JSON.stringify({ response: [{ league: { standings: [standings] } }] }), { headers: { "content-type": "application/json" } });
+    });
+    const provider = new ProviderBackedSportsDataProvider({ env: { API_FOOTBALL_KEY: "test" }, fetchImpl });
+
+    expect(await provider.getFootballLeagueTable("premier-league", "2026")).toBeNull();
+    expect((await provider.getFootballLeagueTable("premier-league", "2026"))?.rows).toHaveLength(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
   it("does not call the provider for unknown leagues", async () => { const fetchImpl = vi.fn(); const provider = new ProviderBackedSportsDataProvider({ env: { API_FOOTBALL_KEY: "test" }, fetchImpl }); expect(await provider.getFootballLeagueTable("not-a-league")).toBeNull(); expect(fetchImpl).not.toHaveBeenCalled(); });
   it("uses the latest stored final table when the new season is not published", async () => {
     const historical = { slug: "premier-league", season: "2025", rows: [{ position: 1 }] } as LeagueTable;
-    const getCurrent = vi.fn(async () => null);
+    const getCurrent = vi.fn(async () => ({ slug: "premier-league", season: "2026", rows: [] }) as unknown as LeagueTable);
     const getStored = vi.fn(async (_slug: string, season: string) => season === "2025" ? historical : null);
 
     const result = await resolveVerifiedLeagueTable("premier-league", "2026", getCurrent, getStored);
@@ -34,5 +47,20 @@ describe("football league standings", () => {
       historicalFallback: false,
     });
     expect(getStored).not.toHaveBeenCalled();
+  });
+  it("can use a previous provider season for a featured league without requiring a stored snapshot", async () => {
+    const historical = { slug: "ligue-1", season: "2025", rows: [{ position: 1 }] } as LeagueTable;
+    const getCurrent = vi.fn(async () => null);
+    const getStored = vi.fn(async () => null);
+    const getHistoricalProvider = vi.fn(async () => historical);
+
+    expect(await resolveVerifiedLeagueTable("ligue-1", "2026", getCurrent, getStored, getHistoricalProvider)).toEqual({
+      table: historical,
+      requestedSeason: "2026",
+      displaySeason: "2025",
+      historicalFallback: true,
+    });
+    expect(getHistoricalProvider).toHaveBeenCalledWith("ligue-1", "2025");
+    expect(getStored.mock.calls).toEqual([["ligue-1", "2026"]]);
   });
 });
