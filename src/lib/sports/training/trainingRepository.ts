@@ -931,6 +931,14 @@ export async function getTrainingDataSnapshot(sport: Sport = "football"): Promis
   }
 }
 
+export function invalidateTrainingDataSnapshot(sport?: Sport): void {
+  if (sport) {
+    trainingSnapshotCache.delete(sport);
+    return;
+  }
+  trainingSnapshotCache.clear();
+}
+
 type StoredFinishedFixtures = {
   fixtures: FixtureRow[];
   featuresByFixture: Map<string, { home?: FeatureRow; away?: FeatureRow }>;
@@ -1543,6 +1551,8 @@ export async function runAndStoreHistoricalBacktest({
   const stored = await insertBacktestRun({ result, includeDemo });
   if ("error" in stored) return { status: "failed", configured: true, reason: stored.error, result };
 
+  invalidateTrainingDataSnapshot(sport);
+
   return {
     status: "stored",
     configured: true,
@@ -1621,6 +1631,7 @@ export async function runAndStoreFootballRuntimeReplay({
 
   const stored = await insertBacktestRun({ result: replay, includeDemo });
   if ("error" in stored) return { status: "failed", configured: true, reason: stored.error, result: replay };
+  invalidateTrainingDataSnapshot("football");
   return { status: "stored", configured: true, id: stored.id, result: replay };
 }
 

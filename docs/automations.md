@@ -15,7 +15,7 @@ project `wncwtzqipnoqwmqlznqn`.
 | `sports-identity-enrichment-sweep` | `10 3 * * *` | Resolves upcoming club countries/crests and domestic odds-only competition countries, then records a serialized receipt |
 | `football-settlement-sweep` | `*/30 * * * *` | Grades finished football picks |
 | `football-corpus-refresh-sweep` | `40 3 * * *` | Runs two independent EPL corpus lanes: refreshes the previous two complete UTC days with events/lineups/player statistics, then rotates through one bounded seven-day window of the most recently completed season to bootstrap historical player performances |
-| `model-learning-sweep` | `45 4 * * *` | Claims the global sports-pipeline lock, stores per-sport calibration daily, and runs exact runtime-entrypoint replays each Monday without auto-promotion |
+| `model-learning-sweep` | `45 4 * * *` | Claims the global sports-pipeline lock, stores per-sport calibration daily, bootstraps missing or stale exact runtime-entrypoint evidence, and refreshes every sport each Monday without auto-promotion |
 | `multi-sport-settlement-sweep` | `50 * * * *` | Grades other sports |
 | `results-settlement-sweep` | `15 * * * *` | Settles the canonical public-pick ledger and records explicit pending/manual-review reasons |
 | `editorial-generation-sweep` | `35 5,11,17,23 * * *` | Regenerates News stories from ledger rows (OpenAI prose pass when `OPENAI_API_KEY` is set; deterministic fallback otherwise) |

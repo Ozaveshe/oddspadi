@@ -41,6 +41,7 @@ describe("governed model learning schedule", () => {
       adminToken: "same",
       runCalibration,
       runRuntimeReplay,
+      runtimeReplayDue: vi.fn(async () => false),
       now: new Date("2026-07-17T03:45:00.000Z")
     });
     const body = await response.json() as { success: boolean; controls: { automaticLivePromotion: boolean }; results: Array<{ sport: string }> };
@@ -50,6 +51,42 @@ describe("governed model learning schedule", () => {
     expect(body.results.map((row) => row.sport)).toEqual(["football", "basketball", "tennis"]);
     expect(runCalibration).toHaveBeenCalledTimes(3);
     expect(runRuntimeReplay).not.toHaveBeenCalled();
+  });
+
+  it("bootstraps missing exact-runtime evidence before the weekly window", async () => {
+    const runCalibration = vi.fn(async (sport: string) => ({ status: "stored" as const, configured: true, id: `${sport}-calibration` }));
+    const runRuntimeReplay = vi.fn(async (sport: string) => ({
+      status: "stored" as const,
+      configured: true as const,
+      id: `${sport}-runtime-replay`,
+      result: { sport }
+    }) as never);
+    const runtimeReplayDue = vi.fn(async (sport: string) => sport !== "basketball");
+    const response = await runModelLearningCycle({
+      scheduleToken: "same",
+      adminToken: "same",
+      runCalibration,
+      runRuntimeReplay,
+      runtimeReplayDue,
+      now: new Date("2026-07-17T03:45:00.000Z")
+    });
+    const body = await response.json() as {
+      success: boolean;
+      controls: { bootstrapRuntimeParityBacktests: boolean; weeklyRuntimeParityBacktests: boolean };
+      results: Array<{ sport: string; runtimeReplay: { trigger: string; status: string } }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.controls.weeklyRuntimeParityBacktests).toBe(false);
+    expect(body.controls.bootstrapRuntimeParityBacktests).toBe(true);
+    expect(runtimeReplayDue).toHaveBeenCalledTimes(3);
+    expect(runRuntimeReplay.mock.calls.map(([sport]) => sport)).toEqual(["football", "tennis"]);
+    expect(body.results.map((row) => [row.sport, row.runtimeReplay.trigger, row.runtimeReplay.status])).toEqual([
+      ["football", "bootstrap", "stored"],
+      ["basketball", "not-due", "not-due"],
+      ["tennis", "bootstrap", "stored"]
+    ]);
   });
 
   it("stores exact runtime replay evidence on the weekly learning window before calibration", async () => {
@@ -98,6 +135,7 @@ describe("governed model learning schedule", () => {
           reason: "candidate persistence failed"
         }]
       })),
+      runtimeReplayDue: vi.fn(async () => false),
       now: new Date("2026-07-17T04:45:00.000Z")
     });
 

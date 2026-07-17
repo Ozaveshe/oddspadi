@@ -4,10 +4,12 @@ import { finishProviderRun, startProviderRun } from "../../src/lib/sports/intell
 import type { ProviderRunClaim, ProviderRunLog, ProviderRunStatus } from "../../src/lib/sports/intelligence/types";
 import { runAndStoreCalibration, type CalibrationRunResult } from "../../src/lib/sports/prediction/decisionCalibration";
 import {
+  getTrainingDataSnapshot,
   runAndStoreFootballRuntimeReplay,
   runAndStoreHistoricalBacktest,
   type BacktestRunStoreResult
 } from "../../src/lib/sports/training/trainingRepository";
+import { inspectRuntimeBacktestEvidence } from "../../src/lib/sports/training/runtimeBacktestEvidence";
 import type { Sport } from "../../src/lib/sports/types";
 
 declare const Netlify: { env: { get(name: string): string | undefined } };
@@ -15,6 +17,7 @@ declare const Netlify: { env: { get(name: string): string | undefined } };
 type LearningSport = Extract<Sport, "football" | "basketball" | "tennis">;
 type CalibrationOperation = (sport: LearningSport) => Promise<CalibrationRunResult>;
 type RuntimeReplayOperation = (sport: LearningSport) => Promise<BacktestRunStoreResult>;
+type RuntimeReplayDueOperation = (sport: LearningSport, now: Date) => Promise<boolean>;
 type ClaimLearningRun = (startedAt: string) => Promise<ProviderRunClaim>;
 type FinishLearningRun = (run: ProviderRunLog, status: ProviderRunStatus, errors: string[], finishedAt: string) => Promise<ProviderRunLog>;
 
@@ -25,6 +28,17 @@ const tokenMatches = (expected: string, supplied: string) => {
   return left.length === right.length && timingSafeEqual(left, right);
 };
 
+const RUNTIME_REPLAY_MAX_AGE_MS = 7 * 24 * 60 * 60_000;
+
+async function runtimeReplayNeedsBootstrap(sport: LearningSport, now: Date): Promise<boolean> {
+  const snapshot = await getTrainingDataSnapshot(sport);
+  const evidence = inspectRuntimeBacktestEvidence(sport, snapshot.latestBacktest);
+  if (!evidence.exactRuntimeParity) return true;
+
+  const createdAt = Date.parse(snapshot.latestBacktest?.createdAt ?? "");
+  return !Number.isFinite(createdAt) || now.getTime() - createdAt > RUNTIME_REPLAY_MAX_AGE_MS;
+}
+
 export async function runModelLearningCycle({
   scheduleToken,
   adminToken,
@@ -34,6 +48,7 @@ export async function runModelLearningCycle({
     sport === "football"
       ? runAndStoreFootballRuntimeReplay({ minSample: 100, limit: 50_000 })
       : runAndStoreHistoricalBacktest({ sport, minSample: 30, limit: 50_000 }),
+  runtimeReplayDue = runtimeReplayNeedsBootstrap,
   now = new Date()
 }: {
   scheduleToken: string | null;
@@ -41,6 +56,7 @@ export async function runModelLearningCycle({
   sports?: LearningSport[];
   runCalibration?: CalibrationOperation;
   runRuntimeReplay?: RuntimeReplayOperation;
+  runtimeReplayDue?: RuntimeReplayDueOperation;
   now?: Date;
 }) {
   if (!adminToken || !scheduleToken || !tokenMatches(adminToken, scheduleToken)) {
@@ -48,10 +64,17 @@ export async function runModelLearningCycle({
   }
 
   const weeklyRuntimeReplay = now.getUTCDay() === 1;
-  const results: Array<{ sport: LearningSport; result: CalibrationRunResult; runtimeReplay: BacktestRunStoreResult | null }> = [];
+  const results: Array<{
+    sport: LearningSport;
+    result: CalibrationRunResult;
+    runtimeReplay: BacktestRunStoreResult | null;
+    runtimeReplayTrigger: "weekly" | "bootstrap" | "not-due";
+  }> = [];
   for (const sport of sports) {
-    const runtimeReplay = weeklyRuntimeReplay ? await runRuntimeReplay(sport) : null;
-    results.push({ sport, runtimeReplay, result: await runCalibration(sport) });
+    const bootstrapRuntimeReplay = weeklyRuntimeReplay ? false : await runtimeReplayDue(sport, now);
+    const runtimeReplayTrigger = weeklyRuntimeReplay ? "weekly" : bootstrapRuntimeReplay ? "bootstrap" : "not-due";
+    const runtimeReplay = runtimeReplayTrigger === "not-due" ? null : await runRuntimeReplay(sport);
+    results.push({ sport, runtimeReplay, runtimeReplayTrigger, result: await runCalibration(sport) });
   }
   const successfulCandidateStatuses = new Set(["stored", "reused", "skipped"]);
   const success = results.every(({ result, runtimeReplay }) =>
@@ -59,7 +82,7 @@ export async function runModelLearningCycle({
     (result.candidates ?? []).every((candidate) => successfulCandidateStatuses.has(candidate.status)) &&
     (!runtimeReplay || runtimeReplay.status === "stored")
   );
-  const resultSummary = results.map(({ sport, result, runtimeReplay }) => ({
+  const resultSummary = results.map(({ sport, result, runtimeReplay, runtimeReplayTrigger }) => ({
     sport,
     calibration: {
       status: result.status,
@@ -69,6 +92,7 @@ export async function runModelLearningCycle({
       reason: result.status === "stored" ? null : result.reason ?? null
     },
     runtimeReplay: {
+      trigger: runtimeReplayTrigger,
       status: runtimeReplay?.status ?? "not-due",
       runId: runtimeReplay?.status === "stored" ? runtimeReplay.id : null,
       sampleSize: runtimeReplay?.result?.sampleSize ?? 0,
@@ -81,6 +105,7 @@ export async function runModelLearningCycle({
     event: "oddspadi-model-learning-cycle",
     success,
     weeklyRuntimeReplay,
+    bootstrapRuntimeReplay: results.some((result) => result.runtimeReplayTrigger === "bootstrap"),
     sports: resultSummary
   }));
   return Response.json({
@@ -90,6 +115,7 @@ export async function runModelLearningCycle({
       calibrationRunsStored: results.every(({ result }) => result.status === "stored"),
       candidateGeneration: true,
       weeklyRuntimeParityBacktests: weeklyRuntimeReplay,
+      bootstrapRuntimeParityBacktests: results.some((result) => result.runtimeReplayTrigger === "bootstrap"),
       automaticLivePromotion: false,
       promotionRequirement: "A model-bound candidate must pass sample, Brier, log-loss, calibration, CLV, and operator approval gates."
     },
