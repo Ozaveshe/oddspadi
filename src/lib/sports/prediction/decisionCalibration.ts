@@ -1,6 +1,7 @@
 import { getSupabaseRuntimeStatus, getSupabaseServerClient } from "@/lib/supabase/server";
 import { DECISION_ENGINE_VERSION } from "./decisionEngine";
 import { storeCalibrationCandidate, type CalibrationCandidateWriteResult } from "./decisionCalibrationPromotion";
+import { isDecisionModelSport, runtimeModelKey } from "./modelIdentity";
 
 type OutcomeResult = "pending" | "won" | "lost" | "push" | "void";
 
@@ -519,6 +520,7 @@ export function buildDecisionCalibrationCohorts({
     groups.set(key, current);
   }
 
+  const currentRuntimeModelKey = isDecisionModelSport(sport) ? runtimeModelKey(sport) : null;
   return Array.from(groups.values())
     .map((group) => {
       const cohortRuns = decisionRuns.filter((run) => group.runIds.has(run.id));
@@ -530,7 +532,10 @@ export function buildDecisionCalibrationCohorts({
         metrics: computeDecisionCalibrationMetrics({ outcomes: group.outcomes, decisionRuns: cohortRuns, sport })
       };
     })
-    .sort((left, right) => right.outcomes.length - left.outcomes.length || left.modelKey.localeCompare(right.modelKey));
+    .sort((left, right) => {
+      const runtimePriority = Number(right.modelKey === currentRuntimeModelKey) - Number(left.modelKey === currentRuntimeModelKey);
+      return runtimePriority || right.outcomes.length - left.outcomes.length || left.modelKey.localeCompare(right.modelKey);
+    });
 }
 
 async function readCalibrationInputs(sport = "football") {
@@ -711,7 +716,10 @@ export async function runAndStoreCalibration(sport = "football"): Promise<Calibr
   const storedRuns: Array<{ id: string; metrics: DecisionCalibrationMetrics }> = [];
   const candidates: CalibrationCandidateWriteResult[] = [];
 
-  for (const cohort of selectedCohorts) {
+  // Persist the primary/current-runtime cohort last because the public snapshot
+  // reads the latest insert. This prevents a tiny legacy cohort from becoming
+  // the apparent current calibration simply because it was inserted last.
+  for (const cohort of [...selectedCohorts].reverse()) {
     const metrics = cohort.metrics;
     const { data, error } = await client
       .from("op_calibration_runs")
@@ -752,7 +760,7 @@ export async function runAndStoreCalibration(sport = "football"): Promise<Calibr
     }
   }
 
-  const primary = storedRuns[0];
+  const primary = storedRuns.at(-1);
   return {
     status: "stored",
     configured: true,

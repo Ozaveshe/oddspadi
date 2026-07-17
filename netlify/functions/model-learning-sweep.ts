@@ -18,6 +18,6 @@ export default async function modelLearningSweep(_request: Request, context: Con
   }
 }
 
-// Runs after the daily 02:00 UTC intelligence cycle and subsequent result
-// settlement windows. The worker recalibrates in shadow; it never self-promotes.
-export const config: Config = { schedule: "45 3 * * *" };
+// Runs after the daily fixture identity and football corpus windows. The worker
+// recalibrates in shadow, shares the global pipeline lock, and never self-promotes.
+export const config: Config = { schedule: "45 4 * * *" };

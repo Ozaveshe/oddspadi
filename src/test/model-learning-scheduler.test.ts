@@ -1,7 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
-import { runModelLearningCycle } from "../../netlify/functions/model-learning-worker-background";
+import { config } from "../../netlify/functions/model-learning-sweep";
+import { runModelLearningCycle, runSerializedModelLearningCycle } from "../../netlify/functions/model-learning-worker-background";
+
+const runningReceipt = {
+  runId: "model-run-1",
+  providerName: "oddspadi-model-governance",
+  jobType: "model-learning",
+  startedAt: "2026-07-20T04:15:00.000Z",
+  finishedAt: null,
+  status: "running" as const,
+  fixturesFound: 0,
+  oddsFound: 0,
+  predictionsGenerated: 0,
+  valuePicksPublished: 0,
+  errors: []
+};
 
 describe("governed model learning schedule", () => {
+  it("runs after the football corpus and main 04:25 intelligence windows instead of overlapping them", () => {
+    expect(config.schedule).toBe("45 4 * * *");
+  });
+
   it("rejects an invalid schedule token before calibration starts", async () => {
     const runCalibration = vi.fn();
     const response = await runModelLearningCycle({ scheduleToken: "wrong", adminToken: "right", runCalibration });
@@ -61,5 +80,66 @@ describe("governed model learning schedule", () => {
     expect(runRuntimeReplay.mock.calls.map(([sport]) => sport)).toEqual(["football", "basketball", "tennis"]);
     expect(runCalibration).toHaveBeenCalledTimes(3);
     expect(body.results.every((row) => row.runtimeReplay.status === "stored")).toBe(true);
+  });
+
+  it("fails closed when calibration was stored but its promotion candidate was not", async () => {
+    const response = await runModelLearningCycle({
+      scheduleToken: "same",
+      adminToken: "same",
+      sports: ["football"],
+      runCalibration: vi.fn(async () => ({
+        status: "stored" as const,
+        configured: true,
+        id: "calibration-run",
+        candidates: [{
+          status: "failed" as const,
+          configured: true,
+          table: "op_calibration_candidates" as const,
+          reason: "candidate persistence failed"
+        }]
+      })),
+      now: new Date("2026-07-17T04:45:00.000Z")
+    });
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toMatchObject({ success: false });
+  });
+
+  it("skips before model writes when another sports pipeline receipt owns the global lock", async () => {
+    const cycle = vi.fn();
+    const response = await runSerializedModelLearningCycle({
+      scheduleToken: "same",
+      adminToken: "same",
+      claimRun: vi.fn(async () => ({ acquired: false, run: { ...runningReceipt, jobType: "refresh-odds" } })),
+      cycle
+    });
+
+    expect(response.status).toBe(409);
+    expect(cycle).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toMatchObject({ success: false, skippedOverlap: true });
+  });
+
+  it("finishes one durable model-learning receipt after a successful governed cycle", async () => {
+    const finishRun = vi.fn(async (run, status, errors, finishedAt) => ({ ...run, status, errors, finishedAt }));
+    const cycle = vi.fn(async () => Response.json({
+      success: true,
+      results: [
+        { sport: "football", calibration: { status: "stored", reason: null }, runtimeReplay: { status: "not-due", reason: null } },
+        { sport: "basketball", calibration: { status: "stored", reason: null }, runtimeReplay: { status: "not-due", reason: null } },
+        { sport: "tennis", calibration: { status: "stored", reason: null }, runtimeReplay: { status: "not-due", reason: null } }
+      ]
+    }));
+    const response = await runSerializedModelLearningCycle({
+      scheduleToken: "same",
+      adminToken: "same",
+      now: new Date("2026-07-17T04:15:00.000Z"),
+      claimRun: vi.fn(async () => ({ acquired: true, run: runningReceipt })),
+      finishRun,
+      cycle
+    });
+
+    expect(response.status).toBe(200);
+    expect(finishRun).toHaveBeenCalledWith(runningReceipt, "completed", [], expect.any(String));
+    await expect(response.json()).resolves.toMatchObject({ success: true, run: { status: "completed" } });
   });
 });

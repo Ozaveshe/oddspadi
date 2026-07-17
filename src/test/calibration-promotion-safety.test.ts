@@ -166,6 +166,7 @@ describe("calibration promotion safety", () => {
     });
 
     expect(cohorts).toHaveLength(2);
+    expect(cohorts[0]?.modelKey).toBe("football-poisson-v3");
     expect(cohorts.map((cohort) => `${cohort.modelKey}:${cohort.engineVersion}`)).toEqual(
       expect.arrayContaining(["football-poisson-v2:decision-engine-v1", "football-poisson-v3:decision-engine-v2"])
     );

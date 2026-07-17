@@ -99,11 +99,11 @@ function tipsIdentityProblem(payload) {
   return null;
 }
 
-async function checkLatestRun(path, maxAgeMs, label) {
+async function checkLatestRun(path, maxAgeMs, label, acceptedStatuses = ["completed", "partial", "empty"]) {
   return checkJson(path, (payload) => {
     const run = payload?.data;
     if (!run) return "no stored run receipt";
-    if (!["completed", "partial", "empty"].includes(run.status)) return `latest status is ${run.status ?? "missing"}`;
+    if (!acceptedStatuses.includes(run.status)) return `latest status is ${run.status ?? "missing"}`;
     const finishedAt = Date.parse(run.finishedAt ?? "");
     if (!Number.isFinite(finishedAt)) return "latest run has no valid completion time";
     const ageMs = Date.now() - finishedAt;
@@ -182,6 +182,7 @@ await checkLatestRun("/api/cron/refresh-odds", 4 * 60 * 60_000, "scheduled odds 
 await checkLatestRun("/api/cron/run-daily-engine", 26 * 60 * 60_000, "scheduled daily engine receipt");
 await checkLatestRun("/api/cron/generate-weekly-predictions", 26 * 60 * 60_000, "scheduled weekly engine receipt");
 await checkLatestRun("/api/cron/enrich-fixture-identities", 30 * 60 * 60_000, "scheduled fixture identity receipt");
+await checkLatestRun("/api/cron/run-model-learning", 30 * 60 * 60_000, "serialized model learning receipt", ["completed"]);
 
 for (const sport of ["football", "basketball", "tennis"]) {
   await checkJson(`/api/sports/decision/training/calibration?sport=${sport}`, (payload) => {
