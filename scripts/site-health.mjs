@@ -199,7 +199,7 @@ if (weeklyTips) await checkFixtureAnalysisLinks(weeklyTips, "analysis links from
 await checkFeaturedLeagueTables();
 
 await checkLatestRun("/api/cron/import-fixtures", 26 * 60 * 60_000, "scheduled fixture import receipt");
-await checkLatestRun("/api/cron/refresh-odds", 4 * 60 * 60_000, "scheduled odds refresh receipt");
+await checkLatestRun("/api/cron/refresh-odds", 50 * 60_000, "scheduled odds refresh receipt");
 await checkLatestRun("/api/cron/run-daily-engine", 26 * 60 * 60_000, "scheduled daily engine receipt");
 await checkLatestRun("/api/cron/generate-weekly-predictions", 26 * 60 * 60_000, "scheduled weekly engine receipt");
 await checkLatestRun("/api/cron/enrich-fixture-identities", 30 * 60 * 60_000, "scheduled fixture identity receipt");

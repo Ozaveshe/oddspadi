@@ -23,4 +23,8 @@ export default async function sportsIntelligenceSweep(_request: Request, context
   }
 }
 
-export const config: Config = { schedule: "25 */2 * * *" };
+// Public decisions reject basketball prices after 45 minutes (football and
+// tennis after 60), so the odds + daily-decision cycle must run more often
+// than the narrowest freshness boundary. The worker itself keeps fixture
+// import and weekly generation idempotently bounded to one full cycle a day.
+export const config: Config = { schedule: "25,55 * * * *" };

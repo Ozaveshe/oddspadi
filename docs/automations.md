@@ -11,7 +11,7 @@ project `wncwtzqipnoqwmqlznqn`.
 | --- | --- | --- |
 | `decision-cycle-sweep` | `5,35 * * * *` | Football decision/prediction capture |
 | `multi-sport-decision-cycle-sweep` | `20 */2 * * *` | Basketball/tennis capture |
-| `sports-intelligence-sweep` | `25 */2 * * *` | Refreshes the canonical multi-sport intelligence pipeline and daily/weekly public slates |
+| `sports-intelligence-sweep` | `25,55 * * * *` | Refreshes odds and rebuilds Today inside the 45-minute basketball freshness boundary; fixture import and the seven-day slate remain receipt-guarded to one full cycle per day |
 | `sports-identity-enrichment-sweep` | `10 3 * * *` | Resolves the complete stored 400-day fixture horizon, including API-Football provider aliases, team crests, league artwork/flags, national-team countries, and domestic odds-only countries; then records a serialized receipt |
 | `football-settlement-sweep` | `*/30 * * * *` | Grades finished football picks |
 | `football-corpus-refresh-sweep` | `40 3 * * *` | Runs two independent EPL corpus lanes: refreshes the previous two complete UTC days with events/lineups/player statistics, then rotates through one bounded seven-day window of the most recently completed season to bootstrap historical player performances |

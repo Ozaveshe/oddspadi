@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { runSportsIntelligenceCycle, shouldRunFullCycle } from "../../netlify/functions/sports-intelligence-worker-background";
+import { config as sweepConfig } from "../../netlify/functions/sports-intelligence-sweep";
 
 describe("sports intelligence full-cycle retry", () => {
   const now = new Date("2026-07-16T06:25:00.000Z");
+
+  it("refreshes odds inside the narrowest public freshness boundary", () => {
+    expect(sweepConfig.schedule).toBe("25,55 * * * *");
+  });
 
   it("retries after the configured hour when today's weekly receipt is missing or stale", () => {
     expect(shouldRunFullCycle({ requested: false, now, fullRunHour: 2, latestWeeklyRun: null })).toBe(true);
