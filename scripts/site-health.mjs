@@ -130,6 +130,26 @@ async function checkFixtureAnalysisLinks(payload, label) {
   report(!failures.length, label, failures.length ? failures.slice(0, 5).join(", ") : `${fixtureIds.length} checked`);
 }
 
+async function checkFeaturedLeagueTables() {
+  const slugs = ["premier-league", "la-liga", "serie-a", "bundesliga", "ligue-1"];
+  const broken = [];
+  for (let index = 0; index < slugs.length; index += 2) {
+    const batch = slugs.slice(index, index + 2);
+    const results = await Promise.all(batch.map(async (slug) => {
+      try {
+        const { response } = await timedFetch(`/predictions/league/${slug}/table`);
+        const body = await response.text();
+        const populated = body.includes("standings-team") && !body.includes("No verified table yet");
+        return response.ok && populated ? null : `${slug} (${response.status}${populated ? "" : ", empty"})`;
+      } catch (error) {
+        return `${slug} (${String(error)})`;
+      }
+    }));
+    broken.push(...results.filter(Boolean));
+  }
+  report(!broken.length, "featured league table links", broken.length ? broken.join(", ") : `${slugs.length} populated tables checked`);
+}
+
 function checkTipsSurfaceConsistency(page, payload, label) {
   if (!page || !payload) return;
   const providerStatus = payload?.data?.slate?.provider?.status ?? "missing";
@@ -176,6 +196,7 @@ checkTipsSurfaceConsistency(todayPage, todayTips, "today page matches today's ti
 checkTipsSurfaceConsistency(weeklyPage, weeklyTips, "weekly page matches weekly tips API");
 if (todayTips) await checkFixtureAnalysisLinks(todayTips, "analysis links from today's tips");
 if (weeklyTips) await checkFixtureAnalysisLinks(weeklyTips, "analysis links from weekly radar");
+await checkFeaturedLeagueTables();
 
 await checkLatestRun("/api/cron/import-fixtures", 26 * 60 * 60_000, "scheduled fixture import receipt");
 await checkLatestRun("/api/cron/refresh-odds", 4 * 60 * 60_000, "scheduled odds refresh receipt");

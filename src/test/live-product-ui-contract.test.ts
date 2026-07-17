@@ -101,6 +101,9 @@ describe("live OddsPadi product UI contract", () => {
     expect(health).toContain('const todayPage = await checkPage("/predictions/today"');
     expect(health).toContain('const weeklyPage = await checkPage("/predictions/week"');
     expect(health).toContain("HTML is unavailable while API provider status is");
+    expect(health).toContain("checkFeaturedLeagueTables");
+    expect(health).toContain('"featured league table links"');
+    expect(health).toContain('"ligue-1"');
   });
 
   it("shows leans, watchlist, and no-pick reasons on the empty value-picks state", () => {
