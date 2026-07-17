@@ -109,7 +109,7 @@ function readySnapshot(): TrainingDataSnapshot {
         }),
         featureContract: {
           eligibleFixtures: 1200,
-          optionalCoverage: { playerFormFixtures: 900 }
+          optionalCoverage: { playerFormFixtures: 900, completeOddsFixtures: 300 }
         },
         selectionPolicy: {
           version: "economic-confidence-bands-v1",
@@ -132,6 +132,22 @@ function readySnapshot(): TrainingDataSnapshot {
           baselineValidation: { sampleSize: 252, brierScore: 0.21, logLoss: 0.62 },
           calibratedValidation: { sampleSize: 252, brierScore: 0.205, logLoss: 0.615 },
           reason: "validated-proper-score-improvement"
+        },
+        marketPriorEvidence: {
+          version: "runtime-market-prior-parity-v1",
+          status: "applied",
+          evaluatedFixtures: 360,
+          adjustedFixtures: 300,
+          adjustedSelections: 900,
+          coverage: 0.833333,
+          averageWeight: 0.12,
+          averageBookmakerMargin: 0.04,
+          probabilityComparison: {
+            baseline: { sampleSize: 360, brierScore: 0.19, logLoss: 0.55 },
+            calibrated: { sampleSize: 360, brierScore: 0.188, logLoss: 0.547 },
+            brierDelta: -0.002,
+            logLossDelta: -0.003
+          }
         }
       },
       notes: [],
@@ -218,6 +234,10 @@ describe("calibration promotion safety", () => {
     expect(active.active).toBe(true);
     expect(active.modelCompatibility).toBe("exact-runtime-parity");
     expect(active.playerFormCoverage).toBe(0.75);
+    expect(active.marketPriorReplayStatus).toBe("applied");
+    expect(active.marketPriorReplayAdjustedFixtures).toBe(300);
+    expect(active.marketPriorReplayCoverage).toBe(0.833333);
+    expect(active.marketPriorReplayAverageWeight).toBe(0.12);
     expect(active.calibrationPromotion).toMatchObject({ id: "promotion-1", candidateId: "candidate-1" });
     expect(mismatched.active).toBe(false);
     expect(mismatched.reason).toContain("model-bound calibration promotion");
@@ -356,6 +376,44 @@ describe("calibration promotion safety", () => {
     expect(blocked.active).toBe(false);
     expect(blocked.probabilityTemperaturePolicy).toBeNull();
     expect(blocked.reason).toContain("lacks a valid training-only probability calibration policy");
+  });
+
+  it("keeps exact-runtime evidence shadow-only when market-posterior parity is missing or inconsistent", () => {
+    const missing = readySnapshot();
+    const missingConfig = { ...missing.latestBacktest!.config };
+    delete missingConfig.marketPriorEvidence;
+    missing.latestBacktest = { ...missing.latestBacktest!, config: missingConfig };
+    const missingProfile = buildDecisionLearningProfileFromSnapshot(missing, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(missingProfile.active).toBe(false);
+    expect(missingProfile.marketPriorReplayStatus).toBeNull();
+    expect(missingProfile.reason).toContain("lacks a valid pre-match market-prior parity receipt");
+
+    const inconsistent = readySnapshot();
+    inconsistent.latestBacktest = {
+      ...inconsistent.latestBacktest!,
+      config: {
+        ...inconsistent.latestBacktest!.config,
+        marketPriorEvidence: {
+          ...inconsistent.latestBacktest!.config?.marketPriorEvidence as Record<string, unknown>,
+          adjustedFixtures: 0,
+          adjustedSelections: 0,
+          coverage: 0,
+          averageWeight: null,
+          status: "no-priced-market"
+        }
+      }
+    };
+    const inconsistentProfile = buildDecisionLearningProfileFromSnapshot(inconsistent, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(inconsistentProfile.active).toBe(false);
+    expect(inconsistentProfile.reason).toContain("lacks a valid pre-match market-prior parity receipt");
   });
 
   it("accepts learned weights sourced from the complete prospective training-validation window", () => {

@@ -13613,13 +13613,13 @@ describe("prediction utilities", () => {
               learnedWeightsProvenance: snapshot.latestBacktest.config?.learnedWeightsProvenance,
               modelIdentity: runtimeModelIdentityReceipt("football", {
                 featureContractStatus: "passed",
-                evaluatedFixtures: 300,
-                entrypointInvocations: 300,
+                evaluatedFixtures: 360,
+                entrypointInvocations: 360,
                 executionHash: "fnv1a-learning"
               }),
               featureContract: {
                 eligibleFixtures: 1200,
-                optionalCoverage: { playerFormFixtures: 900 }
+                optionalCoverage: { playerFormFixtures: 900, completeOddsFixtures: 360 }
               },
               selectionPolicy: {
                 version: "economic-confidence-bands-v1",
@@ -13642,6 +13642,22 @@ describe("prediction utilities", () => {
                 baselineValidation: { sampleSize: 252, brierScore: 0.21, logLoss: 0.62 },
                 calibratedValidation: { sampleSize: 252, brierScore: 0.205, logLoss: 0.615 },
                 reason: "validated-proper-score-improvement"
+              },
+              marketPriorEvidence: {
+                version: "runtime-market-prior-parity-v1",
+                status: "applied",
+                evaluatedFixtures: 360,
+                adjustedFixtures: 360,
+                adjustedSelections: 1080,
+                coverage: 1,
+                averageWeight: 0.12,
+                averageBookmakerMargin: 0.04,
+                probabilityComparison: {
+                  baseline: { sampleSize: 360, brierScore: 0.19, logLoss: 0.55 },
+                  calibrated: { sampleSize: 360, brierScore: 0.188, logLoss: 0.547 },
+                  brierDelta: -0.002,
+                  logLossDelta: -0.003
+                }
               },
               promotion: {
                 status: "approved",

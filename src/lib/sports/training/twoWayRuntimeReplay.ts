@@ -2,6 +2,7 @@ import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine"
 import { confidenceFromEdgeAndProbability } from "@/lib/sports/prediction/confidence";
 import { modelBasketballMatch } from "@/lib/sports/prediction/basketballModel";
 import { decisionModelIdentity, runtimeModelIdentityReceipt } from "@/lib/sports/prediction/modelIdentity";
+import { applyMarketPriorAdjustmentToMarkets } from "@/lib/sports/prediction/odds";
 import { tennisModelRatingFromElo } from "@/lib/sports/prediction/historicalTennisStrength";
 import { modelTennisMatch } from "@/lib/sports/prediction/tennisModel";
 import {
@@ -13,12 +14,17 @@ import {
 } from "@/lib/sports/prediction/probabilityTemperatureScaling";
 import type {
   Match,
+  MarketPriorAdjustment,
   OddsMarket,
   ProbabilityCalibrationComparison,
   ProbabilityTemperatureScalingPolicy
 } from "@/lib/sports/types";
 import type { HistoricalBasketballFixture, HistoricalBasketballOddsQuote } from "./basketballBacktest";
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "./probabilityCalibration";
+import {
+  buildMarketPriorReplayEvidence,
+  type MarketPriorReplayEvidence
+} from "./marketPriorReplayEvidence";
 import type { HistoricalTennisMatch, HistoricalTennisOddsQuote } from "./tennisBacktest";
 import {
   applyEconomicSelectionPolicy,
@@ -115,6 +121,7 @@ export type TwoWayRuntimeReplayResult = {
   economicSelectionComparison: EconomicSelectionComparison;
   probabilityCalibrationPolicy: ProbabilityTemperatureScalingPolicy;
   probabilityCalibrationComparison: ProbabilityCalibrationComparison;
+  marketPriorEvidence: MarketPriorReplayEvidence;
   config: ResolvedConfig;
   notes: string[];
   results: TwoWayRuntimeReplayFixtureResult[];
@@ -159,6 +166,11 @@ type Prepared = {
 type ModeledPrepared = {
   prepared: Prepared;
   probabilities: Record<TwoWayOutcome, number>;
+};
+
+type EvaluatedRows = {
+  results: TwoWayRuntimeReplayFixtureResult[];
+  marketPriorAdjustments: MarketPriorAdjustment[];
 };
 
 const CHRONOLOGY_VERSION: Record<RuntimeReplaySport, string> = {
@@ -237,19 +249,20 @@ function updateCommon(state: TeamState, won: boolean, pointsFor: number, pointsA
   state.lastKickoff = kickoff;
 }
 
-function matchWinnerMarket(odds: Array<HistoricalBasketballOddsQuote | HistoricalTennisOddsQuote>): OddsMarket[] {
-  const latest = new Map<TwoWayOutcome, HistoricalBasketballOddsQuote | HistoricalTennisOddsQuote>();
-  for (const quote of [...odds].sort((left, right) => Date.parse(left.observedAt ?? "") - Date.parse(right.observedAt ?? ""))) {
-    if (quote.decimalOdds > 1) latest.set(quote.selection, quote);
-  }
-  if (!latest.has("home") || !latest.has("away")) return [];
+function matchWinnerMarket(
+  odds: Array<HistoricalBasketballOddsQuote | HistoricalTennisOddsQuote>,
+  kickoffAt: string
+): OddsMarket[] {
+  const decision = oddsForEvaluation(odds, kickoffAt);
+  if (!decision) return [];
   return [{
     id: "match_winner",
     name: "Match winner",
+    bookmaker: decision.bookmaker ? { id: decision.bookmaker, name: decision.bookmaker } : undefined,
     selections: (["home", "away"] as const).map((selection) => ({
       id: selection,
       label: selection === "home" ? "Home" : "Away",
-      decimalOdds: latest.get(selection)!.decimalOdds
+      decimalOdds: decision.selections[selection].odds
     }))
   }];
 }
@@ -346,7 +359,7 @@ function prepareBasketball(
             }
           },
           status: "scheduled",
-          oddsMarkets: matchWinnerMarket(fixture.odds),
+          oddsMarkets: matchWinnerMarket(fixture.odds, fixture.kickoffAt),
           homeForm: basketballForm(fixture.homeTeamExternalId, home),
           awayForm: basketballForm(fixture.awayTeamExternalId, away),
           dataQualityScore: dataQuality(fixture.dataQuality),
@@ -467,7 +480,7 @@ function prepareTennis(
             }
           },
           status: "scheduled",
-          oddsMarkets: matchWinnerMarket(fixture.odds),
+          oddsMarkets: matchWinnerMarket(fixture.odds, fixture.kickoffAt),
           homeForm,
           awayForm,
           dataQualityScore: dataQuality(fixture.dataQuality),
@@ -495,30 +508,74 @@ function prepareTennis(
   return { prepared, rejections };
 }
 
-function quoteTime(quote: HistoricalBasketballOddsQuote | HistoricalTennisOddsQuote): number {
-  const value = Date.parse(quote.observedAt ?? "");
-  return Number.isFinite(value) ? value : 0;
+type TwoWayOddsQuote = HistoricalBasketballOddsQuote | HistoricalTennisOddsQuote;
+
+type CoherentTwoWayOddsSnapshot = {
+  bookmaker: string;
+  observedAt: string;
+  timestamp: number;
+  odds: Record<TwoWayOutcome, number>;
+};
+
+function coherentOddsSnapshots(
+  odds: readonly TwoWayOddsQuote[],
+  kickoffAt: string,
+  closing: boolean
+): CoherentTwoWayOddsSnapshot[] {
+  const kickoff = Date.parse(kickoffAt);
+  if (!Number.isFinite(kickoff)) return [];
+  const grouped = new Map<string, {
+    bookmaker: string;
+    observedAt: string;
+    timestamp: number;
+    selections: Partial<Record<TwoWayOutcome, number>>;
+  }>();
+
+  for (const quote of odds) {
+    if (Boolean(quote.isClosing) !== closing || !Number.isFinite(quote.decimalOdds) || quote.decimalOdds <= 1) continue;
+    const timestamp = Date.parse(quote.observedAt ?? "");
+    if (!Number.isFinite(timestamp) || timestamp > kickoff) continue;
+    const observedAt = new Date(timestamp).toISOString();
+    const bookmaker = quote.bookmaker?.trim() || "unknown-bookmaker";
+    const key = `${bookmaker}\u0000${observedAt}`;
+    const group = grouped.get(key) ?? { bookmaker, observedAt, timestamp, selections: {} };
+    group.selections[quote.selection] = quote.decimalOdds;
+    grouped.set(key, group);
+  }
+
+  return [...grouped.values()]
+    .filter((group) => group.selections.home !== undefined && group.selections.away !== undefined)
+    .map((group) => ({
+      bookmaker: group.bookmaker,
+      observedAt: group.observedAt,
+      timestamp: group.timestamp,
+      odds: { home: group.selections.home!, away: group.selections.away! }
+    }))
+    .sort((left, right) => left.timestamp - right.timestamp || left.bookmaker.localeCompare(right.bookmaker));
 }
 
-function oddsForEvaluation(odds: Array<HistoricalBasketballOddsQuote | HistoricalTennisOddsQuote>) {
-  const result: Partial<Record<TwoWayOutcome, { odds: number; closingOdds: number | null; impliedProbability: number }>> = {};
-  const selected: Partial<Record<TwoWayOutcome, { taken: HistoricalBasketballOddsQuote | HistoricalTennisOddsQuote; closing: HistoricalBasketballOddsQuote | HistoricalTennisOddsQuote }>> = {};
-  for (const side of ["home", "away"] as const) {
-    const quotes = odds.filter((quote) => quote.selection === side && quote.decimalOdds > 1).sort((left, right) => quoteTime(left) - quoteTime(right));
-    if (!quotes.length) return null;
-    selected[side] = { taken: quotes.find((quote) => !quote.isClosing) ?? quotes[0]!, closing: [...quotes].reverse().find((quote) => quote.isClosing) ?? quotes.at(-1)! };
-  }
-  const rawHome = 1 / selected.home!.taken.decimalOdds;
-  const rawAway = 1 / selected.away!.taken.decimalOdds;
+function oddsForEvaluation(odds: Array<TwoWayOddsQuote>, kickoffAt: string) {
+  const decision = coherentOddsSnapshots(odds, kickoffAt, false)[0];
+  if (!decision) return null;
+  const closing = coherentOddsSnapshots(odds, kickoffAt, true)
+    .filter((snapshot) => snapshot.bookmaker === decision.bookmaker)
+    .at(-1) ?? null;
+  const selections: Partial<Record<TwoWayOutcome, { odds: number; closingOdds: number | null; impliedProbability: number }>> = {};
+  const rawHome = 1 / decision.odds.home;
+  const rawAway = 1 / decision.odds.away;
   const overround = rawHome + rawAway || 1;
   for (const side of ["home", "away"] as const) {
-    result[side] = {
-      odds: selected[side]!.taken.decimalOdds,
-      closingOdds: selected[side]!.closing.decimalOdds,
+    selections[side] = {
+      odds: decision.odds[side],
+      closingOdds: closing?.odds[side] ?? null,
       impliedProbability: (side === "home" ? rawHome : rawAway) / overround
     };
   }
-  return result as Record<TwoWayOutcome, { odds: number; closingOdds: number | null; impliedProbability: number }>;
+  return {
+    bookmaker: decision.bookmaker,
+    observedAt: decision.observedAt,
+    selections: selections as Record<TwoWayOutcome, { odds: number; closingOdds: number | null; impliedProbability: number }>
+  };
 }
 
 function confidence(edge: number, probability: number, quality: number): Confidence {
@@ -527,7 +584,7 @@ function confidence(edge: number, probability: number, quality: number): Confide
 
 function evaluate(prepared: Prepared, probabilities: Record<TwoWayOutcome, number>, resolved: ResolvedConfig): TwoWayRuntimeReplayFixtureResult {
   const actual = prepared.actualOutcome;
-  const marketOdds = oddsForEvaluation(prepared.odds);
+  const marketOdds = oddsForEvaluation(prepared.odds, prepared.kickoffAt)?.selections ?? null;
   let pick: TwoWayRuntimeReplayPick | null = null;
   if (marketOdds) {
     const candidate = (["home", "away"] as const)
@@ -632,20 +689,37 @@ function run(
   const evaluateRows = (
     rows: readonly ModeledPrepared[],
     selectionConfig: ResolvedConfig,
-    calibrationPolicy?: ProbabilityTemperatureScalingPolicy
-  ) => rows.map((row) => evaluate(
-    row.prepared,
-    calibrationPolicy ? applyProbabilityTemperaturePolicy(row.probabilities, calibrationPolicy) as Record<TwoWayOutcome, number> : row.probabilities,
-    selectionConfig
-  ));
+    calibrationPolicy?: ProbabilityTemperatureScalingPolicy,
+    applyMarketPrior = false
+  ): EvaluatedRows => {
+    const marketPriorAdjustments: MarketPriorAdjustment[] = [];
+    const results = rows.map((row) => {
+      let probabilities = calibrationPolicy
+        ? applyProbabilityTemperaturePolicy(row.probabilities, calibrationPolicy) as Record<TwoWayOutcome, number>
+        : row.probabilities;
+      if (applyMarketPrior) {
+        const prior = applyMarketPriorAdjustmentToMarkets(
+          [{ marketId: "match_winner", probabilities }],
+          row.prepared.match.oddsMarkets,
+          row.prepared.match.dataQualityScore
+        );
+        marketPriorAdjustments.push(prior.adjustment);
+        const posterior = prior.markets.find((market) => market.marketId === "match_winner")?.probabilities;
+        if (posterior) probabilities = posterior as Record<TwoWayOutcome, number>;
+      }
+      return evaluate(row.prepared, probabilities, selectionConfig);
+    });
+    return { results, marketPriorAdjustments };
+  };
   const modeledTraining = modelRows(trainingRows);
   const modeledHoldout = modelRows(holdoutRows);
-  const rawTrainingResults = evaluateRows(modeledTraining, resolved);
+  const rawTrainingResults = evaluateRows(modeledTraining, resolved).results;
   const probabilityCalibrationPolicy = learnProbabilityTemperaturePolicy({
     trainingRows: rawTrainingResults,
     holdoutWindowStart: holdoutRows[0]?.kickoffAt ?? null
   });
-  const trainingResults = evaluateRows(modeledTraining, resolved, probabilityCalibrationPolicy);
+  const trainingPosterior = evaluateRows(modeledTraining, resolved, probabilityCalibrationPolicy, true);
+  const trainingResults = trainingPosterior.results;
   const selectionTrainingResults = probabilityPolicyValidationRows(trainingResults, probabilityCalibrationPolicy);
   const usedTrainingValidation =
     probabilityCalibrationPolicy.validationSampleSize >= 20 &&
@@ -655,14 +729,30 @@ function run(
   const holdoutSelectionConfig = { ...resolved, minEdge: minimumEdge };
   const policyTrainingResults = applyMinimumEdgeToResults(selectionTrainingResults, minimumEdge);
   const selectionPolicy = learnEconomicSelectionPolicy(policyTrainingResults);
-  const rawHoldoutResults = evaluateRows(modeledHoldout, holdoutSelectionConfig);
-  const baselineResults = evaluateRows(modeledHoldout, holdoutSelectionConfig, probabilityCalibrationPolicy);
+  const rawHoldoutResults = evaluateRows(modeledHoldout, holdoutSelectionConfig).results;
+  const calibratedHoldoutResults = evaluateRows(
+    modeledHoldout,
+    holdoutSelectionConfig,
+    probabilityCalibrationPolicy
+  ).results;
+  const holdoutPosterior = evaluateRows(
+    modeledHoldout,
+    holdoutSelectionConfig,
+    probabilityCalibrationPolicy,
+    true
+  );
+  const posteriorResults = holdoutPosterior.results;
   const probabilityCalibrationComparison = buildProbabilityCalibrationComparison({
     baselineRows: rawHoldoutResults,
-    calibratedRows: baselineResults
+    calibratedRows: calibratedHoldoutResults
   });
-  const results = applyEconomicSelectionPolicy(baselineResults, selectionPolicy);
-  const economicSelectionComparison = buildEconomicSelectionComparison(baselineResults, results);
+  const marketPriorEvidence = buildMarketPriorReplayEvidence({
+    adjustments: holdoutPosterior.marketPriorAdjustments,
+    baselineRows: calibratedHoldoutResults,
+    posteriorRows: posteriorResults
+  });
+  const results = applyEconomicSelectionPolicy(posteriorResults, selectionPolicy);
+  const economicSelectionComparison = buildEconomicSelectionComparison(posteriorResults, results);
   const holdoutSummary = summary(results);
   const identity = decisionModelIdentity(sport);
   const contract: TwoWayRuntimeFeatureContract = {
@@ -677,7 +767,7 @@ function run(
     evaluatedFixtures: results.length,
     entrypointInvocations: holdoutRows.length,
     optionalCoverage: {
-      completeOddsFixtures: prepared.filter((item) => oddsForEvaluation(item.odds)).length,
+      completeOddsFixtures: prepared.filter((item) => oddsForEvaluation(item.odds, item.kickoffAt)).length,
       surfaceFixtures: sport === "tennis" ? prepared.filter((item) => item.match.homeTeam.ratingEvidence?.surface !== "unknown").length : 0,
       restFixtures: prepared.filter((item) => typeof item.match.homeTeam.ratingEvidence?.restDays === "number" && typeof item.match.awayTeam.ratingEvidence?.restDays === "number").length
     },
@@ -686,7 +776,7 @@ function run(
   const executionHash = stableHash({
     sport,
     modelKey: identity.runtimeModelKey,
-    entrypoint: identity.runtimeEntrypoint,
+    entrypoint: `${identity.runtimeEntrypoint}+temperatureScaling+marketPrior`,
     contract,
     training: trainingResults.map((row) => row.probabilities),
     holdout: results.map((row) => row.probabilities),
@@ -698,7 +788,8 @@ function run(
       comparison: economicSelectionComparison
     },
     probabilityCalibrationPolicy,
-    probabilityCalibrationComparison
+    probabilityCalibrationComparison,
+    marketPriorEvidence
   });
   return {
     sport,
@@ -731,6 +822,7 @@ function run(
     economicSelectionComparison,
     probabilityCalibrationPolicy,
     probabilityCalibrationComparison,
+    marketPriorEvidence,
     config: resolved,
     notes: [
       `Executed ${results.length} chronological holdout fixture(s) through ${identity.runtimeEntrypoint}.`,
@@ -739,6 +831,9 @@ function run(
       probabilityCalibrationPolicy.status === "active"
         ? `Training fit/validation evidence activated temperature ${probabilityCalibrationPolicy.temperature.toFixed(3)}; it was frozen before holdout and changed holdout log loss by ${probabilityCalibrationComparison.logLossDelta ?? "n/a"}.`
         : `Training fit/validation evidence kept identity calibration (${probabilityCalibrationPolicy.reason}); holdout probabilities were not tuned.`,
+      marketPriorEvidence.status === "applied"
+        ? `The live no-vig market prior adjusted ${marketPriorEvidence.adjustedFixtures}/${marketPriorEvidence.evaluatedFixtures} holdout fixture(s) at average weight ${marketPriorEvidence.averageWeight}; final-posterior log-loss delta ${marketPriorEvidence.probabilityComparison.logLossDelta ?? "n/a"}.`
+        : "No coherent pre-match holdout market was available for live market-prior parity.",
       selectionPolicy.status === "active"
         ? `Training-only economic evidence admitted ${selectionPolicy.allowedConfidenceBands.join(", ")} confidence band(s); the policy was applied unchanged to holdout.`
         : `Training-only economic evidence admitted no confidence band, so the holdout selection policy abstained.`,

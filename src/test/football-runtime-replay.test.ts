@@ -113,6 +113,15 @@ describe("football exact runtime replay", () => {
       reason: "insufficient-training-sample"
     });
     expect(result.probabilityCalibrationComparison.baseline.sampleSize).toBe(result.testSize);
+    expect(result.marketPriorEvidence).toMatchObject({
+      version: "runtime-market-prior-parity-v1",
+      status: "applied",
+      evaluatedFixtures: result.testSize,
+      adjustedFixtures: result.testSize,
+      coverage: 1
+    });
+    expect(result.marketPriorEvidence.probabilityComparison.baseline.sampleSize).toBe(result.testSize);
+    expect(result.marketPriorEvidence.probabilityComparison.calibrated.sampleSize).toBe(result.testSize);
     expect(result.notes).toEqual(expect.arrayContaining([
       expect.stringContaining("Holdout selection used the training-window fallback minimum edge")
     ]));
@@ -137,6 +146,27 @@ describe("football exact runtime replay", () => {
     expect(homeWin.learnedWeightsProvenance).toEqual(awayWin.learnedWeightsProvenance);
     expect(homeWin.selectionPolicy).toEqual(awayWin.selectionPolicy);
     expect(homeWin.probabilityCalibrationPolicy).toEqual(awayWin.probabilityCalibrationPolicy);
+  });
+
+  it("keeps explicit closing prices out of the final posterior while retaining them for evaluation", () => {
+    const baselineFixtures = history();
+    const withClosing = history();
+    const last = withClosing[9]!;
+    const closingAt = new Date(Date.parse(last.kickoffAt) - 5 * 60_000).toISOString();
+    last.odds = [
+      ...(last.odds ?? []),
+      { market: "match_winner", selection: "home", decimalOdds: 1.08, bookmaker: "test", observedAt: closingAt, isClosing: true },
+      { market: "match_winner", selection: "draw", decimalOdds: 12, bookmaker: "test", observedAt: closingAt, isClosing: true },
+      { market: "match_winner", selection: "away", decimalOdds: 18, bookmaker: "test", observedAt: closingAt, isClosing: true }
+    ];
+    const config = { trainRatio: 0.5, minPriorMatches: 3 };
+    const baseline = runFootballRuntimeReplay(baselineFixtures, config);
+    const replay = runFootballRuntimeReplay(withClosing, config);
+    const finalProbability = (result: ReturnType<typeof runFootballRuntimeReplay>) =>
+      result.results.find((row) => row.fixtureExternalId === "fixture:10")!.probabilities;
+
+    expect(finalProbability(replay)).toEqual(finalProbability(baseline));
+    expect(replay.marketPriorEvidence).toEqual(baseline.marketPriorEvidence);
   });
 
   it("fails closed for neutral venues the runtime Match contract cannot represent", () => {

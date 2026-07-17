@@ -1466,6 +1466,10 @@ export interface DecisionLearningProfile {
   economicSelectionPolicyStatus?: "active" | "abstain" | null;
   allowedConfidenceBands?: ConfidenceLevel[] | null;
   probabilityTemperaturePolicy?: ProbabilityTemperatureScalingPolicy | null;
+  marketPriorReplayStatus?: "applied" | "no-priced-market" | null;
+  marketPriorReplayAdjustedFixtures?: number | null;
+  marketPriorReplayCoverage?: number | null;
+  marketPriorReplayAverageWeight?: number | null;
   brierScore: number | null;
   logLoss?: number | null;
   calibrationError?: number | null;

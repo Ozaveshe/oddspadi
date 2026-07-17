@@ -75,6 +75,13 @@ describe("basketball and tennis exact runtime replay", () => {
       reason: "insufficient-training-sample"
     });
     expect(result.probabilityCalibrationComparison.baseline.sampleSize).toBe(result.testSize);
+    expect(result.marketPriorEvidence).toMatchObject({
+      version: "runtime-market-prior-parity-v1",
+      status: "applied",
+      evaluatedFixtures: result.testSize,
+      adjustedFixtures: result.testSize,
+      coverage: 1
+    });
     expect(result.notes).toEqual(expect.arrayContaining([
       expect.stringContaining("set the holdout minimum edge")
     ]));
@@ -96,6 +103,49 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(home.learnedWeights).toEqual(away.learnedWeights);
     expect(home.selectionPolicy).toEqual(away.selectionPolicy);
     expect(home.probabilityCalibrationPolicy).toEqual(away.probabilityCalibrationPolicy);
+  });
+
+  it("uses coherent decision prices for the basketball posterior and never closing or post-kickoff prices", () => {
+    const baselineFixtures = basketballHistory();
+    const contaminated = basketballHistory();
+    const last = contaminated[11]!;
+    const kickoff = Date.parse(last.kickoffAt);
+    last.odds = [
+      ...last.odds,
+      { market: "moneyline", selection: "home", decimalOdds: 1.05, observedAt: new Date(kickoff - 5 * 60_000).toISOString(), isClosing: true },
+      { market: "moneyline", selection: "away", decimalOdds: 15, observedAt: new Date(kickoff - 5 * 60_000).toISOString(), isClosing: true },
+      { market: "moneyline", selection: "home", decimalOdds: 1.01, observedAt: new Date(kickoff + 60_000).toISOString() },
+      { market: "moneyline", selection: "away", decimalOdds: 30, observedAt: new Date(kickoff + 60_000).toISOString() }
+    ];
+    const config = { trainRatio: 0.5, minPriorMatches: 3 };
+    const baseline = runBasketballRuntimeReplay(baselineFixtures, config);
+    const replay = runBasketballRuntimeReplay(contaminated, config);
+    const finalProbability = (result: ReturnType<typeof runBasketballRuntimeReplay>) =>
+      result.results.find((row) => row.fixtureExternalId === "basketball:12")!.probabilities;
+
+    expect(finalProbability(replay)).toEqual(finalProbability(baseline));
+    expect(replay.marketPriorEvidence).toEqual(baseline.marketPriorEvidence);
+  });
+
+  it("refuses to synthesize a market posterior from different bookmaker snapshots", () => {
+    const mismatched = basketballHistory();
+    const noOdds = basketballHistory();
+    const last = mismatched[11]!;
+    const observedAt = new Date(Date.parse(last.kickoffAt) - 8 * 60 * 60_000).toISOString();
+    last.odds = [
+      { market: "moneyline", selection: "home", decimalOdds: 1.3, bookmaker: "book-a", observedAt },
+      { market: "moneyline", selection: "away", decimalOdds: 4.2, bookmaker: "book-b", observedAt }
+    ];
+    noOdds[11] = { ...noOdds[11]!, odds: [] };
+    const config = { trainRatio: 0.5, minPriorMatches: 3 };
+    const mismatchedReplay = runBasketballRuntimeReplay(mismatched, config);
+    const noOddsReplay = runBasketballRuntimeReplay(noOdds, config);
+    const finalProbability = (result: ReturnType<typeof runBasketballRuntimeReplay>) =>
+      result.results.find((row) => row.fixtureExternalId === "basketball:12")!.probabilities;
+
+    expect(finalProbability(mismatchedReplay)).toEqual(finalProbability(noOddsReplay));
+    expect(mismatchedReplay.marketPriorEvidence.adjustedFixtures).toBe(mismatchedReplay.testSize - 1);
+    expect(mismatchedReplay.results.find((row) => row.fixtureExternalId === "basketball:12")?.pick).toBeNull();
   });
 
   it("fails closed for neutral basketball rows", () => {
@@ -128,6 +178,7 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(last(away).actualOutcome).toBe("away");
     expect(home.selectionPolicy).toEqual(away.selectionPolicy);
     expect(home.probabilityCalibrationPolicy).toEqual(away.probabilityCalibrationPolicy);
+    expect(home.marketPriorEvidence.status).toBe("applied");
     expect(historicalModelCompatibility({
       sport: "tennis",
       evidenceModelKey: home.modelKey,

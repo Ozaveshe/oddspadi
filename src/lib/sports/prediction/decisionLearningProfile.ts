@@ -205,6 +205,82 @@ function probabilityTemperaturePolicy(
   };
 }
 
+type MarketPriorReplayReceipt = {
+  valid: boolean;
+  status: "applied" | "no-priced-market" | null;
+  adjustedFixtures: number | null;
+  coverage: number | null;
+  averageWeight: number | null;
+};
+
+function marketPriorReplayReceipt(backtest: StoredBacktestRun | null): MarketPriorReplayReceipt {
+  if (!backtest) return { valid: false, status: null, adjustedFixtures: null, coverage: null, averageWeight: null };
+  const evidence = record(backtest.config?.marketPriorEvidence);
+  const comparison = record(evidence.probabilityComparison);
+  const baseline = record(comparison.baseline);
+  const posterior = record(comparison.calibrated);
+  const contract = record(backtest.config?.featureContract);
+  const optionalCoverage = record(contract.optionalCoverage);
+  const status = evidence.status === "applied" || evidence.status === "no-priced-market" ? evidence.status : null;
+  const evaluatedFixtures = finiteNumber(evidence.evaluatedFixtures);
+  const adjustedFixtures = finiteNumber(evidence.adjustedFixtures);
+  const adjustedSelections = finiteNumber(evidence.adjustedSelections);
+  const coverage = finiteNumber(evidence.coverage);
+  const averageWeight = finiteNumber(evidence.averageWeight);
+  const averageBookmakerMargin = evidence.averageBookmakerMargin === null
+    ? null
+    : finiteNumber(evidence.averageBookmakerMargin);
+  const completeOddsFixtures = finiteNumber(optionalCoverage.completeOddsFixtures);
+  const baselineSampleSize = finiteNumber(baseline.sampleSize);
+  const posteriorSampleSize = finiteNumber(posterior.sampleSize);
+  const baselineBrier = finiteNumber(baseline.brierScore);
+  const baselineLogLoss = finiteNumber(baseline.logLoss);
+  const posteriorBrier = finiteNumber(posterior.brierScore);
+  const posteriorLogLoss = finiteNumber(posterior.logLoss);
+  const brierDelta = finiteNumber(comparison.brierDelta);
+  const logLossDelta = finiteNumber(comparison.logLossDelta);
+  const expectedCoverage = adjustedFixtures !== null && evaluatedFixtures && evaluatedFixtures > 0
+    ? adjustedFixtures / evaluatedFixtures
+    : 0;
+  const countsValid =
+    evaluatedFixtures === backtest.testSize &&
+    adjustedFixtures !== null && Number.isInteger(adjustedFixtures) && adjustedFixtures >= 0 && adjustedFixtures <= evaluatedFixtures &&
+    adjustedSelections !== null && Number.isInteger(adjustedSelections) &&
+    adjustedSelections >= adjustedFixtures * 2 && adjustedSelections <= adjustedFixtures * 3;
+  const statusValid =
+    (status === "applied" && adjustedFixtures !== null && adjustedFixtures > 0) ||
+    (status === "no-priced-market" && adjustedFixtures === 0);
+  const weightValid = adjustedFixtures === 0
+    ? evidence.averageWeight === null && evidence.averageBookmakerMargin === null
+    : averageWeight !== null && averageWeight >= 0.03 && averageWeight <= 0.9 && averageBookmakerMargin !== null;
+  const comparisonValid =
+    baselineSampleSize === backtest.testSize &&
+    posteriorSampleSize === backtest.testSize &&
+    baselineBrier !== null && baselineBrier >= 0 &&
+    baselineLogLoss !== null && baselineLogLoss >= 0 &&
+    posteriorBrier !== null && posteriorBrier >= 0 &&
+    posteriorLogLoss !== null && posteriorLogLoss >= 0 &&
+    brierDelta !== null && Math.abs(brierDelta - (posteriorBrier - baselineBrier)) <= 0.000002 &&
+    logLossDelta !== null && Math.abs(logLossDelta - (posteriorLogLoss - baselineLogLoss)) <= 0.000002;
+  const valid =
+    evidence.version === "runtime-market-prior-parity-v1" &&
+    status !== null &&
+    countsValid &&
+    statusValid &&
+    coverage !== null && coverage >= 0 && coverage <= 1 && Math.abs(coverage - expectedCoverage) <= 0.000001 &&
+    weightValid &&
+    comparisonValid &&
+    !(completeOddsFixtures !== null && completeOddsFixtures > 0 && adjustedFixtures === 0);
+
+  return {
+    valid,
+    status: valid ? status : null,
+    adjustedFixtures: valid ? adjustedFixtures : null,
+    coverage: valid ? coverage : null,
+    averageWeight: valid ? averageWeight : null
+  };
+}
+
 function footballLearningProvenanceBlocker(backtest: StoredBacktestRun): string | null {
   const provenance = record(backtest.config?.learnedWeightsProvenance);
   if (provenance.source !== "training-window" && provenance.source !== "training-validation-window") {
@@ -269,6 +345,9 @@ function liveMetricBlockers(
     const calibrationPolicy = probabilityTemperaturePolicy(backtest);
     if (!calibrationPolicy) {
       blockers.push("runtime replay lacks a valid training-only probability calibration policy");
+    }
+    if (!marketPriorReplayReceipt(backtest).valid) {
+      blockers.push("runtime replay lacks a valid pre-match market-prior parity receipt");
     }
     const policy = economicSelectionPolicy(backtest);
     if (policy.status === null || policy.allowedConfidenceBands === null) {
@@ -348,6 +427,7 @@ export function buildDecisionLearningProfileFromSnapshot(
   const metricBlockers = liveMetricBlockers(snapshot, backtest, runtimeEvidence);
   const selectionPolicy = economicSelectionPolicy(backtest);
   const temperaturePolicy = probabilityTemperaturePolicy(backtest);
+  const marketPriorReceipt = marketPriorReplayReceipt(backtest);
   const shadowReady = snapshot.status === "ready" && Boolean(backtest) && snapshot.readiness.readyForTraining && !demoOnly;
   const active = shadowReady && promotionApproved && metricBlockers.length === 0;
   const status: DecisionLearningProfile["status"] =
@@ -385,6 +465,10 @@ export function buildDecisionLearningProfileFromSnapshot(
     economicSelectionPolicyStatus: selectionPolicy.status,
     allowedConfidenceBands: selectionPolicy.allowedConfidenceBands,
     probabilityTemperaturePolicy: temperaturePolicy,
+    marketPriorReplayStatus: marketPriorReceipt.status,
+    marketPriorReplayAdjustedFixtures: marketPriorReceipt.adjustedFixtures,
+    marketPriorReplayCoverage: marketPriorReceipt.coverage,
+    marketPriorReplayAverageWeight: marketPriorReceipt.averageWeight,
     brierScore: backtest?.brierScore ?? null,
     logLoss: backtest?.logLoss ?? null,
     calibrationError: backtest?.calibrationError ?? null,

@@ -74,6 +74,12 @@ export type MultiSportBacktestJob = {
     baselineHoldoutLogLoss: number | null;
     calibratedHoldoutLogLoss: number | null;
     holdoutLogLossDelta: number | null;
+    marketPriorStatus: "applied" | "no-priced-market" | null;
+    marketPriorAdjustedFixtures: number | null;
+    marketPriorCoverage: number | null;
+    marketPriorAverageWeight: number | null;
+    finalPosteriorHoldoutLogLoss: number | null;
+    finalPosteriorLogLossDelta: number | null;
     reason: string | null;
   };
   nextAction: string;
@@ -153,6 +159,12 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
       baselineHoldoutLogLoss: null,
       calibratedHoldoutLogLoss: null,
       holdoutLogLossDelta: null,
+      marketPriorStatus: null,
+      marketPriorAdjustedFixtures: null,
+      marketPriorCoverage: null,
+      marketPriorAverageWeight: null,
+      finalPosteriorHoldoutLogLoss: null,
+      finalPosteriorLogLossDelta: null,
       reason: null
     };
   }
@@ -176,6 +188,12 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
     baselineHoldoutLogLoss: runtimeResult?.probabilityCalibrationComparison.baseline.logLoss ?? null,
     calibratedHoldoutLogLoss: runtimeResult?.probabilityCalibrationComparison.calibrated.logLoss ?? null,
     holdoutLogLossDelta: runtimeResult?.probabilityCalibrationComparison.logLossDelta ?? null,
+    marketPriorStatus: runtimeResult?.marketPriorEvidence.status ?? null,
+    marketPriorAdjustedFixtures: runtimeResult?.marketPriorEvidence.adjustedFixtures ?? null,
+    marketPriorCoverage: runtimeResult?.marketPriorEvidence.coverage ?? null,
+    marketPriorAverageWeight: runtimeResult?.marketPriorEvidence.averageWeight ?? null,
+    finalPosteriorHoldoutLogLoss: runtimeResult?.marketPriorEvidence.probabilityComparison.calibrated.logLoss ?? null,
+    finalPosteriorLogLossDelta: runtimeResult?.marketPriorEvidence.probabilityComparison.logLossDelta ?? null,
     reason: result.status === "stored" ? null : result.reason
   };
 }
