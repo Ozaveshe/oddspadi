@@ -2845,7 +2845,7 @@ a.score-row:active,
 .weekly-decision-metrics dt { color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .weekly-decision-metrics dd { margin: 0; font-family: var(--font-display); font-size: 26px; font-weight: 800; line-height: 1; }
 .weekly-day-content { display: grid; gap: 14px; min-width: 0; }
-.weekly-day-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+.weekly-day-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .weekly-day-heading h3 { margin: 3px 0 0; font-size: 22px; }
 .weekly-review-pending,
 .weekly-queue-clear { display: grid; gap: 4px; padding: 16px 18px; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-2); }
@@ -2977,6 +2977,11 @@ a.score-row:active,
   font-size: 1.35rem;
 }
 
+.results-audit-rundown,
+.results-audit-reviewed { display: grid; gap: 14px; }
+.results-audit-rundown { margin-top: 18px; }
+.results-audit-reviewed h3 { margin: 3px 0 0; font-size: 22px; }
+
 .results-metrics {
   margin-top: 12px;
 }
@@ -2992,7 +2997,9 @@ a.score-row:active,
 }
 
 @media (max-width: 560px) {
-  .results-window-grid { grid-template-columns: 1fr; }
+  .results-window-grid { display: flex; gap: 10px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: x proximity; scrollbar-width: thin; }
+  .results-window-grid .panel { flex: 0 0 min(78vw, 280px); min-height: 150px; scroll-snap-align: start; }
+  .results-audit-reviewed h3 { font-size: 19px; }
 }
 
 /* Live product homepage, decision dashboard, and canonical match summary. */

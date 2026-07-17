@@ -111,6 +111,15 @@ describe("live OddsPadi product UI contract", () => {
     expect(valuePicks).toContain("Why today has no picks");
   });
 
+  it("keeps yesterday's complete audit distinct and decision-first", () => {
+    const history = source("src/app/predictions/history/page.tsx");
+    expect(history).toContain("Yesterday&apos;s complete engine record");
+    expect(history).toContain("partitionDecisionAuditRows");
+    expect(history).toContain("Reviewed decisions and abstentions");
+    expect(history).toContain("without a completed market review");
+    expect(history).toContain("only picks that were actually published can affect accuracy or ROI");
+  });
+
   it("uses the canonical public decision before any match audit detail", () => {
     const detail = source("src/app/predictions/[matchId]/page.tsx");
     expect(detail).toContain("const canonical = prediction.canonicalDecision");

@@ -4,7 +4,7 @@ import { buildSportsSlate } from "@/lib/sports/intelligence/canonical";
 import type { CanonicalDecision, CanonicalFixture, CanonicalOddsSnapshot, SlateFixture, SlatePublicStatus, SportsSlate } from "@/lib/sports/intelligence/types";
 import { buildDailyTipsProduct, buildWeeklyTipsProduct, filterDailyTipsProductBySport, type YesterdayResultsProduct } from "@/lib/sports/tips/product";
 import { formatDailyTipsForTelegram, formatDailyTipsForWhatsApp, formatValuePickPost, formatWeeklyRadarPost, formatYesterdayResultsPost } from "@/lib/sports/tips/social";
-import { partitionDailyTipsSections, partitionWeeklyTipsDay } from "@/components/odds/IntelligenceSlate";
+import { partitionDailyTipsSections, partitionDecisionAuditRows, partitionWeeklyTipsDay } from "@/components/odds/IntelligenceSlate";
 import type { DecisionMarketAnalysis, DecisionSummary } from "@/lib/sports/types";
 
 const GENERATED_AT = "2026-07-14T10:00:00.000Z";
@@ -91,6 +91,16 @@ describe("Daily Tips and Weekly Predictions product layer", () => {
     expect(partitions.abstentions.map((row) => row.fixture.fixtureId)).toEqual(["abstain-1"]);
     expect(partitions.waitingForEvidence.map((row) => row.fixture.fixtureId)).toEqual(["waiting-1"]);
     expect(partitions.waitingForEvidence.map((row) => row.fixture.fixtureId)).not.toContain("watch-1");
+  });
+
+  it("separates reviewed yesterday decisions from provider-only audit rows", () => {
+    const waiting = fixtureRow("audit-waiting", "needs_data");
+    waiting.decisionSummary = { ...waiting.decisionSummary, allMarketAnalyses: [] };
+
+    const partitions = partitionDecisionAuditRows([fixtureRow("audit-reviewed", "no_clear_value"), waiting]);
+
+    expect(partitions.reviewed.map((row) => row.fixture.fixtureId)).toEqual(["audit-reviewed"]);
+    expect(partitions.awaitingReview.map((row) => row.fixture.fixtureId)).toEqual(["audit-waiting"]);
   });
 
   it("filters every daily slate section and summary to the requested sport", () => {

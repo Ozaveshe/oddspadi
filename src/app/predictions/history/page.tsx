@@ -11,7 +11,7 @@ import {
 } from "@/lib/sports/prediction/history";
 import { getYesterdayDecisionAuditProduct, getYesterdayResultsProduct } from "@/lib/sports/tips/product";
 import { formatYesterdayResultsPost } from "@/lib/sports/tips/social";
-import { SlateFixtureCard } from "@/components/odds/IntelligenceSlate";
+import { partitionDecisionAuditRows, SlateFixtureCard } from "@/components/odds/IntelligenceSlate";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +58,7 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
   const history = filterPublicPredictionHistory(ledger.items, filters);
   const summary = getHistorySummary(history);
   const windows = getHistoryWindowSummaries(ledger.items);
+  const auditPartitions = partitionDecisionAuditRows(yesterdayAudit.rows);
   const markets = [...new Set(ledger.items.map((item) => item.market))].sort();
   const settlementHealth = {
     waiting: ledger.items.filter((item) => ["waiting_kickoff", "match_live"].includes(item.settlementStatus)).length,
@@ -115,7 +116,22 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
         <div><span>Watchlist</span><strong>{yesterdayAudit.summary.watchlist}</strong></div>
         <div><span>Abstentions</span><strong>{yesterdayAudit.summary.abstentions}</strong></div>
       </div>
-      {yesterdayAudit.source === "unavailable" ? <div className="empty-state compact"><h3>Yesterday&apos;s stored audit is unavailable</h3><p className="muted">{yesterdayAudit.reason}</p></div> : yesterdayAudit.rows.length ? <div className="intelligence-grid">{yesterdayAudit.rows.map((row) => <SlateFixtureCard key={row.fixture.fixtureId} row={row} compact asOf={yesterdayAudit.generatedAt} />)}</div> : <div className="empty-state compact"><h3>No provider-backed decisions were stored yesterday</h3><p className="muted">The empty audit remains separate from the published-pick ledger.</p></div>}
+      {yesterdayAudit.source === "unavailable" ? <div className="empty-state compact"><h3>Yesterday&apos;s stored audit is unavailable</h3><p className="muted">{yesterdayAudit.reason}</p></div> : yesterdayAudit.rows.length ? (
+        <div className="results-audit-rundown">
+          {auditPartitions.reviewed.length ? (
+            <div className="results-audit-reviewed">
+              <div className="weekly-day-heading"><div><span className="section-kicker">Completed market review</span><h3>Reviewed decisions and abstentions</h3></div><span className="badge scheduled">{auditPartitions.reviewed.length}</span></div>
+              <div className="intelligence-grid">{auditPartitions.reviewed.map((row) => <SlateFixtureCard key={`audit-reviewed-${row.fixture.fixtureId}`} row={row} compact asOf={yesterdayAudit.generatedAt} />)}</div>
+            </div>
+          ) : <div className="weekly-review-pending"><strong>No completed market reviews were stored</strong><span>The provider fixture receipt remains visible below and is not presented as model analysis.</span></div>}
+          {auditPartitions.awaitingReview.length ? (
+            <details className="weekly-coverage-queue results-audit-queue">
+              <summary>Show {auditPartitions.awaitingReview.length} provider fixture{auditPartitions.awaitingReview.length === 1 ? "" : "s"} without a completed market review</summary>
+              <div className="intelligence-grid">{auditPartitions.awaitingReview.map((row) => <SlateFixtureCard key={`audit-waiting-${row.fixture.fixtureId}`} row={row} compact asOf={yesterdayAudit.generatedAt} />)}</div>
+            </details>
+          ) : null}
+        </div>
+      ) : <div className="empty-state compact"><h3>No provider-backed decisions were stored yesterday</h3><p className="muted">The empty audit remains separate from the published-pick ledger.</p></div>}
     </section>
 
     <section className="grid-2 section" aria-label="Results scorecard">

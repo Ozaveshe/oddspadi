@@ -160,6 +160,15 @@ export function partitionDailyTipsSections(product: DailyTipsProduct) {
   };
 }
 
+export function partitionDecisionAuditRows(rows: SlateFixture[]) {
+  const reviewed = rows.filter((row) => row.decisionSummary.allMarketAnalyses.length > 0);
+  const reviewedFixtureIds = new Set(reviewed.map((row) => row.fixture.fixtureId));
+  return {
+    reviewed,
+    awaitingReview: rows.filter((row) => !reviewedFixtureIds.has(row.fixture.fixtureId))
+  };
+}
+
 export function DailyDecisionOverview({ product }: { product: DailyTipsProduct }) {
   if (!product.sections.schedule.length) return null;
   const { published, abstentions, waitingForEvidence } = partitionDailyTipsSections(product);
