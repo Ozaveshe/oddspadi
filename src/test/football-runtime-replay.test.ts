@@ -98,6 +98,10 @@ describe("football exact runtime replay", () => {
     });
     expect(result.executionHash).toMatch(/^fnv1a-[a-f0-9]{8}$/);
     expect(result.results.every((row) => Math.abs(Object.values(row.probabilities).reduce((sum, value) => sum + value, 0) - 1) < 0.001)).toBe(true);
+    expect(result.results.every((row) => row.pick === null || row.pick.edge >= result.learnedWeights.minimumEdge)).toBe(true);
+    expect(result.notes).toEqual(expect.arrayContaining([
+      expect.stringContaining("Holdout selection used the training-derived minimum edge")
+    ]));
     expect(result.learnedWeights).not.toHaveProperty("homeAdvantageElo");
     expect(historicalModelCompatibility({
       sport: "football",

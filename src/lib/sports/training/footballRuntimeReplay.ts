@@ -504,7 +504,8 @@ export function runFootballRuntimeReplay(
   });
   const evaluatePreparedFixture = (
     fixture: PreparedRuntimeFixture,
-    phase: "training" | "holdout"
+    phase: "training" | "holdout",
+    selectionConfig: ReturnType<typeof resolveFootballBacktestConfig>
   ): FootballBacktestFixtureResult | null => {
     const historicalClock = new Date(fixture.source.kickoffAt);
     const modeled = modelFootballMatch(fixture.match, { now: historicalClock });
@@ -523,7 +524,7 @@ export function runFootballRuntimeReplay(
       fixture: fixture.evaluationFixture,
       probabilities,
       expectedGoals: modeled.diagnostics.expectedGoals,
-      config: evaluationConfig
+      config: selectionConfig
     });
   };
 
@@ -531,19 +532,31 @@ export function runFootballRuntimeReplay(
   let trainingEntrypointInvocations = 0;
   for (const fixture of training) {
     trainingEntrypointInvocations += 1;
-    const evaluation = evaluatePreparedFixture(fixture, "training");
+    const evaluation = evaluatePreparedFixture(fixture, "training", evaluationConfig);
     if (evaluation) trainingResults.push(evaluation);
   }
+
+  const trainingSummary = summarizeFootballEvaluation(trainingResults);
+  const learnedWeights = footballDecisionLearnedWeights({
+    pickCount: trainingSummary.pickCount,
+    yield: trainingSummary.yield,
+    brierScore: trainingSummary.brierScore,
+    closingLineValue: trainingSummary.closingLineValue,
+    config
+  });
+  const holdoutEvaluationConfig = {
+    ...evaluationConfig,
+    minEdge: learnedWeights.minimumEdge
+  };
 
   const results: FootballBacktestFixtureResult[] = [];
   let entrypointInvocations = 0;
   for (const fixture of holdout) {
     entrypointInvocations += 1;
-    const evaluation = evaluatePreparedFixture(fixture, "holdout");
+    const evaluation = evaluatePreparedFixture(fixture, "holdout", holdoutEvaluationConfig);
     if (evaluation) results.push(evaluation);
   }
 
-  const trainingSummary = summarizeFootballEvaluation(trainingResults);
   const summary = summarizeFootballEvaluation(results);
   const weightProvenance = buildFootballLearnedWeightsProvenance(
     trainingResults,
@@ -586,13 +599,6 @@ export function runFootballRuntimeReplay(
     },
     rejectionReasons: rejectionCounts(rejections)
   };
-  const learnedWeights = footballDecisionLearnedWeights({
-    pickCount: trainingSummary.pickCount,
-    yield: trainingSummary.yield,
-    brierScore: trainingSummary.brierScore,
-    closingLineValue: trainingSummary.closingLineValue,
-    config
-  });
   const windowStart = prepared[0]?.source.kickoffAt ?? null;
   const windowEnd = prepared.at(-1)?.source.kickoffAt ?? null;
   const executionHash = stableHash({
@@ -602,6 +608,11 @@ export function runFootballRuntimeReplay(
     fixtureIds: results.map((result) => result.fixtureExternalId),
     probabilityVectors: results.map((result) => result.probabilities),
     trainingProbabilityVectors: trainingResults.map((result) => result.probabilities),
+    holdoutSelectionPolicy: {
+      source: "chronological-training-window",
+      minimumEdge: holdoutEvaluationConfig.minEdge,
+      minimumModelProbability: holdoutEvaluationConfig.minModelProbability
+    },
     learnedWeightsProvenance: weightProvenance
   });
 
@@ -635,7 +646,10 @@ export function runFootballRuntimeReplay(
     learnedWeights,
     learnedWeightsProvenance: weightProvenance,
     config,
-    notes: runtimeNotes(contract, summary, weightProvenance),
+    notes: [
+      ...runtimeNotes(contract, summary, weightProvenance),
+      `Holdout selection used the training-derived minimum edge ${holdoutEvaluationConfig.minEdge.toFixed(4)}; holdout outcomes could not tune it.`
+    ],
     results,
     featureContract: contract,
     executionHash,

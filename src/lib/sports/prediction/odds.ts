@@ -124,9 +124,16 @@ export type BestPickSelectionOptions = {
   caseMemoryBank?: DecisionCaseMemoryBank;
 };
 
+/** Conservative floor used until a governed, runtime-compatible profile is promoted. */
+export const BASELINE_MINIMUM_VALUE_EDGE = 0.035;
+
 export function learnedMinimumEdge(options: BestPickSelectionOptions = {}): number | null {
   if (!options.learningProfile?.active) return null;
   return learnedWeight(options.learningProfile, "minimumEdge", 0.035, 0.02, 0.09);
+}
+
+export function effectiveMinimumEdge(options: BestPickSelectionOptions = {}): number {
+  return learnedMinimumEdge(options) ?? BASELINE_MINIMUM_VALUE_EDGE;
 }
 
 function similarityFromDifference(a: number, b: number, tolerance: number): number {
@@ -226,6 +233,7 @@ export function scoreValueEdge(edge: ValueEdge, options: BestPickSelectionOption
     caseMemoryAvoidShare: memoryPressure.avoidShare,
     caseMemoryReliability: memoryPressure.reliability,
     learnedMinimumEdge: minimumEdge,
+    effectiveMinimumEdge: minimumEdge ?? BASELINE_MINIMUM_VALUE_EDGE,
     learnedValueEdgeWeight: valueEdgeWeight,
     learnedDataQualityWeight: dataQualityWeight,
     learnedMarketAdjustmentWeight: marketAdjustmentWeight
@@ -440,9 +448,9 @@ export function buildValueEdges(
 }
 
 export function selectBestPick(valueEdges: ValueEdge[], options: BestPickSelectionOptions = {}): BestPickResult {
-  const minimumEdge = learnedMinimumEdge(options);
+  const minimumEdge = effectiveMinimumEdge(options);
   const viable = valueEdges
-    .filter((edge) => edge.edge > 0 && (minimumEdge === null || edge.edge >= minimumEdge) && edge.expectedValue > 0 && edge.confidence !== "low")
+    .filter((edge) => edge.edge >= minimumEdge && edge.expectedValue > 0 && edge.confidence !== "low")
     .map((edge) => {
       const scoring = scoreValueEdge(edge, options);
       return {

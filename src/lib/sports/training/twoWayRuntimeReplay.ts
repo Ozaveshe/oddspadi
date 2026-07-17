@@ -590,18 +590,20 @@ function run(
   const trainingRows = prepared.slice(0, trainSize);
   const holdoutRows = prepared.slice(trainSize);
   const model = sport === "basketball" ? modelBasketballMatch : modelTennisMatch;
-  const evaluateRows = (rows: Prepared[]) => rows.flatMap((item) => {
+  const evaluateRows = (rows: Prepared[], selectionConfig: ResolvedConfig) => rows.flatMap((item) => {
     const modeled = model(item.match);
     const market = modeled.markets.find((candidate) => candidate.marketId === "match_winner");
     const home = market?.probabilities.home;
     const away = market?.probabilities.away;
     return typeof home === "number" && typeof away === "number" && Number.isFinite(home) && Number.isFinite(away)
-      ? [evaluate(item, { home, away }, resolved)]
+      ? [evaluate(item, { home, away }, selectionConfig)]
       : [];
   });
-  const trainingResults = evaluateRows(trainingRows);
-  const results = evaluateRows(holdoutRows);
+  const trainingResults = evaluateRows(trainingRows, resolved);
   const trainingSummary = summary(trainingResults);
+  const minimumEdge = clamp(resolved.minEdge + ((trainingSummary.yield ?? 0) < 0 ? 0.015 : 0), 0.02, 0.09);
+  const holdoutSelectionConfig = { ...resolved, minEdge: minimumEdge };
+  const results = evaluateRows(holdoutRows, holdoutSelectionConfig);
   const holdoutSummary = summary(results);
   const identity = decisionModelIdentity(sport);
   const contract: TwoWayRuntimeFeatureContract = {
@@ -622,8 +624,19 @@ function run(
     },
     rejectionReasons: rejectionCounts(rejections)
   };
-  const executionHash = stableHash({ sport, modelKey: identity.runtimeModelKey, entrypoint: identity.runtimeEntrypoint, contract, training: trainingResults.map((row) => row.probabilities), holdout: results.map((row) => row.probabilities) });
-  const minimumEdge = clamp(resolved.minEdge + ((trainingSummary.yield ?? 0) < 0 ? 0.015 : 0), 0.02, 0.09);
+  const executionHash = stableHash({
+    sport,
+    modelKey: identity.runtimeModelKey,
+    entrypoint: identity.runtimeEntrypoint,
+    contract,
+    training: trainingResults.map((row) => row.probabilities),
+    holdout: results.map((row) => row.probabilities),
+    holdoutSelectionPolicy: {
+      source: "chronological-training-window",
+      minimumEdge: holdoutSelectionConfig.minEdge,
+      minimumModelProbability: holdoutSelectionConfig.minModelProbability
+    }
+  });
   return {
     sport,
     modelKey: identity.runtimeModelKey,
@@ -655,7 +668,7 @@ function run(
     notes: [
       `Executed ${results.length} chronological holdout fixture(s) through ${identity.runtimeEntrypoint}.`,
       `All Elo, form, rest, scoring, and surface features were calculated before each result updated team or player state.`,
-      `${trainingResults.length} training-window fixture(s) informed shadow-only threshold suggestions; holdout outcomes did not.`,
+      `${trainingResults.length} training-window fixture(s) set the holdout minimum edge to ${holdoutSelectionConfig.minEdge.toFixed(4)}; holdout outcomes did not tune it.`,
       rejections.length ? `${rejections.length} source fixture(s) were rejected by the fail-closed contract.` : "Every source fixture had a valid identity and decisive result."
     ],
     results,

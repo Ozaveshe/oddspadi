@@ -60,6 +60,10 @@ describe("basketball and tennis exact runtime replay", () => {
       evaluatedFixtures: result.testSize,
       entrypointInvocations: result.testSize
     });
+    expect(result.results.every((row) => row.pick === null || row.pick.edge >= result.learnedWeights.minimumEdge)).toBe(true);
+    expect(result.notes).toEqual(expect.arrayContaining([
+      expect.stringContaining("set the holdout minimum edge")
+    ]));
     expect(historicalModelCompatibility({
       sport: "basketball",
       evidenceModelKey: result.modelKey,

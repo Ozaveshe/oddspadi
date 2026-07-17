@@ -287,6 +287,7 @@ export interface ValueEdge {
     caseMemoryAvoidShare?: number | null;
     caseMemoryReliability?: number | null;
     learnedMinimumEdge?: number | null;
+    effectiveMinimumEdge?: number;
     learnedValueEdgeWeight?: number | null;
     learnedDataQualityWeight?: number | null;
     learnedMarketAdjustmentWeight?: number | null;
