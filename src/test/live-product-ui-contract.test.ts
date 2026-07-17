@@ -187,6 +187,12 @@ describe("live OddsPadi product UI contract", () => {
     expect(markets).toContain("Price details");
   });
 
+  it("keeps long fixture identities inside the mobile viewport", () => {
+    const styles = source("src/app/globals.css");
+    expect(styles).toContain(".intelligence-card { position: relative; display: grid; grid-template-columns: minmax(0, 1fr);");
+    expect(styles).toContain(".intelligence-grid { grid-template-columns: minmax(0, 1fr); }");
+  });
+
   it("presents the engine as an evidence ledger without AI product language", () => {
     const engine = source("src/app/predictions/decision-engine/page.tsx");
     expect(engine).toContain("engine-run-metrics");

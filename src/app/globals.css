@@ -2768,7 +2768,7 @@ a.score-row:active,
 .daily-coverage-more .intelligence-grid { padding: 16px; }
 .intelligence-section[id],.daily-no-publish[id] { scroll-margin-top: calc(var(--header-h) + 18px); }
 .intelligence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.intelligence-card { position: relative; display: grid; gap: 13px; padding: 18px; border: 1px solid var(--border); border-left: 4px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 14px 34px -28px rgba(7, 94, 51, .65); }
+.intelligence-card { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 13px; min-width: 0; padding: 18px; border: 1px solid var(--border); border-left: 4px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 14px 34px -28px rgba(7, 94, 51, .65); }
 .intelligence-competition { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .intelligence-competition > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .intelligence-matchline > a { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: center; }
@@ -2910,7 +2910,7 @@ a.score-row:active,
   .daily-decision-jumps a { min-height: 72px; padding: 12px; }
   .daily-no-publish { display: grid; gap: 10px; margin-top: 22px; padding: 18px; }
   .daily-coverage-more .intelligence-grid { padding: 10px; }
-  .intelligence-grid { grid-template-columns: 1fr; }
+  .intelligence-grid { grid-template-columns: minmax(0, 1fr); }
   .intelligence-decision { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .intelligence-home-metrics div { grid-template-columns: 1fr; }
   .intelligence-home-metrics strong { text-align: left; }

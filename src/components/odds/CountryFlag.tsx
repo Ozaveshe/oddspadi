@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 const countryCodes: Record<string, string> = {
   england: "GB", nigeria: "NG", ghana: "GH", "south africa": "ZA", egypt: "EG", morocco: "MA",
   kenya: "KE", tanzania: "TZ", uganda: "UG", zambia: "ZM", senegal: "SN", cameroon: "CM",
@@ -29,8 +33,23 @@ export function flagEmoji(country?: string | null): string {
   return [...code].map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0))).join("");
 }
 
+export function usableFlagUrl(flag?: string | null): string | null {
+  const cleaned = flag?.trim();
+  if (!cleaned) return null;
+  try {
+    const url = new URL(cleaned, "https://oddspadi.invalid");
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+    const filename = decodeURIComponent(url.pathname.split("/").at(-1) ?? "").replace(/\.svg$/i, "").trim();
+    return filename ? cleaned : null;
+  } catch {
+    return null;
+  }
+}
+
 export function CountryFlag({ country, flag, size = 18 }: { country?: string | null; flag?: string | null; size?: number }) {
   const label = country?.trim() || "Unknown country";
-  if (flag) return <img className="country-flag" src={flag} alt={`${label} flag`} width={size} height={Math.round(size * .7)} loading="lazy" referrerPolicy="no-referrer" />;
+  const usableFlag = usableFlagUrl(flag);
+  const [failedFlag, setFailedFlag] = useState<string | null>(null);
+  if (usableFlag && failedFlag !== usableFlag) return <img className="country-flag" src={usableFlag} alt={`${label} flag`} width={size} height={Math.round(size * .7)} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailedFlag(usableFlag)} />;
   return <span className="country-flag country-flag--emoji" role="img" aria-label={`${label} flag`} style={{ fontSize: size }}>{flagEmoji(country)}</span>;
 }

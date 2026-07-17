@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { readUpcomingIdentityCoverage } from "@/lib/sports/intelligence/identityCoverage";
 import { domesticCountryForFixture, enrichUpcomingFixtureIdentities, nationalTeamCountry } from "@/lib/sports/intelligence/identityEnrichment";
 import { oddsCompetitionCountry } from "@/lib/sports/providers/providerBackedProvider";
-import { flagEmoji } from "@/components/odds/CountryFlag";
+import { flagEmoji, usableFlagUrl } from "@/components/odds/CountryFlag";
 
 function fakeClient() {
   const fixtures = [
@@ -64,6 +64,11 @@ function fakeClient() {
 }
 
 describe("sports identity enrichment", () => {
+  it("rejects provider flag URLs whose filename is blank", () => {
+    expect(usableFlagUrl("https://media.api-sports.io/flags/%20.svg")).toBeNull();
+    expect(usableFlagUrl("https://media.api-sports.io/flags/gb.svg")).toBe("https://media.api-sports.io/flags/gb.svg");
+  });
+
   it("maps domestic competition keys without assigning a country to continental cups", () => {
     expect(oddsCompetitionCountry("soccer_brazil_campeonato", "Brazil Série A")).toBe("Brazil");
     expect(oddsCompetitionCountry("soccer_usa_mls", "MLS")).toBe("United States");
