@@ -46,9 +46,14 @@ export const GET = withApiHandler(async (request: Request) => {
   const url = new URL(request.url);
   const runRequested = enabled(url.searchParams.get("run"));
   const dryRun = bool(url.searchParams.get("dryRun"), true);
-  const adminAuthorized = isTrainingAdminAuthorized(request);
-  if (!dryRun && !runRequested) return apiError("Writes require dryRun=0 with run=1 and a valid admin token.", 400);
-  if (runRequested && !adminAuthorized) return apiError("Execution requires run=1 plus a valid x-oddspadi-admin-token.", 401);
-  const receipt = await observeHistoricalProviderStorageReceipt({ request: requestFromUrl(url), runRequested, adminAuthorized, env: process.env, origin: url.origin });
+  if (runRequested || !dryRun) return apiError("GET is preview-only. Use POST with a valid x-oddspadi-admin-token to execute provider work.", 405);
+  const receipt = await observeHistoricalProviderStorageReceipt({ request: requestFromUrl(url), runRequested: false, adminAuthorized: false, env: process.env, origin: url.origin });
+  return apiSuccess(receipt, { status: statusCode(receipt.status) });
+});
+
+export const POST = withApiHandler(async (request: Request) => {
+  if (!isTrainingAdminAuthorized(request)) return apiError("Execution requires a valid x-oddspadi-admin-token.", 401);
+  const url = new URL(request.url);
+  const receipt = await observeHistoricalProviderStorageReceipt({ request: requestFromUrl(url), runRequested: true, adminAuthorized: true, env: process.env, origin: url.origin });
   return apiSuccess(receipt, { status: statusCode(receipt.status) });
 });

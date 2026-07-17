@@ -55,7 +55,7 @@ describe("football historical corpus refresh scheduler", () => {
       expect(url.searchParams.get("maxJobs")).toBe("1");
       expect(url.searchParams.get("dryRun")).toBe("0");
       expect(url.searchParams.get("run")).toBe("1");
-      expect(init?.method).toBe("GET");
+      expect(init?.method).toBe("POST");
       expect(new Headers(init?.headers).get("x-oddspadi-admin-token")).toBe("admin-token");
       if (requestNumber === 1) {
         expect(url.searchParams.get("seasonFrom")).toBe("2026");

@@ -65,9 +65,8 @@ async function buildFromRequest(request: Request, runRequested: boolean, adminAu
 
 export const GET = withApiHandler(async (request: Request) => {
   const runRequested = enabled(new URL(request.url).searchParams.get("run"));
-  const adminAuthorized = isTrainingAdminAuthorized(request);
-  if (runRequested && !adminAuthorized) return apiError("Backtest execution requires a valid x-oddspadi-admin-token.", 401);
-  const built = await buildFromRequest(request, runRequested, adminAuthorized);
+  if (runRequested) return apiError("GET is read-only. Use POST with a valid x-oddspadi-admin-token to execute a backtest.", 405);
+  const built = await buildFromRequest(request, false, false);
   if (!built.ok) return apiError(built.error, 400);
   return apiSuccess(built.result, { status: statusCodeFor(built.result.status) });
 });

@@ -112,7 +112,7 @@ export function footballPlayerHistoryWindow(now = new Date()): {
 async function requestBackfill(fetchImpl: FetchLike, endpoint: URL, token: string): Promise<BackfillReceipt> {
   try {
     const response = await fetchImpl(endpoint, {
-      method: "GET",
+      method: "POST",
       headers: { accept: "application/json", "x-oddspadi-admin-token": token },
       signal: AbortSignal.timeout(6 * 60_000)
     });
