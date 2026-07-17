@@ -2,6 +2,7 @@ import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine"
 import { buildScoreMatrix, probabilityFromScoreMatrix } from "@/lib/sports/prediction/poisson";
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "@/lib/sports/training/probabilityCalibration";
 import { benchmarkBacktestModelKey } from "@/lib/sports/prediction/modelIdentity";
+import { confidenceFromEdgeAndProbability } from "@/lib/sports/prediction/confidence";
 import {
   resolveHistoricalFootballOdds,
   type HistoricalFootballOddsAudit,
@@ -343,9 +344,7 @@ function winnerOdds(fixture: HistoricalFootballFixture): {
 }
 
 function confidenceForPick(edge: number, probability: number, dataQuality: number): BacktestConfidence {
-  if (edge >= 0.08 && probability >= 0.5 && dataQuality >= 0.78) return "high";
-  if (edge >= 0.05 && probability >= 0.38 && dataQuality >= 0.66) return "medium";
-  return "low";
+  return confidenceFromEdgeAndProbability(edge, probability, dataQuality);
 }
 
 function selectBacktestPick(

@@ -1,6 +1,7 @@
 import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine";
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "@/lib/sports/training/probabilityCalibration";
 import { benchmarkBacktestModelKey } from "@/lib/sports/prediction/modelIdentity";
+import { confidenceFromEdgeAndProbability } from "@/lib/sports/prediction/confidence";
 
 export const BASKETBALL_BACKTEST_MODEL_KEY = benchmarkBacktestModelKey("basketball");
 
@@ -117,6 +118,17 @@ export type BasketballBacktestResult = {
     dataQualityWeight: number;
     minimumEdge: number;
     homeCourtPoints: number;
+  };
+  learnedWeightsProvenance: {
+    source: "training-window" | "defaults-no-training-data";
+    sampleSize: number;
+    pickCount: number;
+    windowStart: string | null;
+    windowEnd: string | null;
+    holdoutWindowStart: string | null;
+    yield: number | null;
+    brierScore: number | null;
+    closingLineValue: number | null;
   };
   config: Required<BasketballBacktestConfig>;
   notes: string[];
@@ -260,9 +272,7 @@ function moneylineOdds(odds: HistoricalBasketballOddsQuote[]): Record<Basketball
 }
 
 function confidenceForPick(edge: number, probability: number, dataQuality: number): BacktestConfidence {
-  if (edge >= 0.08 && probability >= 0.56 && dataQuality >= 0.78) return "high";
-  if (edge >= 0.05 && probability >= 0.48 && dataQuality >= 0.66) return "medium";
-  return "low";
+  return confidenceFromEdgeAndProbability(edge, probability, dataQuality);
 }
 
 function selectPick(
@@ -401,6 +411,17 @@ export function runBasketballBacktest(
       marketBreakdown: {},
       confidenceBreakdown: {},
       learnedWeights: learnedWeights({ yield: null, brierScore: null, closingLineValue: null, config }),
+      learnedWeightsProvenance: {
+        source: "defaults-no-training-data",
+        sampleSize: 0,
+        pickCount: 0,
+        windowStart: null,
+        windowEnd: null,
+        holdoutWindowStart: null,
+        yield: null,
+        brierScore: null,
+        closingLineValue: null
+      },
       config,
       notes: ["No finished historical basketball fixtures are available for backtesting."],
       results: []
@@ -409,6 +430,7 @@ export function runBasketballBacktest(
 
   const testStartIndex = Math.min(sampleSize - 1, Math.max(0, Math.floor(sampleSize * clamp(config.trainRatio, 0.1, 0.9))));
   const ratings: Ratings = new Map();
+  const trainingResults: BasketballBacktestFixtureResult[] = [];
   const results: BasketballBacktestFixtureResult[] = [];
 
   sortedFixtures.forEach((fixture, index) => {
@@ -417,20 +439,20 @@ export function runBasketballBacktest(
     const actual = actualOutcome(fixture);
     const projection = projectGame(fixture, homeRating, awayRating, config);
     const odds = moneylineOdds(fixture.odds);
-    if (index >= testStartIndex) {
-      const pick = odds ? selectPick(fixture, projection.probabilities, odds, actual, config) : null;
-      results.push({
-        fixtureExternalId: fixture.fixtureExternalId,
-        kickoffAt: fixture.kickoffAt,
-        actualOutcome: actual,
-        probabilities: projection.probabilities,
-        projectedMargin: projection.projectedMargin,
-        projectedTotal: projection.projectedTotal,
-        brierScore: brierScore(projection.probabilities, actual),
-        logLoss: logLoss(projection.probabilities, actual),
-        pick
-      });
-    }
+    const pick = odds ? selectPick(fixture, projection.probabilities, odds, actual, config) : null;
+    const evaluation = {
+      fixtureExternalId: fixture.fixtureExternalId,
+      kickoffAt: fixture.kickoffAt,
+      actualOutcome: actual,
+      probabilities: projection.probabilities,
+      projectedMargin: projection.projectedMargin,
+      projectedTotal: projection.projectedTotal,
+      brierScore: brierScore(projection.probabilities, actual),
+      logLoss: logLoss(projection.probabilities, actual),
+      pick
+    };
+    if (index < testStartIndex) trainingResults.push(evaluation);
+    else results.push(evaluation);
     updateRatings(ratings, fixture, config);
   });
 
@@ -443,6 +465,11 @@ export function runBasketballBacktest(
   const yieldValue = roundMetric(picks.length ? roiUnits / picks.length : null, 6);
   const confidenceGroups = groupBy(results, (result) => result.pick?.confidence ?? "no-pick");
   const calibration = buildCalibration(results);
+  const trainingPicks = trainingResults.map((row) => row.pick).filter((pick): pick is BasketballBacktestPick => Boolean(pick));
+  const trainingRoi = trainingPicks.reduce((sum, pick) => sum + pick.unitReturn, 0);
+  const trainingYield = roundMetric(trainingPicks.length ? trainingRoi / trainingPicks.length : null, 6);
+  const trainingBrier = roundMetric(average(trainingResults.map((row) => row.brierScore)), 6);
+  const trainingClv = roundMetric(average(trainingPicks.map((pick) => pick.closingLineValue).filter((value): value is number => value !== null)), 6);
 
   const result: BasketballBacktestResult = {
     sport: "basketball",
@@ -466,11 +493,25 @@ export function runBasketballBacktest(
     calibrationBuckets: calibration.buckets,
     marketBreakdown: { moneyline: buildBreakdown(results) },
     confidenceBreakdown: Object.fromEntries(Object.entries(confidenceGroups).map(([key, group]) => [key, buildBreakdown(group)])),
-    learnedWeights: learnedWeights({ yield: yieldValue, brierScore: brier, closingLineValue: clv, config }),
+    learnedWeights: learnedWeights({ yield: trainingYield, brierScore: trainingBrier, closingLineValue: trainingClv, config }),
+    learnedWeightsProvenance: {
+      source: trainingResults.length ? "training-window" : "defaults-no-training-data",
+      sampleSize: trainingResults.length,
+      pickCount: trainingPicks.length,
+      windowStart: trainingResults[0]?.kickoffAt ?? null,
+      windowEnd: trainingResults.at(-1)?.kickoffAt ?? null,
+      holdoutWindowStart: results[0]?.kickoffAt ?? null,
+      yield: trainingYield,
+      brierScore: trainingBrier,
+      closingLineValue: trainingClv
+    },
     config,
     notes: [],
     results
   };
-  result.notes = resultNotes(result);
+  result.notes = [
+    `Learned weights use only ${trainingResults.length} chronological training fixture(s); holdout outcomes remain evaluation-only.`,
+    ...resultNotes(result)
+  ];
   return result;
 }

@@ -97,6 +97,23 @@ function hasExplicitLivePromotion(backtest: StoredBacktestRun | null): boolean {
   return promotion.status === "approved" && promotion.scope === "live-guardrails" && Number.isFinite(approvedAt);
 }
 
+function economicSelectionPolicy(backtest: StoredBacktestRun | null): {
+  status: "active" | "abstain" | null;
+  allowedConfidenceBands: NonNullable<DecisionLearningProfile["allowedConfidenceBands"]> | null;
+} {
+  const policy = record(backtest?.config?.selectionPolicy);
+  const validContract =
+    policy.version === "economic-confidence-bands-v1" &&
+    policy.source === "chronological-training-window";
+  const status = validContract && (policy.status === "active" || policy.status === "abstain") ? policy.status : null;
+  const allowedConfidenceBands = Array.isArray(policy.allowedConfidenceBands)
+    ? policy.allowedConfidenceBands.filter(
+        (value): value is "medium" | "high" => value === "medium" || value === "high"
+      )
+    : null;
+  return { status, allowedConfidenceBands: validContract ? allowedConfidenceBands : null };
+}
+
 function footballLearningProvenanceBlocker(backtest: StoredBacktestRun): string | null {
   const provenance = record(backtest.config?.learnedWeightsProvenance);
   if (provenance.source !== "training-window") {
@@ -152,6 +169,14 @@ function liveMetricBlockers(
   }
   if (backtest.yield === null || backtest.yield <= 0) blockers.push("holdout yield is not positive");
   if (backtest.closingLineValue === null || backtest.closingLineValue <= 0) blockers.push("closing-line value is not positive");
+  if (evidence.compatibility === "exact-runtime-parity") {
+    const policy = economicSelectionPolicy(backtest);
+    if (policy.status === null || policy.allowedConfidenceBands === null) {
+      blockers.push("runtime replay lacks a training-only economic selection policy");
+    } else if (policy.status === "abstain" || policy.allowedConfidenceBands.length === 0) {
+      blockers.push("training-only economic selection policy abstains");
+    }
+  }
   if (snapshot.sport === "football") {
     const provenanceBlocker = footballLearningProvenanceBlocker(backtest);
     if (provenanceBlocker) blockers.push(provenanceBlocker);
@@ -221,6 +246,7 @@ export function buildDecisionLearningProfileFromSnapshot(
   const demoOnly = Boolean(backtest?.dataSource?.includes("demo")) || snapshot.counts.realFinishedFixtures === 0;
   const promotionApproved = requireDurablePromotion ? promotionMatchesBacktest : promotionMatchesBacktest || hasExplicitLivePromotion(backtest);
   const metricBlockers = liveMetricBlockers(snapshot, backtest, runtimeEvidence);
+  const selectionPolicy = economicSelectionPolicy(backtest);
   const shadowReady = snapshot.status === "ready" && Boolean(backtest) && snapshot.readiness.readyForTraining && !demoOnly;
   const active = shadowReady && promotionApproved && metricBlockers.length === 0;
   const status: DecisionLearningProfile["status"] =
@@ -255,6 +281,8 @@ export function buildDecisionLearningProfileFromSnapshot(
     dataQualityWeight: learnedValue(backtest, "dataQualityWeight"),
     marketAdjustmentWeight: learnedValue(backtest, "marketAdjustmentWeight"),
     homeAdvantageElo: learnedValue(backtest, "homeAdvantageElo"),
+    economicSelectionPolicyStatus: selectionPolicy.status,
+    allowedConfidenceBands: selectionPolicy.allowedConfidenceBands,
     brierScore: backtest?.brierScore ?? null,
     logLoss: backtest?.logLoss ?? null,
     calibrationError: backtest?.calibrationError ?? null,

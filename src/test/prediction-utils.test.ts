@@ -13621,6 +13621,12 @@ describe("prediction utilities", () => {
                 eligibleFixtures: 1200,
                 optionalCoverage: { playerFormFixtures: 900 }
               },
+              selectionPolicy: {
+                version: "economic-confidence-bands-v1",
+                source: "chronological-training-window",
+                status: "active",
+                allowedConfidenceBands: ["medium"]
+              },
               promotion: {
                 status: "approved",
                 scope: "live-guardrails",
@@ -21474,6 +21480,17 @@ describe("prediction utilities", () => {
           dataQualityWeight: 0.22,
           minimumEdge: 0.035,
           homeCourtPoints: 2.6
+        },
+        learnedWeightsProvenance: {
+          source: "training-window",
+          sampleSize: 80,
+          pickCount: 16,
+          windowStart: "2025-01-01T00:00:00.000Z",
+          windowEnd: "2025-04-15T00:00:00.000Z",
+          holdoutWindowStart: "2025-04-16T00:00:00.000Z",
+          yield: 0.12,
+          brierScore: 0.19,
+          closingLineValue: 0.02
         },
         config: {
           trainRatio: 0.7,

@@ -72,6 +72,8 @@ function replaySummary(replay: FootballRuntimeReplayResult, stored?: { id: strin
       closingLineValue: replay.closingLineValue
     },
     learnedWeights: replay.learnedWeights,
+    selectionPolicy: replay.selectionPolicy,
+    economicSelectionComparison: replay.economicSelectionComparison,
     config: replay.config,
     notes: replay.notes,
     rejectionSample: replay.rejections.slice(0, 20),

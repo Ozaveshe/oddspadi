@@ -1447,14 +1447,17 @@ function backtestInsertPayload(result: HistoricalBacktestResult, includeDemo: bo
     learned_weights: result.learnedWeights,
     config: {
       ...result.config,
-      ...(result.sport === "football"
-        ? {
-            learnedWeightsProvenance: result.learnedWeightsProvenance,
-            oddsCoverage: result.oddsCoverage
-          }
+      ...("learnedWeightsProvenance" in result
+        ? { learnedWeightsProvenance: result.learnedWeightsProvenance }
         : {}),
+      ...(result.sport === "football" ? { oddsCoverage: result.oddsCoverage } : {}),
       ...(runtimeReplay
-        ? { featureContract: result.featureContract, executionHash: result.executionHash }
+        ? {
+            featureContract: result.featureContract,
+            executionHash: result.executionHash,
+            selectionPolicy: result.selectionPolicy,
+            economicSelectionComparison: result.economicSelectionComparison
+          }
         : {}),
       modelIdentity: modelIdentityForResult(result)
     },
@@ -1559,6 +1562,31 @@ export async function runAndStoreHistoricalBacktest({
     id: stored.id,
     result
   };
+}
+
+/** Read and replay the stored corpus without inserting an op_backtest_runs row. */
+export async function previewStoredHistoricalRuntimeReplay({
+  sport,
+  limit = 50_000,
+  config = {},
+  includeDemo = false
+}: {
+  sport: TrainingSport;
+  limit?: number;
+  config?: HistoricalBacktestConfig;
+  includeDemo?: boolean;
+}): Promise<HistoricalBacktestResult | { error: string }> {
+  if (sport === "football") {
+    return previewStoredFootballRuntimeReplay({
+      limit,
+      config: config as FootballRuntimeReplayConfig,
+      includeDemo
+    });
+  }
+
+  const fixtures = await readHistoricalFixturesForSport(sport, limit, includeDemo);
+  if ("error" in fixtures) return fixtures;
+  return runBacktestForSport(sport, fixtures, config);
 }
 
 export async function runAndStoreHistoricalFootballBacktest({

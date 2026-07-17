@@ -65,6 +65,10 @@ export type MultiSportBacktestJob = {
     logLoss: number | null;
     yield: number | null;
     calibrationError: number | null;
+    selectionPolicyStatus: "active" | "abstain" | null;
+    allowedConfidenceBands: string[];
+    baselinePickCount: number | null;
+    baselineYield: number | null;
     reason: string | null;
   };
   nextAction: string;
@@ -135,10 +139,15 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
       logLoss: null,
       yield: null,
       calibrationError: null,
+      selectionPolicyStatus: null,
+      allowedConfidenceBands: [],
+      baselinePickCount: null,
+      baselineYield: null,
       reason: null
     };
   }
 
+  const runtimeResult = result.result && "selectionPolicy" in result.result ? result.result : null;
   return {
     status: result.status,
     id: result.status === "stored" ? result.id : null,
@@ -148,6 +157,10 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
     logLoss: result.result?.logLoss ?? null,
     yield: result.result?.yield ?? null,
     calibrationError: result.result?.calibrationError ?? null,
+    selectionPolicyStatus: runtimeResult?.selectionPolicy.status ?? null,
+    allowedConfidenceBands: runtimeResult?.selectionPolicy.allowedConfidenceBands ?? [],
+    baselinePickCount: runtimeResult?.economicSelectionComparison.baseline.pickCount ?? null,
+    baselineYield: runtimeResult?.economicSelectionComparison.baseline.yield ?? null,
     reason: result.status === "stored" ? null : result.reason
   };
 }

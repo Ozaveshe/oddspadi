@@ -449,8 +449,16 @@ export function buildValueEdges(
 
 export function selectBestPick(valueEdges: ValueEdge[], options: BestPickSelectionOptions = {}): BestPickResult {
   const minimumEdge = effectiveMinimumEdge(options);
+  const allowedConfidenceBands = options.learningProfile?.active
+    ? options.learningProfile.allowedConfidenceBands
+    : null;
   const viable = valueEdges
-    .filter((edge) => edge.edge >= minimumEdge && edge.expectedValue > 0 && edge.confidence !== "low")
+    .filter((edge) => {
+      if (edge.edge < minimumEdge || edge.expectedValue <= 0 || edge.confidence === "low") return false;
+      return allowedConfidenceBands === null || allowedConfidenceBands === undefined
+        ? true
+        : allowedConfidenceBands.includes(edge.confidence);
+    })
     .map((edge) => {
       const scoring = scoreValueEdge(edge, options);
       return {

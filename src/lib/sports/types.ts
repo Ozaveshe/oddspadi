@@ -1426,6 +1426,8 @@ export interface DecisionLearningProfile {
   dataQualityWeight: number | null;
   marketAdjustmentWeight: number | null;
   homeAdvantageElo: number | null;
+  economicSelectionPolicyStatus?: "active" | "abstain" | null;
+  allowedConfidenceBands?: ConfidenceLevel[] | null;
   brierScore: number | null;
   logLoss?: number | null;
   calibrationError?: number | null;

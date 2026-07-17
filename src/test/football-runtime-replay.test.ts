@@ -99,6 +99,13 @@ describe("football exact runtime replay", () => {
     expect(result.executionHash).toMatch(/^fnv1a-[a-f0-9]{8}$/);
     expect(result.results.every((row) => Math.abs(Object.values(row.probabilities).reduce((sum, value) => sum + value, 0) - 1) < 0.001)).toBe(true);
     expect(result.results.every((row) => row.pick === null || row.pick.edge >= result.learnedWeights.minimumEdge)).toBe(true);
+    expect(result.selectionPolicy).toMatchObject({
+      source: "chronological-training-window",
+      status: "abstain",
+      allowedConfidenceBands: []
+    });
+    expect(result.economicSelectionComparison.selected.pickCount).toBe(result.pickCount);
+    expect(result.economicSelectionComparison.baseline.pickCount).toBeGreaterThanOrEqual(result.pickCount);
     expect(result.notes).toEqual(expect.arrayContaining([
       expect.stringContaining("Holdout selection used the training-derived minimum edge")
     ]));
@@ -121,6 +128,7 @@ describe("football exact runtime replay", () => {
     expect(awayWinLast?.actualOutcome).toBe("away");
     expect(homeWin.learnedWeights).toEqual(awayWin.learnedWeights);
     expect(homeWin.learnedWeightsProvenance).toEqual(awayWin.learnedWeightsProvenance);
+    expect(homeWin.selectionPolicy).toEqual(awayWin.selectionPolicy);
   });
 
   it("fails closed for neutral venues the runtime Match contract cannot represent", () => {

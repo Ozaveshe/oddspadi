@@ -1,4 +1,5 @@
 import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine";
+import { confidenceFromEdgeAndProbability } from "@/lib/sports/prediction/confidence";
 import { modelBasketballMatch } from "@/lib/sports/prediction/basketballModel";
 import { decisionModelIdentity, runtimeModelIdentityReceipt } from "@/lib/sports/prediction/modelIdentity";
 import { tennisModelRatingFromElo } from "@/lib/sports/prediction/historicalTennisStrength";
@@ -7,6 +8,14 @@ import type { Match, OddsMarket } from "@/lib/sports/types";
 import type { HistoricalBasketballFixture, HistoricalBasketballOddsQuote } from "./basketballBacktest";
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "./probabilityCalibration";
 import type { HistoricalTennisMatch, HistoricalTennisOddsQuote } from "./tennisBacktest";
+import {
+  applyEconomicSelectionPolicy,
+  applyMinimumEdgeToResults,
+  buildEconomicSelectionComparison,
+  learnEconomicSelectionPolicy,
+  type EconomicSelectionComparison,
+  type EconomicSelectionPolicy
+} from "./economicSelectionPolicy";
 
 type RuntimeReplaySport = "basketball" | "tennis";
 type TwoWayOutcome = "home" | "away";
@@ -90,6 +99,8 @@ export type TwoWayRuntimeReplayResult = {
   marketBreakdown: Record<string, RuntimeReplayBreakdown>;
   confidenceBreakdown: Record<string, RuntimeReplayBreakdown>;
   learnedWeights: Record<string, number>;
+  selectionPolicy: EconomicSelectionPolicy;
+  economicSelectionComparison: EconomicSelectionComparison;
   config: ResolvedConfig;
   notes: string[];
   results: TwoWayRuntimeReplayFixtureResult[];
@@ -492,9 +503,7 @@ function oddsForEvaluation(odds: Array<HistoricalBasketballOddsQuote | Historica
 }
 
 function confidence(edge: number, probability: number, quality: number): Confidence {
-  if (edge >= 0.08 && probability >= 0.57 && quality >= 0.78) return "high";
-  if (edge >= 0.05 && probability >= 0.49 && quality >= 0.66) return "medium";
-  return "low";
+  return confidenceFromEdgeAndProbability(edge, probability, quality);
 }
 
 function evaluate(prepared: Prepared, probabilities: Record<TwoWayOutcome, number>, resolved: ResolvedConfig): TwoWayRuntimeReplayFixtureResult {
@@ -603,7 +612,11 @@ function run(
   const trainingSummary = summary(trainingResults);
   const minimumEdge = clamp(resolved.minEdge + ((trainingSummary.yield ?? 0) < 0 ? 0.015 : 0), 0.02, 0.09);
   const holdoutSelectionConfig = { ...resolved, minEdge: minimumEdge };
-  const results = evaluateRows(holdoutRows, holdoutSelectionConfig);
+  const policyTrainingResults = applyMinimumEdgeToResults(trainingResults, minimumEdge);
+  const selectionPolicy = learnEconomicSelectionPolicy(policyTrainingResults);
+  const baselineResults = evaluateRows(holdoutRows, holdoutSelectionConfig);
+  const results = applyEconomicSelectionPolicy(baselineResults, selectionPolicy);
+  const economicSelectionComparison = buildEconomicSelectionComparison(baselineResults, results);
   const holdoutSummary = summary(results);
   const identity = decisionModelIdentity(sport);
   const contract: TwoWayRuntimeFeatureContract = {
@@ -634,7 +647,9 @@ function run(
     holdoutSelectionPolicy: {
       source: "chronological-training-window",
       minimumEdge: holdoutSelectionConfig.minEdge,
-      minimumModelProbability: holdoutSelectionConfig.minModelProbability
+      minimumModelProbability: holdoutSelectionConfig.minModelProbability,
+      economicPolicy: selectionPolicy,
+      comparison: economicSelectionComparison
     }
   });
   return {
@@ -664,11 +679,16 @@ function run(
     marketBreakdown: holdoutSummary.marketBreakdown,
     confidenceBreakdown: holdoutSummary.confidenceBreakdown,
     learnedWeights: { minimumEdge: round(minimumEdge, 4)!, trainingSampleSize: trainingResults.length, trainingBrierScore: trainingSummary.brierScore ?? 0 },
+    selectionPolicy,
+    economicSelectionComparison,
     config: resolved,
     notes: [
       `Executed ${results.length} chronological holdout fixture(s) through ${identity.runtimeEntrypoint}.`,
       `All Elo, form, rest, scoring, and surface features were calculated before each result updated team or player state.`,
       `${trainingResults.length} training-window fixture(s) set the holdout minimum edge to ${holdoutSelectionConfig.minEdge.toFixed(4)}; holdout outcomes did not tune it.`,
+      selectionPolicy.status === "active"
+        ? `Training-only economic evidence admitted ${selectionPolicy.allowedConfidenceBands.join(", ")} confidence band(s); the policy was applied unchanged to holdout.`
+        : `Training-only economic evidence admitted no confidence band, so the holdout selection policy abstained.`,
       rejections.length ? `${rejections.length} source fixture(s) were rejected by the fail-closed contract.` : "Every source fixture had a valid identity and decisive result."
     ],
     results,

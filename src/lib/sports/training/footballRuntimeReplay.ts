@@ -29,6 +29,14 @@ import {
   type PlayerMatchPerformance
 } from "@/lib/sports/training/playerPerformance";
 import { consolidateFootballRuntimeFixtures } from "@/lib/sports/training/footballRuntimeFixtureConsolidation";
+import {
+  applyEconomicSelectionPolicy,
+  applyMinimumEdgeToResults,
+  buildEconomicSelectionComparison,
+  learnEconomicSelectionPolicy,
+  type EconomicSelectionComparison,
+  type EconomicSelectionPolicy
+} from "@/lib/sports/training/economicSelectionPolicy";
 
 export type FootballRuntimeReplayConfig = {
   trainRatio?: number;
@@ -74,6 +82,8 @@ export type FootballRuntimeFeatureContract = {
 export type FootballRuntimeReplayResult = Omit<FootballBacktestResult, "config" | "learnedWeights"> & {
   config: Required<FootballRuntimeReplayConfig>;
   learnedWeights: FootballDecisionLearnedWeights;
+  selectionPolicy: EconomicSelectionPolicy;
+  economicSelectionComparison: EconomicSelectionComparison;
   featureContract: FootballRuntimeFeatureContract;
   executionHash: string;
   rejections: FootballRuntimeReplayRejection[];
@@ -537,17 +547,23 @@ export function runFootballRuntimeReplay(
   }
 
   const trainingSummary = summarizeFootballEvaluation(trainingResults);
-  const learnedWeights = footballDecisionLearnedWeights({
+  const learnedWeightsCandidate = footballDecisionLearnedWeights({
     pickCount: trainingSummary.pickCount,
     yield: trainingSummary.yield,
     brierScore: trainingSummary.brierScore,
     closingLineValue: trainingSummary.closingLineValue,
     config
   });
+  const learnedWeights: FootballDecisionLearnedWeights = {
+    ...learnedWeightsCandidate,
+    minimumEdge: Math.max(evaluationConfig.minEdge, learnedWeightsCandidate.minimumEdge)
+  };
   const holdoutEvaluationConfig = {
     ...evaluationConfig,
     minEdge: learnedWeights.minimumEdge
   };
+  const policyTrainingResults = applyMinimumEdgeToResults(trainingResults, holdoutEvaluationConfig.minEdge);
+  const selectionPolicy = learnEconomicSelectionPolicy(policyTrainingResults);
 
   const results: FootballBacktestFixtureResult[] = [];
   let entrypointInvocations = 0;
@@ -557,11 +573,15 @@ export function runFootballRuntimeReplay(
     if (evaluation) results.push(evaluation);
   }
 
-  const summary = summarizeFootballEvaluation(results);
+  const selectedResults = applyEconomicSelectionPolicy(results, selectionPolicy);
+  const economicSelectionComparison = buildEconomicSelectionComparison(results, selectedResults);
+  const summary = summarizeFootballEvaluation(selectedResults);
+  const selectedTrainingResults = applyEconomicSelectionPolicy(policyTrainingResults, selectionPolicy);
+  const selectedTrainingSummary = summarizeFootballEvaluation(selectedTrainingResults);
   const weightProvenance = buildFootballLearnedWeightsProvenance(
-    trainingResults,
-    trainingSummary,
-    results[0]?.kickoffAt ?? null
+    selectedTrainingResults,
+    selectedTrainingSummary,
+    selectedResults[0]?.kickoffAt ?? null
   );
   const contract: FootballRuntimeFeatureContract = {
     status:
@@ -605,13 +625,15 @@ export function runFootballRuntimeReplay(
     modelKey: RUNTIME_MODEL_KEY,
     entrypoint: "modelFootballMatch+buildMatchContextAdjustment",
     contract,
-    fixtureIds: results.map((result) => result.fixtureExternalId),
-    probabilityVectors: results.map((result) => result.probabilities),
+    fixtureIds: selectedResults.map((result) => result.fixtureExternalId),
+    probabilityVectors: selectedResults.map((result) => result.probabilities),
     trainingProbabilityVectors: trainingResults.map((result) => result.probabilities),
     holdoutSelectionPolicy: {
       source: "chronological-training-window",
       minimumEdge: holdoutEvaluationConfig.minEdge,
-      minimumModelProbability: holdoutEvaluationConfig.minModelProbability
+      minimumModelProbability: holdoutEvaluationConfig.minModelProbability,
+      economicPolicy: selectionPolicy,
+      comparison: economicSelectionComparison
     },
     learnedWeightsProvenance: weightProvenance
   });
@@ -644,13 +666,18 @@ export function runFootballRuntimeReplay(
     confidenceBreakdown: summary.confidenceBreakdown,
     oddsCoverage: summary.oddsCoverage,
     learnedWeights,
+    selectionPolicy,
+    economicSelectionComparison,
     learnedWeightsProvenance: weightProvenance,
     config,
     notes: [
       ...runtimeNotes(contract, summary, weightProvenance),
-      `Holdout selection used the training-derived minimum edge ${holdoutEvaluationConfig.minEdge.toFixed(4)}; holdout outcomes could not tune it.`
+      `Holdout selection used the training-derived minimum edge ${holdoutEvaluationConfig.minEdge.toFixed(4)}; holdout outcomes could not tune it.`,
+      selectionPolicy.status === "active"
+        ? `Training-only economic evidence admitted ${selectionPolicy.allowedConfidenceBands.join(", ")} confidence band(s); the policy was applied unchanged to holdout.`
+        : `Training-only economic evidence admitted no confidence band, so the holdout selection policy abstained.`
     ],
-    results,
+    results: selectedResults,
     featureContract: contract,
     executionHash,
     rejections

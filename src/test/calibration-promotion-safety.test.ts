@@ -110,6 +110,12 @@ function readySnapshot(): TrainingDataSnapshot {
         featureContract: {
           eligibleFixtures: 1200,
           optionalCoverage: { playerFormFixtures: 900 }
+        },
+        selectionPolicy: {
+          version: "economic-confidence-bands-v1",
+          source: "chronological-training-window",
+          status: "active",
+          allowedConfidenceBands: ["medium"]
         }
       },
       notes: [],
@@ -264,6 +270,32 @@ describe("calibration promotion safety", () => {
     expect(profile.modelCompatibility).toBe("exact-runtime-parity");
     expect(profile.playerFormCoverage).toBe(0.2);
     expect(profile.reason).toContain("player-form coverage is 20.0%; 60% of chronology-safe fixtures is required");
+  });
+
+  it("keeps a promoted exact-runtime replay shadow-only when its training-only economic policy abstains", () => {
+    const snapshot = readySnapshot();
+    snapshot.latestBacktest = {
+      ...snapshot.latestBacktest!,
+      config: {
+        ...snapshot.latestBacktest!.config,
+        selectionPolicy: {
+          version: "economic-confidence-bands-v1",
+          source: "chronological-training-window",
+          status: "abstain",
+          allowedConfidenceBands: []
+        }
+      }
+    };
+
+    const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(profile.active).toBe(false);
+    expect(profile.economicSelectionPolicyStatus).toBe("abstain");
+    expect(profile.allowedConfidenceBands).toEqual([]);
+    expect(profile.reason).toContain("training-only economic selection policy abstains");
   });
 
   it("allows only pending-to-final settlement and never rewrites a final label", () => {
