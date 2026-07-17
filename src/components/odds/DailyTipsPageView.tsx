@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DailyTipsSections, ProviderRunStrip } from "@/components/odds/IntelligenceSlate";
+import { DailyDecisionOverview, DailyTipsSections, ProviderRunStrip } from "@/components/odds/IntelligenceSlate";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { TipsSharePreview } from "@/components/odds/TipsSharePreview";
 import type { LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
@@ -28,6 +28,7 @@ export function DailyTipsPageView({ product, fallbackBoard = null }: { product: 
           <Link className="button" href="/predictions/history">Yesterday&apos;s results</Link>
         </nav>
       </div>
+      <DailyDecisionOverview product={product} />
       <ProviderRunStrip slate={product.slate} />
       <DailyTipsSections product={product} fallbackBoard={fallbackBoard} />
       <TipsSharePreview formats={formats} />

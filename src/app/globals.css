@@ -2748,6 +2748,25 @@ a.score-row:active,
 .engine-rundown details ul { margin: 8px 0 4px; padding-left: 20px; }
 
 .intelligence-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 8px; }
+.daily-decision-overview { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(360px, .85fr); gap: clamp(22px, 4vw, 50px); align-items: center; margin: 22px 0 16px; padding: clamp(22px, 3.5vw, 34px); border: 1px solid var(--border-strong); border-top: 5px solid var(--green-strong); border-radius: 8px 28px 8px 8px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.daily-decision-overview-copy h2 { max-width: 720px; margin: 8px 0 10px; font-size: clamp(25px, 3.5vw, 40px); line-height: 1.02; }
+.daily-decision-overview-copy p { max-width: 64ch; margin: 0; color: var(--muted); line-height: 1.6; }
+.daily-decision-jumps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-block: 1px solid var(--border-strong); }
+.daily-decision-jumps a { display: grid; gap: 3px; min-height: 84px; padding: 14px 16px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); color: var(--text); text-decoration: none; }
+.daily-decision-jumps a:nth-child(2n) { border-right: 0; }
+.daily-decision-jumps a:nth-last-child(-n + 2) { border-bottom: 0; }
+.daily-decision-jumps a:hover { background: var(--surface-2); }
+.daily-decision-jumps strong { font: 780 26px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.daily-decision-jumps span { color: var(--muted); font: 800 10px/1.2 var(--font-mono); letter-spacing: .065em; text-transform: uppercase; }
+.daily-no-publish { display: flex; gap: 16px; align-items: flex-start; margin: 30px 0 4px; padding: 20px 22px; border: 1px solid var(--border-strong); border-left: 5px solid var(--green-strong); border-radius: var(--radius-lg); background: var(--green-soft); }
+.daily-no-publish h2 { margin: 0 0 5px; font-size: 22px; }
+.daily-no-publish p { max-width: 76ch; margin: 0; color: var(--muted); line-height: 1.55; }
+.daily-coverage-intro { max-width: 78ch; margin: -8px 0 20px; color: var(--muted); }
+.daily-coverage-more { margin-top: 16px; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); }
+.daily-coverage-more summary { padding: 16px 18px; color: var(--green-strong); font-weight: 800; cursor: pointer; }
+.daily-coverage-more[open] summary { border-bottom: 1px solid var(--border); }
+.daily-coverage-more .intelligence-grid { padding: 16px; }
+.intelligence-section[id],.daily-no-publish[id] { scroll-margin-top: calc(var(--header-h) + 18px); }
 .intelligence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .intelligence-card { position: relative; display: grid; gap: 13px; padding: 18px; border: 1px solid var(--border); border-left: 4px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 14px 34px -28px rgba(7, 94, 51, .65); }
 .intelligence-competition { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
@@ -2854,13 +2873,22 @@ a.score-row:active,
 @media (max-width: 820px) {
   .engine-rundown { grid-template-columns: 1fr; }
   .engine-rundown-state { border-right: 0; border-bottom: 1px solid var(--border); }
+  .daily-decision-overview { grid-template-columns: 1fr; }
   .intelligence-empty-slate { grid-template-columns: 1fr; }
   .weekly-day { grid-template-columns: 1fr; }
   .weekly-date { position: static; grid-template-columns: 1fr auto; align-items: baseline; }
   .homepage-product-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-  .engine-rundown dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .engine-rundown { gap: 8px; margin: 12px 0 22px; padding: 10px; }
+  .engine-rundown-state { padding: 6px 4px 10px; }
+  .engine-rundown dl { display: flex; gap: 0; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin; }
+  .engine-rundown dl div { flex: 0 0 104px; min-height: 58px; padding: 7px 10px; }
+  .daily-decision-overview { gap: 18px; margin: 16px 0 12px; padding: 20px 16px; border-radius: 6px 22px 6px 6px; }
+  .daily-decision-overview-copy h2 { font-size: 27px; }
+  .daily-decision-jumps a { min-height: 72px; padding: 12px; }
+  .daily-no-publish { display: grid; gap: 10px; margin-top: 22px; padding: 18px; }
+  .daily-coverage-more .intelligence-grid { padding: 10px; }
   .intelligence-grid { grid-template-columns: 1fr; }
   .intelligence-decision { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .intelligence-home-metrics div { grid-template-columns: 1fr; }

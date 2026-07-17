@@ -36,10 +36,13 @@ describe("live OddsPadi product UI contract", () => {
 
   it("keeps the daily tips surface useful even without a published value pick", () => {
     const slate = source("src/components/odds/IntelligenceSlate.tsx");
-    expect(slate).toContain("'s Full Schedule");
+    expect(slate).toContain("DailyDecisionOverview");
+    expect(slate).toContain("No public pick forced");
+    expect(slate).toContain("Evidence Queue");
+    expect(slate).toContain("waitingForEvidence");
     expect(slate).toContain("Safer Leans");
     expect(slate).toContain("Watchlist");
-    expect(slate).toContain("No-Pick Matches");
+    expect(slate).toContain("Analysed Abstentions");
     expect(slate).toContain("if (!product.sections.schedule.length)");
     expect(slate).toContain("fallbackBoard?.fixtures.length");
     expect(slate).toContain("<LiveCoverageFallback board={fallbackBoard}");
