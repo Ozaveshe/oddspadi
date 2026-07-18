@@ -33,24 +33,25 @@ export const newsStories: NewsStory[] = [
   },
   {
     slug: "basketball-summer-league-matchday-watchlist",
-    title: "NBA Summer League July 16 desk: seven official games, four stored, no pick",
-    excerpt: "The NBA lists seven Las Vegas games from 4 to 10 p.m. ET; four were present in OddsPadi's recovered store, but their stale, suspended state does not support a pick.",
+    title: "NBA Summer League July 17 desk: six official games, none stored yet",
+    excerpt: "The NBA lists six Las Vegas consolation games from 6:30 to 11 p.m. ET; none were in OddsPadi's checked July 17 store, so this desk makes no pick.",
     category: "Matchday briefing",
     sport: "Basketball",
     publishedAt: "2026-07-12",
-    updatedAt: "2026-07-16",
-    sourceAsOf: "2026-07-16T16:32:05.225873Z",
-    revision: 6,
+    updatedAt: "2026-07-17",
+    sourceAsOf: "2026-07-17T06:35:02.214994Z",
+    revision: 7,
     readMinutes: 4,
     body: [
-      "The NBA's official schedule lists seven Las Vegas Summer League games for Thursday, July 16: Dallas–Oklahoma City at 4 p.m. ET, Brooklyn–Houston at 4:30 p.m., LA Lakers–Chicago at 6 p.m., Golden State–New York at 7 p.m., Memphis–Atlanta at 8 p.m., Toronto–Miami at 9 p.m. and Portland–Denver at 10 p.m.",
-      "This is the last day of the first-four-game stage. After each team has completed that stage, the top four records advance to the July 18 semifinals; the other 26 teams play a fifth consolation game from July 17–19, and the championship follows on July 19. The published tiebreak order starts with head-to-head for a two-team tie, then point differential and total points.",
-      "An exact OddsPadi database check completed on July 16 at 16:32:05 UTC. Four of the seven official fixtures were stored: Dallas–Oklahoma City, Brooklyn–Houston, LA Lakers–Chicago and Golden State–New York. Memphis–Atlanta, Toronto–Miami and Portland–Denver were not present in the checked schedule window. The four stored rows had last synced on July 15 at 02:26:37 UTC and were marked live without scores; their latest summaries were suspended, with no current market decisions, outcomes or public picks. This desk therefore makes no model pick and does not treat the stored status as current game-state evidence."
+      "The NBA's live schedule lists six Las Vegas Summer League consolation games for Friday, July 17: Sacramento–Charlotte at 6:30 p.m. ET, Chicago–Cleveland at 7 p.m., Dallas–New York at 8:30 p.m., Detroit–Miami at 9 p.m., Portland–Utah at 10:30 p.m. and Minnesota–LA Clippers at 11 p.m.",
+      "The published format sends the top four records from the first four games to the July 18 semifinals. The other 26 teams play a fifth consolation game from July 17–19, with the championship on July 19. Friday's six games are part of that consolation slate; they begin at 22:30 UTC and the final three fall after midnight UTC on July 18.",
+      "An exact OddsPadi database check completed on July 17 at 06:35:02 UTC found no Summer League fixture whose Las Vegas local date was July 17. The latest completed daily-engine receipt at 06:27 UTC published zero value picks, and no prediction-outcome row was attached to the UTC-day fixtures. This desk therefore makes no model pick and does not reuse July 16's stored rows as evidence for Friday's games."
     ],
     sources: [
-      { label: "Official NBA Summer League schedule PDF", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-16" },
-      { label: "Official 2026 Summer League format and tiebreakers", url: "https://www.nba.com/news/2026-summer-league-format", checkedAt: "2026-07-16" },
-      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-16" }
+      { label: "Official NBA live Summer League schedule", url: "https://www.nba.com/2026-summer-league-vegas-schedule", checkedAt: "2026-07-17" },
+      { label: "Official NBA Summer League schedule PDF", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-17" },
+      { label: "Official 2026 Summer League format and tiebreakers", url: "https://www.nba.com/news/2026-summer-league-format", checkedAt: "2026-07-17" },
+      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-17" }
     ]
   },
   {
@@ -71,14 +72,18 @@ export const newsStories: NewsStory[] = [
       { label: "Official 2026/27 fixture list", url: "https://www.premierleague.com/en/news/4675097/all-380-fixtures-for-202627-premier-league-season/", checkedAt: "2026-07-12" }
     ]
   }
-];
+].sort((left, right) => Date.parse(right.updatedAt ?? right.publishedAt) - Date.parse(left.updatedAt ?? left.publishedAt));
 
 export function getFallbackNewsStory(slug: string) {
   return newsStories.find((story) => story.slug === slug) ?? null;
 }
 
-type EditorialStoryRow = { slug: string; title: string; excerpt: string; category: string; sport: string; published_at: string; updated_at: string; source_as_of: string; revision: number; read_minutes: number; body: unknown; sources: unknown };
+type EditorialStoryRow = { slug: string; generator: string; data_fingerprint: string; title: string; excerpt: string; category: string; sport: string; published_at: string; updated_at: string; source_as_of: string; revision: number; read_minutes: number; body: unknown; sources: unknown };
+export function isSafeGeneratedEditorialFingerprint(value: string): boolean {
+  return value.startsWith("canonical-v1-") || value.startsWith("fixture-desk-fnv1a-");
+}
 function generatedStory(row: EditorialStoryRow): NewsStory | null {
+  if (!isSafeGeneratedEditorialFingerprint(row.data_fingerprint)) return null;
   if (!Array.isArray(row.body) || !row.body.every((item) => typeof item === "string")) return null;
   const sources = Array.isArray(row.sources) ? row.sources.filter((item): item is { label: string; url: string; checkedAt: string } => Boolean(item) && typeof item === "object" && typeof (item as Record<string, unknown>).label === "string" && typeof (item as Record<string, unknown>).url === "string" && typeof (item as Record<string, unknown>).checkedAt === "string") : [];
   return { slug: row.slug, title: row.title, excerpt: row.excerpt, category: row.category, sport: row.sport, publishedAt: row.published_at, updatedAt: row.updated_at, sourceAsOf: row.source_as_of, revision: row.revision, readMinutes: row.read_minutes, body: row.body, sources };
@@ -87,7 +92,7 @@ function generatedStory(row: EditorialStoryRow): NewsStory | null {
 export async function getNewsStories(): Promise<NewsStory[]> {
   const db = getSupabasePublicReadClient();
   if (!db) return newsStories;
-  const { data, error } = await db.from("op_editorial_stories").select("slug,title,excerpt,category,sport,published_at,updated_at,source_as_of,revision,read_minutes,body,sources").order("published_at", { ascending: false }).limit(100).abortSignal(publicReadAbortSignal());
+  const { data, error } = await db.from("op_editorial_stories").select("slug,generator,data_fingerprint,title,excerpt,category,sport,published_at,updated_at,source_as_of,revision,read_minutes,body,sources").order("published_at", { ascending: false }).limit(100).abortSignal(publicReadAbortSignal());
   if (error) return newsStories;
   const generated = (data as EditorialStoryRow[] ?? []).map(generatedStory).filter((story): story is NewsStory => Boolean(story));
   const generatedSlugs = new Set(generated.map((story) => story.slug));

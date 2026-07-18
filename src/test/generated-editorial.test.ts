@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { generateEditorialStories, type EditorialOutcome } from "@/lib/editorial/generatedStories";
-import { runEditorialGeneration } from "../../netlify/functions/editorial-generation-worker-background";
+import { publicPickEditorialOutcome, runEditorialGeneration } from "../../netlify/functions/editorial-generation-worker-background";
 
 const now = new Date("2026-07-13T05:00:00Z");
 const row = (overrides: Partial<EditorialOutcome>): EditorialOutcome => ({ id: crypto.randomUUID(), fixture_external_id: "fixture-1", sport: "football", league: "NPFL", home_team: "Enyimba", away_team: "Kano Pillars", kickoff_at: "2026-07-14T16:00:00Z", market: "match_winner", selection: "home", recommended_selection: "Enyimba", model_probability: 0.61, value_edge: 0.08, odds: 2.05, result: "pending", settled_at: null, created_at: "2026-07-13T04:00:00Z", ...overrides });
@@ -18,8 +18,17 @@ describe("deterministic editorial generators", () => {
     const marketStory = stories.find((story) => story.generator === "model-vs-market");
     expect(marketStory?.title).not.toContain("today");
     expect(marketStory?.body.join(" ")).toContain("Scheduled 2026-07-14T16:00:00.000Z");
-    expect(marketStory?.dataFingerprint).toMatch(/^template-v2-fnv1a-/);
+    expect(marketStory?.dataFingerprint).toMatch(/^canonical-v1-template-v2-fnv1a-/);
     expect(stories.every((story) => story.sources.some((source) => source.url === "/predictions/history"))).toBe(true);
+  });
+
+  it("keeps a one-fixture desk grammatical and excludes far-future rows", () => {
+    const stories = generateEditorialStories([
+      row({ id: "near" }),
+      row({ id: "far", fixture_external_id: "fixture-far", home_team: "Far", away_team: "Future", kickoff_at: "2026-08-21T19:00:00Z" })
+    ], now);
+    expect(stories.find((story) => story.generator === "daily-slate")?.title).toBe("Matchday desk: 1 upcoming fixture");
+    expect(stories.flatMap((story) => story.body).join(" ")).not.toContain("Far vs Future");
   });
 
   it("does not fabricate a story when its source rows are absent", () => {
@@ -32,6 +41,31 @@ describe("deterministic editorial generators", () => {
 });
 
 describe("editorial worker boundary", () => {
+  it("maps canonical public-pick fields into editorial outcomes", () => {
+    expect(publicPickEditorialOutcome({
+      id: "pick-1",
+      fixture_id: "fixture-1",
+      sport: "football",
+      league: "NPFL",
+      home_team: "Enyimba",
+      away_team: "Kano Pillars",
+      kickoff_at: "2026-07-14T16:00:00Z",
+      market: "match_winner",
+      selection: "home",
+      selection_label: "Enyimba",
+      model_probability: 0.61,
+      value_edge: 0.08,
+      odds: 2.05,
+      result: "pending",
+      settled_at: null,
+      published_at: "2026-07-13T04:00:00Z"
+    })).toEqual(expect.objectContaining({
+      fixture_external_id: "fixture-1",
+      recommended_selection: "Enyimba",
+      created_at: "2026-07-13T04:00:00Z"
+    }));
+  });
+
   it("rejects requests without the matching schedule token before database access", async () => {
     const response = await runEditorialGeneration({ scheduleToken: "wrong", adminToken: "right", supabaseUrl: null, supabaseKey: null, now });
     expect(response.status).toBe(401);
