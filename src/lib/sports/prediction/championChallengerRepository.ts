@@ -6,7 +6,7 @@ import { readActiveCalibrationPromotion, type ActiveCalibrationPromotion } from 
 
 type GovernedSport = Extract<Sport, "football" | "basketball" | "tennis">;
 
-type ChallengerCandidateRow = {
+export type ChallengerCandidateRow = {
   id: string;
   sport: GovernedSport;
   model_key: string;
@@ -39,6 +39,13 @@ export type ChampionChallengerStoreResult = {
   reason?: string;
 };
 
+export type ChampionChallengerSweepResult = {
+  status: "completed" | "not-configured" | "pending-migration" | "failed";
+  candidatesInspected: number;
+  comparisons: ChampionChallengerStoreResult[];
+  reason?: string;
+};
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -50,6 +57,27 @@ function tableMissing(reason: string | undefined, name: string): boolean {
 
 function candidateReady(candidate: ChallengerCandidateRow): boolean {
   return record(record(candidate.metrics).promotionReadiness).status === "ready-shadow-review";
+}
+
+export function selectEarliestReadyChallengerCandidates(
+  candidates: ChallengerCandidateRow[],
+  limit = 12
+): ChallengerCandidateRow[] {
+  const earliestReadyByIdentity = new Map<string, ChallengerCandidateRow>();
+  for (const candidate of candidates) {
+    if (!candidateReady(candidate)) continue;
+    const windowEnd = Date.parse(candidate.window_end ?? "");
+    if (!Number.isFinite(windowEnd)) continue;
+    const identity = `${candidate.model_key}\u0000${candidate.engine_version}`;
+    const existing = earliestReadyByIdentity.get(identity);
+    if (!existing || windowEnd < Date.parse(existing.window_end ?? "")) {
+      earliestReadyByIdentity.set(identity, candidate);
+    }
+  }
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(50, Math.trunc(limit))) : 12;
+  return [...earliestReadyByIdentity.values()]
+    .sort((left, right) => Date.parse(left.window_end ?? "") - Date.parse(right.window_end ?? ""))
+    .slice(0, safeLimit);
 }
 
 async function readChallengerCandidate(candidateId: string): Promise<ChallengerCandidateRow | { error: string; pendingMigration?: boolean } | null> {
@@ -112,7 +140,30 @@ export async function previewChampionChallengerComparison({
     .order("settled_at", { ascending: false })
     .limit(5000);
   if (outcomesResult.error) return { status: "failed", reason: outcomesResult.error.message };
-  const outcomes = (outcomesResult.data ?? []) as OutcomeRow[];
+  const shadowResult = await client
+    .from("op_shadow_predictions")
+    .select("id,fixture_external_id,sport,market,selection,model_probability,implied_probability,odds,closing_odds,result,settled_at,generated_at,model_key,engine_version")
+    .eq("sport", sport)
+    .neq("result", "pending")
+    .gt("settled_at", candidateResult.window_end)
+    .lte("settled_at", now.toISOString())
+    .order("settled_at", { ascending: false })
+    .limit(5000);
+  if (shadowResult.error) {
+    return {
+      status: tableMissing(shadowResult.error.message, "op_shadow_predictions") ? "pending-migration" : "failed",
+      reason: shadowResult.error.message
+    };
+  }
+  const shadowOutcomes = (shadowResult.data ?? []).map((row) => ({
+    ...row,
+    decision_run_id: null,
+    value_edge: typeof row.model_probability === "number" && typeof row.implied_probability === "number"
+      ? row.model_probability - row.implied_probability
+      : null,
+    created_at: row.generated_at
+  })) as OutcomeRow[];
+  const outcomes = [...(outcomesResult.data ?? []) as OutcomeRow[], ...shadowOutcomes];
   const runIds = [...new Set(outcomes.map((row) => row.decision_run_id).filter((id): id is string => Boolean(id)))];
   let decisionRuns: DecisionRunRow[] = [];
   if (runIds.length) {
@@ -211,4 +262,48 @@ export async function runAndStoreChampionChallengerComparison({
     return { status: "failed", configured: true, table: "op_model_comparison_receipts", receipt: preview.receipt, reason: result.error.message };
   }
   return { status: "stored", configured: true, table: "op_model_comparison_receipts", id: String(result.data.id), receipt: preview.receipt };
+}
+
+export async function runChampionChallengerSweep({
+  sport,
+  now = new Date(),
+  limit = 12
+}: {
+  sport: GovernedSport;
+  now?: Date;
+  limit?: number;
+}): Promise<ChampionChallengerSweepResult> {
+  const runtime = getSupabaseRuntimeStatus();
+  if (!runtime.serverWriteReady) {
+    return {
+      status: "not-configured",
+      candidatesInspected: 0,
+      comparisons: [],
+      reason: `Supabase server reads are not configured. Missing: ${runtime.missingServerEnv.join(", ")}.`
+    };
+  }
+  const client = getSupabaseServerClient();
+  if (!client) return { status: "failed", candidatesInspected: 0, comparisons: [], reason: "Supabase client could not be created." };
+  const candidatesResult = await client
+    .from("op_calibration_candidates")
+    .select("id,sport,model_key,engine_version,window_end,metrics")
+    .eq("sport", sport)
+    .not("window_end", "is", null)
+    .lt("window_end", now.toISOString())
+    .order("window_end", { ascending: true })
+    .limit(500);
+  if (candidatesResult.error) {
+    return {
+      status: tableMissing(candidatesResult.error.message, "op_calibration_candidates") ? "pending-migration" : "failed",
+      candidatesInspected: 0,
+      comparisons: [],
+      reason: candidatesResult.error.message
+    };
+  }
+  const eligible = selectEarliestReadyChallengerCandidates((candidatesResult.data ?? []) as ChallengerCandidateRow[], limit);
+  const comparisons: ChampionChallengerStoreResult[] = [];
+  for (const candidate of eligible) {
+    comparisons.push(await runAndStoreChampionChallengerComparison({ sport, challengerCandidateId: candidate.id, now }));
+  }
+  return { status: "completed", candidatesInspected: eligible.length, comparisons };
 }

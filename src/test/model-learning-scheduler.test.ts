@@ -41,6 +41,7 @@ describe("governed model learning schedule", () => {
       adminToken: "same",
       runCalibration,
       runRuntimeReplay,
+      runChampionChallengerComparisonSweep: vi.fn(async () => ({ status: "completed" as const, candidatesInspected: 0, comparisons: [] })),
       runtimeReplayDue: vi.fn(async () => false),
       now: new Date("2026-07-17T03:45:00.000Z")
     });
@@ -68,6 +69,7 @@ describe("governed model learning schedule", () => {
       runCalibration,
       runRuntimeReplay,
       runtimeReplayDue,
+      runChampionChallengerComparisonSweep: vi.fn(async () => ({ status: "completed" as const, candidatesInspected: 0, comparisons: [] })),
       now: new Date("2026-07-17T03:45:00.000Z")
     });
     const body = await response.json() as {
@@ -102,6 +104,7 @@ describe("governed model learning schedule", () => {
       adminToken: "same",
       runCalibration,
       runRuntimeReplay,
+      runChampionChallengerComparisonSweep: vi.fn(async () => ({ status: "completed" as const, candidatesInspected: 0, comparisons: [] })),
       now: new Date("2026-07-20T03:45:00.000Z")
     });
     const body = await response.json() as {
@@ -119,14 +122,18 @@ describe("governed model learning schedule", () => {
     expect(body.results.every((row) => row.runtimeReplay.status === "stored")).toBe(true);
   });
 
-  it("stores paired champion-challenger evidence for every newly created candidate without auto-promoting", async () => {
-    const runChampionChallenger = vi.fn(async ({ sport, challengerCandidateId }: { sport: string; challengerCandidateId: string }) => ({
-      status: "stored" as const,
-      configured: true,
-      table: "op_model_comparison_receipts" as const,
-      id: `${sport}-comparison`,
-      receipt: { status: "challenger-promotable", eligibleForPromotion: true, sample: { paired: 80 } }
-    }) as never);
+  it("stores paired champion-challenger evidence without auto-promoting", async () => {
+    const runChampionChallengerComparisonSweep = vi.fn(async ({ sport }: { sport: string }) => ({
+      status: "completed" as const,
+      candidatesInspected: 1,
+      comparisons: [{
+        status: "stored" as const,
+        configured: true,
+        table: "op_model_comparison_receipts" as const,
+        id: `${sport}-comparison`,
+        receipt: { status: "challenger-promotable", eligibleForPromotion: true, sample: { paired: 80 } }
+      } as never]
+    }));
     const response = await runModelLearningCycle({
       scheduleToken: "same",
       adminToken: "same",
@@ -137,20 +144,25 @@ describe("governed model learning schedule", () => {
         id: "calibration-1",
         candidates: [{ status: "stored" as const, configured: true, table: "op_calibration_candidates" as const, id: "challenger-1" }]
       })),
-      runChampionChallenger,
+      runChampionChallengerComparisonSweep,
       runtimeReplayDue: vi.fn(async () => false),
       now: new Date("2026-07-17T04:45:00.000Z")
     });
     const body = await response.json() as {
       success: boolean;
       controls: { championChallengerEvaluation: boolean; automaticLivePromotion: boolean };
-      results: Array<{ championChallenger: Array<{ receiptId: string; verdict: string; pairedSize: number }> }>;
+      results: Array<{ championChallenger: { sweepStatus: string; candidatesInspected: number; comparisons: Array<{ receiptId: string; verdict: string; pairedSize: number }> } }>;
     };
 
     expect(response.status).toBe(200);
     expect(body.controls).toMatchObject({ championChallengerEvaluation: true, automaticLivePromotion: false });
-    expect(runChampionChallenger).toHaveBeenCalledWith({ sport: "football", challengerCandidateId: "challenger-1", now: expect.any(Date) });
-    expect(body.results[0]?.championChallenger).toEqual([{ status: "stored", receiptId: "football-comparison", verdict: "challenger-promotable", eligibleForPromotion: true, pairedSize: 80, reason: null }]);
+    expect(runChampionChallengerComparisonSweep).toHaveBeenCalledWith({ sport: "football", now: expect.any(Date) });
+    expect(body.results[0]?.championChallenger).toEqual({
+      sweepStatus: "completed",
+      candidatesInspected: 1,
+      reason: null,
+      comparisons: [{ status: "stored", receiptId: "football-comparison", verdict: "challenger-promotable", eligibleForPromotion: true, pairedSize: 80, reason: null }]
+    });
   });
 
   it("treats a first-sport bootstrap candidate as comparison-not-applicable rather than a failed learning cycle", async () => {
@@ -164,11 +176,15 @@ describe("governed model learning schedule", () => {
         id: "calibration-1",
         candidates: [{ status: "stored" as const, configured: true, table: "op_calibration_candidates" as const, id: "candidate-1" }]
       })),
-      runChampionChallenger: vi.fn(async () => ({
-        status: "not-applicable" as const,
-        configured: true,
-        table: "op_model_comparison_receipts" as const,
-        reason: "No active tennis champion exists; the first promotion is a bootstrap decision."
+      runChampionChallengerComparisonSweep: vi.fn(async () => ({
+        status: "completed" as const,
+        candidatesInspected: 1,
+        comparisons: [{
+          status: "not-applicable" as const,
+          configured: true,
+          table: "op_model_comparison_receipts" as const,
+          reason: "No active tennis champion exists; the first promotion is a bootstrap decision."
+        }]
       })),
       runtimeReplayDue: vi.fn(async () => false)
     });
@@ -176,7 +192,7 @@ describe("governed model learning schedule", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       success: true,
-      results: [{ championChallenger: [{ status: "not-applicable" }] }]
+      results: [{ championChallenger: { sweepStatus: "completed", comparisons: [{ status: "not-applicable" }] } }]
     });
   });
 
@@ -196,6 +212,7 @@ describe("governed model learning schedule", () => {
           reason: "candidate persistence failed"
         }]
       })),
+      runChampionChallengerComparisonSweep: vi.fn(async () => ({ status: "completed" as const, candidatesInspected: 0, comparisons: [] })),
       runtimeReplayDue: vi.fn(async () => false),
       now: new Date("2026-07-17T04:45:00.000Z")
     });

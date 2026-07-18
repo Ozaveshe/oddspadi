@@ -13,6 +13,13 @@ async function fixture() {
   return { match, prediction };
 }
 
+const noPendingShadowSettlement = async () => ({
+  status: "no-pending" as const,
+  configured: true,
+  table: "op_shadow_predictions" as const,
+  totals: { pending: 0, settled: 0, reused: 0, waiting: 0, failed: 0 }
+});
+
 describe("autonomous shadow outcomes", () => {
   it("opens an auditable match-winner outcome even when the final action is avoid", async () => {
     const { match, prediction } = await fixture();
@@ -98,6 +105,7 @@ describe("autonomous shadow outcomes", () => {
       matchesByDateOverride: new Map([[match.kickoffTime.slice(0, 10), [finishedMatch]]]),
       storeOutcome,
       runCalibration,
+      settleShadowPredictions: noPendingShadowSettlement,
       now: new Date("2026-08-22T01:00:00.000Z")
     });
 
@@ -153,6 +161,7 @@ describe("autonomous shadow outcomes", () => {
       matchesByDateOverride: new Map([[match.kickoffTime.slice(0, 10), [match]]]),
       refreshClosingLine,
       storeOutcome,
+      settleShadowPredictions: noPendingShadowSettlement,
       now: new Date("2026-08-20T12:00:00.000Z")
     });
 
@@ -205,6 +214,7 @@ describe("autonomous shadow outcomes", () => {
       rowsOverride: [row],
       matchesByDateOverride: new Map([[match.kickoffTime.slice(0, 10), [match]]]),
       refreshClosingLine,
+      settleShadowPredictions: noPendingShadowSettlement,
       now: new Date("2026-08-22T12:00:00.000Z")
     });
 

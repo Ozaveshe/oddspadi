@@ -9,7 +9,11 @@ vi.mock("@/lib/supabase/server", () => ({ getSupabaseRuntimeStatus, getSupabaseS
 vi.mock("@/lib/sports/prediction/decisionCalibrationPromotion", () => ({ readActiveCalibrationPromotion }));
 vi.mock("@/lib/sports/prediction/championChallenger", () => ({ buildChampionChallengerReceipt }));
 
-import { runAndStoreChampionChallengerComparison } from "@/lib/sports/prediction/championChallengerRepository";
+import {
+  runAndStoreChampionChallengerComparison,
+  selectEarliestReadyChallengerCandidates,
+  type ChallengerCandidateRow
+} from "@/lib/sports/prediction/championChallengerRepository";
 
 describe("champion challenger repository", () => {
   beforeEach(() => {
@@ -23,6 +27,25 @@ describe("champion challenger repository", () => {
         engineVersion: "engine-v1"
       }
     });
+  });
+
+  it("keeps the earliest ready freeze per model identity so evidence can mature", () => {
+    const candidate = (id: string, modelKey: string, windowEnd: string, status = "ready-shadow-review") => ({
+      id,
+      sport: "football",
+      model_key: modelKey,
+      engine_version: "engine-v1",
+      window_end: windowEnd,
+      metrics: { promotionReadiness: { status } }
+    }) as ChallengerCandidateRow;
+
+    expect(selectEarliestReadyChallengerCandidates([
+      candidate("new-shadow", "football-shadow", "2026-04-01T00:00:00.000Z"),
+      candidate("old-shadow", "football-shadow", "2026-03-01T00:00:00.000Z"),
+      candidate("champion", "football-v1", "2026-02-01T00:00:00.000Z"),
+      candidate("invalid-window", "football-v2", "not-a-date"),
+      candidate("not-ready", "football-v3", "2026-01-01T00:00:00.000Z", "waiting-sample")
+    ]).map((row) => row.id)).toEqual(["champion", "old-shadow"]);
   });
 
   it("reads the latest bounded evidence and returns the exact immutable receipt when a hash is reused", async () => {
@@ -69,7 +92,7 @@ describe("champion challenger repository", () => {
     const client = {
       from: vi.fn((table: string) => {
         if (table === "op_calibration_candidates") return candidateQuery;
-        if (table === "op_prediction_outcomes") return outcomeQuery;
+        if (table === "op_prediction_outcomes" || table === "op_shadow_predictions") return outcomeQuery;
         if (table === "op_model_comparison_receipts") return receiptQuery;
         throw new Error(`Unexpected table ${table}`);
       })
@@ -118,7 +141,7 @@ describe("champion challenger repository", () => {
       })
     };
     getSupabaseServerClient.mockReturnValue({
-      from: vi.fn((table: string) => table === "op_calibration_candidates" ? candidateQuery : table === "op_prediction_outcomes" ? outcomeQuery : receiptQuery)
+      from: vi.fn((table: string) => table === "op_calibration_candidates" ? candidateQuery : ["op_prediction_outcomes", "op_shadow_predictions"].includes(table) ? outcomeQuery : receiptQuery)
     });
 
     const result = await runAndStoreChampionChallengerComparison({ sport: "football", challengerCandidateId: "candidate-2" });

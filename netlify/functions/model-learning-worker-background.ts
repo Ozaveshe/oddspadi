@@ -4,7 +4,8 @@ import { finishProviderRun, startProviderRun } from "../../src/lib/sports/intell
 import type { ProviderRunClaim, ProviderRunLog, ProviderRunStatus } from "../../src/lib/sports/intelligence/types";
 import { runAndStoreCalibration, type CalibrationRunResult } from "../../src/lib/sports/prediction/decisionCalibration";
 import {
-  runAndStoreChampionChallengerComparison,
+  runChampionChallengerSweep,
+  type ChampionChallengerSweepResult,
   type ChampionChallengerStoreResult
 } from "../../src/lib/sports/prediction/championChallengerRepository";
 import {
@@ -22,7 +23,7 @@ type LearningSport = Extract<Sport, "football" | "basketball" | "tennis">;
 type CalibrationOperation = (sport: LearningSport) => Promise<CalibrationRunResult>;
 type RuntimeReplayOperation = (sport: LearningSport) => Promise<BacktestRunStoreResult>;
 type RuntimeReplayDueOperation = (sport: LearningSport, now: Date) => Promise<boolean>;
-type ChampionChallengerOperation = (input: { sport: LearningSport; challengerCandidateId: string; now: Date }) => Promise<ChampionChallengerStoreResult>;
+type ChampionChallengerSweepOperation = (input: { sport: LearningSport; now: Date }) => Promise<ChampionChallengerSweepResult>;
 type ClaimLearningRun = (startedAt: string) => Promise<ProviderRunClaim>;
 type FinishLearningRun = (run: ProviderRunLog, status: ProviderRunStatus, errors: string[], finishedAt: string) => Promise<ProviderRunLog>;
 
@@ -54,7 +55,7 @@ export async function runModelLearningCycle({
       ? runAndStoreFootballRuntimeReplay({ minSample: 100, limit: 50_000 })
       : runAndStoreHistoricalBacktest({ sport, minSample: 30, limit: 50_000 }),
   runtimeReplayDue = runtimeReplayNeedsBootstrap,
-  runChampionChallenger = runAndStoreChampionChallengerComparison,
+  runChampionChallengerComparisonSweep = runChampionChallengerSweep,
   now = new Date()
 }: {
   scheduleToken: string | null;
@@ -63,7 +64,7 @@ export async function runModelLearningCycle({
   runCalibration?: CalibrationOperation;
   runRuntimeReplay?: RuntimeReplayOperation;
   runtimeReplayDue?: RuntimeReplayDueOperation;
-  runChampionChallenger?: ChampionChallengerOperation;
+  runChampionChallengerComparisonSweep?: ChampionChallengerSweepOperation;
   now?: Date;
 }) {
   if (!adminToken || !scheduleToken || !tokenMatches(adminToken, scheduleToken)) {
@@ -76,6 +77,7 @@ export async function runModelLearningCycle({
     result: CalibrationRunResult;
     runtimeReplay: BacktestRunStoreResult | null;
     runtimeReplayTrigger: "weekly" | "bootstrap" | "not-due";
+    comparisonSweep: ChampionChallengerSweepResult;
     comparisons: ChampionChallengerStoreResult[];
   }> = [];
   for (const sport of sports) {
@@ -83,24 +85,20 @@ export async function runModelLearningCycle({
     const runtimeReplayTrigger = weeklyRuntimeReplay ? "weekly" : bootstrapRuntimeReplay ? "bootstrap" : "not-due";
     const runtimeReplay = runtimeReplayTrigger === "not-due" ? null : await runRuntimeReplay(sport);
     const result = await runCalibration(sport);
-    const newCandidateIds = (result.candidates ?? [])
-      .filter((candidate) => candidate.status === "stored" && candidate.id)
-      .map((candidate) => candidate.id!);
-    const comparisons: ChampionChallengerStoreResult[] = [];
-    for (const challengerCandidateId of newCandidateIds) {
-      comparisons.push(await runChampionChallenger({ sport, challengerCandidateId, now }));
-    }
-    results.push({ sport, runtimeReplay, runtimeReplayTrigger, result, comparisons });
+    const comparisonSweep = await runChampionChallengerComparisonSweep({ sport, now });
+    const comparisons: ChampionChallengerStoreResult[] = comparisonSweep.comparisons;
+    results.push({ sport, runtimeReplay, runtimeReplayTrigger, result, comparisonSweep, comparisons });
   }
   const successfulCandidateStatuses = new Set(["stored", "reused", "skipped"]);
   const successfulComparisonStatuses = new Set(["stored", "reused", "not-applicable"]);
-  const success = results.every(({ result, runtimeReplay, comparisons }) =>
+  const success = results.every(({ result, runtimeReplay, comparisonSweep, comparisons }) =>
     result.status === "stored" &&
     (result.candidates ?? []).every((candidate) => successfulCandidateStatuses.has(candidate.status)) &&
+    comparisonSweep.status === "completed" &&
     comparisons.every((comparison) => successfulComparisonStatuses.has(comparison.status)) &&
     (!runtimeReplay || runtimeReplay.status === "stored")
   );
-  const resultSummary = results.map(({ sport, result, runtimeReplay, runtimeReplayTrigger, comparisons }) => ({
+  const resultSummary = results.map(({ sport, result, runtimeReplay, runtimeReplayTrigger, comparisonSweep, comparisons }) => ({
     sport,
     calibration: {
       status: result.status,
@@ -118,14 +116,19 @@ export async function runModelLearningCycle({
       logLoss: runtimeReplay?.result?.logLoss ?? null,
       reason: runtimeReplay && runtimeReplay.status !== "stored" ? runtimeReplay.reason : null
     },
-    championChallenger: comparisons.map((comparison) => ({
-      status: comparison.status,
-      receiptId: comparison.id ?? null,
-      verdict: comparison.receipt?.status ?? null,
-      eligibleForPromotion: comparison.receipt?.eligibleForPromotion ?? false,
-      pairedSize: comparison.receipt?.sample.paired ?? 0,
-      reason: comparison.reason ?? null
-    }))
+    championChallenger: {
+      sweepStatus: comparisonSweep.status,
+      candidatesInspected: comparisonSweep.candidatesInspected,
+      reason: comparisonSweep.reason ?? null,
+      comparisons: comparisons.map((comparison) => ({
+        status: comparison.status,
+        receiptId: comparison.id ?? null,
+        verdict: comparison.receipt?.status ?? null,
+        eligibleForPromotion: comparison.receipt?.eligibleForPromotion ?? false,
+        pairedSize: comparison.receipt?.sample.paired ?? 0,
+        reason: comparison.reason ?? null
+      }))
+    }
   }));
   console.info(JSON.stringify({
     event: "oddspadi-model-learning-cycle",
@@ -141,7 +144,7 @@ export async function runModelLearningCycle({
       calibrationRunsStored: results.every(({ result }) => result.status === "stored"),
       candidateGeneration: true,
       championChallengerEvaluation: true,
-      comparisonReceiptsStored: results.every(({ comparisons }) => comparisons.every((comparison) => successfulComparisonStatuses.has(comparison.status))),
+      comparisonReceiptsStored: results.every(({ comparisonSweep, comparisons }) => comparisonSweep.status === "completed" && comparisons.every((comparison) => successfulComparisonStatuses.has(comparison.status))),
       weeklyRuntimeParityBacktests: weeklyRuntimeReplay,
       bootstrapRuntimeParityBacktests: results.some((result) => result.runtimeReplayTrigger === "bootstrap"),
       automaticLivePromotion: false,
@@ -202,7 +205,11 @@ export async function runSerializedModelLearningCycle({
         sport?: string;
         calibration?: { status?: string; reason?: string | null; candidates?: Array<{ status?: string; reason?: string | null }> };
         runtimeReplay?: { status?: string; reason?: string | null };
-        championChallenger?: Array<{ status?: string; reason?: string | null }>;
+        championChallenger?: {
+          sweepStatus?: string;
+          reason?: string | null;
+          comparisons?: Array<{ status?: string; reason?: string | null }>;
+        };
       }>;
       [key: string]: unknown;
     };
@@ -213,15 +220,19 @@ export async function runSerializedModelLearningCycle({
       const candidateErrors = (result.calibration?.candidates ?? [])
         .filter((candidate) => candidate.status && !["stored", "reused", "skipped"].includes(candidate.status))
         .map((candidate) => `${sport} calibration candidate: ${candidate.reason ?? candidate.status}`);
-      const comparisonErrors = (result.championChallenger ?? [])
+      const comparisonErrors = (result.championChallenger?.comparisons ?? [])
         .filter((comparison) => comparison.status && !["stored", "reused", "not-applicable"].includes(comparison.status))
         .map((comparison) => `${sport} champion-challenger: ${comparison.reason ?? comparison.status}`);
+      const sweepError = result.championChallenger?.sweepStatus && result.championChallenger.sweepStatus !== "completed"
+        ? `${sport} champion-challenger sweep: ${result.championChallenger.reason ?? result.championChallenger.sweepStatus}`
+        : "";
       return [
         calibration && calibration !== "stored" ? `${sport} calibration: ${result.calibration?.reason ?? calibration}` : "",
         runtimeReplay && runtimeReplay !== "stored" && runtimeReplay !== "not-due"
           ? `${sport} runtime replay: ${result.runtimeReplay?.reason ?? runtimeReplay}`
           : "",
         ...candidateErrors,
+        sweepError,
         ...comparisonErrors
       ].filter(Boolean);
     });

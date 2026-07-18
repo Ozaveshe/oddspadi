@@ -84,6 +84,23 @@ describe("champion challenger governance", () => {
     expect(result.blockers).toEqual([]);
   });
 
+  it("pairs a private challenger with direct immutable identity and no public decision run", () => {
+    const outcomes = pairedOutcomes().map((row) => row.decision_run_id === "challenger-run"
+      ? { ...row, decision_run_id: null, model_key: challenger.modelKey, engine_version: challenger.engineVersion }
+      : row);
+    const result = buildChampionChallengerReceipt({
+      sport: "football",
+      champion,
+      challenger,
+      evaluationWindowStart: "2026-02-28T00:00:00.000Z",
+      outcomes,
+      decisionRuns: runs().filter((row) => row.id === "champion-run"),
+      now
+    });
+
+    expect(result).toMatchObject({ status: "challenger-promotable", sample: { paired: 80 } });
+  });
+
   it("retains the champion when the challenger is confidently worse", () => {
     const result = receipt(pairedOutcomes({ championProbability: 0.72, challengerProbability: 0.5 }));
 

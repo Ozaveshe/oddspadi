@@ -157,7 +157,7 @@ const DOMAINS: Array<Omit<DecisionSupabaseSchemaManifestDomain, "declaredCount" 
     label: "Learning and backtest",
     purpose: "Store outcomes, calibration runs, shadow replay, and historical backtest metrics.",
     requiredFor: ["settlement", "calibration", "shadow backtest", "training gates"],
-    tables: ["op_prediction_outcomes", "op_calibration_runs", "op_calibration_candidates", "op_calibration_promotions", "op_model_comparison_receipts", "op_shadow_memory_replay", "op_backtest_runs"]
+    tables: ["op_prediction_outcomes", "op_shadow_predictions", "op_calibration_runs", "op_calibration_candidates", "op_calibration_promotions", "op_model_comparison_receipts", "op_shadow_memory_replay", "op_backtest_runs"]
   }
 ];
 

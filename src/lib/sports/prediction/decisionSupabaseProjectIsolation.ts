@@ -121,6 +121,7 @@ const ODDSPADI_MCP_EXPECTED_TABLES = [
   "op_provider_ingestion_runs",
   "op_raw_provider_payloads",
   "op_prediction_outcomes",
+  "op_shadow_predictions",
   "op_calibration_runs",
   "op_calibration_candidates",
   "op_calibration_promotions",

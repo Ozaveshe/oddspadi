@@ -14,6 +14,9 @@ import {
   storePredictionOutcome,
   type PredictionOutcomeWriteResult
 } from "@/lib/sports/prediction/decisionOutcomes";
+import { getShadowModelArtifact, type ShadowModelArtifactResult } from "@/lib/sports/prediction/shadowModelArtifact";
+import { storeShadowPrediction, type ShadowPredictionStoreResult } from "@/lib/sports/prediction/shadowPredictionRepository";
+import type { PredictionOutcomeInput } from "@/lib/sports/prediction/decisionOutcomes";
 
 type PredictionRow = { match: Match; prediction: Prediction };
 
@@ -55,6 +58,12 @@ export type DecisionAutonomousCycleItem = {
     status: "skipped";
     configured: boolean;
     table: "op_prediction_outcomes";
+    reason: string;
+  };
+  shadow: ShadowPredictionStoreResult | {
+    status: "skipped";
+    configured: boolean;
+    table: "op_shadow_predictions";
     reason: string;
   };
 };
@@ -101,6 +110,10 @@ export type DecisionAutonomousCycle = {
     outcomesStored: number;
     outcomesReused: number;
     outcomeFailures: number;
+    shadowStored: number;
+    shadowReused: number;
+    shadowSkipped: number;
+    shadowFailures: number;
   };
   decisions: DecisionAutonomousCycleItem[];
   controls: {
@@ -122,6 +135,8 @@ export type DecisionAutonomousCycleDependencies = {
   runOpenAIDecisionAgentReview: typeof runOpenAIDecisionAgentReview;
   persistDecisionRun: typeof persistDecisionRun;
   storePredictionOutcome: typeof storePredictionOutcome;
+  getShadowModelArtifact?: typeof getShadowModelArtifact;
+  storeShadowPrediction?: typeof storeShadowPrediction;
 };
 
 const defaultDependencies: DecisionAutonomousCycleDependencies = {
@@ -129,7 +144,9 @@ const defaultDependencies: DecisionAutonomousCycleDependencies = {
   findDecisionRunByInput,
   runOpenAIDecisionAgentReview,
   persistDecisionRun,
-  storePredictionOutcome
+  storePredictionOutcome,
+  getShadowModelArtifact,
+  storeShadowPrediction
 };
 
 function stableHash(value: unknown): string {
@@ -198,9 +215,9 @@ function summaryFor(status: DecisionAutonomousCycleStatus, counts: DecisionAuton
   if (status === "no-fixtures") return "No scheduled or live fixtures were available for this decision cycle.";
   if (status === "failed") return "The autonomous cycle could not persist any selected fixture decision.";
   if (status === "partial") {
-    return `The cycle processed ${counts.selected} fixture(s), with ${counts.aiFallbacks} AI fallback(s), ${counts.persistenceFailed} decision-write failure(s), ${counts.evidenceBundlePendingMigration + counts.evidenceBundlesUnverified + counts.evidenceBundleFailures} immutable-evidence issue(s), and ${counts.outcomeFailures} outcome-write failure(s).`;
+    return `The cycle processed ${counts.selected} fixture(s), with ${counts.aiFallbacks} AI fallback(s), ${counts.persistenceFailed} decision-write failure(s), ${counts.evidenceBundlePendingMigration + counts.evidenceBundlesUnverified + counts.evidenceBundleFailures} immutable-evidence issue(s), ${counts.outcomeFailures} outcome-write failure(s), and ${counts.shadowFailures} private-shadow failure(s).`;
   }
-  return `The cycle processed ${counts.selected} fixture(s), completed ${counts.aiReviewed} new AI review(s), reused ${counts.aiReused} prior review(s), and opened or reused ${counts.outcomesStored + counts.outcomesReused} shadow outcome(s).`;
+  return `The cycle processed ${counts.selected} fixture(s), completed ${counts.aiReviewed} new AI review(s), reused ${counts.aiReused} prior review(s), opened or reused ${counts.outcomesStored + counts.outcomesReused} champion outcome(s), and stored or reused ${counts.shadowStored + counts.shadowReused} private challenger prediction(s).`;
 }
 
 function baseResult({
@@ -244,7 +261,11 @@ function baseResult({
     evidenceBundleFailures: 0,
     outcomesStored: 0,
     outcomesReused: 0,
-    outcomeFailures: 0
+    outcomeFailures: 0,
+    shadowStored: 0,
+    shadowReused: 0,
+    shadowSkipped: 0,
+    shadowFailures: 0
   };
   return {
     mode: "autonomous-decision-cycle",
@@ -323,6 +344,9 @@ export async function runDecisionAutonomousCycle({
   const selectedRows = rankRows(actionableRows).slice(0, boundedFixtureLimit);
   const decisions: DecisionAutonomousCycleItem[] = [];
   let aiCalls = 0;
+  const shadowArtifact: ShadowModelArtifactResult = runRequested && persist
+    ? await (dependencies.getShadowModelArtifact ?? getShadowModelArtifact)(sport)
+    : { status: "not-applicable", reason: "Preview or non-persistent cycles never resolve challenger artifacts." };
 
   for (const row of selectedRows) {
     const evidenceHash = buildDecisionRunInputHash(row);
@@ -403,8 +427,9 @@ export async function runDecisionAutonomousCycle({
       table: "op_prediction_outcomes",
       reason: runRequested ? "No stored decision run was available for shadow outcome tracking." : "Preview mode never writes outcomes."
     };
+    let pendingOutcome: PredictionOutcomeInput | null = null;
     if (runRequested && persist && persistence.id && (persistence.status === "stored" || persistence.status === "reused")) {
-      const pendingOutcome = buildAutonomousPendingOutcome({
+      pendingOutcome = buildAutonomousPendingOutcome({
         match: row.match,
         prediction: row.prediction,
         decisionRunId: persistence.id,
@@ -419,6 +444,31 @@ export async function runDecisionAutonomousCycle({
             table: "op_prediction_outcomes",
             reason: "No auditable model selection was available for shadow outcome tracking."
           };
+    }
+
+    let shadow: DecisionAutonomousCycleItem["shadow"] = {
+      status: "skipped",
+      configured: false,
+      table: "op_shadow_predictions",
+      reason: shadowArtifact.status === "ready"
+        ? "A durable champion outcome is required before private challenger evidence can be paired."
+        : shadowArtifact.reason
+    };
+    if (
+      shadowArtifact.status === "ready" &&
+      pendingOutcome &&
+      (outcome.status === "stored" || outcome.status === "reused") &&
+      "id" in outcome &&
+      outcome.id
+    ) {
+      shadow = await (dependencies.storeShadowPrediction ?? storeShadowPrediction)({
+        match: row.match,
+        championPrediction: row.prediction,
+        championOutcome: pendingOutcome,
+        championOutcomeId: outcome.id,
+        artifact: shadowArtifact.artifact,
+        now
+      });
     }
 
     decisions.push({
@@ -440,7 +490,8 @@ export async function runDecisionAutonomousCycle({
       final,
       ai,
       persistence,
-      outcome
+      outcome,
+      shadow
     });
   }
 
@@ -462,7 +513,11 @@ export async function runDecisionAutonomousCycle({
     evidenceBundleFailures: decisions.filter((item) => item.persistence.evidenceBundle?.status === "failed").length,
     outcomesStored: decisions.filter((item) => item.outcome.status === "stored").length,
     outcomesReused: decisions.filter((item) => item.outcome.status === "reused").length,
-    outcomeFailures: decisions.filter((item) => item.outcome.status === "failed" || item.outcome.status === "not-configured").length
+    outcomeFailures: decisions.filter((item) => item.outcome.status === "failed" || item.outcome.status === "not-configured").length,
+    shadowStored: decisions.filter((item) => item.shadow.status === "stored").length,
+    shadowReused: decisions.filter((item) => item.shadow.status === "reused").length,
+    shadowSkipped: decisions.filter((item) => item.shadow.status === "skipped" || item.shadow.status === "not-applicable").length,
+    shadowFailures: decisions.filter((item) => ["failed", "not-configured", "pending-migration"].includes(item.shadow.status)).length
   };
 
   let status: DecisionAutonomousCycleStatus;
@@ -475,7 +530,8 @@ export async function runDecisionAutonomousCycle({
     counts.aiFallbacks > 0 ||
     counts.evidenceBundlePendingMigration > 0 ||
     counts.evidenceBundlesUnverified > 0 ||
-    counts.evidenceBundleFailures > 0
+    counts.evidenceBundleFailures > 0 ||
+    counts.shadowFailures > 0
   ) status = "partial";
   else status = "completed";
 

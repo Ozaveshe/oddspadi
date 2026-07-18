@@ -284,6 +284,14 @@ Only real-data, training-ready backtests can activate learned guardrails. Demo-s
 - enforce a learned minimum-edge abstention gate
 - explain in the public trace why a decision used learned thresholds or stayed on defaults
 
+## Private Challenger Evidence Plane
+
+The autonomous cycle can run one frozen challenger beside the public champion without changing the public decision. A challenger is eligible only when an exact-runtime-parity backtest contains a chronology-valid market-prior candidate that differs from the unpromoted runtime baseline. Its SHA-256 artifact identity freezes the source backtest, validation boundary, probability policy, market-prior policy, learned weights, and empirical/segment guards.
+
+For every eligible provider fixture, the challenger is evaluated before kickoff on the champion's exact fixture, market, and selection. The server stores the result in private `op_shadow_predictions` storage with direct model/engine identity, an input hash, the champion outcome link, and an immutable probability. It never creates a public decision run, public pick, stake, or automatic promotion.
+
+Settlement mirrors the exact linked champion outcome instead of grading a second approximate fixture match. Settled shadow rows enter the same Brier/log-loss calibration cohorts under their direct model identity. The daily learning worker revisits the earliest ready calibration freeze for each candidate identity, allowing fresh paired evidence to reach the minimum sample instead of resetting the evaluation window on every calibration run. Promotion still requires a fresh immutable comparison receipt and explicit operator approval.
+
 Environment variables:
 
 ```txt
@@ -296,6 +304,8 @@ The page `/predictions/decision-engine` ranks the football workspace in depth an
 API routes:
 
 - `/api/sports/decision` returns the full decision board for a day.
+- `/api/sports/decision/autonomous-cycle` previews ranked provider fixtures on `GET`; authenticated `POST` stores the champion decision/outcome and, when a frozen artifact exists, its exact private challenger pair.
+- `/api/sports/decision/autonomous-settlement` previews pending outcomes on `GET`; authenticated `POST` deterministically settles champion outcomes, mirrors exact private challenger pairs, and recalibrates newly settled cohorts.
 - `/api/sports/decision/data-authority` returns the data-family authority layer. It joins data intake, provider ingestion evidence, OddsPadi Supabase isolation, model governance, the training snapshot, and the 10-year corpus plan, then marks each signal family as live-authorized, computed-shadow, dry-run-ready, provider-env blocked, Supabase-proof blocked, training blocked, or fully blocked. The route can expose safe read-only or dry-run-first commands, but provider writes, decision persistence, training, publishing, and public-action upgrades remain locked.
 - `/api/sports/decision/world-model` returns the no-write state-of-the-world reducer. It fuses the ranked slate and data authority into pressure cells, unstable assumptions, falsifiers, next observations, and a conservative public posture while keeping persistence, publishing, training, trust raises, and action upgrades locked.
 - `/api/sports/decision/world-model-critic` returns the deterministic self-critic over the world model. It converts pressure cells into hypotheses, model/market/data/safety/learning debate roles, stress tests, unresolved questions, a confidence ceiling, and one safe read-only command while keeping OpenAI live review, persistence, publishing, training, trust raises, and public-action upgrades locked.

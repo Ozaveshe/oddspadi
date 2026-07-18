@@ -9,6 +9,10 @@ import {
   type PredictionOutcomeWriteResult
 } from "@/lib/sports/prediction/decisionOutcomes";
 import { runAndStoreCalibration, type CalibrationRunResult } from "@/lib/sports/prediction/decisionCalibration";
+import {
+  settlePendingShadowPredictions,
+  type ShadowPredictionSettlementResult
+} from "@/lib/sports/prediction/shadowPredictionRepository";
 
 type EnvLike = Record<string, string | undefined>;
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -86,6 +90,7 @@ export type DecisionAutonomousSettlement = {
     persistence: PredictionOutcomeWriteResult | null;
   }>;
   calibration: CalibrationRunResult | { status: "skipped"; reason: string };
+  shadowSettlement: ShadowPredictionSettlementResult | { status: "skipped"; reason: string };
   controls: {
     providerFinalScoreRequired: true;
     preKickoffClosingOddsOnly: true;
@@ -252,7 +257,8 @@ export async function runDecisionAutonomousSettlement({
   matchesByDateOverride,
   storeOutcome = storePredictionOutcome,
   refreshClosingLine = refreshPredictionOutcomeClosingLine,
-  runCalibration = runAndStoreCalibration
+  runCalibration = runAndStoreCalibration,
+  settleShadowPredictions = settlePendingShadowPredictions
 }: {
   runRequested?: boolean;
   adminAuthorized?: boolean;
@@ -266,6 +272,7 @@ export async function runDecisionAutonomousSettlement({
   storeOutcome?: typeof storePredictionOutcome;
   refreshClosingLine?: typeof refreshPredictionOutcomeClosingLine;
   runCalibration?: typeof runAndStoreCalibration;
+  settleShadowPredictions?: typeof settlePendingShadowPredictions;
 } = {}): Promise<DecisionAutonomousSettlement> {
   const generatedAt = now.toISOString();
   const safeLimit = Math.max(1, Math.min(500, Math.trunc(limit)));
@@ -377,7 +384,7 @@ export async function runDecisionAutonomousSettlement({
     (draft) => draft.closingLinePersistence?.status === "failed" || draft.closingLinePersistence?.status === "not-configured"
   ).length;
   const serverReady = runtime.serverWriteReady || Boolean(rowsOverride);
-  const status = readError
+  let status = readError
     ? "failed"
     : statusFor({
         runRequested,
@@ -389,10 +396,21 @@ export async function runDecisionAutonomousSettlement({
         failed,
         closingLineFailed
       });
+  const shadowSettlement = runRequested && adminAuthorized
+    ? await settleShadowPredictions({ sport, now })
+    : { status: "skipped" as const, reason: "Private shadow settlement runs only during authenticated execution." };
+  if (
+    !readError &&
+    "configured" in shadowSettlement &&
+    ["failed", "partial", "pending-migration", "not-configured"].includes(shadowSettlement.status)
+  ) {
+    status = status === "failed" ? "failed" : "partial";
+  }
+  const newlySettledShadow = "totals" in shadowSettlement ? shadowSettlement.totals.settled : 0;
   const calibration =
-    runRequested && adminAuthorized && settled > 0
+    runRequested && adminAuthorized && (settled > 0 || newlySettledShadow > 0)
       ? await runCalibration(sport)
-      : { status: "skipped" as const, reason: "Calibration runs only after at least one newly settled outcome." };
+      : { status: "skipped" as const, reason: "Calibration runs only after at least one newly settled champion or private-shadow outcome." };
 
   return {
     mode: "autonomous-decision-settlement",
@@ -417,6 +435,7 @@ export async function runDecisionAutonomousSettlement({
     },
     drafts,
     calibration,
+    shadowSettlement,
     controls: {
       providerFinalScoreRequired: true,
       preKickoffClosingOddsOnly: true,

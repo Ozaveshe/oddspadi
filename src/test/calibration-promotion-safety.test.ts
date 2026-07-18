@@ -10,7 +10,7 @@ import { runtimeModelIdentityReceipt, runtimeModelKey } from "@/lib/sports/predi
 
 const FOOTBALL_RUNTIME_MODEL_KEY = runtimeModelKey("football");
 
-function outcome(id: string, decisionRunId: string): OutcomeRow {
+function outcome(id: string, decisionRunId: string | null): OutcomeRow {
   return {
     id,
     decision_run_id: decisionRunId,
@@ -390,6 +390,22 @@ describe("calibration promotion safety", () => {
     );
     expect(cohorts.find((cohort) => cohort.modelKey === "football-poisson-v2")?.outcomes.map((row) => row.id)).toEqual(["a-won", "a-lost"]);
     expect(cohorts.find((cohort) => cohort.modelKey === "football-poisson-v5")?.outcomes.map((row) => row.id)).toEqual(["b-won"]);
+  });
+
+  it("calibrates private shadow rows by their direct model identity", () => {
+    const shadow = {
+      ...outcome("shadow-won", null),
+      model_key: "football-poisson-v3-shadow-mp-abc123",
+      engine_version: "decision-engine-v1"
+    };
+    const cohorts = buildDecisionCalibrationCohorts({ sport: "football", decisionRuns: [], outcomes: [shadow] });
+
+    expect(cohorts).toHaveLength(1);
+    expect(cohorts[0]).toMatchObject({
+      modelKey: "football-poisson-v3-shadow-mp-abc123",
+      engineVersion: "decision-engine-v1",
+      metrics: { modelKey: "football-poisson-v3-shadow-mp-abc123", engineVersion: "decision-engine-v1", settledSize: 1 }
+    });
   });
 
   it("refuses a promoted curve scoped to a different model or engine", () => {

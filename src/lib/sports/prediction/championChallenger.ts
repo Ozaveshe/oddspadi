@@ -189,7 +189,11 @@ function identityRows({
   const duplicateKeys = new Set<string>();
   let malformed = 0;
   for (const row of outcomes) {
-    if (row.sport !== sport || !row.decision_run_id || !runIds.has(row.decision_run_id) || !settled(row) || !finiteProbability(row)) continue;
+    const directIdentity = row.model_key || row.engine_version
+      ? row.model_key === identity.modelKey && row.engine_version === identity.engineVersion
+      : null;
+    const runIdentity = Boolean(row.decision_run_id && runIds.has(row.decision_run_id));
+    if (row.sport !== sport || (directIdentity === null ? !runIdentity : !directIdentity) || !settled(row) || !finiteProbability(row)) continue;
     const settledAt = row.settled_at ? Date.parse(row.settled_at) : Number.NaN;
     if (!Number.isFinite(settledAt) || settledAt <= evaluationWindowStart || settledAt > now) continue;
     const key = predictionKey(row);

@@ -68,6 +68,15 @@ function dependenciesFor(predictionRow: TestPredictionRow) {
     table: "op_prediction_outcomes" as const,
     id: "outcome-1"
   }));
+  const getShadowModelArtifact = vi.fn(async () => ({ status: "not-applicable" as const, reason: "No frozen challenger in this test." }));
+  const storeShadowPrediction = vi.fn(async () => ({
+    status: "stored" as const,
+    configured: true,
+    table: "op_shadow_predictions" as const,
+    id: "shadow-1",
+    modelKey: "football-shadow-1",
+    modelProbability: 0.61
+  }));
 
   return {
     dependencies: {
@@ -75,13 +84,17 @@ function dependenciesFor(predictionRow: TestPredictionRow) {
       findDecisionRunByInput,
       runOpenAIDecisionAgentReview,
       persistDecisionRun,
-      storePredictionOutcome
+      storePredictionOutcome,
+      getShadowModelArtifact,
+      storeShadowPrediction
     } as DecisionAutonomousCycleDependencies,
     getPredictions,
     findDecisionRunByInput,
     runOpenAIDecisionAgentReview,
     persistDecisionRun,
-    storePredictionOutcome
+    storePredictionOutcome,
+    getShadowModelArtifact,
+    storeShadowPrediction
   };
 }
 
@@ -109,6 +122,36 @@ describe("autonomous decision cycle", () => {
       expect.objectContaining({ aiAgent: expect.objectContaining({ provider: "openai", status: "reviewed" }) })
     );
     expect(mocks.storePredictionOutcome).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores a private challenger only after the exact champion outcome is durable", async () => {
+    const predictionRow = await row();
+    const mocks = dependenciesFor(predictionRow);
+    mocks.getShadowModelArtifact.mockResolvedValue({
+      status: "ready",
+      artifact: {
+        sport: "football",
+        modelKey: "football-shadow-1",
+        artifactHash: "artifact-1"
+      }
+    } as never);
+
+    const cycle = await runDecisionAutonomousCycle({
+      date: "2026-08-21",
+      runRequested: true,
+      adminAuthorized: true,
+      fixtureLimit: 1,
+      dependencies: mocks.dependencies,
+      now: new Date("2026-07-10T05:30:00.000Z")
+    });
+
+    expect(cycle.counts).toMatchObject({ outcomesStored: 1, shadowStored: 1, shadowFailures: 0 });
+    expect(cycle.decisions[0]?.shadow).toMatchObject({ status: "stored", id: "shadow-1" });
+    expect(mocks.storeShadowPrediction).toHaveBeenCalledWith(expect.objectContaining({
+      championOutcomeId: "outcome-1",
+      championOutcome: expect.objectContaining({ decisionRunId: "run-1", fixtureExternalId: predictionRow.match.id, result: "pending" }),
+      championPrediction: predictionRow.prediction
+    }));
   });
 
   it("reuses an existing reviewed evidence hash without another AI call or write", async () => {

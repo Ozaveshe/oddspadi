@@ -2,6 +2,7 @@ import type {
   DecisionLearningProfile,
   FootballModelDiagnostics,
   LearnedProbabilityCalibrationAdjustment,
+  MarketPriorScalingPolicy,
   MarketPriorAdjustment,
   Match,
   MatchContextAdjustment,
@@ -52,13 +53,15 @@ export function applyRuntimeProbabilityPipeline({
   baseModel,
   learningProfile,
   engineVersion,
-  now = new Date()
+  now = new Date(),
+  marketPriorScalingPolicy
 }: {
   match: Match;
   baseModel: RuntimeProbabilityModelOutput;
   learningProfile?: DecisionLearningProfile;
   engineVersion: string;
   now?: Date;
+  marketPriorScalingPolicy?: Pick<MarketPriorScalingPolicy, "weightScale">;
 }): RuntimeProbabilityPipelineResult {
   const contextAdjustment = buildMatchContextAdjustment(match, {
     probabilityHandledCategories: coreModelContextCategories(match),
@@ -81,7 +84,7 @@ export function applyRuntimeProbabilityPipeline({
     match.oddsMarkets,
     learnedCalibrationDiagnostics.dataQualityScore,
     footballMarketPriorEvidencePolicy(match),
-    learningProfile?.marketPriorScalingPolicy ?? undefined
+    marketPriorScalingPolicy ?? learningProfile?.marketPriorScalingPolicy ?? undefined
   );
 
   return {

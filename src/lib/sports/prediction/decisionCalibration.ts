@@ -20,6 +20,8 @@ export type OutcomeRow = {
   result: OutcomeResult;
   settled_at: string | null;
   created_at: string;
+  model_key?: string | null;
+  engine_version?: string | null;
 };
 
 export type DecisionRunRow = {
@@ -514,11 +516,18 @@ export function buildDecisionCalibrationCohorts({
 
   for (const outcome of outcomes) {
     const run = outcome.decision_run_id ? runsById.get(outcome.decision_run_id) : null;
-    if (!run?.model_key || !run.engine_version) continue;
-    const key = `${run.model_key}\u0000${run.engine_version}`;
-    const current = groups.get(key) ?? { modelKey: run.model_key, engineVersion: run.engine_version, outcomes: [], runIds: new Set<string>() };
+    const directIdentity = outcome.model_key && outcome.engine_version
+      ? { modelKey: outcome.model_key, engineVersion: outcome.engine_version }
+      : null;
+    if (directIdentity && run && (run.model_key !== directIdentity.modelKey || run.engine_version !== directIdentity.engineVersion)) continue;
+    const identity = directIdentity ?? (run?.model_key && run.engine_version
+      ? { modelKey: run.model_key, engineVersion: run.engine_version }
+      : null);
+    if (!identity) continue;
+    const key = `${identity.modelKey}\u0000${identity.engineVersion}`;
+    const current = groups.get(key) ?? { modelKey: identity.modelKey, engineVersion: identity.engineVersion, outcomes: [], runIds: new Set<string>() };
     current.outcomes.push(outcome);
-    current.runIds.add(run.id);
+    if (run) current.runIds.add(run.id);
     groups.set(key, current);
   }
 
@@ -531,7 +540,11 @@ export function buildDecisionCalibrationCohorts({
         engineVersion: group.engineVersion,
         outcomes: group.outcomes,
         decisionRuns: cohortRuns,
-        metrics: computeDecisionCalibrationMetrics({ outcomes: group.outcomes, decisionRuns: cohortRuns, sport })
+        metrics: {
+          ...computeDecisionCalibrationMetrics({ outcomes: group.outcomes, decisionRuns: cohortRuns, sport }),
+          modelKey: group.modelKey,
+          engineVersion: group.engineVersion
+        }
       };
     })
     .sort((left, right) => {
@@ -556,7 +569,25 @@ async function readCalibrationInputs(sport = "football") {
 
   if (outcomesResult.error) return { error: outcomesResult.error.message };
 
-  const outcomes = (outcomesResult.data ?? []) as OutcomeRow[];
+  const shadowResult = await client
+    .from("op_shadow_predictions")
+    .select("id,fixture_external_id,sport,market,selection,model_probability,implied_probability,odds,closing_odds,result,settled_at,generated_at,model_key,engine_version")
+    .eq("sport", sport)
+    .neq("result", "pending")
+    .order("generated_at", { ascending: true })
+    .limit(5000);
+  const shadowTableUnavailable = shadowResult.error && /op_shadow_predictions/i.test(shadowResult.error.message) && /does not exist|schema cache|could not find/i.test(shadowResult.error.message);
+  if (shadowResult.error && !shadowTableUnavailable) return { error: shadowResult.error.message };
+
+  const shadowOutcomes = (shadowResult.data ?? []).map((row) => ({
+    ...row,
+    decision_run_id: null,
+    value_edge: typeof row.model_probability === "number" && typeof row.implied_probability === "number"
+      ? row.model_probability - row.implied_probability
+      : null,
+    created_at: row.generated_at
+  })) as OutcomeRow[];
+  const outcomes = [...(outcomesResult.data ?? []) as OutcomeRow[], ...shadowOutcomes];
   const runIds = Array.from(new Set(outcomes.map((row) => row.decision_run_id).filter((id): id is string => Boolean(id))));
 
   if (!runIds.length) return { outcomes, decisionRuns: [] as DecisionRunRow[] };

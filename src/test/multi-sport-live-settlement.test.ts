@@ -46,7 +46,13 @@ describe("multi-sport settlement and calibration", () => {
       rowsOverride: [row],
       matchesByDateOverride: new Map([["2026-07-10", [finished]]]),
       storeOutcome,
-      runCalibration
+      runCalibration,
+      settleShadowPredictions: vi.fn(async () => ({
+        status: "no-pending" as const,
+        configured: true,
+        table: "op_shadow_predictions" as const,
+        totals: { pending: 0, settled: 0, reused: 0, waiting: 0, failed: 0 }
+      }))
     });
     expect(receipt.status).toBe("settled");
     expect(receipt.request.sport).toBe("basketball");

@@ -5,7 +5,6 @@ import {
   buildValueEdges,
   selectBestPick
 } from "./prediction/odds";
-import { footballMarketPriorEvidencePolicy } from "./prediction/marketPriorPolicy";
 import { predictionSegmentKey } from "./prediction/predictionSegment";
 import { modelBasketballMatch } from "./prediction/basketballModel";
 import { modelFootballMatch } from "./prediction/footballModel";
@@ -110,11 +109,18 @@ async function getLearningProfileForSport(sport: Sport): Promise<DecisionLearnin
   );
 }
 
-function modelMatch(match: Match) {
+function modelMatch(match: Match, now: Date) {
   if (match.sport === "basketball") return modelBasketballMatch(match);
   if (match.sport === "tennis") return modelTennisMatch(match);
-  return modelFootballMatch(match);
+  return modelFootballMatch(match, { now });
 }
+
+export type PredictionModelOverride = {
+  /** Private model identity used by a frozen shadow artifact. Public callers leave this unset. */
+  modelKey: string;
+  learningProfile: DecisionLearningProfile;
+  marketPriorWeightScale: number;
+};
 
 /** Never let promoted thresholds or weights cross the model/engine boundary they were validated against. */
 export function scopeLearningProfileToRuntime(
@@ -159,24 +165,33 @@ export function buildPrediction(
   {
     learningProfile,
     caseMemoryBank,
-    publicHistoricalTrainingEvidence
+    publicHistoricalTrainingEvidence,
+    modelOverride,
+    now = new Date()
   }: {
     learningProfile?: DecisionLearningProfile;
     caseMemoryBank?: DecisionCaseMemoryBank;
     publicHistoricalTrainingEvidence?: PublicHistoricalTrainingEvidence | null;
+    modelOverride?: PredictionModelOverride;
+    now?: Date;
   } = {}
 ): Prediction {
-  const baseModel = modelMatch(match);
-  const runtimeLearningProfile = scopeLearningProfileToRuntime(
-    learningProfile,
-    baseModel.diagnostics.modelVersion,
-    DECISION_ENGINE_VERSION
-  );
+  const modeled = modelMatch(match, now);
+  const baseModel = modelOverride
+    ? { ...modeled, diagnostics: { ...modeled.diagnostics, modelVersion: modelOverride.modelKey } }
+    : modeled;
+  const runtimeLearningProfile = modelOverride
+    ? scopeLearningProfileToRuntime(modelOverride.learningProfile, modelOverride.modelKey, DECISION_ENGINE_VERSION)
+    : scopeLearningProfileToRuntime(learningProfile, baseModel.diagnostics.modelVersion, DECISION_ENGINE_VERSION);
   const runtimePipeline = applyRuntimeProbabilityPipeline({
     match,
     baseModel,
     learningProfile: runtimeLearningProfile,
-    engineVersion: DECISION_ENGINE_VERSION
+    engineVersion: DECISION_ENGINE_VERSION,
+    now,
+    marketPriorScalingPolicy: modelOverride
+      ? { weightScale: modelOverride.marketPriorWeightScale }
+      : undefined
   });
   const markets = runtimePipeline.markets;
   const diagnostics = runtimePipeline.diagnostics;
@@ -220,7 +235,7 @@ export function buildPrediction(
       decision
     }
   });
-  const generatedAt = new Date().toISOString();
+  const generatedAt = now.toISOString();
   const canonicalDecision = buildCanonicalDecision(
     match,
     oddsSnapshotsFromMatch(match, new Date(generatedAt)),
