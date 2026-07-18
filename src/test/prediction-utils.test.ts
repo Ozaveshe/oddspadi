@@ -15777,6 +15777,12 @@ describe("prediction utilities", () => {
     const fetchImpl = async (input: string | URL, init?: RequestInit) => {
       const url = input.toString();
       calls.push(url);
+      if (url.includes("api.the-odds-api.com/v4/sports/?")) {
+        return new Response(
+          JSON.stringify([{ key: "basketball_nba", group: "Basketball", title: "NBA", active: true, has_outrights: false }]),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
       if (url.includes("api.the-odds-api.com/v4/sports/basketball_nba/odds")) {
         expect(url).toContain("markets=h2h%2Cspreads%2Ctotals");
         return new Response(
@@ -15889,7 +15895,10 @@ describe("prediction utilities", () => {
     const [match] = await provider.getFixtures("2026-06-24", "basketball");
     const matchById = await provider.getMatch(match.id);
 
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
+    expect(calls.some((url) => url.includes("api.the-odds-api.com/v4/sports/?"))).toBe(true);
+    expect(calls.some((url) => url.includes("api.the-odds-api.com/v4/sports/basketball_nba/odds"))).toBe(true);
+    expect(calls.some((url) => url.includes("v1.basketball.api-sports.io/games"))).toBe(true);
     expect(matchById).toBe(match);
     expect(match.id).toBe("api-basketball:501");
     expect(match.sport).toBe("basketball");
