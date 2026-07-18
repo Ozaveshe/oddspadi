@@ -9,7 +9,8 @@ export default defineConfig({
     // starving module transforms. Failure-path storage tests legitimately
     // exercise several dynamic imports before their bounded network timeout.
     maxWorkers: 2,
-    testTimeout: 30_000
+    pool: "threads",
+    testTimeout: 60_000
   },
   resolve: {
     alias: {
