@@ -10,7 +10,7 @@ project `wncwtzqipnoqwmqlznqn`.
 | Function | Schedule (UTC) | What it does |
 | --- | --- | --- |
 | `decision-cycle-sweep` | `5,35 * * * *` | Football decision/prediction capture |
-| `multi-sport-decision-cycle-sweep` | `20 */2 * * *` | Basketball/tennis capture |
+| `multi-sport-decision-cycle-sweep` | `20 */2 * * *` | Runs the built basketball/tennis odds-refresh and daily-engine routes; fails when either sport is degraded |
 | `sports-intelligence-sweep` | `25,55 * * * *` | Refreshes odds and rebuilds Today inside the 45-minute basketball freshness boundary; fixture import and the seven-day slate remain receipt-guarded to one full cycle per day |
 | `sports-identity-enrichment-sweep` | `10 3 * * *` | Resolves the complete stored 400-day fixture horizon, including API-Football provider aliases, team crests, league artwork/flags, national-team countries, and domestic odds-only countries; then records a serialized receipt |
 | `football-settlement-sweep` | `*/30 * * * *` | Grades finished football picks |
@@ -38,6 +38,19 @@ worker accepts `stored` only when census readback is evidence-ready, and accepts
 `no-data` only for a genuinely quiet provider window. A finished fixture's
 player-stat payload must cover at least 11 participants with minutes for each
 team; incomplete payloads fail the lane and are not stored as player history.
+
+### Basketball odds-history checkpoints
+
+`POST /api/sports/decision/training/basketball-odds-backfill` restores the
+operator path for attaching historical NBA moneylines to the existing finished
+fixture corpus. It is plan-only by default (`run=0`): completed receipt dates are
+skipped, the next unfinished date is returned as `nextCursor`, and no provider
+request is made. Execution requires `run=1`; `dryRun=1` still calls the paid
+provider but does not write rows. Keep `regions=us`, `maxJobs=7`, and
+`maxCredits=70` for a normal checkpoint. The historical h2h endpoint costs an
+estimated 10 credits per region per date, and the route refuses to exceed the
+explicit credit ceiling. Storage receipts report provider quota headers plus
+`fixtures_found`, `odds_found`, and `rows_written` separately.
 
 The identity worker uses the same server-only API-Football key as the fixture
 pipeline. It batches by league and season (maximum eight competitions), keeps

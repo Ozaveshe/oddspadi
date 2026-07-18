@@ -167,6 +167,12 @@ export type PipelineRunResult = {
   run: ProviderRunLog;
   slate: SportsSlate;
   rejectedMockFixtures: number;
+  sportCoverage?: Array<{
+    sport: Sport;
+    requestedDates: number;
+    providerBackedFixtures: number;
+    rejectedMockFixtures: number;
+  }>;
   persisted: boolean;
   skippedOverlap: boolean;
 };

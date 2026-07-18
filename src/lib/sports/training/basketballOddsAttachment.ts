@@ -40,6 +40,7 @@ type OddsApiHistoricalResponse = {
 };
 
 type StoredFixtureRow = {
+  id: string;
   external_id: string;
   provider: string;
   kickoff_at: string;
@@ -62,6 +63,7 @@ export type BasketballOddsAttachmentRequest = {
 };
 
 export type BasketballStoredFixtureCandidate = {
+  fixtureId?: string | null;
   fixtureExternalId: string;
   provider: string;
   kickoffAt: string;
@@ -107,6 +109,11 @@ export type BasketballOddsAttachmentResult = {
   matchedFixtures: number;
   oddsRows: number;
   rowsWritten: number;
+  quota: {
+    requestCost: number | null;
+    requestsUsed: number | null;
+    requestsRemaining: number | null;
+  };
   ingestionRunId?: string;
   reason?: string;
   unmatchedEvents: Array<{
@@ -332,6 +339,7 @@ export function basketballOddsRowsForMatches(matches: BasketballOddsFixtureMatch
     matches.flatMap((match) =>
       match.event.quotes.map((quote) => ({
         fixture_external_id: match.fixture.fixtureExternalId,
+        fixture_id: match.fixture.fixtureId ?? null,
         sport: "basketball",
         provider: "the_odds_api",
         bookmaker: quote.bookmaker,
@@ -356,15 +364,30 @@ export function basketballOddsRowsForMatches(matches: BasketballOddsFixtureMatch
   );
 }
 
-async function fetchJson(fetchImpl: FetchLike, url: URL): Promise<{ data?: unknown; error?: string; status: number }> {
+async function fetchJson(fetchImpl: FetchLike, url: URL): Promise<{
+  data?: unknown;
+  error?: string;
+  status: number;
+  quota: BasketballOddsAttachmentResult["quota"];
+}> {
   const response = await fetchImpl(url);
+  const quota = {
+    requestCost: finiteHeader(response.headers.get("x-requests-last")),
+    requestsUsed: finiteHeader(response.headers.get("x-requests-used")),
+    requestsRemaining: finiteHeader(response.headers.get("x-requests-remaining"))
+  };
   const contentType = response.headers.get("content-type") ?? "";
   const data = contentType.includes("application/json") ? await response.json().catch(() => null) : await response.text().catch(() => "");
   if (!response.ok) {
-    if (data && typeof data === "object" && "message" in data) return { data, error: String((data as { message?: unknown }).message), status: response.status };
-    return { data, error: `Provider returned HTTP ${response.status}.`, status: response.status };
+    if (data && typeof data === "object" && "message" in data) return { data, error: String((data as { message?: unknown }).message), status: response.status, quota };
+    return { data, error: `Provider returned HTTP ${response.status}.`, status: response.status, quota };
   }
-  return { data, status: response.status };
+  return { data, status: response.status, quota };
+}
+
+function finiteHeader(value: string | null): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 async function readStoredBasketballFixturesForEvents(events: BasketballOddsEvent[]): Promise<BasketballStoredFixtureCandidate[] | { error: string }> {
@@ -379,7 +402,7 @@ async function readStoredBasketballFixturesForEvents(events: BasketballOddsEvent
 
   const { data: fixtureRows, error: fixtureError } = await client
     .from("op_fixtures")
-    .select("external_id, provider, kickoff_at, home_team_external_id, away_team_external_id")
+    .select("id, external_id, provider, kickoff_at, home_team_external_id, away_team_external_id")
     .eq("sport", "basketball")
     .eq("status", "finished")
     .gte("kickoff_at", from)
@@ -406,6 +429,7 @@ async function readStoredBasketballFixturesForEvents(events: BasketballOddsEvent
     if (!homeTeamName || !awayTeamName) return [];
     return [
       {
+        fixtureId: fixture.id,
         fixtureExternalId: fixture.external_id,
         provider: fixture.provider,
         kickoffAt: new Date(fixture.kickoff_at).toISOString(),
@@ -418,7 +442,13 @@ async function readStoredBasketballFixturesForEvents(events: BasketballOddsEvent
   });
 }
 
-async function createIngestionRun(rowsReceived: number, request: BasketballOddsAttachmentRequest) {
+async function createIngestionRun(
+  rowsReceived: number,
+  fixturesFound: number,
+  oddsFound: number,
+  request: BasketballOddsAttachmentRequest,
+  quota: BasketballOddsAttachmentResult["quota"]
+) {
   const client = getSupabaseServerClient();
   if (!client) return { error: "Supabase client could not be created." };
   const { data, error } = await client
@@ -427,14 +457,18 @@ async function createIngestionRun(rowsReceived: number, request: BasketballOddsA
       provider: "the_odds_api",
       sport: "basketball",
       ingestion_type: "historical_basketball_odds_attachment",
+      job_type: "historical_basketball_odds_attachment",
       status: "running",
       started_at: new Date().toISOString(),
       rows_received: rowsReceived,
+      fixtures_found: fixturesFound,
+      odds_found: oddsFound,
       metadata: {
         date: request.date,
         regions: request.regions ?? "us",
         bookmakers: request.bookmakers ?? null,
-        isClosing: Boolean(request.isClosing)
+        isClosing: Boolean(request.isClosing),
+        quota
       }
     })
     .select("id")
@@ -443,16 +477,28 @@ async function createIngestionRun(rowsReceived: number, request: BasketballOddsA
   return { id: String(data.id) };
 }
 
-async function finishIngestionRun(id: string, status: "completed" | "failed", rowsWritten: number, errorMessage?: string) {
+async function finishIngestionRun(
+  id: string,
+  status: "completed" | "failed",
+  rowsWritten: number,
+  fixturesFound: number,
+  oddsFound: number,
+  errorMessage?: string
+) {
   const client = getSupabaseServerClient();
   if (!client) return;
+  const finishedAt = new Date().toISOString();
   await client
     .from("op_provider_ingestion_runs")
     .update({
       status,
-      completed_at: new Date().toISOString(),
+      completed_at: finishedAt,
+      finished_at: finishedAt,
       rows_written: rowsWritten,
-      error_message: errorMessage ?? null
+      fixtures_found: fixturesFound,
+      odds_found: oddsFound,
+      error_message: errorMessage ?? null,
+      errors: errorMessage ? [errorMessage] : []
     })
     .eq("id", id);
 }
@@ -489,6 +535,11 @@ export async function attachBasketballHistoricalOdds({
     matchedFixtures: 0,
     oddsRows: 0,
     rowsWritten: 0,
+    quota: {
+      requestCost: null,
+      requestsUsed: null,
+      requestsRemaining: null
+    },
     unmatchedEvents: [],
     sampleMatches: []
   };
@@ -509,10 +560,11 @@ export async function attachBasketballHistoricalOdds({
     };
   }
 
-  const { data, error } = await fetchJson(fetchImpl, endpoint);
+  const { data, error, quota } = await fetchJson(fetchImpl, endpoint);
   if (error) {
     return {
       ...baseResult,
+      quota,
       status: "provider-error",
       reason: error
     };
@@ -524,6 +576,7 @@ export async function attachBasketballHistoricalOdds({
   if ("error" in fixtureCandidates) {
     return {
       ...baseResult,
+      quota,
       status: "failed",
       fetched: Array.isArray(response.data) ? response.data.length : 0,
       normalizedEvents: events.length,
@@ -546,6 +599,7 @@ export async function attachBasketballHistoricalOdds({
   if (request.dryRun ?? true) {
     return {
       ...baseResult,
+      quota,
       status: matches.length ? "dry-run" : "no-matches",
       fetched: Array.isArray(response.data) ? response.data.length : 0,
       normalizedEvents: events.length,
@@ -561,6 +615,7 @@ export async function attachBasketballHistoricalOdds({
   if (!runtime.serverWriteReady) {
     return {
       ...baseResult,
+      quota,
       status: "not-configured",
       configured: false,
       fetched: Array.isArray(response.data) ? response.data.length : 0,
@@ -573,21 +628,11 @@ export async function attachBasketballHistoricalOdds({
     };
   }
 
-  if (!matches.length || !rows.length) {
-    return {
-      ...baseResult,
-      status: "no-matches",
-      fetched: Array.isArray(response.data) ? response.data.length : 0,
-      normalizedEvents: events.length,
-      unmatchedEvents,
-      reason: "No confident basketball fixture matches were available for odds attachment."
-    };
-  }
-
   const client = getSupabaseServerClient(env);
   if (!client) {
     return {
       ...baseResult,
+      quota,
       status: "failed",
       fetched: Array.isArray(response.data) ? response.data.length : 0,
       normalizedEvents: events.length,
@@ -599,10 +644,11 @@ export async function attachBasketballHistoricalOdds({
     };
   }
 
-  const ingestionRun = await createIngestionRun(rows.length, request);
+  const ingestionRun = await createIngestionRun(events.length, matches.length, rows.length, request, quota);
   if ("error" in ingestionRun) {
     return {
       ...baseResult,
+      quota,
       status: "failed",
       fetched: Array.isArray(response.data) ? response.data.length : 0,
       normalizedEvents: events.length,
@@ -661,10 +707,11 @@ export async function attachBasketballHistoricalOdds({
     });
     if (rawError) throw new Error(rawError.message);
 
-    await finishIngestionRun(ingestionRun.id, "completed", rows.length);
+    await finishIngestionRun(ingestionRun.id, "completed", rows.length, matches.length, rows.length);
     return {
       ...baseResult,
-      status: "stored",
+      quota,
+      status: rows.length ? "stored" : "no-matches",
       fetched: Array.isArray(response.data) ? response.data.length : 0,
       normalizedEvents: events.length,
       matchedFixtures: matches.length,
@@ -672,13 +719,15 @@ export async function attachBasketballHistoricalOdds({
       rowsWritten: rows.length,
       ingestionRunId: ingestionRun.id,
       unmatchedEvents,
-      sampleMatches
+      sampleMatches,
+      reason: rows.length ? undefined : "Recorded a completed provider checkpoint, but no confident stored fixture matches were available."
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Basketball odds attachment failed.";
-    await finishIngestionRun(ingestionRun.id, "failed", 0, message);
+    await finishIngestionRun(ingestionRun.id, "failed", 0, matches.length, rows.length, message);
     return {
       ...baseResult,
+      quota,
       status: "failed",
       fetched: Array.isArray(response.data) ? response.data.length : 0,
       normalizedEvents: events.length,

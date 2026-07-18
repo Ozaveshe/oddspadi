@@ -243,6 +243,7 @@ export interface MatchContextAdjustment {
 
 export interface MarketPriorAdjustment {
   applied: boolean;
+  weightScale: number;
   adjustedMarkets: number;
   adjustedSelections: number;
   averageWeight: number;
@@ -271,6 +272,8 @@ export interface ValueEdge {
   odds: number;
   confidence: ConfidenceLevel;
   risk: RiskLevel;
+  empiricalValueGuard?: EmpiricalValueGuardDecision;
+  segmentValueGuard?: SegmentValueGuardDecision;
   uncertaintyAdjustedScore?: number;
   scoreComponents?: {
     expectedValue: number;
@@ -287,6 +290,7 @@ export interface ValueEdge {
     caseMemoryAvoidShare?: number | null;
     caseMemoryReliability?: number | null;
     learnedMinimumEdge?: number | null;
+    effectiveMinimumEdge?: number;
     learnedValueEdgeWeight?: number | null;
     learnedDataQualityWeight?: number | null;
     learnedMarketAdjustmentWeight?: number | null;
@@ -394,6 +398,8 @@ export interface DecisionSummary {
 
 export interface LearnedProbabilityCalibrationAdjustment {
   status: "applied" | "inactive" | "insufficient-evidence";
+  method?: "temperature-scaling" | "bucket-residual" | "none";
+  temperature?: number | null;
   source: string | null;
   modelKey: string | null;
   bucketCount: number;
@@ -401,6 +407,170 @@ export interface LearnedProbabilityCalibrationAdjustment {
   calibratedMarkets: string[];
   meanAbsoluteShift: number;
   summary: string;
+}
+
+export interface ProbabilityCalibrationScoreSummary {
+  sampleSize: number;
+  brierScore: number | null;
+  logLoss: number | null;
+}
+
+export interface ProbabilityTemperatureScalingPolicy {
+  version: "temperature-scaling-v1";
+  source: "chronological-training-window";
+  status: "active" | "identity";
+  temperature: number;
+  fitSampleSize: number;
+  validationSampleSize: number;
+  fitWindowStart: string | null;
+  fitWindowEnd: string | null;
+  validationWindowStart: string | null;
+  validationWindowEnd: string | null;
+  holdoutWindowStart: string | null;
+  baselineValidation: ProbabilityCalibrationScoreSummary;
+  calibratedValidation: ProbabilityCalibrationScoreSummary;
+  reason:
+    | "validated-proper-score-improvement"
+    | "insufficient-training-sample"
+    | "invalid-chronology"
+    | "identity-won-fit"
+    | "validation-did-not-improve";
+}
+
+export interface MarketPriorScalingPolicy {
+  version: "market-prior-scaling-v1";
+  source: "chronological-priced-training-window";
+  status: "active" | "identity";
+  weightScale: number;
+  candidateWeightScale: number;
+  fitSampleSize: number;
+  validationSampleSize: number;
+  fitWindowStart: string | null;
+  fitWindowEnd: string | null;
+  validationWindowStart: string | null;
+  validationWindowEnd: string | null;
+  holdoutWindowStart: string | null;
+  baselineFit: ProbabilityCalibrationScoreSummary;
+  candidateFit: ProbabilityCalibrationScoreSummary;
+  baselineValidation: ProbabilityCalibrationScoreSummary;
+  candidateValidation: ProbabilityCalibrationScoreSummary;
+  reason:
+    | "validated-proper-score-improvement"
+    | "insufficient-priced-sample"
+    | "invalid-chronology"
+    | "identity-won-fit"
+    | "validation-did-not-improve";
+}
+
+export interface EmpiricalValueGuardBucket {
+  minProbability: number;
+  maxProbability: number;
+  sampleSize: number;
+  averageProbability: number;
+  observedRate: number;
+  aggregateProbabilityFloor: number | null;
+  probabilityFloor: number | null;
+  eligible: boolean;
+  earlier: EmpiricalValueGuardRegimeEvidence;
+  recent: EmpiricalValueGuardRegimeEvidence;
+}
+
+export interface EmpiricalValueGuardRegimeEvidence {
+  sampleSize: number;
+  averageProbability: number | null;
+  observedRate: number | null;
+  probabilityFloor: number | null;
+}
+
+export interface EmpiricalValueGuardWindow {
+  windowStart: string | null;
+  windowEnd: string | null;
+  sampleSize: number;
+}
+
+export interface EmpiricalValueGuardPolicy {
+  version: "empirical-value-guard-v2";
+  source: "chronological-final-posterior-regime-windows";
+  status: "active" | "abstain";
+  confidenceLevel: 0.95;
+  regimeConfidenceLevel: 0.975;
+  minimumBucketSample: number;
+  minimumRegimeSample: number;
+  sampleSize: number;
+  windowStart: string | null;
+  windowEnd: string | null;
+  holdoutWindowStart: string | null;
+  earlierWindow: EmpiricalValueGuardWindow;
+  recentWindow: EmpiricalValueGuardWindow;
+  buckets: EmpiricalValueGuardBucket[];
+  reason: "stable-regime-buckets" | "insufficient-regime-sample" | "invalid-chronology";
+}
+
+export interface EmpiricalValueGuardDecision {
+  status: "passed" | "blocked" | "not-applied";
+  probabilityFloor: number | null;
+  earlierProbabilityFloor: number | null;
+  recentProbabilityFloor: number | null;
+  regimeObservedRateDrift: number | null;
+  conservativeEdge: number | null;
+  conservativeExpectedValue: number | null;
+  bucketSampleSize: number | null;
+  confidenceLevel: number | null;
+  reason: string;
+}
+
+export type PredictionSegmentDimension = "competition" | "surface";
+
+export interface SegmentValueGuardSegment {
+  segmentKey: string;
+  sampleSize: number;
+  earlierSampleSize: number;
+  recentSampleSize: number;
+  buckets: EmpiricalValueGuardBucket[];
+}
+
+export interface SegmentValueGuardPolicy {
+  version: "segment-value-guard-v1";
+  source: "chronological-final-posterior-segment-regime-windows";
+  status: "active" | "abstain";
+  segmentDimension: PredictionSegmentDimension;
+  confidenceLevel: 0.95;
+  regimeConfidenceLevel: 0.975;
+  minimumBucketSample: number;
+  minimumRegimeSample: number;
+  sampleSize: number;
+  unresolvedSampleSize: number;
+  unresolvedEarlierSampleSize: number;
+  unresolvedRecentSampleSize: number;
+  windowStart: string | null;
+  windowEnd: string | null;
+  holdoutWindowStart: string | null;
+  earlierWindow: EmpiricalValueGuardWindow;
+  recentWindow: EmpiricalValueGuardWindow;
+  segments: SegmentValueGuardSegment[];
+  reason: "eligible-segments" | "insufficient-segment-sample" | "invalid-chronology";
+}
+
+export interface SegmentValueGuardDecision {
+  status: "passed" | "blocked" | "not-applied";
+  segmentKey: string | null;
+  probabilityFloor: number | null;
+  earlierProbabilityFloor: number | null;
+  recentProbabilityFloor: number | null;
+  regimeObservedRateDrift: number | null;
+  conservativeEdge: number | null;
+  conservativeExpectedValue: number | null;
+  bucketSampleSize: number | null;
+  segmentSampleSize: number | null;
+  confidenceLevel: number | null;
+  reason: string;
+}
+
+export interface ProbabilityCalibrationComparison {
+  baseline: ProbabilityCalibrationScoreSummary;
+  calibrated: ProbabilityCalibrationScoreSummary;
+  brierDelta: number | null;
+  logLossDelta: number | null;
 }
 
 export interface Prediction {
@@ -1425,6 +1595,26 @@ export interface DecisionLearningProfile {
   dataQualityWeight: number | null;
   marketAdjustmentWeight: number | null;
   homeAdvantageElo: number | null;
+  economicSelectionPolicyStatus?: "active" | "abstain" | null;
+  allowedConfidenceBands?: ConfidenceLevel[] | null;
+  probabilityTemperaturePolicy?: ProbabilityTemperatureScalingPolicy | null;
+  marketPriorScalingPolicy?: MarketPriorScalingPolicy | null;
+  empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy | null;
+  empiricalValueGuardComparison?: {
+    baseline: { pickCount: number; roiUnits: number; yield: number | null };
+    selected: { pickCount: number; roiUnits: number; yield: number | null };
+    picksRemoved: number;
+  } | null;
+  segmentValueGuardPolicy?: SegmentValueGuardPolicy | null;
+  segmentValueGuardComparison?: {
+    baseline: { pickCount: number; roiUnits: number; yield: number | null };
+    selected: { pickCount: number; roiUnits: number; yield: number | null };
+    picksRemoved: number;
+  } | null;
+  marketPriorReplayStatus?: "applied" | "no-priced-market" | null;
+  marketPriorReplayAdjustedFixtures?: number | null;
+  marketPriorReplayCoverage?: number | null;
+  marketPriorReplayAverageWeight?: number | null;
   brierScore: number | null;
   logLoss?: number | null;
   calibrationError?: number | null;

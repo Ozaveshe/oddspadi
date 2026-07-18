@@ -5630,6 +5630,117 @@ describe("prediction utilities", () => {
     expect(prediction.decision.saferAlternatives.some((alternative) => alternative.market === "Spread")).toBe(true);
   });
 
+  it("applies a model-bound market-prior scale in the live prediction path", async () => {
+    const [match] = await mockSportsDataProvider.getFixtures("2026-06-24", "basketball");
+    const baseline = buildPrediction(match);
+    const profile: DecisionLearningProfile = {
+      status: "active",
+      source: "prospective-runtime-replay",
+      active: true,
+      modelKey: baseline.diagnostics.modelVersion,
+      engineVersion: baseline.decision.engineVersion,
+      sampleSize: 1200,
+      realFinishedFixtures: 1200,
+      minimumRecommendedFixtures: 1000,
+      minimumEdge: null,
+      valueEdgeWeight: null,
+      dataQualityWeight: null,
+      marketAdjustmentWeight: null,
+      homeAdvantageElo: null,
+      marketPriorScalingPolicy: {
+        version: "market-prior-scaling-v1",
+        source: "chronological-priced-training-window",
+        status: "active",
+        weightScale: 0,
+        candidateWeightScale: 0,
+        fitSampleSize: 100,
+        validationSampleSize: 100,
+        fitWindowStart: "2025-01-01T00:00:00.000Z",
+        fitWindowEnd: "2025-03-31T00:00:00.000Z",
+        validationWindowStart: "2025-04-01T00:00:00.000Z",
+        validationWindowEnd: "2025-06-30T00:00:00.000Z",
+        holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+        baselineFit: { sampleSize: 100, brierScore: 0.2, logLoss: 0.6 },
+        candidateFit: { sampleSize: 100, brierScore: 0.19, logLoss: 0.59 },
+        baselineValidation: { sampleSize: 100, brierScore: 0.2, logLoss: 0.6 },
+        candidateValidation: { sampleSize: 100, brierScore: 0.19, logLoss: 0.59 },
+        reason: "validated-proper-score-improvement"
+      },
+      brierScore: 0.19,
+      yield: 0.04,
+      closingLineValue: 0.02,
+      generatedAt: "2026-06-24T10:00:00.000Z",
+      reason: "Model-bound replay policy is active.",
+      notes: []
+    };
+    const governed = buildPrediction(match, { learningProfile: profile });
+
+    expect(baseline.decision.marketPriorAdjustment?.averageWeight).toBeGreaterThan(0);
+    expect(governed.decision.marketPriorAdjustment).toMatchObject({ applied: true, weightScale: 0, averageWeight: 0 });
+    expect(governed.decision.learningProfile?.marketPriorScalingPolicy?.weightScale).toBe(0);
+  });
+
+  it("applies the empirical value floor in the live prediction path", async () => {
+    const [match] = await mockSportsDataProvider.getFixtures("2026-06-24", "basketball");
+    const baseline = buildPrediction(match);
+    const profile: DecisionLearningProfile = {
+      status: "active",
+      source: "prospective-runtime-replay",
+      active: true,
+      modelKey: baseline.diagnostics.modelVersion,
+      engineVersion: baseline.decision.engineVersion,
+      sampleSize: 1200,
+      realFinishedFixtures: 1200,
+      minimumRecommendedFixtures: 1000,
+      minimumEdge: null,
+      valueEdgeWeight: null,
+      dataQualityWeight: null,
+      marketAdjustmentWeight: null,
+      homeAdvantageElo: null,
+      allowedConfidenceBands: ["medium", "high"],
+      empiricalValueGuardPolicy: {
+        version: "empirical-value-guard-v2",
+        source: "chronological-final-posterior-regime-windows",
+        status: "active",
+        confidenceLevel: 0.95,
+        regimeConfidenceLevel: 0.975,
+        minimumBucketSample: 60,
+        minimumRegimeSample: 30,
+        sampleSize: 600,
+        windowStart: "2025-04-01T00:00:00.000Z",
+        windowEnd: "2025-06-30T00:00:00.000Z",
+        holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+        earlierWindow: { windowStart: "2025-04-01T00:00:00.000Z", windowEnd: "2025-05-15T00:00:00.000Z", sampleSize: 300 },
+        recentWindow: { windowStart: "2025-05-16T00:00:00.000Z", windowEnd: "2025-06-30T00:00:00.000Z", sampleSize: 300 },
+        buckets: Array.from({ length: 10 }, (_, index) => ({
+          minProbability: index / 10,
+          maxProbability: (index + 1) / 10,
+          sampleSize: 60,
+          averageProbability: (index + 0.5) / 10,
+          observedRate: 0,
+          aggregateProbabilityFloor: 0,
+          probabilityFloor: 0,
+          eligible: true,
+          earlier: { sampleSize: 30, averageProbability: (index + 0.5) / 10, observedRate: 0, probabilityFloor: 0 },
+          recent: { sampleSize: 30, averageProbability: (index + 0.5) / 10, observedRate: 0, probabilityFloor: 0 }
+        })),
+        reason: "stable-regime-buckets"
+      },
+      brierScore: 0.19,
+      yield: 0.04,
+      closingLineValue: 0.02,
+      generatedAt: "2026-06-24T10:00:00.000Z",
+      reason: "Model-bound empirical value guard is active.",
+      notes: []
+    };
+
+    const governed = buildPrediction(match, { learningProfile: profile });
+
+    expect(governed.valueEdges.length).toBeGreaterThan(0);
+    expect(governed.valueEdges.every((edge) => edge.empiricalValueGuard?.status === "blocked")).toBe(true);
+    expect(governed.bestPick.hasValue).toBe(false);
+  });
+
   it("builds tennis predictions with Elo, surface, set handicap, and total-games logic", async () => {
     const [match] = await mockSportsDataProvider.getFixtures("2026-06-24", "tennis");
     const prediction = buildPrediction(match);
@@ -13613,13 +13724,162 @@ describe("prediction utilities", () => {
               learnedWeightsProvenance: snapshot.latestBacktest.config?.learnedWeightsProvenance,
               modelIdentity: runtimeModelIdentityReceipt("football", {
                 featureContractStatus: "passed",
-                evaluatedFixtures: 300,
-                entrypointInvocations: 300,
+                evaluatedFixtures: 360,
+                entrypointInvocations: 360,
                 executionHash: "fnv1a-learning"
               }),
               featureContract: {
                 eligibleFixtures: 1200,
-                optionalCoverage: { playerFormFixtures: 900 }
+                optionalCoverage: { playerFormFixtures: 900, completeOddsFixtures: 360 }
+              },
+              selectionPolicy: {
+                version: "economic-confidence-bands-v1",
+                source: "chronological-training-window",
+                status: "active",
+                allowedConfidenceBands: ["medium"]
+              },
+              probabilityCalibrationPolicy: {
+                version: "temperature-scaling-v1",
+                source: "chronological-training-window",
+                status: "active",
+                temperature: 1.2,
+                fitSampleSize: 588,
+                validationSampleSize: 252,
+                fitWindowStart: "2022-08-01T00:00:00.000Z",
+                fitWindowEnd: "2024-12-31T00:00:00.000Z",
+                validationWindowStart: "2025-01-01T00:00:00.000Z",
+                validationWindowEnd: "2025-06-30T00:00:00.000Z",
+                holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+                baselineValidation: { sampleSize: 252, brierScore: 0.21, logLoss: 0.62 },
+                calibratedValidation: { sampleSize: 252, brierScore: 0.205, logLoss: 0.615 },
+                reason: "validated-proper-score-improvement"
+              },
+              marketPriorScalingPolicy: {
+                version: "market-prior-scaling-v1",
+                source: "chronological-priced-training-window",
+                status: "identity",
+                weightScale: 1,
+                candidateWeightScale: 1,
+                fitSampleSize: 126,
+                validationSampleSize: 126,
+                fitWindowStart: "2025-01-01T00:00:00.000Z",
+                fitWindowEnd: "2025-03-31T00:00:00.000Z",
+                validationWindowStart: "2025-04-01T00:00:00.000Z",
+                validationWindowEnd: "2025-06-30T00:00:00.000Z",
+                holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+                baselineFit: { sampleSize: 126, brierScore: 0.205, logLoss: 0.615 },
+                candidateFit: { sampleSize: 126, brierScore: 0.205, logLoss: 0.615 },
+                baselineValidation: { sampleSize: 126, brierScore: 0.204, logLoss: 0.614 },
+                candidateValidation: { sampleSize: 126, brierScore: 0.204, logLoss: 0.614 },
+                reason: "identity-won-fit"
+              },
+              empiricalValueGuardPolicy: {
+                version: "empirical-value-guard-v2",
+                source: "chronological-final-posterior-regime-windows",
+                status: "active",
+                confidenceLevel: 0.95,
+                regimeConfidenceLevel: 0.975,
+                minimumBucketSample: 60,
+                minimumRegimeSample: 30,
+                sampleSize: 378,
+                windowStart: "2025-04-01T00:00:00.000Z",
+                windowEnd: "2025-06-30T00:00:00.000Z",
+                holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+                earlierWindow: { windowStart: "2025-04-01T00:00:00.000Z", windowEnd: "2025-05-15T00:00:00.000Z", sampleSize: 189 },
+                recentWindow: { windowStart: "2025-05-16T00:00:00.000Z", windowEnd: "2025-06-30T00:00:00.000Z", sampleSize: 189 },
+                buckets: [
+                  {
+                    minProbability: 0.2, maxProbability: 0.3, sampleSize: 126, averageProbability: 0.25, observedRate: 0.238095,
+                    aggregateProbabilityFloor: 0.181603, probabilityFloor: 0.149938, eligible: true,
+                    earlier: { sampleSize: 63, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.149938 },
+                    recent: { sampleSize: 63, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.149938 }
+                  },
+                  {
+                    minProbability: 0.3, maxProbability: 0.4, sampleSize: 126, averageProbability: 0.35, observedRate: 0.333333,
+                    aggregateProbabilityFloor: 0.268399, probabilityFloor: 0.229496, eligible: true,
+                    earlier: { sampleSize: 63, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.229496 },
+                    recent: { sampleSize: 63, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.229496 }
+                  },
+                  {
+                    minProbability: 0.4, maxProbability: 0.5, sampleSize: 126, averageProbability: 0.45, observedRate: 0.460317,
+                    aggregateProbabilityFloor: 0.388882, probabilityFloor: 0.343089, eligible: true,
+                    earlier: { sampleSize: 63, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.343089 },
+                    recent: { sampleSize: 63, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.343089 }
+                  }
+                ],
+                reason: "stable-regime-buckets"
+              },
+              empiricalValueGuardComparison: {
+                baseline: { pickCount: 72, roiUnits: 5.4, yield: 0.075 },
+                selected: { pickCount: 48, roiUnits: 4.8, yield: 0.1 },
+                picksRemoved: 24
+              },
+              segmentValueGuardPolicy: {
+                version: "segment-value-guard-v1",
+                source: "chronological-final-posterior-segment-regime-windows",
+                status: "active",
+                segmentDimension: "competition",
+                confidenceLevel: 0.95,
+                regimeConfidenceLevel: 0.975,
+                minimumBucketSample: 40,
+                minimumRegimeSample: 20,
+                sampleSize: 378,
+                unresolvedSampleSize: 0,
+                unresolvedEarlierSampleSize: 0,
+                unresolvedRecentSampleSize: 0,
+                windowStart: "2025-04-01T00:00:00.000Z",
+                windowEnd: "2025-06-30T00:00:00.000Z",
+                holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+                earlierWindow: { windowStart: "2025-04-01T00:00:00.000Z", windowEnd: "2025-05-15T00:00:00.000Z", sampleSize: 189 },
+                recentWindow: { windowStart: "2025-05-16T00:00:00.000Z", windowEnd: "2025-06-30T00:00:00.000Z", sampleSize: 189 },
+                segments: [{
+                  segmentKey: "competition:39",
+                  sampleSize: 378,
+                  earlierSampleSize: 189,
+                  recentSampleSize: 189,
+                  buckets: [
+                    {
+                      minProbability: 0.2, maxProbability: 0.3, sampleSize: 126, averageProbability: 0.25, observedRate: 0.238095,
+                      aggregateProbabilityFloor: 0.181603, probabilityFloor: 0.149938, eligible: true,
+                      earlier: { sampleSize: 63, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.149938 },
+                      recent: { sampleSize: 63, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.149938 }
+                    },
+                    {
+                      minProbability: 0.3, maxProbability: 0.4, sampleSize: 126, averageProbability: 0.35, observedRate: 0.333333,
+                      aggregateProbabilityFloor: 0.268399, probabilityFloor: 0.229496, eligible: true,
+                      earlier: { sampleSize: 63, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.229496 },
+                      recent: { sampleSize: 63, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.229496 }
+                    },
+                    {
+                      minProbability: 0.4, maxProbability: 0.5, sampleSize: 126, averageProbability: 0.45, observedRate: 0.460317,
+                      aggregateProbabilityFloor: 0.388882, probabilityFloor: 0.343089, eligible: true,
+                      earlier: { sampleSize: 63, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.343089 },
+                      recent: { sampleSize: 63, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.343089 }
+                    }
+                  ]
+                }],
+                reason: "eligible-segments"
+              },
+              segmentValueGuardComparison: {
+                baseline: { pickCount: 48, roiUnits: 4.8, yield: 0.1 },
+                selected: { pickCount: 36, roiUnits: 3.6, yield: 0.1 },
+                picksRemoved: 12
+              },
+              marketPriorEvidence: {
+                version: "runtime-market-prior-parity-v1",
+                status: "applied",
+                evaluatedFixtures: 360,
+                adjustedFixtures: 360,
+                adjustedSelections: 1080,
+                coverage: 1,
+                averageWeight: 0.12,
+                averageBookmakerMargin: 0.04,
+                probabilityComparison: {
+                  baseline: { sampleSize: 360, brierScore: 0.19, logLoss: 0.55 },
+                  calibrated: { sampleSize: 360, brierScore: 0.188, logLoss: 0.547 },
+                  brierDelta: -0.002,
+                  logLossDelta: -0.003
+                }
               },
               promotion: {
                 status: "approved",
@@ -16844,6 +17104,7 @@ describe("prediction utilities", () => {
     );
     const fixtures: BasketballStoredFixtureCandidate[] = [
       {
+        fixtureId: "11111111-1111-4111-8111-111111111111",
         fixtureExternalId: "nba-team-totals:0022401004",
         provider: "nba_team_totals_csv",
         kickoffAt: "2025-01-15T20:00:00Z",
@@ -16862,6 +17123,7 @@ describe("prediction utilities", () => {
     expect(result.unmatchedEvents).toHaveLength(0);
     expect(rows).toHaveLength(2);
     expect(rows.map((row) => row.fixture_external_id)).toEqual(["nba-team-totals:0022401004", "nba-team-totals:0022401004"]);
+    expect(rows.every((row) => row.fixture_id === "11111111-1111-4111-8111-111111111111")).toBe(true);
     expect(rows.every((row) => row.provider === "the_odds_api" && row.market === "match_winner")).toBe(true);
     expect(rows.reduce((sum, row) => sum + Number(row.margin_adjusted_probability), 0)).toBeCloseTo(1, 5);
   });
@@ -21473,6 +21735,17 @@ describe("prediction utilities", () => {
           minimumEdge: 0.035,
           homeCourtPoints: 2.6
         },
+        learnedWeightsProvenance: {
+          source: "training-window",
+          sampleSize: 80,
+          pickCount: 16,
+          windowStart: "2025-01-01T00:00:00.000Z",
+          windowEnd: "2025-04-15T00:00:00.000Z",
+          holdoutWindowStart: "2025-04-16T00:00:00.000Z",
+          yield: 0.12,
+          brierScore: 0.19,
+          closingLineValue: 0.02
+        },
         config: {
           trainRatio: 0.7,
           minEdge: 0.035,
@@ -22888,7 +23161,7 @@ describe("prediction utilities", () => {
     expect(probe.primaryTarget.entitlementSignal).toBe("paid-plan-required");
     expect(probe.targets.every((target) => target.status === "blocked")).toBe(true);
     expect(probe.attachmentDryRun.ready).toBe(false);
-    expect(probe.attachmentDryRun.verifyUrl).toContain("/api/sports/decision/training/basketball-odds-attach");
+    expect(probe.attachmentDryRun.verifyUrl).toContain("/api/sports/decision/training/basketball-odds-backfill");
     expect(probe.nextAction).toContain("Historical odds are only available");
     expect(probe.controls.canRunProviderDryRun).toBe(true);
     expect(probe.controls.canAttachBasketballOdds).toBe(false);
@@ -25345,10 +25618,10 @@ describe("prediction utilities", () => {
     expect(attachment?.sport).toBe("basketball");
     expect(attachment?.status).toBe("ready");
     expect(attachment?.canRunNow).toBe(true);
-    expect(attachment?.verifyUrl).toContain("/api/sports/decision/training/basketball-odds-attach");
+    expect(attachment?.verifyUrl).toContain("/api/sports/decision/training/basketball-odds-backfill");
     expect(attachment?.command).toContain("-X POST");
     expect(attachment?.expectedEvidence).toContain("match existing finished NBA fixtures");
-    expect(queue.proofUrls).toContain("/api/sports/decision/training/basketball-odds-attach");
+    expect(queue.proofUrls).toContain("/api/sports/decision/training/basketball-odds-backfill");
   });
 
   it("summarizes engine capacity without confusing OpenAI readiness for provider readiness", async () => {

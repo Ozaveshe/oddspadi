@@ -1,6 +1,7 @@
 import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine";
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "@/lib/sports/training/probabilityCalibration";
 import { benchmarkBacktestModelKey } from "@/lib/sports/prediction/modelIdentity";
+import { confidenceFromEdgeAndProbability } from "@/lib/sports/prediction/confidence";
 
 export const TENNIS_BACKTEST_MODEL_KEY = benchmarkBacktestModelKey("tennis");
 
@@ -117,6 +118,17 @@ export type TennisBacktestResult = {
     dataQualityWeight: number;
     minimumEdge: number;
     eloKFactor: number;
+  };
+  learnedWeightsProvenance: {
+    source: "training-window" | "defaults-no-training-data";
+    sampleSize: number;
+    pickCount: number;
+    windowStart: string | null;
+    windowEnd: string | null;
+    holdoutWindowStart: string | null;
+    yield: number | null;
+    brierScore: number | null;
+    closingLineValue: number | null;
   };
   config: Required<TennisBacktestConfig>;
   notes: string[];
@@ -250,9 +262,7 @@ function matchWinnerOdds(odds: HistoricalTennisOddsQuote[]): Record<TennisOutcom
 }
 
 function confidenceForPick(edge: number, probability: number, dataQuality: number): BacktestConfidence {
-  if (edge >= 0.075 && probability >= 0.57 && dataQuality >= 0.78) return "high";
-  if (edge >= 0.048 && probability >= 0.49 && dataQuality >= 0.66) return "medium";
-  return "low";
+  return confidenceFromEdgeAndProbability(edge, probability, dataQuality);
 }
 
 function selectPick(
@@ -392,6 +402,17 @@ export function runTennisBacktest(matches: HistoricalTennisMatch[], configInput:
       surfaceBreakdown: {},
       confidenceBreakdown: {},
       learnedWeights: learnedWeights({ yield: null, brierScore: null, closingLineValue: null, config }),
+      learnedWeightsProvenance: {
+        source: "defaults-no-training-data",
+        sampleSize: 0,
+        pickCount: 0,
+        windowStart: null,
+        windowEnd: null,
+        holdoutWindowStart: null,
+        yield: null,
+        brierScore: null,
+        closingLineValue: null
+      },
       config,
       notes: ["No finished historical tennis matches are available for backtesting."],
       results: []
@@ -400,6 +421,7 @@ export function runTennisBacktest(matches: HistoricalTennisMatch[], configInput:
 
   const testStartIndex = Math.min(sampleSize - 1, Math.max(0, Math.floor(sampleSize * clamp(config.trainRatio, 0.1, 0.9))));
   const ratings: Ratings = new Map();
+  const trainingResults: TennisBacktestMatchResult[] = [];
   const results: TennisBacktestMatchResult[] = [];
 
   sortedMatches.forEach((match, index) => {
@@ -408,21 +430,21 @@ export function runTennisBacktest(matches: HistoricalTennisMatch[], configInput:
     const actual = actualOutcome(match);
     const projection = projectMatch(match, homeElo, awayElo, config);
     const odds = matchWinnerOdds(match.odds);
-    if (index >= testStartIndex) {
-      const pick = odds ? selectPick(match, projection.probabilities, odds, actual, config) : null;
-      results.push({
-        fixtureExternalId: match.fixtureExternalId,
-        kickoffAt: match.kickoffAt,
-        surface: normalizedSurface(match.surface),
-        actualOutcome: actual,
-        probabilities: projection.probabilities,
-        ratingEdge: projection.ratingEdge,
-        adjustmentEdge: projection.adjustmentEdge,
-        brierScore: brierScore(projection.probabilities, actual),
-        logLoss: logLoss(projection.probabilities, actual),
-        pick
-      });
-    }
+    const pick = odds ? selectPick(match, projection.probabilities, odds, actual, config) : null;
+    const evaluation = {
+      fixtureExternalId: match.fixtureExternalId,
+      kickoffAt: match.kickoffAt,
+      surface: normalizedSurface(match.surface),
+      actualOutcome: actual,
+      probabilities: projection.probabilities,
+      ratingEdge: projection.ratingEdge,
+      adjustmentEdge: projection.adjustmentEdge,
+      brierScore: brierScore(projection.probabilities, actual),
+      logLoss: logLoss(projection.probabilities, actual),
+      pick
+    };
+    if (index < testStartIndex) trainingResults.push(evaluation);
+    else results.push(evaluation);
     updateRatings(ratings, match, config);
   });
 
@@ -436,6 +458,11 @@ export function runTennisBacktest(matches: HistoricalTennisMatch[], configInput:
   const surfaceGroups = groupBy(results, (result) => result.surface);
   const confidenceGroups = groupBy(results, (result) => result.pick?.confidence ?? "no-pick");
   const calibration = buildCalibration(results);
+  const trainingPicks = trainingResults.map((row) => row.pick).filter((pick): pick is TennisBacktestPick => Boolean(pick));
+  const trainingRoi = trainingPicks.reduce((sum, pick) => sum + pick.unitReturn, 0);
+  const trainingYield = roundMetric(trainingPicks.length ? trainingRoi / trainingPicks.length : null, 6);
+  const trainingBrier = roundMetric(average(trainingResults.map((row) => row.brierScore)), 6);
+  const trainingClv = roundMetric(average(trainingPicks.map((pick) => pick.closingLineValue).filter((value): value is number => value !== null)), 6);
 
   const result: TennisBacktestResult = {
     sport: "tennis",
@@ -460,11 +487,25 @@ export function runTennisBacktest(matches: HistoricalTennisMatch[], configInput:
     marketBreakdown: { match_winner: buildBreakdown(results) },
     surfaceBreakdown: Object.fromEntries(Object.entries(surfaceGroups).map(([key, group]) => [key, buildBreakdown(group)])),
     confidenceBreakdown: Object.fromEntries(Object.entries(confidenceGroups).map(([key, group]) => [key, buildBreakdown(group)])),
-    learnedWeights: learnedWeights({ yield: yieldValue, brierScore: brier, closingLineValue: clv, config }),
+    learnedWeights: learnedWeights({ yield: trainingYield, brierScore: trainingBrier, closingLineValue: trainingClv, config }),
+    learnedWeightsProvenance: {
+      source: trainingResults.length ? "training-window" : "defaults-no-training-data",
+      sampleSize: trainingResults.length,
+      pickCount: trainingPicks.length,
+      windowStart: trainingResults[0]?.kickoffAt ?? null,
+      windowEnd: trainingResults.at(-1)?.kickoffAt ?? null,
+      holdoutWindowStart: results[0]?.kickoffAt ?? null,
+      yield: trainingYield,
+      brierScore: trainingBrier,
+      closingLineValue: trainingClv
+    },
     config,
     notes: [],
     results
   };
-  result.notes = resultNotes(result);
+  result.notes = [
+    `Learned weights use only ${trainingResults.length} chronological training match(es); holdout outcomes remain evaluation-only.`,
+    ...resultNotes(result)
+  ];
   return result;
 }

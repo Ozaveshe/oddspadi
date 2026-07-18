@@ -14,6 +14,7 @@ import type {
   FootballModelDiagnostics
 } from "@/lib/sports/types";
 import { formatOdds, formatPercent, formatSignedPercent } from "./format";
+import { BASELINE_MINIMUM_VALUE_EDGE } from "./odds";
 
 function learnedNumber(value: number | null | undefined, fallback: number, min: number, max: number): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
@@ -103,7 +104,8 @@ export function buildDecisionBoundary({
   robustness: DecisionRobustnessAudit;
   abstentionRules: DecisionAbstentionRule[];
 }): DecisionBoundary {
-  const learnedMinimumEdge = learningProfile?.active ? learnedNumber(learningProfile.minimumEdge, 0.035, 0.02, 0.09) : 0;
+  const learnedMinimumEdge = learningProfile?.active ? learnedNumber(learningProfile.minimumEdge, 0.035, 0.02, 0.09) : null;
+  const minimumEdge = learnedMinimumEdge ?? BASELINE_MINIMUM_VALUE_EDGE;
   const currentProbability = bestPick.hasValue ? (probabilityTrace.posteriorProbability ?? bestPick.modelProbability) : null;
   const breakEvenProbability = bestPick.hasValue ? 1 / bestPick.odds : null;
   const posteriorFairOdds = currentProbability && currentProbability > 0 ? 1 / currentProbability : null;
@@ -117,7 +119,7 @@ export function buildDecisionBoundary({
       : null;
   const priceShorteningRoom = marketMovement.maxShorteningBeforeNoValue;
   const noVigFloor = bestPick.hasValue ? bestPick.noVigImpliedProbability : null;
-  const edgeNearBand = Math.max(0.03, learnedMinimumEdge || 0.03);
+  const edgeNearBand = Math.max(0.03, minimumEdge);
 
   const metrics = [
     buildBoundaryMetric({
@@ -151,12 +153,14 @@ export function buildDecisionBoundary({
       kind: "edge-floor",
       label: "No-vig edge floor",
       current: currentEdge,
-      threshold: learnedMinimumEdge,
+      threshold: minimumEdge,
       nearBand: edgeNearBand,
       detail:
         currentEdge !== null
           ? `Current edge is ${formatSignedPercent(currentEdge)}; ${
-              learnedMinimumEdge > 0 ? `learned minimum edge is ${formatSignedPercent(learnedMinimumEdge)}` : "the hard floor is positive edge"
+              learnedMinimumEdge !== null
+                ? `learned minimum edge is ${formatSignedPercent(learnedMinimumEdge)}`
+                : `conservative baseline is ${formatSignedPercent(BASELINE_MINIMUM_VALUE_EDGE)}`
             }.`
           : "No priced candidate exists, so no-vig edge cannot clear the floor."
     }),
@@ -254,9 +258,9 @@ export function buildDecisionBoundary({
     ? [
         `${bestPick.label} posterior probability stays above break-even ${formatBoundaryValue("probability-floor", breakEvenProbability)}.`,
         `Quoted odds stay at or above posterior fair odds ${formatBoundaryValue("odds-floor", posteriorFairOdds)}.`,
-        learnedMinimumEdge > 0
+        learnedMinimumEdge !== null
           ? `No-vig edge stays above learned minimum ${formatSignedPercent(learnedMinimumEdge)}.`
-          : "No-vig edge and expected value stay positive.",
+          : `No-vig edge stays above the conservative baseline ${formatSignedPercent(BASELINE_MINIMUM_VALUE_EDGE)}.`,
         "Decision score stays at or above 24 and no hard abstention gate triggers.",
         "Model data quality stays at or above 62/100.",
         "Uncertainty stays below 66/100 and context-shock stress keeps value above zero."

@@ -354,7 +354,7 @@ function trainingNextActions(
   if (status === "schema-error") return ["Apply the local OddsPadi Supabase migrations to the proven OddsPadi project, then rerun this training snapshot."];
   if (status === "ready" && sport === "basketball" && (counts?.realFinishedFixtures ?? 0) > 0 && (counts?.realOddsSnapshots ?? 0) === 0) {
     return [
-      "Run /api/sports/decision/training/basketball-odds-attach with dryRun=1 after The Odds API historical plan is upgraded.",
+      "Plan /api/sports/decision/training/basketball-odds-backfill with run=0, then execute a quota-bounded checkpoint after The Odds API historical plan is upgraded.",
       "Review matched fixture IDs and odds-row counts, then attach NBA moneyline odds with dryRun=0 before rerunning basketball backtests."
     ];
   }
@@ -1447,14 +1447,25 @@ function backtestInsertPayload(result: HistoricalBacktestResult, includeDemo: bo
     learned_weights: result.learnedWeights,
     config: {
       ...result.config,
-      ...(result.sport === "football"
-        ? {
-            learnedWeightsProvenance: result.learnedWeightsProvenance,
-            oddsCoverage: result.oddsCoverage
-          }
+      ...("learnedWeightsProvenance" in result
+        ? { learnedWeightsProvenance: result.learnedWeightsProvenance }
         : {}),
+      ...(result.sport === "football" ? { oddsCoverage: result.oddsCoverage } : {}),
       ...(runtimeReplay
-        ? { featureContract: result.featureContract, executionHash: result.executionHash }
+        ? {
+            featureContract: result.featureContract,
+            executionHash: result.executionHash,
+            selectionPolicy: result.selectionPolicy,
+            economicSelectionComparison: result.economicSelectionComparison,
+            probabilityCalibrationPolicy: result.probabilityCalibrationPolicy,
+            probabilityCalibrationComparison: result.probabilityCalibrationComparison,
+            marketPriorScalingPolicy: result.marketPriorScalingPolicy,
+            empiricalValueGuardPolicy: result.empiricalValueGuardPolicy,
+            empiricalValueGuardComparison: result.empiricalValueGuardComparison,
+            segmentValueGuardPolicy: result.segmentValueGuardPolicy,
+            segmentValueGuardComparison: result.segmentValueGuardComparison,
+            marketPriorEvidence: result.marketPriorEvidence
+          }
         : {}),
       modelIdentity: modelIdentityForResult(result)
     },
@@ -1512,6 +1523,14 @@ export async function runAndStoreHistoricalBacktest({
   config?: HistoricalBacktestConfig;
   includeDemo?: boolean;
 } = {}): Promise<BacktestRunStoreResult> {
+  if (sport === "football") {
+    return runAndStoreFootballRuntimeReplay({
+      minSample,
+      limit,
+      config: config as FootballRuntimeReplayConfig,
+      includeDemo
+    });
+  }
   const runtime = getSupabaseRuntimeStatus();
   if (!runtime.serverWriteReady) {
     return {
@@ -1559,6 +1578,31 @@ export async function runAndStoreHistoricalBacktest({
     id: stored.id,
     result
   };
+}
+
+/** Read and replay the stored corpus without inserting an op_backtest_runs row. */
+export async function previewStoredHistoricalRuntimeReplay({
+  sport,
+  limit = 50_000,
+  config = {},
+  includeDemo = false
+}: {
+  sport: TrainingSport;
+  limit?: number;
+  config?: HistoricalBacktestConfig;
+  includeDemo?: boolean;
+}): Promise<HistoricalBacktestResult | { error: string }> {
+  if (sport === "football") {
+    return previewStoredFootballRuntimeReplay({
+      limit,
+      config: config as FootballRuntimeReplayConfig,
+      includeDemo
+    });
+  }
+
+  const fixtures = await readHistoricalFixturesForSport(sport, limit, includeDemo);
+  if ("error" in fixtures) return fixtures;
+  return runBacktestForSport(sport, fixtures, config);
 }
 
 export async function runAndStoreHistoricalFootballBacktest({
@@ -1644,5 +1688,5 @@ export function trainingModelKey(sport: TrainingSport = "football"): string {
 export function historicalBacktestExecutionModelKey(sport: TrainingSport = "football"): string {
   if (sport === "basketball") return runtimeModelKey("basketball");
   if (sport === "tennis") return runtimeModelKey("tennis");
-  return FOOTBALL_BACKTEST_MODEL_KEY;
+  return runtimeModelKey("football");
 }

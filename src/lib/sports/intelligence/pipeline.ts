@@ -35,6 +35,12 @@ import type { DecisionSummary } from "@/lib/sports/types";
 import { persistCanonicalPublicPicks } from "@/lib/sports/results/publicPicks";
 
 type PredictionRow = { match: Match; prediction: Prediction };
+type SportCoverage = {
+  sport: Sport;
+  requestedDates: number;
+  providerBackedFixtures: number;
+  rejectedMockFixtures: number;
+};
 
 export type IntelligencePipelineDependencies = {
   getFixtures: (date: string, sport: Sport) => Promise<Match[]>;
@@ -127,11 +133,22 @@ async function collectFixtures({
   sports: Sport[];
   generateDecisions: boolean;
   dependencies: IntelligencePipelineDependencies;
-}): Promise<{ matches: Match[]; predictionByFixture: Map<string, Prediction>; rejectedMockFixtures: number; errors: string[] }> {
+}): Promise<{
+  matches: Match[];
+  predictionByFixture: Map<string, Prediction>;
+  rejectedMockFixtures: number;
+  errors: string[];
+  sportCoverage: SportCoverage[];
+}> {
   const matches: Match[] = [];
   const predictionByFixture = new Map<string, Prediction>();
   const errors: string[] = [];
   let rejectedMockFixtures = 0;
+  const coverage = new Map<Sport, SportCoverage>(
+    sports.map((sport) => [sport, { sport, requestedDates: dates.length, providerBackedFixtures: 0, rejectedMockFixtures: 0 }])
+  );
+  const providerFixtureIds = new Map(sports.map((sport) => [sport, new Set<string>()]));
+  const rejectedMockFixtureIds = new Map(sports.map((sport) => [sport, new Set<string>()]));
 
   for (const date of dates) {
     for (const sport of sports) {
@@ -141,9 +158,11 @@ async function collectFixtures({
           for (const row of rows) {
             if (!isProviderBackedMatch(row.match)) {
               rejectedMockFixtures += 1;
+              rejectedMockFixtureIds.get(sport)?.add(row.match.id);
               continue;
             }
             matches.push(row.match);
+            providerFixtureIds.get(sport)?.add(row.match.id);
             predictionByFixture.set(row.match.id, row.prediction);
           }
         } else {
@@ -151,9 +170,11 @@ async function collectFixtures({
           for (const match of rows) {
             if (!isProviderBackedMatch(match)) {
               rejectedMockFixtures += 1;
+              rejectedMockFixtureIds.get(sport)?.add(match.id);
               continue;
             }
             matches.push(match);
+            providerFixtureIds.get(sport)?.add(match.id);
           }
         }
       } catch (error) {
@@ -161,7 +182,19 @@ async function collectFixtures({
       }
     }
   }
-  return { matches: dedupeMatches(matches), predictionByFixture, rejectedMockFixtures, errors };
+  const sportCoverage = [...coverage.values()].map((item) => ({
+    ...item,
+    providerBackedFixtures: providerFixtureIds.get(item.sport)?.size ?? 0,
+    rejectedMockFixtures: rejectedMockFixtureIds.get(item.sport)?.size ?? 0
+  }));
+  for (const item of sportCoverage) {
+    if (item.providerBackedFixtures === 0 && item.rejectedMockFixtures > 0) {
+      errors.push(
+        `${item.sport}: no provider-backed fixtures returned across ${item.requestedDates} requested day(s); rejected ${item.rejectedMockFixtures} fallback mock fixture(s).`
+      );
+    }
+  }
+  return { matches: dedupeMatches(matches), predictionByFixture, rejectedMockFixtures, errors, sportCoverage };
 }
 
 async function executePipeline({
@@ -207,7 +240,14 @@ async function executePipeline({
       lastRun: run,
       generatedAt: startedAt
     });
-    return { run, slate, rejectedMockFixtures: 0, persisted: false, skippedOverlap: true };
+    return {
+      run,
+      slate,
+      rejectedMockFixtures: 0,
+      sportCoverage: sports.map((sport) => ({ sport, requestedDates: dates.length, providerBackedFixtures: 0, rejectedMockFixtures: 0 })),
+      persisted: false,
+      skippedOverlap: true
+    };
   }
   const collected = await collectFixtures({ dates, sports, generateDecisions, dependencies });
   const providerIssues = getRecentSportsProviderIssues(startedAt).map((issue) => `${issue.provider}${issue.path}: ${issue.reason}`);
@@ -289,7 +329,7 @@ async function executePipeline({
     predictionsGenerated: decisionsByFixture.size,
     valuePicksPublished,
     errors
-  });
+  }, undefined, { sportCoverage: collected.sportCoverage });
   run = { ...run, providerName: providers.join(", ") || "configured-sports-providers" };
   const slate = buildSportsSlate({
     scope,
@@ -307,6 +347,7 @@ async function executePipeline({
     run,
     slate,
     rejectedMockFixtures: collected.rejectedMockFixtures,
+    sportCoverage: collected.sportCoverage,
     persisted: shouldPersist && (fixtures.length === 0 || fixtureIds.size === fixtures.length) && !errors.some((error) => error.startsWith("Storage:")),
     skippedOverlap: false
   };

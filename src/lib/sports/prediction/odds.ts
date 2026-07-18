@@ -5,11 +5,14 @@ import type {
   DecisionLearningProfile,
   FootballModelDiagnostics,
   MarketPriorAdjustment,
+  MarketPriorScalingPolicy,
   OddsMarket,
   PredictionMarket,
   ValueEdge
 } from "@/lib/sports/types";
 import { confidenceFromEdgeAndProbability, riskLevelFromConfidenceAndOdds } from "./confidence";
+import { evaluateEmpiricalValueGuard } from "./empiricalValueGuard";
+import { evaluateSegmentValueGuard } from "./segmentValueGuard";
 
 export function clampProbability(value: number): number {
   if (Number.isNaN(value)) return 0;
@@ -122,11 +125,19 @@ function priceFragilityPenalty(edge: ValueEdge): { tolerance: number | null; pen
 export type BestPickSelectionOptions = {
   learningProfile?: DecisionLearningProfile;
   caseMemoryBank?: DecisionCaseMemoryBank;
+  segmentKey?: string | null;
 };
+
+/** Conservative floor used until a governed, runtime-compatible profile is promoted. */
+export const BASELINE_MINIMUM_VALUE_EDGE = 0.035;
 
 export function learnedMinimumEdge(options: BestPickSelectionOptions = {}): number | null {
   if (!options.learningProfile?.active) return null;
   return learnedWeight(options.learningProfile, "minimumEdge", 0.035, 0.02, 0.09);
+}
+
+export function effectiveMinimumEdge(options: BestPickSelectionOptions = {}): number {
+  return learnedMinimumEdge(options) ?? BASELINE_MINIMUM_VALUE_EDGE;
 }
 
 function similarityFromDifference(a: number, b: number, tolerance: number): number {
@@ -226,6 +237,7 @@ export function scoreValueEdge(edge: ValueEdge, options: BestPickSelectionOption
     caseMemoryAvoidShare: memoryPressure.avoidShare,
     caseMemoryReliability: memoryPressure.reliability,
     learnedMinimumEdge: minimumEdge,
+    effectiveMinimumEdge: minimumEdge ?? BASELINE_MINIMUM_VALUE_EDGE,
     learnedValueEdgeWeight: valueEdgeWeight,
     learnedDataQualityWeight: dataQualityWeight,
     learnedMarketAdjustmentWeight: marketAdjustmentWeight
@@ -255,13 +267,17 @@ function marketPriorWeight(
   dataQuality: number,
   bookmakerMargin: number,
   selectionCount: number,
-  evidencePolicy?: MarketPriorEvidencePolicy
+  evidencePolicy?: MarketPriorEvidencePolicy,
+  scalingPolicy?: Pick<MarketPriorScalingPolicy, "weightScale">
 ): number {
   const quality = clampProbability(dataQuality);
   const qualityWeight = 0.08 + (1 - quality) * 0.16;
   const marginDiscount = clampRange(1 - Math.max(0, bookmakerMargin) / 0.18, 0.25, 1);
   const selectionDepth = selectionCount >= 3 ? 1 : 0.92;
-  const standardWeight = qualityWeight * marginDiscount * selectionDepth;
+  const standardWeight = clampRange(qualityWeight * marginDiscount * selectionDepth, 0.03, 0.9);
+  const weightScale = scalingPolicy && Number.isFinite(scalingPolicy.weightScale)
+    ? clampRange(scalingPolicy.weightScale, 0, 3)
+    : 1;
   const coherentMarket = bookmakerMargin >= -0.03 && bookmakerMargin <= 0.12;
   const evidenceMarketReliability = bookmakerMargin <= 0.08
     ? 1
@@ -269,7 +285,7 @@ function marketPriorWeight(
   const evidenceFloor = coherentMarket && evidencePolicy
     ? clampProbability(evidencePolicy.minimumWeight) * evidenceMarketReliability * selectionDepth
     : 0;
-  return round(clampRange(Math.max(standardWeight, evidenceFloor), 0.03, 0.9));
+  return round(clampRange(Math.max(standardWeight * weightScale, evidenceFloor), 0, 0.9));
 }
 
 function normalizeSelectionSubset(probabilities: Record<string, number>, selectionIds: string[]): Record<string, number> {
@@ -286,7 +302,8 @@ export function applyMarketPriorAdjustmentToMarkets(
   predictionMarkets: PredictionMarket[],
   oddsMarkets: OddsMarket[],
   dataQuality: number,
-  evidencePolicy?: MarketPriorEvidencePolicy
+  evidencePolicy?: MarketPriorEvidencePolicy,
+  scalingPolicy?: Pick<MarketPriorScalingPolicy, "weightScale">
 ): { markets: PredictionMarket[]; adjustment: MarketPriorAdjustment } {
   const marketAdjustments: MarketPriorAdjustment["markets"] = [];
   let adjustedSelections = 0;
@@ -307,7 +324,7 @@ export function applyMarketPriorAdjustmentToMarkets(
     if (matchedSelections.length < 2) return predictionMarket;
 
     const bookmakerMargin = calculateBookmakerMargin(rawImpliedProbabilities);
-    const weight = marketPriorWeight(dataQuality, bookmakerMargin, matchedSelections.length, evidencePolicy);
+    const weight = marketPriorWeight(dataQuality, bookmakerMargin, matchedSelections.length, evidencePolicy, scalingPolicy);
     const blended = { ...predictionMarket.probabilities };
 
     for (const selection of matchedSelections) {
@@ -343,6 +360,9 @@ export function applyMarketPriorAdjustmentToMarkets(
     markets,
     adjustment: {
       applied,
+      weightScale: scalingPolicy && Number.isFinite(scalingPolicy.weightScale)
+        ? round(clampRange(scalingPolicy.weightScale, 0, 3))
+        : 1,
       adjustedMarkets: marketAdjustments.length,
       adjustedSelections,
       averageWeight,
@@ -352,6 +372,7 @@ export function applyMarketPriorAdjustmentToMarkets(
         ? [
             `Blended ${marketAdjustments.length} priced market${marketAdjustments.length === 1 ? "" : "s"} toward no-vig bookmaker probabilities before EV ranking.`,
             "Market-prior weight increases when model data quality is lower and decreases when bookmaker margin is high.",
+            ...(scalingPolicy ? [`The governed market-prior weight scale is ${round(clampRange(scalingPolicy.weightScale, 0, 3))}.`] : []),
             ...(evidencePolicy
               ? [`Evidence-aware market-prior floor requested at ${Math.round(evidencePolicy.minimumWeight * 100)}%: ${evidencePolicy.reason}`]
               : [])
@@ -394,7 +415,9 @@ export function applyMarketPriorAdjustmentToDiagnostics(
 export function buildValueEdges(
   predictionMarkets: PredictionMarket[],
   oddsMarkets: OddsMarket[],
-  dataQuality: number
+  dataQuality: number,
+  learningProfile?: DecisionLearningProfile,
+  segmentKey?: string | null
 ): ValueEdge[] {
   return oddsMarkets.flatMap((market) => {
     const predictionMarket = predictionMarkets.find((item) => item.marketId === market.id);
@@ -426,9 +449,22 @@ export function buildValueEdges(
         expectedRoi: expectedValue,
         odds: selection.decimalOdds,
         confidence,
-        risk
+        risk,
+        empiricalValueGuard: evaluateEmpiricalValueGuard({
+          modelProbability,
+          impliedProbability,
+          odds: selection.decimalOdds,
+          policy: learningProfile?.active ? learningProfile.empiricalValueGuardPolicy : null
+        }),
+        segmentValueGuard: evaluateSegmentValueGuard({
+          segmentKey: segmentKey ?? null,
+          modelProbability,
+          impliedProbability,
+          odds: selection.decimalOdds,
+          policy: learningProfile?.active ? learningProfile.segmentValueGuardPolicy : null
+        })
       };
-      const scoring = scoreValueEdge(valueEdge);
+      const scoring = scoreValueEdge(valueEdge, { learningProfile });
 
       return {
         ...valueEdge,
@@ -440,9 +476,35 @@ export function buildValueEdges(
 }
 
 export function selectBestPick(valueEdges: ValueEdge[], options: BestPickSelectionOptions = {}): BestPickResult {
-  const minimumEdge = learnedMinimumEdge(options);
+  const minimumEdge = effectiveMinimumEdge(options);
+  const allowedConfidenceBands = options.learningProfile?.active
+    ? options.learningProfile.allowedConfidenceBands
+    : null;
   const viable = valueEdges
-    .filter((edge) => edge.edge > 0 && (minimumEdge === null || edge.edge >= minimumEdge) && edge.expectedValue > 0 && edge.confidence !== "low")
+    .map((edge) => ({
+      ...edge,
+      empiricalValueGuard: evaluateEmpiricalValueGuard({
+        modelProbability: edge.modelProbability,
+        impliedProbability: edge.impliedProbability,
+        odds: edge.odds,
+        policy: options.learningProfile?.active ? options.learningProfile.empiricalValueGuardPolicy : null
+      }),
+      segmentValueGuard: evaluateSegmentValueGuard({
+        segmentKey: options.segmentKey ?? null,
+        modelProbability: edge.modelProbability,
+        impliedProbability: edge.impliedProbability,
+        odds: edge.odds,
+        policy: options.learningProfile?.active ? options.learningProfile.segmentValueGuardPolicy : null
+      })
+    }))
+    .filter((edge) => {
+      if (edge.edge < minimumEdge || edge.expectedValue <= 0 || edge.confidence === "low") return false;
+      if (edge.empiricalValueGuard.status === "blocked") return false;
+      if (edge.segmentValueGuard.status === "blocked") return false;
+      return allowedConfidenceBands === null || allowedConfidenceBands === undefined
+        ? true
+        : allowedConfidenceBands.includes(edge.confidence);
+    })
     .map((edge) => {
       const scoring = scoreValueEdge(edge, options);
       return {

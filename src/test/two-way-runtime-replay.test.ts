@@ -27,6 +27,31 @@ function basketballHistory(lastScore: [number, number] = [112, 104]): Historical
   }));
 }
 
+function longBasketballHistory(reverseHoldout = false): HistoricalBasketballFixture[] {
+  const fixtureCount = 1200;
+  const holdoutStart = Math.floor(fixtureCount * 0.75);
+  return Array.from({ length: fixtureCount }, (_, index) => {
+    const baselineHomeWin = index % 4 !== 0;
+    const homeWin = reverseHoldout && index >= holdoutStart ? !baselineHomeWin : baselineHomeWin;
+    const kickoffAt = new Date(Date.UTC(2024, 0, index + 1, 20)).toISOString();
+    return {
+      fixtureExternalId: `basketball-long:${index + 1}`,
+      kickoffAt,
+      leagueExternalId: "nba",
+      season: "2024",
+      homeTeamExternalId: "team:a",
+      awayTeamExternalId: "team:b",
+      homeScore: homeWin ? 112 : 99,
+      awayScore: homeWin ? 103 : 108,
+      dataQuality: 0.9,
+      odds: [
+        { market: "moneyline", selection: "home", decimalOdds: 1.92, observedAt: new Date(Date.parse(kickoffAt) - 8 * 60 * 60_000).toISOString() },
+        { market: "moneyline", selection: "away", decimalOdds: 2.02, observedAt: new Date(Date.parse(kickoffAt) - 8 * 60 * 60_000).toISOString() }
+      ]
+    };
+  });
+}
+
 function tennisHistory(lastSets: [number, number] = [2, 0]): HistoricalTennisMatch[] {
   return Array.from({ length: 12 }, (_, index) => ({
     fixtureExternalId: `tennis:${index + 1}`,
@@ -60,6 +85,54 @@ describe("basketball and tennis exact runtime replay", () => {
       evaluatedFixtures: result.testSize,
       entrypointInvocations: result.testSize
     });
+    expect(result.results.every((row) => row.pick === null || row.pick.edge >= result.learnedWeights.minimumEdge)).toBe(true);
+    expect(result.selectionPolicy).toMatchObject({
+      source: "chronological-training-window",
+      status: "abstain",
+      allowedConfidenceBands: []
+    });
+    expect(result.economicSelectionComparison.selected.pickCount).toBe(result.pickCount);
+    expect(result.economicSelectionComparison.baseline.pickCount).toBeGreaterThanOrEqual(result.pickCount);
+    expect(result.probabilityCalibrationPolicy).toMatchObject({
+      source: "chronological-training-window",
+      status: "identity",
+      temperature: 1,
+      reason: "insufficient-training-sample"
+    });
+    expect(result.probabilityCalibrationComparison.baseline.sampleSize).toBe(result.testSize);
+    expect(result.marketPriorScalingPolicy).toMatchObject({
+      source: "chronological-priced-training-window",
+      status: "identity",
+      weightScale: 1,
+      reason: "insufficient-priced-sample"
+    });
+    expect(result.empiricalValueGuardPolicy).toMatchObject({
+      source: "chronological-final-posterior-regime-windows",
+      status: "abstain",
+      reason: expect.stringMatching(/insufficient-regime-sample|invalid-chronology/)
+    });
+    expect(result.empiricalValueGuardComparison.selected.pickCount).toBeLessThanOrEqual(
+      result.empiricalValueGuardComparison.baseline.pickCount
+    );
+    expect(result.empiricalValueGuardComparison.picksRemoved).toBe(
+      result.empiricalValueGuardComparison.baseline.pickCount - result.empiricalValueGuardComparison.selected.pickCount
+    );
+    expect(result.segmentValueGuardPolicy).toMatchObject({
+      source: "chronological-final-posterior-segment-regime-windows",
+      segmentDimension: "competition",
+      status: "abstain"
+    });
+    expect(result.segmentValueGuardComparison.baseline.pickCount).toBe(result.empiricalValueGuardComparison.selected.pickCount);
+    expect(result.marketPriorEvidence).toMatchObject({
+      version: "runtime-market-prior-parity-v1",
+      status: "applied",
+      evaluatedFixtures: result.testSize,
+      adjustedFixtures: result.testSize,
+      coverage: 1
+    });
+    expect(result.notes).toEqual(expect.arrayContaining([
+      expect.stringContaining("set the holdout minimum edge")
+    ]));
     expect(historicalModelCompatibility({
       sport: "basketball",
       evidenceModelKey: result.modelKey,
@@ -76,6 +149,80 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(last(home).actualOutcome).toBe("home");
     expect(last(away).actualOutcome).toBe("away");
     expect(home.learnedWeights).toEqual(away.learnedWeights);
+    expect(home.selectionPolicy).toEqual(away.selectionPolicy);
+    expect(home.probabilityCalibrationPolicy).toEqual(away.probabilityCalibrationPolicy);
+    expect(home.marketPriorScalingPolicy).toEqual(away.marketPriorScalingPolicy);
+    expect(home.empiricalValueGuardPolicy).toEqual(away.empiricalValueGuardPolicy);
+    expect(home.segmentValueGuardPolicy).toEqual(away.segmentValueGuardPolicy);
+  });
+
+  it("freezes an active empirical value policy before the outer holdout", () => {
+    const baseline = runBasketballRuntimeReplay(longBasketballHistory(), { trainRatio: 0.75, minPriorMatches: 3 });
+    const reversedHoldout = runBasketballRuntimeReplay(longBasketballHistory(true), { trainRatio: 0.75, minPriorMatches: 3 });
+
+    expect(baseline.empiricalValueGuardPolicy).toMatchObject({ status: "active", reason: "stable-regime-buckets" });
+    expect(baseline.empiricalValueGuardPolicy.buckets.some((bucket) => bucket.eligible)).toBe(true);
+    expect(Date.parse(baseline.empiricalValueGuardPolicy.earlierWindow.windowEnd!)).toBeLessThan(
+      Date.parse(baseline.empiricalValueGuardPolicy.recentWindow.windowStart!)
+    );
+    expect(baseline.empiricalValueGuardPolicy.buckets.filter((bucket) => bucket.eligible).every((bucket) =>
+      bucket.earlier.sampleSize >= baseline.empiricalValueGuardPolicy.minimumRegimeSample &&
+      bucket.recent.sampleSize >= baseline.empiricalValueGuardPolicy.minimumRegimeSample &&
+      bucket.probabilityFloor === Math.min(
+        bucket.aggregateProbabilityFloor!,
+        bucket.earlier.probabilityFloor!,
+        bucket.recent.probabilityFloor!
+      )
+    )).toBe(true);
+    expect(reversedHoldout.empiricalValueGuardPolicy).toEqual(baseline.empiricalValueGuardPolicy);
+    expect(baseline.segmentValueGuardPolicy).toMatchObject({ status: "active", segmentDimension: "competition" });
+    expect(reversedHoldout.segmentValueGuardPolicy).toEqual(baseline.segmentValueGuardPolicy);
+    expect(baseline.segmentValueGuardComparison.baseline.pickCount).toBe(baseline.empiricalValueGuardComparison.selected.pickCount);
+    expect(Date.parse(baseline.empiricalValueGuardPolicy.windowEnd!)).toBeLessThan(Date.parse(baseline.testWindowStart!));
+    expect(baseline.empiricalValueGuardComparison.picksRemoved).toBeGreaterThanOrEqual(0);
+  });
+
+  it("uses coherent decision prices for the basketball posterior and never closing or post-kickoff prices", () => {
+    const baselineFixtures = basketballHistory();
+    const contaminated = basketballHistory();
+    const last = contaminated[11]!;
+    const kickoff = Date.parse(last.kickoffAt);
+    last.odds = [
+      ...last.odds,
+      { market: "moneyline", selection: "home", decimalOdds: 1.05, observedAt: new Date(kickoff - 5 * 60_000).toISOString(), isClosing: true },
+      { market: "moneyline", selection: "away", decimalOdds: 15, observedAt: new Date(kickoff - 5 * 60_000).toISOString(), isClosing: true },
+      { market: "moneyline", selection: "home", decimalOdds: 1.01, observedAt: new Date(kickoff + 60_000).toISOString() },
+      { market: "moneyline", selection: "away", decimalOdds: 30, observedAt: new Date(kickoff + 60_000).toISOString() }
+    ];
+    const config = { trainRatio: 0.5, minPriorMatches: 3 };
+    const baseline = runBasketballRuntimeReplay(baselineFixtures, config);
+    const replay = runBasketballRuntimeReplay(contaminated, config);
+    const finalProbability = (result: ReturnType<typeof runBasketballRuntimeReplay>) =>
+      result.results.find((row) => row.fixtureExternalId === "basketball:12")!.probabilities;
+
+    expect(finalProbability(replay)).toEqual(finalProbability(baseline));
+    expect(replay.marketPriorEvidence).toEqual(baseline.marketPriorEvidence);
+  });
+
+  it("refuses to synthesize a market posterior from different bookmaker snapshots", () => {
+    const mismatched = basketballHistory();
+    const noOdds = basketballHistory();
+    const last = mismatched[11]!;
+    const observedAt = new Date(Date.parse(last.kickoffAt) - 8 * 60 * 60_000).toISOString();
+    last.odds = [
+      { market: "moneyline", selection: "home", decimalOdds: 1.3, bookmaker: "book-a", observedAt },
+      { market: "moneyline", selection: "away", decimalOdds: 4.2, bookmaker: "book-b", observedAt }
+    ];
+    noOdds[11] = { ...noOdds[11]!, odds: [] };
+    const config = { trainRatio: 0.5, minPriorMatches: 3 };
+    const mismatchedReplay = runBasketballRuntimeReplay(mismatched, config);
+    const noOddsReplay = runBasketballRuntimeReplay(noOdds, config);
+    const finalProbability = (result: ReturnType<typeof runBasketballRuntimeReplay>) =>
+      result.results.find((row) => row.fixtureExternalId === "basketball:12")!.probabilities;
+
+    expect(finalProbability(mismatchedReplay)).toEqual(finalProbability(noOddsReplay));
+    expect(mismatchedReplay.marketPriorEvidence.adjustedFixtures).toBe(mismatchedReplay.testSize - 1);
+    expect(mismatchedReplay.results.find((row) => row.fixtureExternalId === "basketball:12")?.pick).toBeNull();
   });
 
   it("fails closed for neutral basketball rows", () => {
@@ -106,6 +253,11 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(last(home).probabilities).toEqual(last(away).probabilities);
     expect(last(home).actualOutcome).toBe("home");
     expect(last(away).actualOutcome).toBe("away");
+    expect(home.selectionPolicy).toEqual(away.selectionPolicy);
+    expect(home.probabilityCalibrationPolicy).toEqual(away.probabilityCalibrationPolicy);
+    expect(home.marketPriorScalingPolicy).toEqual(away.marketPriorScalingPolicy);
+    expect(home.empiricalValueGuardPolicy).toEqual(away.empiricalValueGuardPolicy);
+    expect(home.marketPriorEvidence.status).toBe("applied");
     expect(historicalModelCompatibility({
       sport: "tennis",
       evidenceModelKey: home.modelKey,
@@ -120,5 +272,17 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(tennis.featureContract.status).toBe("failed");
     expect(() => twoWayRuntimeReplayIdentityReceipt(basketball)).toThrow("failed feature contract");
     expect(() => twoWayRuntimeReplayIdentityReceipt(tennis)).toThrow("failed feature contract");
+  });
+
+  it("fails the outer replay contract when no strict kickoff boundary exists", () => {
+    const fixtures = basketballHistory().map((fixture) => ({
+      ...fixture,
+      kickoffAt: "2025-01-01T20:00:00.000Z"
+    }));
+    const result = runBasketballRuntimeReplay(fixtures, { trainRatio: 0.5, minPriorMatches: 3 });
+
+    expect(result.trainSize).toBe(0);
+    expect(result.featureContract.status).toBe("failed");
+    expect(() => twoWayRuntimeReplayIdentityReceipt(result)).toThrow("failed feature contract");
   });
 });

@@ -156,11 +156,12 @@ expectedValue = modelProbability * decimalOdds - 1
 Before value-edge ranking, the live prediction pipeline applies a bounded market-prior blend when a model market matches priced bookmaker selections:
 
 ```txt
-marketPriorWeight = f(dataQuality, bookmakerMargin, selectionCount)
+heuristicMarketPriorWeight = f(dataQuality, bookmakerMargin, selectionCount)
+marketPriorWeight = max(heuristicMarketPriorWeight * learnedWeightScale, footballEvidenceFloor)
 adjustedModelProbability = normalize(modelProbability * (1 - marketPriorWeight) + noVigImpliedProbability * marketPriorWeight)
 ```
 
-The weight rises when model data quality is lower and falls when bookmaker margin is high. This lets the agent respect the market as a signal without letting high-overround prices overwrite the sport model.
+The heuristic weight rises when model data quality is lower and falls when bookmaker margin is high. The scale is fit chronologically on priced training observations after probability-temperature calibration, accepted only when a strictly later validation window improves log loss without material Brier regression, and frozen before the outer holdout. A scale of `1` preserves the original heuristic, while football evidence floors still protect thin-history teams even if the learned scale is lower. Identical kickoff cohorts are never divided between evidence windows; when no strict timestamp boundary exists, training fails closed.
 
 Example:
 
@@ -172,6 +173,44 @@ modelProbability = 52.00%
 valueEdge = +8.20%
 expectedValue = +14.40%
 ```
+
+### 4.1 Empirical value durability
+
+A positive point estimate is necessary but no longer sufficient for a governed live pick. After temperature calibration and the learned market-prior blend, the engine splits the final-posterior training-validation cohort at the nearest strict kickoff boundary into earlier and recent regimes. It then groups selections into canonical probability buckets of width `0.10`. A bucket is eligible only with at least 30 observations in each regime and 60 total.
+
+The aggregate floor uses a one-sided 95% Wilson bound. Each regime uses a 97.5% bound; by Bonferroni, both regime bounds jointly retain at least 95% coverage:
+
+```txt
+aggregateZ = 1.6448536269514722
+regimeZ = 1.959963984540054
+denominator = 1 + z^2 / n
+center = (observedRate + z^2 / (2n)) / denominator
+margin = z * sqrt(observedRate * (1 - observedRate) / n + z^2 / (4n^2)) / denominator
+wilsonFloor = max(0, center - margin)
+probabilityFloor = min(aggregateFloor, earlierRegimeFloor, recentRegimeFloor)
+```
+
+The candidate survives only when value remains positive at that floor:
+
+```txt
+conservativeEdge = probabilityFloor - noVigImpliedProbability
+conservativeExpectedValue = probabilityFloor * decimalOdds - 1
+eligiblePick = conservativeEdge > 0 AND conservativeExpectedValue > 0
+```
+
+The policy is learned only from a strictly earlier final-posterior training-validation window and is frozen before the outer holdout. Identical kickoff cohorts are never split between regimes. Missing, thin, malformed, unsplittable, or chronology-invalid regimes fail closed. Replay stores both the unguarded point-estimate pick metrics and the guarded metrics; promotion recomputes every aggregate and regime floor, validates window/sample conservation, and checks the exact pick-count delta plus ROI/yield arithmetic before the policy can reach the live engine.
+
+### 4.2 Exact-segment reliability
+
+The pooled temporal floor is necessary but can hide local failure. The engine therefore learns a second policy from the same frozen final-posterior cohort and the same strict earlier/recent boundary. Football and basketball use the provider competition identity; tennis uses the normalized court surface (`hard`, `clay`, `grass`, or `indoor`). Each segment repeats the canonical 0.10 probability buckets and Wilson-floor calculation, with a segment-specific minimum of 20 observations per regime and 40 total.
+
+```txt
+globallyEligible = globalConservativeEdge > 0 AND globalConservativeExpectedValue > 0
+segmentEligible = exactSegmentConservativeEdge > 0 AND exactSegmentConservativeExpectedValue > 0
+eligiblePick = globallyEligible AND segmentEligible
+```
+
+Unknown live segments, mismatched or unknown tennis surfaces, unseen segments, sparse buckets, and recent local reversals all abstain. Replay first compares point-estimate picks with globally guarded picks, then compares those globally guarded picks with exact-segment guarded picks. Promotion requires the second comparison baseline to equal the first comparison selection exactly and recomputes every segment floor, count, chronology window, and yield receipt before activation. This is segment safety, not a claim of simultaneous statistical coverage across every segment inspected.
 
 ## 5. Fair Odds
 

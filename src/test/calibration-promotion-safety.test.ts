@@ -59,6 +59,84 @@ function activeProfile(): DecisionLearningProfile {
   };
 }
 
+function empiricalValueGuardPolicy() {
+  return {
+    version: "empirical-value-guard-v2",
+    source: "chronological-final-posterior-regime-windows",
+    status: "active",
+    confidenceLevel: 0.95,
+    regimeConfidenceLevel: 0.975,
+    minimumBucketSample: 60,
+    minimumRegimeSample: 30,
+    sampleSize: 378,
+    windowStart: "2025-04-01T12:00:00.000Z",
+    windowEnd: "2025-06-30T12:00:00.000Z",
+    holdoutWindowStart: "2025-07-01T12:00:00.000Z",
+    earlierWindow: {
+      windowStart: "2025-04-01T12:00:00.000Z",
+      windowEnd: "2025-05-15T12:00:00.000Z",
+      sampleSize: 189
+    },
+    recentWindow: {
+      windowStart: "2025-05-16T12:00:00.000Z",
+      windowEnd: "2025-06-30T12:00:00.000Z",
+      sampleSize: 189
+    },
+    buckets: [
+      {
+        minProbability: 0.2, maxProbability: 0.3, sampleSize: 126, averageProbability: 0.25, observedRate: 0.238095,
+        aggregateProbabilityFloor: 0.181603, probabilityFloor: 0.149938, eligible: true,
+        earlier: { sampleSize: 63, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.149938 },
+        recent: { sampleSize: 63, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.149938 }
+      },
+      {
+        minProbability: 0.3, maxProbability: 0.4, sampleSize: 126, averageProbability: 0.35, observedRate: 0.333333,
+        aggregateProbabilityFloor: 0.268399, probabilityFloor: 0.229496, eligible: true,
+        earlier: { sampleSize: 63, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.229496 },
+        recent: { sampleSize: 63, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.229496 }
+      },
+      {
+        minProbability: 0.4, maxProbability: 0.5, sampleSize: 126, averageProbability: 0.45, observedRate: 0.460317,
+        aggregateProbabilityFloor: 0.388882, probabilityFloor: 0.343089, eligible: true,
+        earlier: { sampleSize: 63, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.343089 },
+        recent: { sampleSize: 63, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.343089 }
+      }
+    ],
+    reason: "stable-regime-buckets"
+  };
+}
+
+function segmentValueGuardPolicy() {
+  const global = empiricalValueGuardPolicy();
+  return {
+    version: "segment-value-guard-v1",
+    source: "chronological-final-posterior-segment-regime-windows",
+    status: "active",
+    segmentDimension: "competition",
+    confidenceLevel: 0.95,
+    regimeConfidenceLevel: 0.975,
+    minimumBucketSample: 40,
+    minimumRegimeSample: 20,
+    sampleSize: global.sampleSize,
+    unresolvedSampleSize: 0,
+    unresolvedEarlierSampleSize: 0,
+    unresolvedRecentSampleSize: 0,
+    windowStart: global.windowStart,
+    windowEnd: global.windowEnd,
+    holdoutWindowStart: global.holdoutWindowStart,
+    earlierWindow: global.earlierWindow,
+    recentWindow: global.recentWindow,
+    segments: [{
+      segmentKey: "competition:39",
+      sampleSize: global.sampleSize,
+      earlierSampleSize: global.earlierWindow.sampleSize,
+      recentSampleSize: global.recentWindow.sampleSize,
+      buckets: global.buckets
+    }],
+    reason: "eligible-segments"
+  };
+}
+
 function readySnapshot(): TrainingDataSnapshot {
   return {
     generatedAt: "2026-08-21T12:00:00.000Z",
@@ -109,7 +187,76 @@ function readySnapshot(): TrainingDataSnapshot {
         }),
         featureContract: {
           eligibleFixtures: 1200,
-          optionalCoverage: { playerFormFixtures: 900 }
+          optionalCoverage: { playerFormFixtures: 900, completeOddsFixtures: 300 }
+        },
+        selectionPolicy: {
+          version: "economic-confidence-bands-v1",
+          source: "chronological-training-window",
+          status: "active",
+          allowedConfidenceBands: ["medium"]
+        },
+        probabilityCalibrationPolicy: {
+          version: "temperature-scaling-v1",
+          source: "chronological-training-window",
+          status: "active",
+          temperature: 1.2,
+          fitSampleSize: 588,
+          validationSampleSize: 252,
+          fitWindowStart: "2023-01-01T12:00:00.000Z",
+          fitWindowEnd: "2024-12-31T12:00:00.000Z",
+          validationWindowStart: "2025-01-01T12:00:00.000Z",
+          validationWindowEnd: "2025-06-30T12:00:00.000Z",
+          holdoutWindowStart: "2025-07-01T12:00:00.000Z",
+          baselineValidation: { sampleSize: 252, brierScore: 0.21, logLoss: 0.62 },
+          calibratedValidation: { sampleSize: 252, brierScore: 0.205, logLoss: 0.615 },
+          reason: "validated-proper-score-improvement"
+        },
+        marketPriorScalingPolicy: {
+          version: "market-prior-scaling-v1",
+          source: "chronological-priced-training-window",
+          status: "identity",
+          weightScale: 1,
+          candidateWeightScale: 1,
+          fitSampleSize: 126,
+          validationSampleSize: 126,
+          fitWindowStart: "2025-01-01T12:00:00.000Z",
+          fitWindowEnd: "2025-03-31T12:00:00.000Z",
+          validationWindowStart: "2025-04-01T12:00:00.000Z",
+          validationWindowEnd: "2025-06-30T12:00:00.000Z",
+          holdoutWindowStart: "2025-07-01T12:00:00.000Z",
+          baselineFit: { sampleSize: 126, brierScore: 0.205, logLoss: 0.615 },
+          candidateFit: { sampleSize: 126, brierScore: 0.205, logLoss: 0.615 },
+          baselineValidation: { sampleSize: 126, brierScore: 0.204, logLoss: 0.614 },
+          candidateValidation: { sampleSize: 126, brierScore: 0.204, logLoss: 0.614 },
+          reason: "identity-won-fit"
+        },
+        empiricalValueGuardPolicy: empiricalValueGuardPolicy(),
+        empiricalValueGuardComparison: {
+          baseline: { pickCount: 72, roiUnits: 5.4, yield: 0.075 },
+          selected: { pickCount: 48, roiUnits: 4.8, yield: 0.1 },
+          picksRemoved: 24
+        },
+        segmentValueGuardPolicy: segmentValueGuardPolicy(),
+        segmentValueGuardComparison: {
+          baseline: { pickCount: 48, roiUnits: 4.8, yield: 0.1 },
+          selected: { pickCount: 36, roiUnits: 3.6, yield: 0.1 },
+          picksRemoved: 12
+        },
+        marketPriorEvidence: {
+          version: "runtime-market-prior-parity-v1",
+          status: "applied",
+          evaluatedFixtures: 360,
+          adjustedFixtures: 300,
+          adjustedSelections: 900,
+          coverage: 0.833333,
+          averageWeight: 0.12,
+          averageBookmakerMargin: 0.04,
+          probabilityComparison: {
+            baseline: { sampleSize: 360, brierScore: 0.19, logLoss: 0.55 },
+            calibrated: { sampleSize: 360, brierScore: 0.188, logLoss: 0.547 },
+            brierDelta: -0.002,
+            logLossDelta: -0.003
+          }
         }
       },
       notes: [],
@@ -196,6 +343,10 @@ describe("calibration promotion safety", () => {
     expect(active.active).toBe(true);
     expect(active.modelCompatibility).toBe("exact-runtime-parity");
     expect(active.playerFormCoverage).toBe(0.75);
+    expect(active.marketPriorReplayStatus).toBe("applied");
+    expect(active.marketPriorReplayAdjustedFixtures).toBe(300);
+    expect(active.marketPriorReplayCoverage).toBe(0.833333);
+    expect(active.marketPriorReplayAverageWeight).toBe(0.12);
     expect(active.calibrationPromotion).toMatchObject({ id: "promotion-1", candidateId: "candidate-1" });
     expect(mismatched.active).toBe(false);
     expect(mismatched.reason).toContain("model-bound calibration promotion");
@@ -264,6 +415,387 @@ describe("calibration promotion safety", () => {
     expect(profile.modelCompatibility).toBe("exact-runtime-parity");
     expect(profile.playerFormCoverage).toBe(0.2);
     expect(profile.reason).toContain("player-form coverage is 20.0%; 60% of chronology-safe fixtures is required");
+  });
+
+  it("keeps a promoted exact-runtime replay shadow-only when its training-only economic policy abstains", () => {
+    const snapshot = readySnapshot();
+    snapshot.latestBacktest = {
+      ...snapshot.latestBacktest!,
+      config: {
+        ...snapshot.latestBacktest!.config,
+        selectionPolicy: {
+          version: "economic-confidence-bands-v1",
+          source: "chronological-training-window",
+          status: "abstain",
+          allowedConfidenceBands: []
+        }
+      }
+    };
+
+    const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(profile.active).toBe(false);
+    expect(profile.economicSelectionPolicyStatus).toBe("abstain");
+    expect(profile.allowedConfidenceBands).toEqual([]);
+    expect(profile.reason).toContain("training-only economic selection policy abstains");
+  });
+
+  it("accepts a validated identity policy but blocks an invalid or thin probability policy", () => {
+    const snapshot = readySnapshot();
+    snapshot.latestBacktest = {
+      ...snapshot.latestBacktest!,
+      config: {
+        ...snapshot.latestBacktest!.config,
+        probabilityCalibrationPolicy: {
+          ...snapshot.latestBacktest!.config?.probabilityCalibrationPolicy as Record<string, unknown>,
+          status: "identity",
+          temperature: 1,
+          reason: "validation-did-not-improve",
+          calibratedValidation: { sampleSize: 252, brierScore: 0.21, logLoss: 0.62 }
+        }
+      }
+    };
+
+    const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(profile.active).toBe(true);
+    expect(profile.probabilityTemperaturePolicy).toMatchObject({ status: "identity", temperature: 1 });
+
+    snapshot.latestBacktest = {
+      ...snapshot.latestBacktest!,
+      config: {
+        ...snapshot.latestBacktest!.config,
+        probabilityCalibrationPolicy: {
+          ...snapshot.latestBacktest!.config?.probabilityCalibrationPolicy as Record<string, unknown>,
+          validationSampleSize: 0,
+          reason: "insufficient-training-sample"
+        }
+      }
+    };
+    const blocked = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(blocked.active).toBe(false);
+    expect(blocked.probabilityTemperaturePolicy).toBeNull();
+    expect(blocked.reason).toContain("lacks a valid training-only probability calibration policy");
+  });
+
+  it("keeps exact-runtime evidence shadow-only when market-posterior parity is missing or inconsistent", () => {
+    const missing = readySnapshot();
+    const missingConfig = { ...missing.latestBacktest!.config };
+    delete missingConfig.marketPriorEvidence;
+    missing.latestBacktest = { ...missing.latestBacktest!, config: missingConfig };
+    const missingProfile = buildDecisionLearningProfileFromSnapshot(missing, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(missingProfile.active).toBe(false);
+    expect(missingProfile.marketPriorReplayStatus).toBeNull();
+    expect(missingProfile.reason).toContain("lacks a valid pre-match market-prior parity receipt");
+
+    const inconsistent = readySnapshot();
+    inconsistent.latestBacktest = {
+      ...inconsistent.latestBacktest!,
+      config: {
+        ...inconsistent.latestBacktest!.config,
+        marketPriorEvidence: {
+          ...inconsistent.latestBacktest!.config?.marketPriorEvidence as Record<string, unknown>,
+          adjustedFixtures: 0,
+          adjustedSelections: 0,
+          coverage: 0,
+          averageWeight: null,
+          status: "no-priced-market"
+        }
+      }
+    };
+    const inconsistentProfile = buildDecisionLearningProfileFromSnapshot(inconsistent, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(inconsistentProfile.active).toBe(false);
+    expect(inconsistentProfile.reason).toContain("lacks a valid pre-match market-prior parity receipt");
+  });
+
+  it("requires a complete chronology-safe market-prior scaling receipt", () => {
+    const valid = buildDecisionLearningProfileFromSnapshot(readySnapshot(), {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(valid.marketPriorScalingPolicy).toMatchObject({ status: "identity", weightScale: 1 });
+
+    const activeSnapshot = readySnapshot();
+    activeSnapshot.latestBacktest = {
+      ...activeSnapshot.latestBacktest!,
+      config: {
+        ...activeSnapshot.latestBacktest!.config,
+        marketPriorScalingPolicy: {
+          ...activeSnapshot.latestBacktest!.config?.marketPriorScalingPolicy as Record<string, unknown>,
+          status: "active",
+          weightScale: 2,
+          candidateWeightScale: 2,
+          candidateFit: { sampleSize: 126, brierScore: 0.2, logLoss: 0.61 },
+          candidateValidation: { sampleSize: 126, brierScore: 0.202, logLoss: 0.61 },
+          reason: "validated-proper-score-improvement"
+        }
+      }
+    };
+    const activeProfile = buildDecisionLearningProfileFromSnapshot(activeSnapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(activeProfile.active).toBe(true);
+    expect(activeProfile.marketPriorScalingPolicy).toMatchObject({ status: "active", weightScale: 2 });
+
+    const missing = readySnapshot();
+    const missingConfig = { ...missing.latestBacktest!.config };
+    delete missingConfig.marketPriorScalingPolicy;
+    missing.latestBacktest = { ...missing.latestBacktest!, config: missingConfig };
+    const missingProfile = buildDecisionLearningProfileFromSnapshot(missing, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(missingProfile.active).toBe(false);
+    expect(missingProfile.marketPriorScalingPolicy).toBeNull();
+    expect(missingProfile.reason).toContain("lacks a valid training-only market-prior scaling policy");
+
+    const overlapping = readySnapshot();
+    overlapping.latestBacktest = {
+      ...overlapping.latestBacktest!,
+      config: {
+        ...overlapping.latestBacktest!.config,
+        marketPriorScalingPolicy: {
+          ...overlapping.latestBacktest!.config?.marketPriorScalingPolicy as Record<string, unknown>,
+          validationWindowEnd: "2025-07-01T12:00:00.000Z"
+        }
+      }
+    };
+    const overlappingProfile = buildDecisionLearningProfileFromSnapshot(overlapping, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(overlappingProfile.active).toBe(false);
+    expect(overlappingProfile.marketPriorScalingPolicy).toBeNull();
+  });
+
+  it("requires an exact training-only empirical value-floor receipt", () => {
+    const valid = buildDecisionLearningProfileFromSnapshot(readySnapshot(), {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(valid.active).toBe(true);
+    expect(valid.empiricalValueGuardPolicy).toMatchObject({ status: "active", sampleSize: 378 });
+    expect(valid.empiricalValueGuardComparison).toMatchObject({ picksRemoved: 24 });
+
+    const missing = readySnapshot();
+    const missingConfig = { ...missing.latestBacktest!.config };
+    delete missingConfig.empiricalValueGuardPolicy;
+    missing.latestBacktest = { ...missing.latestBacktest!, config: missingConfig };
+    const missingProfile = buildDecisionLearningProfileFromSnapshot(missing, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(missingProfile.active).toBe(false);
+    expect(missingProfile.empiricalValueGuardPolicy).toBeNull();
+    expect(missingProfile.reason).toContain("lacks a valid training-only empirical value guard policy");
+
+    const missingComparison = readySnapshot();
+    const missingComparisonConfig = { ...missingComparison.latestBacktest!.config };
+    delete missingComparisonConfig.empiricalValueGuardComparison;
+    missingComparison.latestBacktest = { ...missingComparison.latestBacktest!, config: missingComparisonConfig };
+    const missingComparisonProfile = buildDecisionLearningProfileFromSnapshot(missingComparison, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(missingComparisonProfile.active).toBe(false);
+    expect(missingComparisonProfile.empiricalValueGuardComparison).toBeNull();
+    expect(missingComparisonProfile.reason).toContain("lacks a valid empirical value guard holdout comparison");
+
+    const forged = readySnapshot();
+    const original = forged.latestBacktest!.config?.empiricalValueGuardPolicy as ReturnType<typeof empiricalValueGuardPolicy>;
+    forged.latestBacktest = {
+      ...forged.latestBacktest!,
+      config: {
+        ...forged.latestBacktest!.config,
+        empiricalValueGuardPolicy: {
+          ...original,
+          buckets: original.buckets.map((bucket, index) => index === 0 ? { ...bucket, probabilityFloor: 0.23 } : bucket)
+        }
+      }
+    };
+    const forgedProfile = buildDecisionLearningProfileFromSnapshot(forged, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(forgedProfile.active).toBe(false);
+    expect(forgedProfile.empiricalValueGuardPolicy).toBeNull();
+
+    const forgedRecentFloor = readySnapshot();
+    const recentFloorPolicy = forgedRecentFloor.latestBacktest!.config?.empiricalValueGuardPolicy as ReturnType<typeof empiricalValueGuardPolicy>;
+    forgedRecentFloor.latestBacktest = {
+      ...forgedRecentFloor.latestBacktest!,
+      config: {
+        ...forgedRecentFloor.latestBacktest!.config,
+        empiricalValueGuardPolicy: {
+          ...recentFloorPolicy,
+          buckets: recentFloorPolicy.buckets.map((bucket, index) => index === 0
+            ? { ...bucket, recent: { ...bucket.recent, probabilityFloor: 0.2 } }
+            : bucket)
+        }
+      }
+    };
+    const forgedRecentFloorProfile = buildDecisionLearningProfileFromSnapshot(forgedRecentFloor, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(forgedRecentFloorProfile.active).toBe(false);
+    expect(forgedRecentFloorProfile.empiricalValueGuardPolicy).toBeNull();
+
+    const overlappingRegimes = readySnapshot();
+    const overlappingPolicy = overlappingRegimes.latestBacktest!.config?.empiricalValueGuardPolicy as ReturnType<typeof empiricalValueGuardPolicy>;
+    overlappingRegimes.latestBacktest = {
+      ...overlappingRegimes.latestBacktest!,
+      config: {
+        ...overlappingRegimes.latestBacktest!.config,
+        empiricalValueGuardPolicy: {
+          ...overlappingPolicy,
+          recentWindow: {
+            ...overlappingPolicy.recentWindow,
+            windowStart: overlappingPolicy.earlierWindow.windowEnd
+          }
+        }
+      }
+    };
+    const overlappingRegimesProfile = buildDecisionLearningProfileFromSnapshot(overlappingRegimes, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(overlappingRegimesProfile.active).toBe(false);
+    expect(overlappingRegimesProfile.empiricalValueGuardPolicy).toBeNull();
+
+    const forgedComparison = readySnapshot();
+    forgedComparison.latestBacktest = {
+      ...forgedComparison.latestBacktest!,
+      config: {
+        ...forgedComparison.latestBacktest!.config,
+        empiricalValueGuardComparison: {
+          baseline: { pickCount: 72, roiUnits: 5.4, yield: 0.075 },
+          selected: { pickCount: 48, roiUnits: 4.8, yield: 0.1 },
+          picksRemoved: 23
+        }
+      }
+    };
+    const forgedComparisonProfile = buildDecisionLearningProfileFromSnapshot(forgedComparison, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(forgedComparisonProfile.active).toBe(false);
+    expect(forgedComparisonProfile.empiricalValueGuardComparison).toBeNull();
+    expect(forgedComparisonProfile.reason).toContain("lacks a valid empirical value guard holdout comparison");
+  });
+
+  it("requires recomputable segment floors and a chained global-to-segment holdout receipt", () => {
+    const valid = buildDecisionLearningProfileFromSnapshot(readySnapshot(), {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(valid.segmentValueGuardPolicy).toMatchObject({
+      status: "active",
+      segmentDimension: "competition",
+      sampleSize: 378,
+      unresolvedSampleSize: 0
+    });
+    expect(valid.segmentValueGuardComparison).toMatchObject({ picksRemoved: 12 });
+
+    const missing = readySnapshot();
+    const missingConfig = { ...missing.latestBacktest!.config };
+    delete missingConfig.segmentValueGuardPolicy;
+    missing.latestBacktest = { ...missing.latestBacktest!, config: missingConfig };
+    const missingProfile = buildDecisionLearningProfileFromSnapshot(missing, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(missingProfile.active).toBe(false);
+    expect(missingProfile.segmentValueGuardPolicy).toBeNull();
+
+    const forgedFloor = readySnapshot();
+    const original = forgedFloor.latestBacktest!.config?.segmentValueGuardPolicy as ReturnType<typeof segmentValueGuardPolicy>;
+    forgedFloor.latestBacktest = {
+      ...forgedFloor.latestBacktest!,
+      config: {
+        ...forgedFloor.latestBacktest!.config,
+        segmentValueGuardPolicy: {
+          ...original,
+          segments: original.segments.map((segment) => ({
+            ...segment,
+            buckets: segment.buckets.map((bucket, index) => index === 0
+              ? { ...bucket, recent: { ...bucket.recent, probabilityFloor: 0.2 } }
+              : bucket)
+          }))
+        }
+      }
+    };
+    const forgedFloorProfile = buildDecisionLearningProfileFromSnapshot(forgedFloor, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(forgedFloorProfile.active).toBe(false);
+    expect(forgedFloorProfile.segmentValueGuardPolicy).toBeNull();
+
+    const forgedChain = readySnapshot();
+    forgedChain.latestBacktest = {
+      ...forgedChain.latestBacktest!,
+      config: {
+        ...forgedChain.latestBacktest!.config,
+        segmentValueGuardComparison: {
+          baseline: { pickCount: 47, roiUnits: 4.8, yield: 0.102128 },
+          selected: { pickCount: 36, roiUnits: 3.6, yield: 0.1 },
+          picksRemoved: 11
+        }
+      }
+    };
+    const forgedChainProfile = buildDecisionLearningProfileFromSnapshot(forgedChain, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(forgedChainProfile.active).toBe(false);
+    expect(forgedChainProfile.segmentValueGuardComparison).toBeNull();
+  });
+
+  it("accepts learned weights sourced from the complete prospective training-validation window", () => {
+    const snapshot = readySnapshot();
+    snapshot.latestBacktest = {
+      ...snapshot.latestBacktest!,
+      config: {
+        ...snapshot.latestBacktest!.config,
+        learnedWeightsProvenance: {
+          source: "training-validation-window",
+          sampleSize: 126,
+          pickCount: 40,
+          windowStart: "2025-04-01T12:00:00.000Z",
+          windowEnd: "2025-06-30T12:00:00.000Z",
+          holdoutWindowStart: "2025-07-01T12:00:00.000Z",
+          yield: 0.03,
+          brierScore: 0.2,
+          closingLineValue: 0.01
+        }
+      }
+    };
+
+    const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(profile.active).toBe(true);
   });
 
   it("allows only pending-to-final settlement and never rewrites a final label", () => {

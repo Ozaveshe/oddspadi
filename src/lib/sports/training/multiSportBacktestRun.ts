@@ -65,6 +65,46 @@ export type MultiSportBacktestJob = {
     logLoss: number | null;
     yield: number | null;
     calibrationError: number | null;
+    selectionPolicyStatus: "active" | "abstain" | null;
+    allowedConfidenceBands: string[];
+    baselinePickCount: number | null;
+    baselineYield: number | null;
+    probabilityCalibrationPolicyStatus: "active" | "identity" | null;
+    probabilityTemperature: number | null;
+    baselineHoldoutLogLoss: number | null;
+    calibratedHoldoutLogLoss: number | null;
+    holdoutLogLossDelta: number | null;
+    marketPriorScalingPolicyStatus: "active" | "identity" | null;
+    marketPriorWeightScale: number | null;
+    marketPriorCandidateWeightScale: number | null;
+    marketPriorScalingFitSampleSize: number | null;
+    marketPriorScalingValidationSampleSize: number | null;
+    marketPriorScalingValidationBrierDelta: number | null;
+    marketPriorScalingValidationLogLossDelta: number | null;
+    empiricalValueGuardStatus: "active" | "abstain" | null;
+    empiricalValueGuardSampleSize: number | null;
+    empiricalValueGuardEligibleBuckets: number | null;
+    empiricalValueGuardMinimumRegimeSample: number | null;
+    empiricalValueGuardEarlierSampleSize: number | null;
+    empiricalValueGuardRecentSampleSize: number | null;
+    empiricalValueGuardLargestRateDrift: number | null;
+    empiricalValueGuardBaselinePickCount: number | null;
+    empiricalValueGuardSelectedPickCount: number | null;
+    empiricalValueGuardPicksRemoved: number | null;
+    segmentValueGuardStatus: "active" | "abstain" | null;
+    segmentValueGuardDimension: "competition" | "surface" | null;
+    segmentValueGuardEligibleSegments: number | null;
+    segmentValueGuardUnresolvedSampleSize: number | null;
+    segmentValueGuardLargestRateDrift: number | null;
+    segmentValueGuardBaselinePickCount: number | null;
+    segmentValueGuardSelectedPickCount: number | null;
+    segmentValueGuardPicksRemoved: number | null;
+    marketPriorStatus: "applied" | "no-priced-market" | null;
+    marketPriorAdjustedFixtures: number | null;
+    marketPriorCoverage: number | null;
+    marketPriorAverageWeight: number | null;
+    finalPosteriorHoldoutLogLoss: number | null;
+    finalPosteriorLogLossDelta: number | null;
     reason: string | null;
   };
   nextAction: string;
@@ -135,10 +175,73 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
       logLoss: null,
       yield: null,
       calibrationError: null,
+      selectionPolicyStatus: null,
+      allowedConfidenceBands: [],
+      baselinePickCount: null,
+      baselineYield: null,
+      probabilityCalibrationPolicyStatus: null,
+      probabilityTemperature: null,
+      baselineHoldoutLogLoss: null,
+      calibratedHoldoutLogLoss: null,
+      holdoutLogLossDelta: null,
+      marketPriorScalingPolicyStatus: null,
+      marketPriorWeightScale: null,
+      marketPriorCandidateWeightScale: null,
+      marketPriorScalingFitSampleSize: null,
+      marketPriorScalingValidationSampleSize: null,
+      marketPriorScalingValidationBrierDelta: null,
+      marketPriorScalingValidationLogLossDelta: null,
+      empiricalValueGuardStatus: null,
+      empiricalValueGuardSampleSize: null,
+      empiricalValueGuardEligibleBuckets: null,
+      empiricalValueGuardMinimumRegimeSample: null,
+      empiricalValueGuardEarlierSampleSize: null,
+      empiricalValueGuardRecentSampleSize: null,
+      empiricalValueGuardLargestRateDrift: null,
+      empiricalValueGuardBaselinePickCount: null,
+      empiricalValueGuardSelectedPickCount: null,
+      empiricalValueGuardPicksRemoved: null,
+      segmentValueGuardStatus: null,
+      segmentValueGuardDimension: null,
+      segmentValueGuardEligibleSegments: null,
+      segmentValueGuardUnresolvedSampleSize: null,
+      segmentValueGuardLargestRateDrift: null,
+      segmentValueGuardBaselinePickCount: null,
+      segmentValueGuardSelectedPickCount: null,
+      segmentValueGuardPicksRemoved: null,
+      marketPriorStatus: null,
+      marketPriorAdjustedFixtures: null,
+      marketPriorCoverage: null,
+      marketPriorAverageWeight: null,
+      finalPosteriorHoldoutLogLoss: null,
+      finalPosteriorLogLossDelta: null,
       reason: null
     };
   }
 
+  const runtimeResult = result.result && "selectionPolicy" in result.result ? result.result : null;
+  const marketPolicy = runtimeResult?.marketPriorScalingPolicy ?? null;
+  const marketValidationBrierDelta = marketPolicy && marketPolicy.baselineValidation.brierScore !== null && marketPolicy.candidateValidation.brierScore !== null
+    ? marketPolicy.candidateValidation.brierScore - marketPolicy.baselineValidation.brierScore
+    : null;
+  const marketValidationLogLossDelta = marketPolicy && marketPolicy.baselineValidation.logLoss !== null && marketPolicy.candidateValidation.logLoss !== null
+    ? marketPolicy.candidateValidation.logLoss - marketPolicy.baselineValidation.logLoss
+    : null;
+  const eligibleValueGuardBuckets = runtimeResult?.empiricalValueGuardPolicy.buckets.filter((bucket) => bucket.eligible) ?? [];
+  const largestValueGuardRateDrift = eligibleValueGuardBuckets.length
+    ? Math.max(...eligibleValueGuardBuckets.map((bucket) => Math.abs(
+        (bucket.recent.observedRate ?? 0) - (bucket.earlier.observedRate ?? 0)
+      )))
+    : null;
+  const eligibleSegments = runtimeResult?.segmentValueGuardPolicy.segments.filter((segment) =>
+    segment.buckets.some((bucket) => bucket.eligible)
+  ) ?? [];
+  const eligibleSegmentBuckets = eligibleSegments.flatMap((segment) => segment.buckets.filter((bucket) => bucket.eligible));
+  const largestSegmentRateDrift = eligibleSegmentBuckets.length
+    ? Math.max(...eligibleSegmentBuckets.map((bucket) => Math.abs(
+        (bucket.recent.observedRate ?? 0) - (bucket.earlier.observedRate ?? 0)
+      )))
+    : null;
   return {
     status: result.status,
     id: result.status === "stored" ? result.id : null,
@@ -148,6 +251,48 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
     logLoss: result.result?.logLoss ?? null,
     yield: result.result?.yield ?? null,
     calibrationError: result.result?.calibrationError ?? null,
+    selectionPolicyStatus: runtimeResult?.selectionPolicy.status ?? null,
+    allowedConfidenceBands: runtimeResult?.selectionPolicy.allowedConfidenceBands ?? [],
+    baselinePickCount: runtimeResult?.economicSelectionComparison.baseline.pickCount ?? null,
+    baselineYield: runtimeResult?.economicSelectionComparison.baseline.yield ?? null,
+    probabilityCalibrationPolicyStatus: runtimeResult?.probabilityCalibrationPolicy.status ?? null,
+    probabilityTemperature: runtimeResult?.probabilityCalibrationPolicy.temperature ?? null,
+    baselineHoldoutLogLoss: runtimeResult?.probabilityCalibrationComparison.baseline.logLoss ?? null,
+    calibratedHoldoutLogLoss: runtimeResult?.probabilityCalibrationComparison.calibrated.logLoss ?? null,
+    holdoutLogLossDelta: runtimeResult?.probabilityCalibrationComparison.logLossDelta ?? null,
+    marketPriorScalingPolicyStatus: marketPolicy?.status ?? null,
+    marketPriorWeightScale: marketPolicy?.weightScale ?? null,
+    marketPriorCandidateWeightScale: marketPolicy?.candidateWeightScale ?? null,
+    marketPriorScalingFitSampleSize: marketPolicy?.fitSampleSize ?? null,
+    marketPriorScalingValidationSampleSize: marketPolicy?.validationSampleSize ?? null,
+    marketPriorScalingValidationBrierDelta: marketValidationBrierDelta,
+    marketPriorScalingValidationLogLossDelta: marketValidationLogLossDelta,
+    empiricalValueGuardStatus: runtimeResult?.empiricalValueGuardPolicy.status ?? null,
+    empiricalValueGuardSampleSize: runtimeResult?.empiricalValueGuardPolicy.sampleSize ?? null,
+    empiricalValueGuardEligibleBuckets: runtimeResult
+      ? runtimeResult.empiricalValueGuardPolicy.buckets.filter((bucket) => bucket.eligible).length
+      : null,
+    empiricalValueGuardMinimumRegimeSample: runtimeResult?.empiricalValueGuardPolicy.minimumRegimeSample ?? null,
+    empiricalValueGuardEarlierSampleSize: runtimeResult?.empiricalValueGuardPolicy.earlierWindow.sampleSize ?? null,
+    empiricalValueGuardRecentSampleSize: runtimeResult?.empiricalValueGuardPolicy.recentWindow.sampleSize ?? null,
+    empiricalValueGuardLargestRateDrift: largestValueGuardRateDrift,
+    empiricalValueGuardBaselinePickCount: runtimeResult?.empiricalValueGuardComparison.baseline.pickCount ?? null,
+    empiricalValueGuardSelectedPickCount: runtimeResult?.empiricalValueGuardComparison.selected.pickCount ?? null,
+    empiricalValueGuardPicksRemoved: runtimeResult?.empiricalValueGuardComparison.picksRemoved ?? null,
+    segmentValueGuardStatus: runtimeResult?.segmentValueGuardPolicy.status ?? null,
+    segmentValueGuardDimension: runtimeResult?.segmentValueGuardPolicy.segmentDimension ?? null,
+    segmentValueGuardEligibleSegments: runtimeResult ? eligibleSegments.length : null,
+    segmentValueGuardUnresolvedSampleSize: runtimeResult?.segmentValueGuardPolicy.unresolvedSampleSize ?? null,
+    segmentValueGuardLargestRateDrift: largestSegmentRateDrift,
+    segmentValueGuardBaselinePickCount: runtimeResult?.segmentValueGuardComparison.baseline.pickCount ?? null,
+    segmentValueGuardSelectedPickCount: runtimeResult?.segmentValueGuardComparison.selected.pickCount ?? null,
+    segmentValueGuardPicksRemoved: runtimeResult?.segmentValueGuardComparison.picksRemoved ?? null,
+    marketPriorStatus: runtimeResult?.marketPriorEvidence.status ?? null,
+    marketPriorAdjustedFixtures: runtimeResult?.marketPriorEvidence.adjustedFixtures ?? null,
+    marketPriorCoverage: runtimeResult?.marketPriorEvidence.coverage ?? null,
+    marketPriorAverageWeight: runtimeResult?.marketPriorEvidence.averageWeight ?? null,
+    finalPosteriorHoldoutLogLoss: runtimeResult?.marketPriorEvidence.probabilityComparison.calibrated.logLoss ?? null,
+    finalPosteriorLogLossDelta: runtimeResult?.marketPriorEvidence.probabilityComparison.logLossDelta ?? null,
     reason: result.status === "stored" ? null : result.reason
   };
 }

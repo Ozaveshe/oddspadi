@@ -2,6 +2,15 @@ import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine"
 import { buildScoreMatrix, probabilityFromScoreMatrix } from "@/lib/sports/prediction/poisson";
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "@/lib/sports/training/probabilityCalibration";
 import { benchmarkBacktestModelKey } from "@/lib/sports/prediction/modelIdentity";
+import { confidenceFromEdgeAndProbability } from "@/lib/sports/prediction/confidence";
+import { evaluateEmpiricalValueGuard } from "@/lib/sports/prediction/empiricalValueGuard";
+import { evaluateSegmentValueGuard } from "@/lib/sports/prediction/segmentValueGuard";
+import type {
+  EmpiricalValueGuardDecision,
+  EmpiricalValueGuardPolicy,
+  SegmentValueGuardDecision,
+  SegmentValueGuardPolicy
+} from "@/lib/sports/types";
 import {
   resolveHistoricalFootballOdds,
   type HistoricalFootballOddsAudit,
@@ -69,6 +78,8 @@ export type FootballBacktestPick = {
   won: boolean;
   unitReturn: number;
   closingLineValue: number | null;
+  empiricalValueGuard?: EmpiricalValueGuardDecision;
+  segmentValueGuard?: SegmentValueGuardDecision;
 };
 
 export type FootballBacktestFixtureResult = {
@@ -104,7 +115,7 @@ export type FootballBacktestBreakdown = {
 };
 
 export type FootballLearnedWeightsProvenance = {
-  source: "training-window" | "defaults-no-training-data";
+  source: "training-window" | "training-validation-window" | "defaults-no-training-data";
   sampleSize: number;
   pickCount: number;
   windowStart: string | null;
@@ -343,9 +354,7 @@ function winnerOdds(fixture: HistoricalFootballFixture): {
 }
 
 function confidenceForPick(edge: number, probability: number, dataQuality: number): BacktestConfidence {
-  if (edge >= 0.08 && probability >= 0.5 && dataQuality >= 0.78) return "high";
-  if (edge >= 0.05 && probability >= 0.38 && dataQuality >= 0.66) return "medium";
-  return "low";
+  return confidenceFromEdgeAndProbability(edge, probability, dataQuality);
 }
 
 function selectBacktestPick(
@@ -353,7 +362,10 @@ function selectBacktestPick(
   probabilities: Record<FootballOutcome, number>,
   odds: Record<FootballOutcome, SelectionOdds>,
   actual: FootballOutcome,
-  config: Required<FootballBacktestConfig>
+  config: Required<FootballBacktestConfig>,
+  empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy,
+  segmentValueGuardPolicy?: SegmentValueGuardPolicy,
+  segmentKey: string | null = null
 ): FootballBacktestPick | null {
   const dataQuality = clamp(safeNumber(fixture.dataQuality, 0.72), 0, 1);
   const candidates = (["home", "draw", "away"] as const)
@@ -362,6 +374,19 @@ function selectBacktestPick(
       const modelProbability = probabilities[selection];
       const edge = modelProbability - quote.impliedProbability;
       const confidence = confidenceForPick(edge, modelProbability, dataQuality);
+      const empiricalValueGuard = evaluateEmpiricalValueGuard({
+        modelProbability,
+        impliedProbability: quote.impliedProbability,
+        odds: quote.odds,
+        policy: empiricalValueGuardPolicy
+      });
+      const segmentValueGuard = evaluateSegmentValueGuard({
+        segmentKey,
+        modelProbability,
+        impliedProbability: quote.impliedProbability,
+        odds: quote.odds,
+        policy: segmentValueGuardPolicy
+      });
 
       return {
         selection,
@@ -373,10 +398,17 @@ function selectBacktestPick(
         bookmaker: quote.bookmaker,
         observedAt: quote.observedAt,
         closingObservedAt: quote.closingObservedAt,
-        confidence
+        confidence,
+        empiricalValueGuard,
+        segmentValueGuard
       };
     })
-    .filter((pick) => pick.edge >= config.minEdge && pick.modelProbability >= config.minModelProbability)
+    .filter((pick) =>
+      pick.edge >= config.minEdge &&
+      pick.modelProbability >= config.minModelProbability &&
+      pick.empiricalValueGuard.status !== "blocked"
+      && pick.segmentValueGuard.status !== "blocked"
+    )
     .sort((a, b) => b.edge - a.edge);
 
   const pick = candidates[0];
@@ -475,12 +507,18 @@ export function evaluateFootballPrediction({
   fixture,
   probabilities,
   expectedGoals,
-  config
+  config,
+  empiricalValueGuardPolicy,
+  segmentValueGuardPolicy,
+  segmentKey
 }: {
   fixture: HistoricalFootballFixture;
   probabilities: Record<FootballOutcome, number>;
   expectedGoals: FootballBacktestFixtureResult["expectedGoals"];
   config: Required<FootballBacktestConfig>;
+  empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy;
+  segmentValueGuardPolicy?: SegmentValueGuardPolicy;
+  segmentKey?: string | null;
 }): FootballBacktestFixtureResult {
   const actual = actualOutcome(fixture.homeScore, fixture.awayScore);
   const odds = winnerOdds(fixture);
@@ -492,7 +530,9 @@ export function evaluateFootballPrediction({
     expectedGoals,
     brierScore: brierScore(probabilities, actual),
     logLoss: logLoss(probabilities, actual),
-    pick: odds.selections ? selectBacktestPick(fixture, probabilities, odds.selections, actual, config) : null,
+    pick: odds.selections
+      ? selectBacktestPick(fixture, probabilities, odds.selections, actual, config, empiricalValueGuardPolicy, segmentValueGuardPolicy, segmentKey ?? null)
+      : null,
     oddsEvidence: odds.audit
   };
 }
@@ -552,10 +592,11 @@ export function footballDecisionLearnedWeights(
 export function buildFootballLearnedWeightsProvenance(
   results: FootballBacktestFixtureResult[],
   summary: FootballEvaluationSummary,
-  holdoutWindowStart: string | null
+  holdoutWindowStart: string | null,
+  source: "training-window" | "training-validation-window" = "training-window"
 ): FootballLearnedWeightsProvenance {
   return {
-    source: results.length ? "training-window" : "defaults-no-training-data",
+    source: results.length ? source : "defaults-no-training-data",
     sampleSize: results.length,
     pickCount: summary.pickCount,
     windowStart: results[0]?.kickoffAt ?? null,
@@ -574,8 +615,8 @@ function resultNotes(
   >
 ): string[] {
   return [
-    result.learnedWeightsProvenance.source === "training-window"
-      ? `Learned decision weights use only ${result.learnedWeightsProvenance.sampleSize} chronological training fixture(s); holdout outcomes remain evaluation-only.`
+    result.learnedWeightsProvenance.source === "training-window" || result.learnedWeightsProvenance.source === "training-validation-window"
+      ? `Learned decision weights use only ${result.learnedWeightsProvenance.sampleSize} chronological ${result.learnedWeightsProvenance.source === "training-validation-window" ? "training-validation" : "training"} fixture(s); holdout outcomes remain evaluation-only.`
       : "Learned decision weights use conservative defaults because no chronological training fixture was available.",
     result.sampleSize < 200 ? "Historical sample is thin; import multiple seasons before trusting calibration." : "",
     result.testSize < 50 ? "Holdout set is small; backtest metrics are directional only." : "",

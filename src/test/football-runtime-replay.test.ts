@@ -98,6 +98,56 @@ describe("football exact runtime replay", () => {
     });
     expect(result.executionHash).toMatch(/^fnv1a-[a-f0-9]{8}$/);
     expect(result.results.every((row) => Math.abs(Object.values(row.probabilities).reduce((sum, value) => sum + value, 0) - 1) < 0.001)).toBe(true);
+    expect(result.results.every((row) => row.pick === null || row.pick.edge >= result.learnedWeights.minimumEdge)).toBe(true);
+    expect(result.selectionPolicy).toMatchObject({
+      source: "chronological-training-window",
+      status: "abstain",
+      allowedConfidenceBands: []
+    });
+    expect(result.economicSelectionComparison.selected.pickCount).toBe(result.pickCount);
+    expect(result.economicSelectionComparison.baseline.pickCount).toBeGreaterThanOrEqual(result.pickCount);
+    expect(result.probabilityCalibrationPolicy).toMatchObject({
+      source: "chronological-training-window",
+      status: "identity",
+      temperature: 1,
+      reason: "insufficient-training-sample"
+    });
+    expect(result.probabilityCalibrationComparison.baseline.sampleSize).toBe(result.testSize);
+    expect(result.marketPriorScalingPolicy).toMatchObject({
+      source: "chronological-priced-training-window",
+      status: "identity",
+      weightScale: 1,
+      reason: "insufficient-priced-sample"
+    });
+    expect(result.empiricalValueGuardPolicy).toMatchObject({
+      source: "chronological-final-posterior-regime-windows",
+      status: "abstain",
+      reason: expect.stringMatching(/insufficient-regime-sample|invalid-chronology/)
+    });
+    expect(result.empiricalValueGuardComparison.selected.pickCount).toBeLessThanOrEqual(
+      result.empiricalValueGuardComparison.baseline.pickCount
+    );
+    expect(result.empiricalValueGuardComparison.picksRemoved).toBe(
+      result.empiricalValueGuardComparison.baseline.pickCount - result.empiricalValueGuardComparison.selected.pickCount
+    );
+    expect(result.segmentValueGuardPolicy).toMatchObject({
+      source: "chronological-final-posterior-segment-regime-windows",
+      segmentDimension: "competition",
+      status: "abstain"
+    });
+    expect(result.segmentValueGuardComparison.baseline.pickCount).toBe(result.empiricalValueGuardComparison.selected.pickCount);
+    expect(result.marketPriorEvidence).toMatchObject({
+      version: "runtime-market-prior-parity-v1",
+      status: "applied",
+      evaluatedFixtures: result.testSize,
+      adjustedFixtures: result.testSize,
+      coverage: 1
+    });
+    expect(result.marketPriorEvidence.probabilityComparison.baseline.sampleSize).toBe(result.testSize);
+    expect(result.marketPriorEvidence.probabilityComparison.calibrated.sampleSize).toBe(result.testSize);
+    expect(result.notes).toEqual(expect.arrayContaining([
+      expect.stringContaining("Holdout selection used the training-window fallback minimum edge")
+    ]));
     expect(result.learnedWeights).not.toHaveProperty("homeAdvantageElo");
     expect(historicalModelCompatibility({
       sport: "football",
@@ -117,6 +167,32 @@ describe("football exact runtime replay", () => {
     expect(awayWinLast?.actualOutcome).toBe("away");
     expect(homeWin.learnedWeights).toEqual(awayWin.learnedWeights);
     expect(homeWin.learnedWeightsProvenance).toEqual(awayWin.learnedWeightsProvenance);
+    expect(homeWin.selectionPolicy).toEqual(awayWin.selectionPolicy);
+    expect(homeWin.probabilityCalibrationPolicy).toEqual(awayWin.probabilityCalibrationPolicy);
+    expect(homeWin.marketPriorScalingPolicy).toEqual(awayWin.marketPriorScalingPolicy);
+    expect(homeWin.empiricalValueGuardPolicy).toEqual(awayWin.empiricalValueGuardPolicy);
+    expect(homeWin.segmentValueGuardPolicy).toEqual(awayWin.segmentValueGuardPolicy);
+  });
+
+  it("keeps explicit closing prices out of the final posterior while retaining them for evaluation", () => {
+    const baselineFixtures = history();
+    const withClosing = history();
+    const last = withClosing[9]!;
+    const closingAt = new Date(Date.parse(last.kickoffAt) - 5 * 60_000).toISOString();
+    last.odds = [
+      ...(last.odds ?? []),
+      { market: "match_winner", selection: "home", decimalOdds: 1.08, bookmaker: "test", observedAt: closingAt, isClosing: true },
+      { market: "match_winner", selection: "draw", decimalOdds: 12, bookmaker: "test", observedAt: closingAt, isClosing: true },
+      { market: "match_winner", selection: "away", decimalOdds: 18, bookmaker: "test", observedAt: closingAt, isClosing: true }
+    ];
+    const config = { trainRatio: 0.5, minPriorMatches: 3 };
+    const baseline = runFootballRuntimeReplay(baselineFixtures, config);
+    const replay = runFootballRuntimeReplay(withClosing, config);
+    const finalProbability = (result: ReturnType<typeof runFootballRuntimeReplay>) =>
+      result.results.find((row) => row.fixtureExternalId === "fixture:10")!.probabilities;
+
+    expect(finalProbability(replay)).toEqual(finalProbability(baseline));
+    expect(replay.marketPriorEvidence).toEqual(baseline.marketPriorEvidence);
   });
 
   it("fails closed for neutral venues the runtime Match contract cannot represent", () => {

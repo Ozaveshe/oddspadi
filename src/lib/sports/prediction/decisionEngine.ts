@@ -70,6 +70,7 @@ import { isRequiredProductionDataSignalBlocked } from "./contextSignalPolicy";
 import type { PublicHistoricalTrainingEvidence } from "@/lib/sports/training/publicHistoricalTrainingEvidence";
 import { formatOdds, formatPercent, formatSignedPercent } from "./format";
 import { selectBestPick } from "./odds";
+import { predictionSegmentKey } from "./predictionSegment";
 import { buildDecisionHistoricalDiscipline } from "./decisionHistoricalEvidence";
 import { buildDecisionDataCoverageAudit } from "./decisionDataCoverage";
 import {
@@ -3682,7 +3683,11 @@ export function buildDecisionEngineReport({
   probabilityStages?: DecisionProbabilityRuntimeStages;
   publicHistoricalTrainingEvidence?: PublicHistoricalTrainingEvidence | null;
 }): DecisionEngineReport {
-  const bestPick = selectBestPick(candidateBestPick.hasValue ? [candidateBestPick] : [], { learningProfile, caseMemoryBank });
+  const bestPick = selectBestPick(candidateBestPick.hasValue ? [candidateBestPick] : [], {
+    learningProfile,
+    caseMemoryBank,
+    segmentKey: predictionSegmentKey(match)
+  });
   const evidence = buildDecisionEvidence({ match, markets, diagnostics, bestPick, contextAdjustment });
   const saferAlternatives = buildSaferAlternatives(match, markets, bestPick);
   const strongestEdges = [...valueEdges].sort((a, b) => b.edge - a.edge).slice(0, 3);
