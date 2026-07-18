@@ -30,6 +30,18 @@ describe("The Odds API active sport discovery", () => {
             { key: "basketball_nba_championship_winner", group: "Basketball", title: "NBA Winner", active: true, has_outrights: true }
           ]);
         }
+        if (url.includes("/sports/basketball_nba_summer_league/events/")) {
+          return jsonResponse([{
+            id: "summer-league-1",
+            sport_key: "basketball_nba_summer_league",
+            commence_time: "2026-07-18T18:00:00.000Z",
+            home_team: "Chicago Bulls",
+            away_team: "Milwaukee Bucks"
+          }]);
+        }
+        if (url.includes("/sports/basketball_nba/events/") || url.includes("/sports/basketball_wnba/events/")) {
+          return jsonResponse([]);
+        }
         if (url.includes("/sports/basketball_nba_summer_league/odds/")) {
           return jsonResponse([
             {
@@ -60,8 +72,11 @@ describe("The Odds API active sport discovery", () => {
     expect(fixtures).toHaveLength(1);
     expect(fixtures[0]?.id).toBe("the-odds-api:summer-league-1");
     expect(fixtures[0]?.oddsMarkets[0]?.selections).toHaveLength(2);
+    expect(calls.filter((url) => url.includes("/events/"))).toHaveLength(3);
+    expect(calls.some((url) => url.includes("/sports/basketball_nba_summer_league/events/"))).toBe(true);
+    expect(calls.some((url) => url.includes("/sports/basketball_wnba/events/"))).toBe(true);
     expect(calls.some((url) => url.includes("/sports/basketball_nba_summer_league/odds/"))).toBe(true);
-    expect(calls.some((url) => url.includes("/sports/basketball_wnba/odds/"))).toBe(true);
+    expect(calls.some((url) => url.includes("/sports/basketball_wnba/odds/"))).toBe(false);
     expect(calls.some((url) => url.includes("/sports/basketball_nba/odds/"))).toBe(false);
     expect(calls.some((url) => url.includes("basketball_nba_championship_winner"))).toBe(false);
   });
@@ -87,6 +102,16 @@ describe("The Odds API active sport discovery", () => {
             { key: "soccer_epl", group: "Soccer", title: "EPL", active: false, has_outrights: false }
           ]);
         }
+        if (url.includes("/sports/tennis_atp_canadian_open/events/")) {
+          return jsonResponse([{
+            id: "active-tennis-1",
+            sport_key: "tennis_atp_canadian_open",
+            commence_time: "2026-07-14T15:00:00.000Z",
+            home_team: "Player One",
+            away_team: "Player Two"
+          }]);
+        }
+        if (url.includes("/sports/tennis_atp_wimbledon/events/")) return jsonResponse([]);
         if (url.includes("/sports/tennis_atp_canadian_open/odds/")) {
           return jsonResponse([
             {
@@ -117,6 +142,9 @@ describe("The Odds API active sport discovery", () => {
     expect(fixtures[0]?.id).toBe("the-odds-api:active-tennis-1");
     expect(fixtures[0]?.oddsMarkets[0]?.selections).toHaveLength(2);
     expect(calls.some((url) => url.includes("/v4/sports/?"))).toBe(true);
+    expect(calls.filter((url) => url.includes("/events/"))).toHaveLength(2);
+    expect(calls.some((url) => url.includes("/sports/tennis_atp_canadian_open/events/"))).toBe(true);
+    expect(calls.some((url) => url.includes("/sports/tennis_atp_wimbledon/events/"))).toBe(true);
     expect(calls.some((url) => url.includes("/sports/tennis_atp_canadian_open/odds/"))).toBe(true);
     expect(calls.some((url) => url.includes("/sports/tennis_atp/"))).toBe(false);
     expect(getRecentSportsProviderIssues("2026-07-14T08:00:00.000Z").some((issue) => issue.path.includes("tennis_atp/"))).toBe(false);

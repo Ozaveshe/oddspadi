@@ -15797,6 +15797,18 @@ describe("prediction utilities", () => {
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
       }
+      if (url.includes("api.the-odds-api.com/v4/sports/basketball_nba/events/")) {
+        return new Response(
+          JSON.stringify([{
+            id: "odds-nba-501",
+            sport_key: "basketball_nba",
+            commence_time: "2026-06-24T19:30:00Z",
+            home_team: "Boston Celtics",
+            away_team: "Miami Heat"
+          }]),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
       if (url.includes("api.the-odds-api.com/v4/sports/basketball_nba/odds")) {
         expect(url).toContain("markets=h2h%2Cspreads%2Ctotals");
         return new Response(
@@ -15902,15 +15914,20 @@ describe("prediction utilities", () => {
       ]
     );
     const provider = new ProviderBackedSportsDataProvider({
-      env: { API_BASKETBALL_KEY: "basketball-key", THE_ODDS_API_KEY: "odds-key" },
+      env: {
+        API_BASKETBALL_KEY: "basketball-key",
+        THE_ODDS_API_KEY: "odds-key",
+        ODDS_API_CORE_MARKETS: "h2h,spreads,totals"
+      },
       fetchImpl,
       historicalBasketballStrengthLoader: async () => historicalStrengths
     });
     const [match] = await provider.getFixtures("2026-06-24", "basketball");
     const matchById = await provider.getMatch(match.id);
 
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4);
     expect(calls.some((url) => url.includes("api.the-odds-api.com/v4/sports/?"))).toBe(true);
+    expect(calls.some((url) => url.includes("api.the-odds-api.com/v4/sports/basketball_nba/events/"))).toBe(true);
     expect(calls.some((url) => url.includes("api.the-odds-api.com/v4/sports/basketball_nba/odds"))).toBe(true);
     expect(calls.some((url) => url.includes("v1.basketball.api-sports.io/games"))).toBe(true);
     expect(matchById).toBe(match);
@@ -15948,6 +15965,18 @@ describe("prediction utilities", () => {
       if (url.includes("api.the-odds-api.com/v4/sports/?")) {
         return new Response(
           JSON.stringify([{ key: "tennis_atp_halle", group: "Tennis", title: "ATP Halle", active: true, has_outrights: false }]),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (url.includes("api.the-odds-api.com/v4/sports/tennis_atp_halle/events/")) {
+        return new Response(
+          JSON.stringify([{
+            id: "odds-tennis-701",
+            sport_key: "tennis_atp_halle",
+            commence_time: "2026-06-24T13:00:00Z",
+            home_team: "Carlos Alcaraz",
+            away_team: "Daniil Medvedev"
+          }]),
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
       }
@@ -16061,14 +16090,19 @@ describe("prediction utilities", () => {
       ]
     );
     const provider = new ProviderBackedSportsDataProvider({
-      env: { API_TENNIS_KEY: "tennis-key", THE_ODDS_API_KEY: "odds-key" },
+      env: {
+        API_TENNIS_KEY: "tennis-key",
+        THE_ODDS_API_KEY: "odds-key",
+        ODDS_API_CORE_MARKETS: "h2h,spreads,totals"
+      },
       fetchImpl,
       historicalTennisStrengthLoader: async () => historicalStrengths
     });
     const [match] = await provider.getFixtures("2026-06-24", "tennis");
     const matchById = await provider.getMatch(match.id);
 
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4);
+    expect(calls.some((url) => url.includes("api.the-odds-api.com/v4/sports/tennis_atp_halle/events/"))).toBe(true);
     expect(matchById).toBe(match);
     expect(match.id).toBe("api-tennis:701");
     expect(match.sport).toBe("tennis");
@@ -16110,7 +16144,19 @@ describe("prediction utilities", () => {
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
       }
-      if (url.includes("tennis_wta_wimbledon")) {
+      if (url.includes("/sports/tennis_atp_wimbledon/events/")) {
+        return new Response(
+          JSON.stringify([{
+            id: "odds-tennis-only-1",
+            sport_key: "tennis_atp_wimbledon",
+            commence_time: "2026-06-24T13:00:00Z",
+            home_team: "Carlos Alcaraz",
+            away_team: "Daniil Medvedev"
+          }]),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (url.includes("/sports/tennis_wta_wimbledon/events/")) {
         return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       expect(url).toContain("api.the-odds-api.com/v4/sports/tennis_atp_wimbledon/odds");
@@ -16183,7 +16229,8 @@ describe("prediction utilities", () => {
     const provider = new ProviderBackedSportsDataProvider({
       env: {
         THE_ODDS_API_KEY: "odds-key",
-        ODDS_API_TENNIS_SPORT_KEYS: "tennis_atp_wimbledon,tennis_wta_wimbledon"
+        ODDS_API_TENNIS_SPORT_KEYS: "tennis_atp_wimbledon,tennis_wta_wimbledon",
+        ODDS_API_CORE_MARKETS: "h2h,totals"
       },
       fetchImpl,
       historicalTennisStrengthLoader: async () => historicalStrengths
@@ -16191,9 +16238,10 @@ describe("prediction utilities", () => {
 
     const [match] = await provider.getFixtures("2026-06-24", "tennis");
 
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4);
     expect(calls.filter((url) => url.includes("/v4/sports/?"))).toHaveLength(1);
-    expect(calls.filter((url) => url.includes("/odds/"))).toHaveLength(2);
+    expect(calls.filter((url) => url.includes("/events/"))).toHaveLength(2);
+    expect(calls.filter((url) => url.includes("/odds/"))).toHaveLength(1);
     expect(match.id).toBe("the-odds-api:odds-tennis-only-1");
     expect(match.dataSource?.kind).toBe("provider");
     expect(match.dataSource?.fixtureProvider).toBe("the-odds-api-events");
