@@ -1,15 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
 import { buildPrediction } from "@/lib/sports/service";
+import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine";
 import type { DecisionLearningProfile, Match } from "@/lib/sports/types";
 
 function activeCalibrationProfile(): DecisionLearningProfile {
   return {
     status: "active",
-    source: "validated-holdout",
+    source: "settled-outcomes",
     active: true,
-    modelKey: "football-poisson-v3",
-    engineVersion: "decision-engine-v1",
+    modelKey: "football-poisson-v5",
+    engineVersion: DECISION_ENGINE_VERSION,
+    modelCompatibility: "exact-runtime-parity",
+    calibrationPromotion: {
+      id: "promotion-trace",
+      candidateId: "candidate-trace",
+      approvedAt: "2026-07-10T00:00:00.000Z",
+      expiresAt: null
+    },
+    calibrationBucketSource: "promoted-cohort",
     sampleSize: 1200,
     realFinishedFixtures: 1200,
     minimumRecommendedFixtures: 1000,
@@ -92,6 +101,11 @@ describe("decision probability runtime trace", () => {
 
     const finalRuntimeStage = trace.steps.find((step) => step.id === "market-calibration");
     expect(finalRuntimeStage?.posteriorProbability).toBeCloseTo(selectedEdge.modelProbability, 12);
+    expect(finalRuntimeStage).toMatchObject({
+      label: "Single-quote no-vig prior blend",
+      confidence: "low",
+      detail: expect.stringContaining("No cross-book agreement is claimed")
+    });
     expect(trace.steps.find((step) => step.id === "posterior")).toMatchObject({
       priorProbability: selectedEdge.modelProbability,
       posteriorProbability: selectedEdge.modelProbability,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyLearnedProbabilityCalibration } from "@/lib/sports/prediction/learnedProbabilityCalibration";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
 import { buildPrediction } from "@/lib/sports/service";
+import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine";
 import type { DecisionLearningProfile, PredictionMarket } from "@/lib/sports/types";
 
 function profile(overrides: Partial<DecisionLearningProfile> = {}): DecisionLearningProfile {
@@ -9,8 +10,8 @@ function profile(overrides: Partial<DecisionLearningProfile> = {}): DecisionLear
     status: "active",
     source: "validated-holdout",
     active: true,
-    modelKey: "football-poisson-v3",
-    engineVersion: "decision-engine-v1",
+    modelKey: "football-poisson-v5",
+    engineVersion: DECISION_ENGINE_VERSION,
     sampleSize: 1200,
     realFinishedFixtures: 1200,
     minimumRecommendedFixtures: 1000,
@@ -41,7 +42,7 @@ describe("learned probability calibration", () => {
       { marketId: "over_under_25", probabilities: { over_25: 0.54, under_25: 0.46 } }
     ];
 
-    const result = applyLearnedProbabilityCalibration({ markets, profile: profile(), modelKey: "football-poisson-v3", engineVersion: "decision-engine-v1" });
+    const result = applyLearnedProbabilityCalibration({ markets, profile: profile(), modelKey: "football-poisson-v5", engineVersion: DECISION_ENGINE_VERSION });
     const winner = result.markets.find((market) => market.marketId === "match_winner");
 
     expect(result.adjustment.status).toBe("applied");
@@ -58,8 +59,8 @@ describe("learned probability calibration", () => {
     const result = applyLearnedProbabilityCalibration({
       markets,
       profile: profile({ active: false, status: "shadow-only" }),
-      modelKey: "football-poisson-v3",
-      engineVersion: "decision-engine-v1"
+      modelKey: "football-poisson-v5",
+      engineVersion: DECISION_ENGINE_VERSION
     });
 
     expect(result.adjustment.status).toBe("inactive");
@@ -102,8 +103,8 @@ describe("learned probability calibration", () => {
           reason: "validated-proper-score-improvement"
         }
       }),
-      modelKey: "football-poisson-v3",
-      engineVersion: "decision-engine-v1"
+      modelKey: "football-poisson-v5",
+      engineVersion: DECISION_ENGINE_VERSION
     });
 
     expect(result.adjustment).toMatchObject({ status: "applied", method: "temperature-scaling", temperature: 1.5 });
@@ -133,8 +134,8 @@ describe("learned probability calibration", () => {
           reason: "identity-won-fit"
         }
       }),
-      modelKey: "football-poisson-v3",
-      engineVersion: "decision-engine-v1"
+      modelKey: "football-poisson-v5",
+      engineVersion: DECISION_ENGINE_VERSION
     });
 
     expect(result.adjustment).toMatchObject({ status: "applied", method: "none", temperature: 1 });
@@ -152,6 +153,6 @@ describe("learned probability calibration", () => {
       status: "shadow-only",
       active: false
     });
-    expect(prediction.decision.learningProfile?.reason).toContain("does not match runtime football-poisson-v3");
+    expect(prediction.decision.learningProfile?.reason).toContain("does not match runtime football-poisson-v5");
   });
 });

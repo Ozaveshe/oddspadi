@@ -4,6 +4,7 @@ import { readActiveCalibrationPromotion, type ActiveCalibrationPromotion } from 
 import { historicalModelCompatibility, isDecisionModelSport } from "./modelIdentity";
 import { inspectRuntimeBacktestEvidence, type RuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 import { readCalibrationDriftReceipt } from "./calibrationDriftGuard";
+import { isGovernedRuntimeThresholdSelection } from "@/lib/sports/training/runtimeThresholdSelection";
 
 function numberFromWeight(weights: Record<string, unknown>, key: string): number | null {
   const value = weights[key];
@@ -72,7 +73,7 @@ function calibrationBucketsFromPromotion(promotion: ActiveCalibrationPromotion |
       averageProbability === null ||
       observedRate === null ||
       calibrationError === null ||
-      bucket.sampleSize <= 0 ||
+      bucket.settledSize <= 0 ||
       bucket.lowerBound < 0 ||
       bucket.upperBound > 1 ||
       bucket.upperBound <= bucket.lowerBound
@@ -83,7 +84,10 @@ function calibrationBucketsFromPromotion(promotion: ActiveCalibrationPromotion |
       {
         minProbability: bucket.lowerBound,
         maxProbability: bucket.upperBound,
-        sampleSize: bucket.sampleSize,
+        // Wilson intervals describe observed win/loss frequency. Pushes and
+        // voids are not Bernoulli trials, so only the settled scoring
+        // denominator may narrow the interval.
+        sampleSize: bucket.settledSize,
         averageProbability,
         observedRate,
         calibrationError
@@ -846,6 +850,9 @@ function liveMetricBlockers(
   }
   if (backtest.status !== "completed") blockers.push("backtest is not completed");
   if (!evidence.realDataOnly) blockers.push("backtest source is not verified as real-only runtime evidence");
+  if (evidence.compatibility === "exact-runtime-parity" && !isGovernedRuntimeThresholdSelection(backtest.config?.thresholdSelection)) {
+    blockers.push("threshold policy lacks a governed nested chronological tuning and validation receipt");
+  }
   if (backtest.sampleSize < snapshot.readiness.minimumRecommendedFixtures) blockers.push("sample is below the minimum recommendation");
   if (backtest.brierScore === null || backtest.logLoss === null) blockers.push("proper scoring metrics are missing");
   if (backtest.calibrationError === null || !backtest.calibrationBuckets.length || backtest.calibrationError > 0.08) {
@@ -960,6 +967,12 @@ export function buildDecisionLearningProfileFromSnapshot(
     promotionMatchesBacktest && promotedBucketSample >= snapshot.readiness.minimumRecommendedFixtures
       ? promotedCalibrationBuckets
       : calibrationBuckets(backtest);
+  const calibrationBucketSource: DecisionLearningProfile["calibrationBucketSource"] =
+    promotionMatchesBacktest && promotedBucketSample >= snapshot.readiness.minimumRecommendedFixtures
+      ? "promoted-cohort"
+      : backtest
+        ? "backtest"
+        : null;
   const demoOnly = Boolean(backtest?.dataSource?.includes("demo")) || snapshot.counts.realFinishedFixtures === 0;
   const promotionApproved = requireDurablePromotion ? promotionMatchesBacktest : promotionMatchesBacktest || hasExplicitLivePromotion(backtest);
   const metricBlockers = liveMetricBlockers(snapshot, backtest, runtimeEvidence);
@@ -1020,6 +1033,7 @@ export function buildDecisionLearningProfileFromSnapshot(
       : null,
     calibrationDriftStatus: driftReceiptMatches ? calibrationDriftReceipt!.status : null,
     calibrationDriftReceipt: driftReceiptMatches ? calibrationDriftReceipt : null,
+    calibrationBucketSource,
     sampleSize: backtest?.sampleSize ?? 0,
     testSize: backtest?.testSize ?? 0,
     realFinishedFixtures: snapshot.counts.realFinishedFixtures,

@@ -13,6 +13,7 @@ import type {
 import { confidenceFromEdgeAndProbability, riskLevelFromConfidenceAndOdds } from "./confidence";
 import { evaluateEmpiricalValueGuard } from "./empiricalValueGuard";
 import { evaluateSegmentValueGuard } from "./segmentValueGuard";
+import { buildValueEdgeEconomicConfidence } from "./valueEdgeEconomicConfidence";
 
 export function clampProbability(value: number): number {
   if (Number.isNaN(value)) return 0;
@@ -222,8 +223,19 @@ export function scoreValueEdge(edge: ValueEdge, options: BestPickSelectionOption
   const marketWeight = marketAdjustmentWeight ?? 0.14;
   const memoryPressure = caseMemoryPressure(edge, options);
   const pricePressure = priceFragilityPenalty(edge);
+  const economicConfidence = edge.economicConfidence;
+  const rankedExpectedValue = economicConfidence?.status === "verified" && economicConfidence.expectedValueLow !== null
+    ? economicConfidence.expectedValueLow
+    : edge.expectedValue;
+  const economicConfidencePenalty = !economicConfidence
+    ? 0
+    : economicConfidence.status === "unavailable"
+      ? 0.08
+      : (economicConfidence.edgeLow ?? -1) <= 0 || (economicConfidence.expectedValueLow ?? -1) <= 0
+        ? 0.3
+        : 0;
   const components = {
-    expectedValue: round(Math.max(0, edge.expectedValue) * confidenceMultiplier(edge.confidence) * (0.78 + valueWeight)),
+    expectedValue: round(Math.max(0, rankedExpectedValue) * confidenceMultiplier(edge.confidence) * (0.78 + valueWeight)),
     edge: round(Math.max(0, edge.edge) * (0.65 + valueWeight)),
     probabilityStability: round(clampProbability(edge.modelProbability) * (0.05 + dataWeight * 0.18)),
     confidenceMultiplier: confidenceMultiplier(edge.confidence),
@@ -231,6 +243,8 @@ export function scoreValueEdge(edge: ValueEdge, options: BestPickSelectionOption
     oddsVolatilityPenalty: oddsVolatilityPenalty(edge.odds),
     priceShorteningTolerance: pricePressure.tolerance,
     priceFragilityPenalty: pricePressure.penalty,
+    economicConfidencePenalty,
+    rankedExpectedValue: round(rankedExpectedValue),
     riskPenalty: round(riskPenalty(edge.risk) * (1 + dataWeight * 0.8)),
     caseMemoryPenalty: memoryPressure.penalty,
     caseMemorySimilarity: memoryPressure.similarity,
@@ -249,6 +263,7 @@ export function scoreValueEdge(edge: ValueEdge, options: BestPickSelectionOption
     components.bookmakerMarginPenalty -
     components.oddsVolatilityPenalty -
     components.priceFragilityPenalty -
+    components.economicConfidencePenalty -
     components.riskPenalty -
     components.caseMemoryPenalty;
 
@@ -267,6 +282,8 @@ function marketPriorWeight(
   dataQuality: number,
   bookmakerMargin: number,
   selectionCount: number,
+  bookmakerCount: number,
+  maxProbabilitySpread: number | null,
   evidencePolicy?: MarketPriorEvidencePolicy,
   scalingPolicy?: Pick<MarketPriorScalingPolicy, "weightScale">
 ): number {
@@ -282,10 +299,25 @@ function marketPriorWeight(
   const evidenceMarketReliability = bookmakerMargin <= 0.08
     ? 1
     : clampRange(1 - (bookmakerMargin - 0.08) / 0.05, 0.25, 1);
+  const depthReliability = bookmakerCount >= 5
+    ? 1
+    : bookmakerCount === 4
+      ? 0.96
+      : bookmakerCount === 3
+        ? 0.9
+        : bookmakerCount === 2
+          ? 0.78
+          : 0.6;
+  const disagreementReliability = maxProbabilitySpread === null
+    ? 0.85
+    : maxProbabilitySpread <= 0.02
+      ? 1
+      : clampRange(1 - ((maxProbabilitySpread - 0.02) / 0.1) * 0.65, 0.35, 1);
+  const consensusReliability = depthReliability * disagreementReliability;
   const evidenceFloor = coherentMarket && evidencePolicy
-    ? clampProbability(evidencePolicy.minimumWeight) * evidenceMarketReliability * selectionDepth
+    ? clampProbability(evidencePolicy.minimumWeight) * evidenceMarketReliability * selectionDepth * consensusReliability
     : 0;
-  return round(clampRange(Math.max(standardWeight * weightScale, evidenceFloor), 0, 0.9));
+  return round(clampRange(Math.max(standardWeight * weightScale * consensusReliability, evidenceFloor), 0, 0.9));
 }
 
 function normalizeSelectionSubset(probabilities: Record<string, number>, selectionIds: string[]): Record<string, number> {
@@ -296,6 +328,26 @@ function normalizeSelectionSubset(probabilities: Record<string, number>, selecti
     ...probabilities,
     ...Object.fromEntries(selectionIds.map((id) => [id, clampProbability((probabilities[id] ?? 0) / total)]))
   };
+}
+
+function validatedMarketConsensus(market: OddsMarket): NonNullable<OddsMarket["consensus"]> | null {
+  const consensus = market.consensus;
+  const selectionIds = market.selections.map((selection) => selection.id);
+  const total = selectionIds.reduce((sum, id) => sum + (consensus?.probabilities[id] ?? 0), 0);
+  const valid = Boolean(
+    consensus?.method === "median-no-vig-v1" &&
+    Number.isInteger(consensus.bookmakerCount) &&
+    consensus.bookmakerCount > 0 &&
+    Number.isFinite(consensus.averageMargin) &&
+    Number.isFinite(consensus.maxProbabilitySpread) &&
+    consensus.maxProbabilitySpread >= 0 &&
+    selectionIds.every((id) => {
+      const probability = consensus.probabilities[id];
+      return typeof probability === "number" && Number.isFinite(probability) && probability >= 0 && probability <= 1;
+    }) &&
+    Math.abs(total - 1) <= 0.01
+  );
+  return valid ? consensus! : null;
 }
 
 export function applyMarketPriorAdjustmentToMarkets(
@@ -314,22 +366,36 @@ export function applyMarketPriorAdjustmentToMarkets(
 
     const rawImpliedProbabilities = oddsMarket.selections.map((selection) => decimalOddsToImpliedProbability(selection.decimalOdds));
     const noVigProbabilities = removeBookmakerMargin(rawImpliedProbabilities);
+    const consensus = validatedMarketConsensus(oddsMarket);
+    const validConsensus = consensus !== null;
     const matchedSelections = oddsMarket.selections
       .map((selection, index) => ({
         ...selection,
-        noVigProbability: noVigProbabilities[index] ?? rawImpliedProbabilities[index] ?? 0
+        priorProbability: validConsensus
+          ? (consensus.probabilities[selection.id] ?? 0)
+          : (noVigProbabilities[index] ?? rawImpliedProbabilities[index] ?? 0)
       }))
       .filter((selection) => selection.decimalOdds > 1 && predictionMarket.probabilities[selection.id] !== undefined);
 
     if (matchedSelections.length < 2) return predictionMarket;
 
-    const bookmakerMargin = calculateBookmakerMargin(rawImpliedProbabilities);
-    const weight = marketPriorWeight(dataQuality, bookmakerMargin, matchedSelections.length, evidencePolicy, scalingPolicy);
+    const bookmakerMargin = validConsensus ? consensus.averageMargin : calculateBookmakerMargin(rawImpliedProbabilities);
+    const bookmakerCount = validConsensus ? consensus.bookmakerCount : 1;
+    const maxProbabilitySpread = validConsensus ? consensus.maxProbabilitySpread : null;
+    const weight = marketPriorWeight(
+      dataQuality,
+      bookmakerMargin,
+      matchedSelections.length,
+      bookmakerCount,
+      maxProbabilitySpread,
+      evidencePolicy,
+      scalingPolicy
+    );
     const blended = { ...predictionMarket.probabilities };
 
     for (const selection of matchedSelections) {
       const modelProbability = clampProbability(predictionMarket.probabilities[selection.id] ?? 0);
-      blended[selection.id] = clampProbability(modelProbability * (1 - weight) + selection.noVigProbability * weight);
+      blended[selection.id] = clampProbability(modelProbability * (1 - weight) + selection.priorProbability * weight);
     }
 
     const selectionIds = matchedSelections.map((selection) => selection.id);
@@ -339,7 +405,10 @@ export function applyMarketPriorAdjustmentToMarkets(
       marketId: predictionMarket.marketId,
       selectionCount: matchedSelections.length,
       bookmakerMargin: round(bookmakerMargin),
-      weight
+      weight,
+      priorMethod: validConsensus ? "median-no-vig-v1" : "selected-quote-no-vig",
+      bookmakerCount,
+      maxProbabilitySpread: maxProbabilitySpread === null ? null : round(maxProbabilitySpread)
     });
 
     return {
@@ -371,7 +440,8 @@ export function applyMarketPriorAdjustmentToMarkets(
       notes: applied
         ? [
             `Blended ${marketAdjustments.length} priced market${marketAdjustments.length === 1 ? "" : "s"} toward no-vig bookmaker probabilities before EV ranking.`,
-            "Market-prior weight increases when model data quality is lower and decreases when bookmaker margin is high.",
+            "Market-prior weight increases when model data quality is lower, but is discounted for bookmaker margin, shallow book depth, and cross-book disagreement.",
+            "Median multi-book no-vig consensus is used as the belief prior when available; executable quote prices remain separate for EV ranking.",
             ...(scalingPolicy ? [`The governed market-prior weight scale is ${round(clampRange(scalingPolicy.weightScale, 0, 3))}.`] : []),
             ...(evidencePolicy
               ? [`Evidence-aware market-prior floor requested at ${Math.round(evidencePolicy.minimumWeight * 100)}%: ${evidencePolicy.reason}`]
@@ -394,7 +464,7 @@ export function applyMarketPriorAdjustmentToDiagnostics(
         label: "Market prior weight",
         value: adjustment.averageWeight,
         note: adjustment.applied
-          ? `No-vig market probabilities adjusted ${adjustment.adjustedSelections} selection probabilities before value-edge ranking.`
+          ? `Reliability-weighted no-vig market consensus adjusted ${adjustment.adjustedSelections} selection probabilities before value-edge ranking.`
           : "No market prior was applied because no priced market matched the model output."
       },
       {
@@ -406,7 +476,7 @@ export function applyMarketPriorAdjustmentToDiagnostics(
     calibrationNotes: [
       ...diagnostics.calibrationNotes,
       adjustment.applied
-        ? "Market-prior calibration blends context-adjusted model probabilities toward no-vig bookmaker probabilities before EV ranking; high-margin markets get less influence."
+        ? "Market-prior calibration blends context-adjusted model probabilities toward a reliability-weighted no-vig market consensus before EV ranking; shallow, high-margin, or disputed markets get less influence."
         : "Market-prior calibration was skipped because no priced bookmaker market matched the model output."
     ]
   };
@@ -423,18 +493,25 @@ export function buildValueEdges(
     const predictionMarket = predictionMarkets.find((item) => item.marketId === market.id);
     if (!predictionMarket) return [];
     const rawImpliedProbabilities = market.selections.map((selection) => decimalOddsToImpliedProbability(selection.decimalOdds));
-    const noVigImpliedProbabilities = removeBookmakerMargin(rawImpliedProbabilities);
-    const bookmakerMargin = calculateBookmakerMargin(rawImpliedProbabilities);
+    const selectedQuoteNoVigProbabilities = removeBookmakerMargin(rawImpliedProbabilities);
+    const consensus = validatedMarketConsensus(market);
+    const bookmakerMargin = consensus?.averageMargin ?? calculateBookmakerMargin(rawImpliedProbabilities);
 
     return market.selections.map((selection, index) => {
       const modelProbability = clampProbability(predictionMarket.probabilities[selection.id] ?? 0);
       const rawImpliedProbability = rawImpliedProbabilities[index] ?? decimalOddsToImpliedProbability(selection.decimalOdds);
-      const noVigImpliedProbability = noVigImpliedProbabilities[index] ?? rawImpliedProbability;
+      const noVigImpliedProbability = consensus?.probabilities[selection.id] ?? selectedQuoteNoVigProbabilities[index] ?? rawImpliedProbability;
       const impliedProbability = noVigImpliedProbability;
       const edge = calculateValueEdge(modelProbability, impliedProbability);
       const expectedValue = calculateExpectedValue(modelProbability, selection.decimalOdds);
       const confidence = confidenceFromEdgeAndProbability(edge, modelProbability, dataQuality);
       const risk = riskLevelFromConfidenceAndOdds(confidence, selection.decimalOdds);
+      const economicConfidence = buildValueEdgeEconomicConfidence({
+        modelProbability,
+        noVigImpliedProbability,
+        odds: selection.decimalOdds,
+        learningProfile
+      });
       const valueEdge: ValueEdge = {
         marketId: market.id,
         selectionId: selection.id,
@@ -448,6 +525,12 @@ export function buildValueEdges(
         expectedValue,
         expectedRoi: expectedValue,
         odds: selection.decimalOdds,
+        bookmaker: selection.bookmaker ?? market.bookmaker,
+        priceObservedAt: selection.observedAt ?? null,
+        priceMethod: market.priceMethod ?? (market.bookmaker ? "selected-coherent-quote" : undefined),
+        consensusBookmakerCount: consensus?.bookmakerCount ?? 1,
+        consensusMaxProbabilitySpread: consensus?.maxProbabilitySpread ?? null,
+        ...(economicConfidence ? { economicConfidence } : {}),
         confidence,
         risk,
         empiricalValueGuard: evaluateEmpiricalValueGuard({
@@ -501,6 +584,10 @@ export function selectBestPick(valueEdges: ValueEdge[], options: BestPickSelecti
       if (edge.edge < minimumEdge || edge.expectedValue <= 0 || edge.confidence === "low") return false;
       if (edge.empiricalValueGuard.status === "blocked") return false;
       if (edge.segmentValueGuard.status === "blocked") return false;
+      if (
+        edge.economicConfidence?.status === "verified" &&
+        ((edge.economicConfidence.edgeLow ?? -1) <= 0 || (edge.economicConfidence.expectedValueLow ?? -1) <= 0)
+      ) return false;
       return allowedConfidenceBands === null || allowedConfidenceBands === undefined
         ? true
         : allowedConfidenceBands.includes(edge.confidence);

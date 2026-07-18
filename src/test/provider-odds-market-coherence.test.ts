@@ -15,6 +15,7 @@ const multiBookBasketballEvent = {
     {
       key: "book-a",
       title: "Book A",
+      last_update: "2026-07-10T12:00:00Z",
       markets: [
         {
           key: "h2h",
@@ -42,6 +43,7 @@ const multiBookBasketballEvent = {
     {
       key: "book-b",
       title: "Book B",
+      last_update: "2026-07-10T12:02:00Z",
       markets: [
         {
           key: "h2h",
@@ -69,6 +71,7 @@ const multiBookBasketballEvent = {
     {
       key: "book-c",
       title: "Book C",
+      last_update: "2026-07-10T12:04:00Z",
       markets: [
         {
           key: "h2h",
@@ -97,7 +100,7 @@ const multiBookBasketballEvent = {
 };
 
 describe("provider odds market coherence", () => {
-  it("keeps one complete quote and one consensus line per multi-book market", async () => {
+  it("keeps a coherent consensus line while shopping each executable selection", async () => {
     const provider = new ProviderBackedSportsDataProvider({
       env: {
         THE_ODDS_API_KEY: "odds-key",
@@ -117,11 +120,17 @@ describe("provider odds market coherence", () => {
 
     expect(match.oddsMarkets.map((market) => market.id)).toEqual(["match_winner", "spread", "total_points"]);
     expect(match.oddsMarkets.every((market) => market.selections.length === 2)).toBe(true);
-    expect(match.oddsMarkets.map((market) => market.bookmaker)).toEqual([
-      { id: "book-a", name: "Book A" },
-      { id: "book-a", name: "Book A" },
-      { id: "book-a", name: "Book A" }
+    expect(match.oddsMarkets.map((market) => market.bookmaker)).toEqual([undefined, undefined, undefined]);
+    expect(match.oddsMarkets.every((market) => market.priceMethod === "best-price-per-selection-v1")).toBe(true);
+    expect(match.oddsMarkets.map((market) => market.consensus?.method)).toEqual([
+      "median-no-vig-v1",
+      "median-no-vig-v1",
+      "median-no-vig-v1"
     ]);
+    expect(match.oddsMarkets.map((market) => market.consensus?.bookmakerCount)).toEqual([3, 2, 2]);
+    for (const market of match.oddsMarkets) {
+      expect(Object.values(market.consensus?.probabilities ?? {}).reduce((sum, probability) => sum + probability, 0)).toBeCloseTo(1, 5);
+    }
     expect(match.oddsMarkets.find((market) => market.id === "spread")?.selections.map((selection) => selection.label)).toEqual([
       "Connecticut Sun -3.5",
       "Golden State Valkyries +3.5"
@@ -129,6 +138,14 @@ describe("provider odds market coherence", () => {
     expect(match.oddsMarkets.find((market) => market.id === "total_points")?.selections.map((selection) => selection.label)).toEqual([
       "Over 154.5",
       "Under 154.5"
+    ]);
+    expect(match.oddsMarkets.find((market) => market.id === "match_winner")?.selections).toEqual([
+      expect.objectContaining({ id: "home", decimalOdds: 1.62, bookmaker: { id: "book-a", name: "Book A" }, observedAt: "2026-07-10T12:00:00Z" }),
+      expect.objectContaining({ id: "away", decimalOdds: 2.42, bookmaker: { id: "book-b", name: "Book B" }, observedAt: "2026-07-10T12:02:00Z" })
+    ]);
+    expect(match.oddsMarkets.find((market) => market.id === "spread")?.selections).toEqual([
+      expect.objectContaining({ id: "home_cover", decimalOdds: 1.93, bookmaker: { id: "book-c", name: "Book C" } }),
+      expect.objectContaining({ id: "away_cover", decimalOdds: 1.91, bookmaker: { id: "book-a", name: "Book A" } })
     ]);
 
     for (const market of match.oddsMarkets) {
@@ -138,6 +155,17 @@ describe("provider odds market coherence", () => {
     }
 
     const prediction = buildPrediction(match);
+    const matchWinnerMarket = match.oddsMarkets.find((market) => market.id === "match_winner");
+    const awayEdge = prediction.valueEdges.find((edge) => edge.marketId === "match_winner" && edge.selectionId === "away");
+    expect(awayEdge).toMatchObject({
+      odds: 2.42,
+      bookmaker: { id: "book-b", name: "Book B" },
+      priceObservedAt: "2026-07-10T12:02:00Z",
+      priceMethod: "best-price-per-selection-v1"
+    });
+    expect(awayEdge?.noVigImpliedProbability).toBeCloseTo(matchWinnerMarket?.consensus?.probabilities.away ?? 0, 8);
+    expect(awayEdge?.bookmakerMargin).toBeCloseTo(matchWinnerMarket?.consensus?.averageMargin ?? 0, 8);
+    expect(awayEdge?.expectedValue).toBeCloseTo((awayEdge?.modelProbability ?? 0) * 2.42 - 1, 8);
     for (const market of prediction.decision.oddsIntelligence.marketAudits) {
       expect(market.selections).toHaveLength(2);
       expect(market.bookmakerMargin).toBeGreaterThan(-0.05);

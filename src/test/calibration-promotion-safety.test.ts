@@ -168,6 +168,21 @@ function readySnapshot(): TrainingDataSnapshot {
       ],
       learnedWeights: { minimumEdge: 0.03, valueEdgeWeight: 0.4, dataQualityWeight: 0.2 },
       config: {
+        thresholdSelection: {
+          version: "nested-chronological-economics-v2",
+          status: "selected",
+          baseline: { minEdge: 0.03, minModelProbability: 0.4 },
+          applied: { minEdge: 0.03, minModelProbability: 0.4 },
+          tuningSampleSize: 672,
+          validationSampleSize: 168,
+          minimumTuningPicks: 30,
+          minimumValidationPicks: 20,
+          selectedCandidate: { minEdge: 0.03, minModelProbability: 0.4 },
+          validation: { sampleSize: 168, pickCount: 24, yield: 0.03, closingLineValue: 0.01 },
+          validationLowerYieldBound: 0.005,
+          candidates: [],
+          reason: "Test receipt."
+        },
         learnedWeightsProvenance: {
           source: "training-window",
           sampleSize: 840,
@@ -364,17 +379,17 @@ describe("calibration promotion safety", () => {
   it("isolates settled outcomes by model key and engine version before calibration", () => {
     const cohorts = buildDecisionCalibrationCohorts({
       sport: "football",
-      decisionRuns: [run("run-a", "football-poisson-v2", "decision-engine-v1"), run("run-b", "football-poisson-v3", "decision-engine-v2")],
+      decisionRuns: [run("run-a", "football-poisson-v2", "decision-engine-v1"), run("run-b", "football-poisson-v5", "decision-engine-v2")],
       outcomes: [outcome("a-won", "run-a"), outcome("a-lost", "run-a"), outcome("b-won", "run-b")]
     });
 
     expect(cohorts).toHaveLength(2);
-    expect(cohorts[0]?.modelKey).toBe("football-poisson-v3");
+    expect(cohorts[0]?.modelKey).toBe("football-poisson-v5");
     expect(cohorts.map((cohort) => `${cohort.modelKey}:${cohort.engineVersion}`)).toEqual(
-      expect.arrayContaining(["football-poisson-v2:decision-engine-v1", "football-poisson-v3:decision-engine-v2"])
+      expect.arrayContaining(["football-poisson-v2:decision-engine-v1", "football-poisson-v5:decision-engine-v2"])
     );
     expect(cohorts.find((cohort) => cohort.modelKey === "football-poisson-v2")?.outcomes.map((row) => row.id)).toEqual(["a-won", "a-lost"]);
-    expect(cohorts.find((cohort) => cohort.modelKey === "football-poisson-v3")?.outcomes.map((row) => row.id)).toEqual(["b-won"]);
+    expect(cohorts.find((cohort) => cohort.modelKey === "football-poisson-v5")?.outcomes.map((row) => row.id)).toEqual(["b-won"]);
   });
 
   it("refuses a promoted curve scoped to a different model or engine", () => {
@@ -404,6 +419,7 @@ describe("calibration promotion safety", () => {
     expect(active.marketPriorReplayCoverage).toBe(0.833333);
     expect(active.marketPriorReplayAverageWeight).toBe(0.12);
     expect(active.calibrationPromotion).toMatchObject({ id: "promotion-1", candidateId: "candidate-1" });
+    expect(active.calibrationBucketSource).toBe("backtest");
     expect(mismatched.active).toBe(false);
     expect(mismatched.reason).toContain("model-bound calibration promotion");
   });
@@ -459,6 +475,27 @@ describe("calibration promotion safety", () => {
     expect(wrongMonitoringBoundary.calibrationDriftReceipt).toBeNull();
   });
 
+  it("uses settled win/loss counts and only marks a sufficiently large promoted cohort as the economic curve", () => {
+    const snapshot = readySnapshot();
+    snapshot.readiness.minimumRecommendedFixtures = 30;
+    const promoted = promotion();
+    promoted.candidate.probabilityBuckets = [{
+      ...promoted.candidate.probabilityBuckets[0]!,
+      sampleSize: 44,
+      settledSize: 30
+    }];
+
+    const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promoted,
+      requireDurablePromotion: true
+    });
+
+    expect(profile.calibrationBucketSource).toBe("promoted-cohort");
+    expect(profile.calibrationBuckets).toEqual([
+      expect.objectContaining({ sampleSize: 30, observedRate: 0.35 })
+    ]);
+  });
+
   it("keeps benchmark and receipt-free runtime-key backtests out of live learning", () => {
     const benchmark = readySnapshot();
     benchmark.latestBacktest = {
@@ -498,6 +535,22 @@ describe("calibration promotion safety", () => {
 
     expect(profile.active).toBe(false);
     expect(profile.reason).toContain("learned weights lack training-window-only provenance");
+  });
+
+  it("keeps runtime-parity weights shadow-only without a nested threshold receipt", () => {
+    const snapshot = readySnapshot();
+    snapshot.latestBacktest = {
+      ...snapshot.latestBacktest!,
+      config: { ...snapshot.latestBacktest!.config, thresholdSelection: undefined }
+    };
+
+    const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+
+    expect(profile.active).toBe(false);
+    expect(profile.reason).toContain("threshold policy lacks a governed nested chronological tuning and validation receipt");
   });
 
   it("keeps an exact-runtime football profile shadow-only when player-form history is too sparse", () => {

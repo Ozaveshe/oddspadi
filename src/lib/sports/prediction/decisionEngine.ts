@@ -94,7 +94,8 @@ import { buildDecisionEvaluationPlan } from "./decisionEvaluationPlan";
 import { buildDecisionResearchBrief } from "./decisionResearchBrief";
 import { buildDecisionNotebook } from "./decisionNotebook";
 
-export const DECISION_ENGINE_VERSION = "decision-engine-v1";
+/** v2 separates multi-book consensus belief probabilities from selection-level best executable prices. */
+export const DECISION_ENGINE_VERSION = "decision-engine-v2";
 
 function confidenceScore(confidence: ConfidenceLevel): number {
   if (confidence === "high") return 3;
@@ -776,6 +777,7 @@ function buildAbstentionRules(
   const learnedMinimumEdge = learningProfile?.active ? learnedNumber(learningProfile.minimumEdge, 0.035, 0.02, 0.09) : null;
   const liveInPlayModel = hasLiveInPlayModel(match, diagnostics);
   const futureFixtureSyntheticMarket = hasFutureFixtureSyntheticMarketGate(match);
+  const governedHoldoutBlockers = governedHoldoutPublicationBlockers(learningProfile);
 
   return [
     {
@@ -828,6 +830,14 @@ function buildAbstentionRules(
         : "Fixture has no future-season seed or synthetic market flag."
     },
     {
+      id: "negative-runtime-holdout",
+      label: "Runtime holdout economics",
+      triggered: governedHoldoutBlockers.length > 0,
+      detail: governedHoldoutBlockers.length
+        ? `Public value picks remain blocked: ${governedHoldoutBlockers.join("; ")}.`
+        : "No sufficiently powered exact-runtime holdout has negative yield or closing-line value."
+    },
+    {
       id: "learned-minimum-edge",
       label: "Learned minimum edge",
       triggered: Boolean(learnedMinimumEdge !== null && (!bestPick.hasValue || bestPick.edge < learnedMinimumEdge)),
@@ -861,6 +871,38 @@ function buildAbstentionRules(
             : "No public historical discipline evidence is attached, so this gate stays neutral."
     }
   ];
+}
+
+const MINIMUM_GOVERNED_HOLDOUT_FIXTURES = 100;
+
+/**
+ * Historical learning may remain shadow-only while the default engine still runs.
+ * Once an exact-runtime holdout is large enough to judge, negative betting
+ * economics are a hard publication veto rather than merely an inactive weight.
+ */
+export function governedHoldoutPublicationBlockers(
+  learningProfile?: DecisionLearningProfile
+): string[] {
+  if (!learningProfile || learningProfile.modelCompatibility !== "exact-runtime-parity") return [];
+  const minimumHoldout = Math.max(
+    MINIMUM_GOVERNED_HOLDOUT_FIXTURES,
+    Math.ceil(learningProfile.minimumRecommendedFixtures * 0.2)
+  );
+  if (
+    learningProfile.sampleSize < learningProfile.minimumRecommendedFixtures ||
+    (learningProfile.testSize ?? 0) < minimumHoldout
+  ) {
+    return [];
+  }
+
+  const blockers: string[] = [];
+  if (learningProfile.yield === null || learningProfile.yield <= 0) {
+    blockers.push("exact-runtime holdout yield is not positive");
+  }
+  if (learningProfile.closingLineValue === null || learningProfile.closingLineValue <= 0) {
+    blockers.push("exact-runtime closing-line value is not positive");
+  }
+  return blockers;
 }
 
 function liveModelRequirementDetail(match: Match, diagnostics: FootballModelDiagnostics): string {

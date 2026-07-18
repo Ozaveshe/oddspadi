@@ -35,6 +35,10 @@ import type {
   SegmentValueGuardDecision,
   SegmentValueGuardPolicy
 } from "@/lib/sports/types";
+import {
+  applyRuntimeProbabilityPipeline,
+  RUNTIME_PROBABILITY_PIPELINE_VERSION
+} from "@/lib/sports/prediction/runtimeProbabilityPipeline";
 import type { HistoricalBasketballFixture, HistoricalBasketballOddsQuote } from "./basketballBacktest";
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "./probabilityCalibration";
 import {
@@ -50,6 +54,11 @@ import {
   type EconomicSelectionComparison,
   type EconomicSelectionPolicy
 } from "./economicSelectionPolicy";
+import {
+  selectNestedRuntimeThreshold,
+  type RuntimeThresholdMetrics,
+  type RuntimeThresholdSelection
+} from "./runtimeThresholdSelection";
 
 type RuntimeReplaySport = "basketball" | "tennis";
 type TwoWayOutcome = "home" | "away";
@@ -63,6 +72,7 @@ export type TwoWayRuntimeReplayConfig = {
 };
 
 type ResolvedConfig = Required<TwoWayRuntimeReplayConfig>;
+type ReplayConfig = ResolvedConfig & { thresholdSelection: RuntimeThresholdSelection };
 
 export type TwoWayRuntimeReplayPick = {
   selection: TwoWayOutcome;
@@ -92,6 +102,7 @@ export type TwoWayRuntimeReplayFixtureResult = {
 export type TwoWayRuntimeFeatureContract = {
   status: "passed" | "failed";
   version: string;
+  probabilityPipelineVersion: typeof RUNTIME_PROBABILITY_PIPELINE_VERSION;
   chronologyVersion: string;
   sourceFixtures: number;
   eligibleFixtures: number;
@@ -102,6 +113,7 @@ export type TwoWayRuntimeFeatureContract = {
   entrypointInvocations: number;
   optionalCoverage: {
     completeOddsFixtures: number;
+    marketPriorFixtures: number;
     surfaceFixtures: number;
     restFixtures: number;
   };
@@ -145,7 +157,7 @@ export type TwoWayRuntimeReplayResult = {
   segmentValueGuardPolicy: SegmentValueGuardPolicy;
   segmentValueGuardComparison: EconomicSelectionComparison;
   marketPriorEvidence: MarketPriorReplayEvidence;
-  config: ResolvedConfig;
+  config: ReplayConfig;
   notes: string[];
   results: TwoWayRuntimeReplayFixtureResult[];
   featureContract: TwoWayRuntimeFeatureContract;
@@ -716,6 +728,18 @@ function summary(results: TwoWayRuntimeReplayFixtureResult[]) {
   };
 }
 
+function thresholdMetrics(results: TwoWayRuntimeReplayFixtureResult[]): RuntimeThresholdMetrics {
+  const picks = results.map((result) => result.pick).filter((pick): pick is TwoWayRuntimeReplayPick => Boolean(pick));
+  const unitReturns = picks.map((pick) => pick.unitReturn);
+  return {
+    sampleSize: results.length,
+    pickCount: picks.length,
+    yield: average(unitReturns),
+    closingLineValue: average(picks.map((pick) => pick.closingLineValue).filter((value): value is number => value !== null)),
+    unitReturns
+  };
+}
+
 function rejectionCounts(rejections: TwoWayRuntimeReplayResult["rejections"]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const rejection of rejections) for (const reason of rejection.reasons) counts[reason] = (counts[reason] ?? 0) + 1;
@@ -736,8 +760,14 @@ function run(
   const holdoutRows = prepared.slice(trainSize);
   const model = sport === "basketball" ? modelBasketballMatch : modelTennisMatch;
   const modelRows = (rows: Prepared[]): ModeledPrepared[] => rows.flatMap((item) => {
-    const modeled = model(item.match);
-    const market = modeled.markets.find((candidate) => candidate.marketId === "match_winner");
+    const baseModel = model(item.match);
+    const pipeline = applyRuntimeProbabilityPipeline({
+      match: item.match,
+      baseModel,
+      engineVersion: DECISION_ENGINE_VERSION,
+      now: new Date(item.kickoffAt)
+    });
+    const market = pipeline.learnedCalibratedMarkets.find((candidate) => candidate.marketId === "match_winner");
     const home = market?.probabilities.home;
     const away = market?.probabilities.away;
     return typeof home === "number" && typeof away === "number" && Number.isFinite(home) && Number.isFinite(away)
@@ -828,9 +858,38 @@ function run(
     holdoutWindowStart: holdoutRows[0]?.kickoffAt ?? null,
     segmentDimension: predictionSegmentDimension(sport)
   });
+  const thresholdValidationSize = modeledTraining.length >= 125
+    ? Math.max(25, Math.floor(modeledTraining.length * 0.2))
+    : 0;
+  const thresholdTuningRows = thresholdValidationSize
+    ? modeledTraining.slice(0, -thresholdValidationSize)
+    : modeledTraining;
+  const thresholdValidationRows = thresholdValidationSize
+    ? modeledTraining.slice(-thresholdValidationSize)
+    : [];
+  const evaluateThresholdRows = (
+    rows: readonly ModeledPrepared[],
+    threshold: Pick<ResolvedConfig, "minEdge" | "minModelProbability">
+  ) => evaluateRows(
+    rows,
+    { ...resolved, ...threshold },
+    probabilityCalibrationPolicy,
+    true,
+    marketPriorScalingPolicy
+  ).results;
+  const thresholdSelection = selectNestedRuntimeThreshold({
+    baseline: { minEdge: resolved.minEdge, minModelProbability: resolved.minModelProbability },
+    tuningSampleSize: thresholdTuningRows.length,
+    validationSampleSize: thresholdValidationRows.length,
+    edgeCandidates: [0.045, 0.055, 0.07, 0.09, 0.12].filter((value) => value >= resolved.minEdge),
+    probabilityCandidates: [0.5, 0.55, 0.6].filter((value) => value >= resolved.minModelProbability),
+    evaluateTuning: (threshold) => thresholdMetrics(evaluateThresholdRows(thresholdTuningRows, threshold)),
+    evaluateValidation: (threshold) => thresholdMetrics(evaluateThresholdRows(thresholdValidationRows, threshold))
+  });
+  const governedResolved = { ...resolved, ...thresholdSelection.applied };
   const trainingPosterior = evaluateRows(
     modeledTraining,
-    resolved,
+    governedResolved,
     probabilityCalibrationPolicy,
     true,
     marketPriorScalingPolicy,
@@ -850,8 +909,8 @@ function run(
       : probabilityCalibrationPolicy.validationSampleSize >= 20 &&
         selectionTrainingResults.length === probabilityCalibrationPolicy.validationSampleSize;
   const trainingSummary = summary(selectionTrainingResults);
-  const minimumEdge = clamp(resolved.minEdge + ((trainingSummary.yield ?? 0) < 0 ? 0.015 : 0), 0.02, 0.09);
-  const holdoutSelectionConfig = { ...resolved, minEdge: minimumEdge };
+  const minimumEdge = clamp(governedResolved.minEdge + ((trainingSummary.yield ?? 0) < 0 ? 0.015 : 0), 0.02, 0.12);
+  const holdoutSelectionConfig = { ...governedResolved, minEdge: minimumEdge };
   const policyTrainingResults = applyMinimumEdgeToResults(selectionTrainingResults, minimumEdge);
   const selectionPolicy = learnEconomicSelectionPolicy(policyTrainingResults);
   const rawHoldoutResults = evaluateRows(modeledHoldout, holdoutSelectionConfig).results;
@@ -903,6 +962,7 @@ function run(
   const contract: TwoWayRuntimeFeatureContract = {
     status: trainingRows.length > 0 && results.length > 0 && results.length === holdoutRows.length && trainingResults.length === trainingRows.length ? "passed" : "failed",
     version: identity.featureContractVersion,
+    probabilityPipelineVersion: RUNTIME_PROBABILITY_PIPELINE_VERSION,
     chronologyVersion: CHRONOLOGY_VERSION[sport],
     sourceFixtures: sourceCount,
     eligibleFixtures: prepared.length,
@@ -913,6 +973,10 @@ function run(
     entrypointInvocations: holdoutRows.length,
     optionalCoverage: {
       completeOddsFixtures: prepared.filter((item) => oddsForEvaluation(item.odds, item.kickoffAt)).length,
+      marketPriorFixtures: [
+        ...trainingPosterior.marketPriorAdjustments,
+        ...holdoutPosterior.marketPriorAdjustments
+      ].filter((adjustment) => adjustment.applied).length,
       surfaceFixtures: sport === "tennis" ? prepared.filter((item) => item.match.homeTeam.ratingEvidence?.surface !== "unknown").length : 0,
       restFixtures: prepared.filter((item) => typeof item.match.homeTeam.ratingEvidence?.restDays === "number" && typeof item.match.awayTeam.ratingEvidence?.restDays === "number").length
     },
@@ -921,7 +985,8 @@ function run(
   const executionHash = stableHash({
     sport,
     modelKey: identity.runtimeModelKey,
-    entrypoint: `${identity.runtimeEntrypoint}+temperatureScaling+marketPrior+empiricalValueGuard+segmentValueGuard`,
+    entrypoint: identity.runtimeEntrypoint,
+    probabilityPipeline: RUNTIME_PROBABILITY_PIPELINE_VERSION,
     contract,
     training: trainingResults.map((row) => row.probabilities),
     holdout: results.map((row) => row.probabilities),
@@ -939,7 +1004,8 @@ function run(
     empiricalValueGuardComparison,
     segmentValueGuardPolicy,
     segmentValueGuardComparison,
-    marketPriorEvidence
+    marketPriorEvidence,
+    thresholdSelection
   });
   return {
     sport,
@@ -978,10 +1044,15 @@ function run(
     segmentValueGuardPolicy,
     segmentValueGuardComparison,
     marketPriorEvidence,
-    config: resolved,
+    config: {
+      ...holdoutSelectionConfig,
+      thresholdSelection
+    },
     notes: [
       `Executed ${results.length} chronological holdout fixture(s) through ${identity.runtimeEntrypoint}.`,
+      `Final probabilities used ${RUNTIME_PROBABILITY_PIPELINE_VERSION} for the shared context and calibration stages before governed market-prior, empirical-value, and segment guards.`,
       `All Elo, form, rest, scoring, and surface features were calculated before each result updated team or player state.`,
+      `Nested threshold policy ${thresholdSelection.status}: ${thresholdSelection.reason}`,
       `${selectionTrainingResults.length} ${usedTrainingValidation ? "prospective training-validation" : "training-window fallback"} fixture(s) set the holdout minimum edge to ${holdoutSelectionConfig.minEdge.toFixed(4)}; holdout outcomes did not tune it.`,
       probabilityCalibrationPolicy.status === "active"
         ? `Training fit/validation evidence activated temperature ${probabilityCalibrationPolicy.temperature.toFixed(3)}; it was frozen before holdout and changed holdout log loss by ${probabilityCalibrationComparison.logLossDelta ?? "n/a"}.`

@@ -133,6 +133,10 @@ function providerFixtureId(row: AutonomousPendingOutcomeRow): string | null {
   return text(record(row.metadata).fixtureProviderId);
 }
 
+function providerSportKey(row: AutonomousPendingOutcomeRow): string | null {
+  return text(record(row.metadata).providerSportKey);
+}
+
 function matchForRow(row: AutonomousPendingOutcomeRow, matches: Match[]): Match | null {
   const metadata = record(row.metadata);
   const providerId = providerFixtureId(row);
@@ -186,7 +190,13 @@ async function providerMatchesByDate(
 ): Promise<Map<string, Match[]>> {
   const provider = new ProviderBackedSportsDataProvider({ env, fetchImpl });
   const dates = Array.from(new Set(rows.map(kickoffDate).filter((value): value is string => Boolean(value)))).slice(0, 14);
-  const entries = await Promise.all(dates.map(async (date) => [date, await provider.getFixtures(date, sport)] as const));
+  const entries = await Promise.all(dates.map(async (date) => {
+    const exactKeys = rows
+      .filter((row) => kickoffDate(row) === date)
+      .map(providerSportKey)
+      .filter((value): value is string => Boolean(value));
+    return [date, await provider.getSettlementFixtures(date, sport, exactKeys)] as const;
+  }));
   return new Map(entries);
 }
 

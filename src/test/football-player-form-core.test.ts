@@ -49,7 +49,7 @@ describe("football player-form core model", () => {
       now
     });
 
-    expect(fresh.diagnostics.modelVersion).toBe("football-poisson-v3");
+    expect(fresh.diagnostics.modelVersion).toBe("football-poisson-v5");
     expect(fresh.diagnostics.expectedGoals.home).toBeGreaterThan(baseline.diagnostics.expectedGoals.home);
     expect(fresh.diagnostics.expectedGoals.away).toBeLessThan(baseline.diagnostics.expectedGoals.away);
     expect(winnerHomeProbability(fresh)).toBeGreaterThan(winnerHomeProbability(baseline));

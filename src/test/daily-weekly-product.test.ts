@@ -34,7 +34,7 @@ function decisionSummary(fixtureId: string, status: SlatePublicStatus, expiresAt
     dataQuality: 0.88, evidenceQuality: "strong", confidence: "medium", risk: "medium", generatedAt: GENERATED_AT, expiresAt,
     auditSummary: {
       thresholdProfile: "football",
-      thresholds: { minimumValueEdge: 0.04, minimumExpectedValue: 0.03, minimumConfidenceForValuePick: "medium", minimumDataQuality: 0.62, maximumOddsAgeMinutes: 60, minimumOdds: 1.2, maximumOdds: 5, minimumKickoffLeadMinutes: 10, maxMarketsPerFixture: 3 },
+      thresholds: { minimumValueEdge: 0.04, minimumExpectedValue: 0.03, minimumConfidenceForValuePick: "medium", minimumDataQuality: 0.62, maximumOddsAgeMinutes: 60, minimumConsensusBookmakers: 3, maximumConsensusProbabilitySpread: 0.1, minimumOdds: 1.2, maximumOdds: 5, minimumKickoffLeadMinutes: 10, maxMarketsPerFixture: 3 },
       marketsAnalysed: 1, publishedCandidates: status === "value_pick" ? 1 : 0, leanCandidates: status === "lean" ? 1 : 0,
       watchlistCandidates: status === "watchlist" ? 1 : 0, staleCandidates: status === "stale" ? 1 : 0,
       enginePublicationAllowed: status === "value_pick", providerBacked: true, contextSignalsSeen: 2, blockers: [], publicInvariantPassed: true

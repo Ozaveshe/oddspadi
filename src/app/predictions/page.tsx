@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { DailyTipsSections, ProviderRunStrip } from "@/components/odds/IntelligenceSlate";
+import { DailyDecisionOverview, DailyTipsSections, ProviderRunStrip } from "@/components/odds/IntelligenceSlate";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
 import { filterDailyTipsProductBySport } from "@/lib/sports/tips/product";
@@ -35,25 +35,33 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
   const sportLabel = requestedSport ? requestedSport[0].toUpperCase() + requestedSport.slice(1) : null;
   return (
     <main id="main" className="container">
-      <div className="page-heading">
-        <span className="section-kicker">Daily sports intelligence</span>
-        <h1>Today&apos;s {sportLabel ? <span className="accent">{sportLabel} predictions</span> : <>provider-backed <span className="accent">predictions</span></>}</h1>
-        <p>Every available {sportLabel ? `${sportLabel.toLowerCase()} match` : "match"} is run through the OddsPadi engine. Value, leans, watchlists and abstentions stay separate, and a provider failure never turns into a fake fixture.</p>
-        <nav className="intelligence-nav" aria-label="Filter predictions by sport">
+      <header className="page-heading predictions-heading prediction-desk-heading">
+        <div>
+          <span className="section-kicker">The Matchday Desk · Today</span>
+          <h1>{sportLabel ? <><span className="accent">{sportLabel}</span> decisions</> : <>Today&apos;s match <span className="accent">decisions</span></>}</h1>
+        </div>
+        <p>Fixture-first model decisions with current prices, evidence quality and an explicit reason when OddsPadi abstains.</p>
+      </header>
+      <div className="prediction-command-bar">
+        <nav className="prediction-filter-row" aria-label="Filter predictions by sport">
           {SPORT_VIEWS.map((view) => {
             const active = view.value === requestedSport;
-            return <Link key={view.label} className={`button${active ? " primary" : ""}`} href={view.href} aria-current={active ? "page" : undefined}>{view.label}</Link>;
+            return <Link key={view.label} className={active ? "active" : ""} href={view.href} aria-current={active ? "page" : undefined}>{view.label}</Link>;
           })}
         </nav>
-        <nav className="intelligence-nav" aria-label="Prediction views">
-          <Link className="button primary" href="/predictions/today">Daily tips</Link>
-          <Link className="button" href="/predictions/week">Weekly preview</Link>
-          <Link className="button" href="/predictions/value-picks">Value picks</Link>
-          <Link className="button" href="/predictions/history">Results ledger</Link>
+        <nav className="prediction-view-row" aria-label="Prediction views">
+          <Link href="/predictions/today">Daily</Link>
+          <Link href="/predictions/week">Week</Link>
+          <Link href="/predictions/value-picks">Published</Link>
+          <Link href="/predictions/history">Results</Link>
         </nav>
       </div>
-      <ProviderRunStrip slate={product.slate} />
+      <DailyDecisionOverview product={product} />
       <DailyTipsSections product={product} />
+      <section className="prediction-receipt">
+        <div><span className="section-kicker">Data receipt</span><h2>How this slate was built</h2></div>
+        <ProviderRunStrip slate={product.slate} />
+      </section>
       <PredictionDisclaimer sport={requestedSport ?? undefined} />
     </main>
   );

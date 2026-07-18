@@ -5,11 +5,42 @@ import { buildDecisionResearchBrief } from "@/lib/sports/prediction/decisionRese
 import { selectBestPick } from "@/lib/sports/prediction/odds";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
 import { buildPrediction } from "@/lib/sports/service";
-import type { NoValuePick } from "@/lib/sports/types";
+import type { DecisionLearningProfile, NoValuePick } from "@/lib/sports/types";
 
 const noValue: NoValuePick = { hasValue: false, label: "No clear value found" };
 
 describe("decision accountability modules", () => {
+  it("turns a sufficiently powered losing runtime holdout into an engine abstention", async () => {
+    const fixture = (await mockSportsDataProvider.getFixtures("2026-07-14", "football"))[0];
+    const learningProfile: DecisionLearningProfile = {
+      status: "shadow-only",
+      source: "provider-history",
+      active: false,
+      modelCompatibility: "exact-runtime-parity",
+      sampleSize: 1_200,
+      testSize: 360,
+      realFinishedFixtures: 1_200,
+      minimumRecommendedFixtures: 1_000,
+      minimumEdge: null,
+      valueEdgeWeight: null,
+      dataQualityWeight: null,
+      marketAdjustmentWeight: null,
+      homeAdvantageElo: null,
+      brierScore: 0.2,
+      yield: -0.03,
+      closingLineValue: -0.01,
+      generatedAt: "2026-07-14T00:00:00.000Z",
+      reason: "Exact-runtime holdout failed betting-economics gates.",
+      notes: []
+    };
+
+    const decision = buildPrediction(fixture, { learningProfile }).decision;
+    expect(decision.abstentionRules.find((rule) => rule.id === "negative-runtime-holdout")).toMatchObject({
+      triggered: true
+    });
+    expect(decision.action).toBe("avoid");
+  });
+
   it("preserves evaluation, research, and notebook output across every supported sport", async () => {
     for (const sport of ["football", "basketball", "tennis"] as const) {
       const fixtures = await mockSportsDataProvider.getFixtures("2026-07-14", sport);

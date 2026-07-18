@@ -12,6 +12,7 @@ It does not replace the math model. It reads:
 - basketball rest-day, availability, and rotation-shape model diagnostics
 - tennis head-to-head and travel/load model diagnostics
 - raw and no-vig bookmaker implied probabilities
+- selection-level best executable prices with named bookmaker and provider-update provenance
 - market-prior adjustment after bookmaker margin removal
 - value edges
 - expected value per unit
@@ -108,33 +109,34 @@ The agent performs structured decision work:
 
 1. Gather model, market, form, and data-quality evidence.
 2. Apply bounded context adjustments from injuries/news, lineups, weather, rest/rotation, surface, and live-state signals.
-3. Blend priced model selections toward no-vig market probabilities with a bounded weight based on data quality and bookmaker margin.
-4. Apply football Dixon-Coles low-score correction before deriving winner, totals, BTTS, and scoreline probabilities.
-5. For live football, use current score and minute to run remaining-time Poisson recalibration before live guardrails.
-6. For basketball, fold rest-day margin and availability/rotation proxies into margin, total, spread, and moneyline diagnostics.
-7. For tennis, fold head-to-head and travel/load proxies into match-winner, set-handicap, and games-total diagnostics.
-8. Score whether the best edge and expected value clear guardrails.
-9. Calculate weighted factors such as value edge, EV, confidence, data quality, variance, missing context, and live-state risk.
-10. Run sensitivity checks for odds movement, adverse lineup/news, and data-quality upgrades.
-11. Refuse weak picks instead of forcing a recommendation.
-12. Surface missing signals instead of pretending the data exists.
-13. Suggest safer alternatives such as double chance, draw no bet, totals, BTTS, moneyline, spread, set handicap, and total games.
-14. Run self-critique checks for probability normalization, confidence/data-quality mismatch, high-risk recommendations, missing context, and live-state mismatch.
-15. Apply abstention gates when edge, data quality, variance, or live-model requirements are not met.
-16. Compare the decision with recent stored Supabase decisions to identify similar cases and discount or abstain when memory is weak enough.
-17. Produce a structured deliberation record that states the primary thesis, counter-thesis, what would change the decision, and which hypotheses survived.
-18. Build a belief state that records the current probability belief, market disagreement, confidence interval, uncertainty score, expiry window, and invalidation triggers.
-19. Run a deterministic decision committee so model advocate, market skeptic, context scout, risk manager, memory analyst, and final arbiter roles vote on consider, monitor, or avoid.
-20. Build a monitoring plan that decides when to refresh odds/context, which signals are urgent, and what would invalidate the decision.
-21. Audit actionability so positive EV is only shown when value, confidence, freshness, committee, memory, monitoring, and responsible-use gates agree.
-22. Run a review loop that attacks the thesis, plans repairs, and either clears, downgrades, or blocks the recommendation.
-23. Audit data coverage and provenance across the production data checklist before trusting the recommendation.
-24. Run odds intelligence across every available bookmaker market and selection, not only the final pick.
-25. Stress-test robustness across adverse odds movement, context shocks, data-quality decay, stale belief, repair pressure, and actionability downgrade.
-26. Register an evaluation plan so the post-match learning loop knows how to grade result, closing-line value, calibration, and missed data.
-27. Compile a research brief that summarizes the model thesis, market thesis, risk thesis, data gaps, evidence trail, required checks, and decision clock.
-28. Open a decision notebook with assumptions, falsifiers, refresh triggers, operator checklist, and an audit trail.
-29. Produce a public reasoning trace that can be shown to users.
+3. Build the no-vig belief prior from complete, line-compatible bookmaker quotes, then keep it separate from the best executable price for each selection.
+4. Blend priced model selections toward no-vig market probabilities with a bounded weight based on data quality, bookmaker depth, margin, and disagreement.
+5. Apply football Dixon-Coles low-score correction before deriving winner, totals, BTTS, and scoreline probabilities.
+6. For live football, use current score and minute to run remaining-time Poisson recalibration before live guardrails.
+7. For basketball, fold rest-day margin and availability/rotation proxies into margin, total, spread, and moneyline diagnostics.
+8. For tennis, fold head-to-head and travel/load proxies into match-winner, set-handicap, and games-total diagnostics.
+9. Score whether the best edge and expected value clear guardrails.
+10. Calculate weighted factors such as value edge, EV, confidence, data quality, variance, missing context, and live-state risk.
+11. Run sensitivity checks for odds movement, adverse lineup/news, and data-quality upgrades.
+12. Refuse weak picks instead of forcing a recommendation.
+13. Surface missing signals instead of pretending the data exists.
+14. Suggest safer alternatives such as double chance, draw no bet, totals, BTTS, moneyline, spread, set handicap, and total games.
+15. Run self-critique checks for probability normalization, confidence/data-quality mismatch, high-risk recommendations, missing context, and live-state mismatch.
+16. Apply abstention gates when edge, data quality, variance, or live-model requirements are not met.
+17. Compare the decision with recent stored Supabase decisions to identify similar cases and discount or abstain when memory is weak enough.
+18. Produce a structured deliberation record that states the primary thesis, counter-thesis, what would change the decision, and which hypotheses survived.
+19. Build a belief state that records the current probability belief, market disagreement, confidence interval, uncertainty score, expiry window, and invalidation triggers.
+20. Run a deterministic decision committee so model advocate, market skeptic, context scout, risk manager, memory analyst, and final arbiter roles vote on consider, monitor, or avoid.
+21. Build a monitoring plan that decides when to refresh odds/context, which signals are urgent, and what would invalidate the decision.
+22. Audit actionability so positive EV is only shown when value, confidence, freshness, committee, memory, monitoring, and responsible-use gates agree.
+23. Run a review loop that attacks the thesis, plans repairs, and either clears, downgrades, or blocks the recommendation.
+24. Audit data coverage and provenance across the production data checklist before trusting the recommendation.
+25. Run odds intelligence across every available bookmaker market and selection, not only the final pick.
+26. Stress-test robustness across adverse odds movement, context shocks, data-quality decay, stale belief, repair pressure, and actionability downgrade.
+27. Register an evaluation plan so the post-match learning loop knows how to grade result, closing-line value, calibration, and missed data.
+28. Compile a research brief that summarizes the model thesis, market thesis, risk thesis, data gaps, evidence trail, required checks, and decision clock.
+29. Open a decision notebook with assumptions, falsifiers, refresh triggers, operator checklist, and an audit trail.
+30. Produce a public reasoning trace that can be shown to users.
 
 The engine intentionally exposes public reasoning steps and structured deliberation, not hidden chain-of-thought.
 
@@ -474,6 +476,10 @@ The context-signal proof layer is the cross-sport data-risk proof before odds an
 The model-math proof layer is the compact formula audit for the real deterministic engines. It turns each sport's diagnostics into a slate-level proof with model versions, formulas, required inputs, present signals, proxy/missing inputs, normalized match-winner checks, expected score examples, market probabilities, and signal scores. It exists to prove the football, basketball, and tennis models are actual mathematical engines; it still cannot train, persist, publish, use learned weights, or upgrade a public action.
 
 The odds-intelligence proof layer is the operator audit for that surface. It answers the money-feature questions directly: what is the implied probability, what is the no-vig market probability, what does the model believe, how large is the edge, what is the EV, what can invalidate it, which softer alternative exists, and why should a row be avoided. The proof checks must pass before portfolio-risk can be treated as more than paper math, and all stake, publish, persist, train, and public-action-upgrade controls remain locked.
+
+Selection-level best prices are publication-gated separately from model math. The canonical receipt requires matching bookmaker identity and selection timestamp, at least three independent books behind the no-vig comparison, no more than 10 percentage points of cross-book probability disagreement, sport-specific quote freshness, and the existing odds/risk limits. The public price component shows the resulting gate verdict and first blocker immediately beside EV, including for positive-EV watchlist cases.
+
+Raw point-estimate EV no longer owns economic ranking by itself. Edge construction now attaches a selection-level empirical confidence receipt from an approved exact-runtime settled-outcome calibration cohort; a historical backtest fallback may govern live thresholds but cannot certify this receipt. Wilson sample sizes use only graded wins and losses, never pushes or voids. A verified 95% lower bound produces conservative probability, edge, and EV floors; ranking uses the conservative EV and rejects a verified negative lower-bound case. Canonical publication requires both lower-bound edge and EV to clear the sport thresholds. Missing, inactive, fallback-only, or identity-unverified calibration evidence leaves the raw case available for analysis while blocking a public value claim. The public ledger stores the promotion/candidate receipt beside the exact bookmaker quote, timestamp, consensus, and lower-bound economics for later settlement audit.
 
 The portfolio-risk layer answers the next operator question: if several value candidates exist, which ones create concentrated exposure? It converts positive-EV board rows into paper-only units with fractional Kelly math, then caps by candidate, sport, market, and match while applying confidence, risk, data-quality, control-policy, and actionability haircuts. This is an audit surface, not staking advice, and it cannot persist, publish, promote, train, or stake.
 
