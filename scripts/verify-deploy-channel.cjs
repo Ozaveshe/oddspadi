@@ -42,8 +42,11 @@ function assertEqual(label, actual, wanted) {
 }
 
 function run(command, args) {
+  const commandEnv = { ...process.env, NETLIFY_SITE_ID: expected.netlify.siteId };
+  delete commandEnv.SITE_ID;
   return execFileSync(command, args, {
     cwd: workspaceRoot,
+    env: commandEnv,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true

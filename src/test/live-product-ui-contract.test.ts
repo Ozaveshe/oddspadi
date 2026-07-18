@@ -98,6 +98,8 @@ describe("live OddsPadi product UI contract", () => {
 
     const health = source("scripts/site-health.mjs");
     expect(health).toContain("checkTipsSurfaceConsistency");
+    expect(health).toContain("homepagePreviewFixtures");
+    expect(health).toContain("HTML does not contain any fixture intended for this surface");
     expect(health).toContain('const todayPage = await checkPage("/predictions/today"');
     expect(health).toContain('const weeklyPage = await checkPage("/predictions/week"');
     expect(health).toContain("HTML is unavailable while API provider status is");

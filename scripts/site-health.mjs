@@ -65,6 +65,25 @@ function tipsFixtures(payload) {
   return Array.isArray(payload?.data?.slate?.fixtures) ? payload.data.slate.fixtures : [];
 }
 
+function homepagePreviewFixtures(payload) {
+  const sections = payload?.data?.sections;
+  if (!sections) return [];
+  const ordered = [
+    ...(sections.valuePicks ?? []),
+    ...(sections.leans ?? []),
+    ...(sections.watchlist ?? []),
+    ...(sections.noPicks ?? []),
+    ...(sections.schedule ?? [])
+  ];
+  const seen = new Set();
+  return ordered.filter((row) => {
+    const fixtureId = row?.fixture?.fixtureId;
+    if (!fixtureId || seen.has(fixtureId)) return false;
+    seen.add(fixtureId);
+    return true;
+  }).slice(0, 3);
+}
+
 function tipsFreshnessProblem(payload) {
   if (!payload?.success || !payload?.data?.slate) return "bad tips payload";
   const providerStatus = payload.data.slate.provider?.status;
@@ -150,21 +169,21 @@ async function checkFeaturedLeagueTables() {
   report(!broken.length, "featured league table links", broken.length ? broken.join(", ") : `${slugs.length} populated tables checked`);
 }
 
-function checkTipsSurfaceConsistency(page, payload, label) {
+function checkTipsSurfaceConsistency(page, payload, label, expectedFixtures = tipsFixtures(payload)) {
   if (!page || !payload) return;
   const providerStatus = payload?.data?.slate?.provider?.status ?? "missing";
   const fixtures = tipsFixtures(payload);
   const renderedUnavailable = /stored provider slate is unavailable|No stored provider response was read/i.test(page.body);
-  const firstFixture = fixtures[0]?.fixture;
-  const firstMatchRendered = !firstFixture || [
-    firstFixture.fixtureId,
-    firstFixture.homeTeam?.name,
-    firstFixture.awayTeam?.name
-  ].filter(Boolean).some((value) => page.body.includes(value));
+  const expectedMatchRendered = !expectedFixtures.length || expectedFixtures.some((row) => {
+    const fixture = row?.fixture;
+    return [fixture?.fixtureId, fixture?.homeTeam?.name, fixture?.awayTeam?.name]
+      .filter(Boolean)
+      .some((value) => page.body.includes(value));
+  });
   const problem = ["completed", "empty"].includes(providerStatus) && renderedUnavailable
     ? `HTML is unavailable while API provider status is ${providerStatus} with ${fixtures.length} fixture(s)`
-    : fixtures.length && !firstMatchRendered
-      ? `HTML does not contain the API's first fixture (${firstFixture?.fixtureId ?? "unknown"})`
+    : expectedFixtures.length && !expectedMatchRendered
+      ? `HTML does not contain any fixture intended for this surface (${expectedFixtures.length} checked)`
       : null;
   report(!problem, label, problem ?? `${fixtures.length} fixture(s), provider ${providerStatus}`);
 }
@@ -190,7 +209,7 @@ const weeklyTips = await checkJson("/api/tips/week", (payload) => {
 }, "api weekly tips freshness");
 const identityProblem = tipsIdentityProblem(weeklyTips);
 report(!identityProblem, "upcoming fixture identity coverage", identityProblem ?? `${tipsFixtures(weeklyTips).length} fixture(s) with team names, countries/flags, and crest fallbacks`);
-checkTipsSurfaceConsistency(homePage, todayTips, "homepage matches today's tips API");
+checkTipsSurfaceConsistency(homePage, todayTips, "homepage matches today's tips API", homepagePreviewFixtures(todayTips));
 checkTipsSurfaceConsistency(predictionsPage, todayTips, "predictions page matches today's tips API");
 checkTipsSurfaceConsistency(todayPage, todayTips, "today page matches today's tips API");
 checkTipsSurfaceConsistency(weeklyPage, weeklyTips, "weekly page matches weekly tips API");

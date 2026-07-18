@@ -2202,9 +2202,10 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   }
 
   /**
-   * Resolve odds keys per sport. Football is season-aware (see above); tennis
-   * resolves tournament-scoped keys from the catalogue; basketball keeps its
-   * stable configured default.
+   * Resolve odds keys per sport. Football is season-aware (see above), while
+   * basketball and tennis discover the competitions that are actually active.
+   * The NBA key disappears between seasons, so treating it as a permanent
+   * default would hide WNBA and Summer League markets during the offseason.
    */
   private async getOddsSportKeys(
     sport: Extract<Sport, "football" | "basketball" | "tennis">
@@ -2212,6 +2213,15 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     const configured = explicitOddsSportKeys(this.env, sport);
     if (sport === "football") return this.activeFootballOddsSportKeys(configured);
     if (configured.length) return configured;
+    if (sport === "basketball") {
+      const active = await this.activeOddsSportKeys();
+      const discovered = active
+        ? Array.from(active)
+            .filter((key) => key.startsWith(oddsSportKeyPrefix(sport)))
+            .slice(0, 8)
+        : [];
+      return discovered.length ? discovered : fallbackOddsSportKeys(this.env, sport);
+    }
     if (sport !== "tennis") return fallbackOddsSportKeys(this.env, sport);
 
     const prefix = oddsSportKeyPrefix(sport);

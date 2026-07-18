@@ -47,6 +47,9 @@ export function displayedSlateDecision(row: SlateFixture): DecisionMarketAnalysi
 }
 
 export function noPickExplanation(row: SlateFixture): string {
+  if (row.publicStatus === "settled") {
+    return "The match finished without a pre-match market-backed review, so OddsPadi will not create a retrospective pick.";
+  }
   if (row.publicStatus === "stale") return "The supporting price expired and must be refreshed.";
   if (row.publicStatus === "preliminary") return "Odds or match context are not ready for a complete engine decision.";
   const analysis = row.decisionSummary.allMarketAnalyses.slice().sort((left, right) => right.edge - left.edge)[0];

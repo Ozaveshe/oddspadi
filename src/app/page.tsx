@@ -119,7 +119,7 @@ export default async function HomePage() {
       </section>
 
       <section className="section" id="live">
-        <div className="section-title"><div><span className="section-kicker">Live Now <span className="nav-live-dot" aria-hidden="true" /></span><h2>Scores as they happen</h2></div><Link className="button small-btn" href="/live-scores">Full live board</Link></div>
+        <div className="section-title"><div><span className="section-kicker">Live &amp; upcoming <span className="nav-live-dot" aria-hidden="true" /></span><h2>Scores and next fixtures</h2></div><Link className="button small-btn" href="/live-scores">Full live board</Link></div>
         <LiveTicker initial={liveBoard} />
       </section>
 
