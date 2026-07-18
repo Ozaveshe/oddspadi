@@ -8,6 +8,8 @@ export type AuthenticatedWriteAction =
   | "community_post"
   | "community_comment"
   | "community_like"
+  | "community_poll_vote"
+  | "community_tip"
   | "forum_thread"
   | "forum_reply";
 
