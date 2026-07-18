@@ -254,6 +254,132 @@ describe("API-Football odds adapter", () => {
     }));
   });
 
+  it("retries one transient page once, records both exact attempts, and normalizes the successful rows once", async () => {
+    const requestedPages: number[] = [];
+    let pageTwoAttempts = 0;
+    const result = await fetchApiFootballMatchWinnerOdds({
+      date: "2026-07-18",
+      apiKey: "key",
+      concurrency: 1,
+      requestsReserve: 5,
+      rateReserve: 1,
+      fetchImpl: async (input) => {
+        const page = Number(new URL(String(input)).searchParams.get("page"));
+        requestedPages.push(page);
+        if (page === 1) return jsonPage({ current: 1, total: 2, rows: [], requestsRemaining: 100, rateRemaining: 100 });
+        pageTwoAttempts += 1;
+        if (pageTwoAttempts === 1) {
+          return jsonPage({
+            current: 2,
+            total: 2,
+            rows: [],
+            status: 503,
+            requestsRemaining: 99,
+            rateRemaining: 99,
+            errors: { server: "Temporary provider failure" }
+          });
+        }
+        return jsonPage({
+          current: 2,
+          total: 2,
+          rows: [oddsRow({ fixtureId: 2002, bookmakers: [bookmaker({ values: completeValues(2, 3.2, 4) })] })],
+          requestsRemaining: 98,
+          rateRemaining: 98
+        });
+      }
+    });
+
+    expect(requestedPages).toEqual([1, 2, 2]);
+    expect(result.pagination).toEqual(expect.objectContaining({
+      pagesRequested: 2,
+      pagesSucceeded: 2,
+      pagesFailed: 0,
+      requestAttempts: 3,
+      pagesRetried: 1,
+      complete: true
+    }));
+    expect(result.normalization.rowsReceived).toBe(1);
+    expect(result.fixtures.map((fixture) => fixture.providerFixtureId)).toEqual(["2002"]);
+    expect(result.pages[1]).toEqual(expect.objectContaining({
+      page: 2,
+      ok: true,
+      attemptCount: 2,
+      retried: true,
+      attempts: [
+        expect.objectContaining({ page: 2, attempt: 1, ok: false, httpStatus: 503 }),
+        expect.objectContaining({ page: 2, attempt: 2, ok: true, httpStatus: 200, rowsReceived: 1 })
+      ]
+    }));
+  });
+
+  it("never retries auth or quota failures and never retries a transient page more than once", async () => {
+    for (const status of [401, 403, 429]) {
+      const fetchImpl = vi.fn(async () => jsonPage({
+        current: 1,
+        total: 1,
+        rows: [],
+        status,
+        requestsRemaining: status === 429 ? 0 : 100,
+        errors: { request: "Rejected" }
+      }));
+      const failure = await fetchApiFootballMatchWinnerOdds({ date: "2026-07-18", apiKey: "key", fetchImpl });
+      expect(fetchImpl, `HTTP ${status}`).toHaveBeenCalledTimes(1);
+      expect(failure.pagination.pagesRetried).toBe(0);
+      expect(failure.pages[0]?.attemptCount).toBe(1);
+    }
+
+    let pageTwoAttempts = 0;
+    const fetchImpl = vi.fn(async (input: string | URL) => {
+      const page = Number(new URL(String(input)).searchParams.get("page"));
+      if (page === 1) return jsonPage({ current: 1, total: 2, rows: [], requestsRemaining: 100, rateRemaining: 100 });
+      pageTwoAttempts += 1;
+      throw new Error(`timeout-${pageTwoAttempts}`);
+    });
+    const transient = await fetchApiFootballMatchWinnerOdds({
+      date: "2026-07-18",
+      apiKey: "key",
+      fetchImpl,
+      concurrency: 1,
+      requestsReserve: 5,
+      rateReserve: 1
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(pageTwoAttempts).toBe(2);
+    expect(transient.pagination).toEqual(expect.objectContaining({ requestAttempts: 3, pagesRetried: 1, pagesFailed: 1 }));
+    expect(transient.pages[1]).toEqual(expect.objectContaining({
+      page: 2,
+      ok: false,
+      attemptCount: 2,
+      error: "timeout-2"
+    }));
+  });
+
+  it("does not spend the configured reserve on a transient retry", async () => {
+    const requestedPages: number[] = [];
+    const result = await fetchApiFootballMatchWinnerOdds({
+      date: "2026-07-18",
+      apiKey: "key",
+      concurrency: 1,
+      requestsReserve: 10,
+      rateReserve: 1,
+      fetchImpl: async (input) => {
+        const page = Number(new URL(String(input)).searchParams.get("page"));
+        requestedPages.push(page);
+        if (page === 1) return jsonPage({ current: 1, total: 2, rows: [], requestsRemaining: 11, rateRemaining: 100 });
+        return new Response("temporary failure", { status: 503 });
+      }
+    });
+
+    expect(requestedPages).toEqual([1, 2]);
+    expect(result.pagination).toEqual(expect.objectContaining({
+      requestAttempts: 2,
+      pagesRetried: 0,
+      pagesFailed: 1,
+      stoppedByQuota: true
+    }));
+    expect(result.pages[1]).toEqual(expect.objectContaining({ page: 2, attemptCount: 1, retried: false }));
+  });
+
   it("keeps the first page and stops when successful quota telemetry is absent", async () => {
     const requestedPages: number[] = [];
     const result = await fetchApiFootballMatchWinnerOdds({

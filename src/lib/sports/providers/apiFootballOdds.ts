@@ -19,6 +19,16 @@ export type ApiFootballOddsQuotaSnapshot = {
   rateRemaining: number | null;
 };
 
+export type ApiFootballOddsPageAttemptDiagnostic = {
+  page: number;
+  attempt: number;
+  ok: boolean;
+  httpStatus: number | null;
+  rowsReceived: number;
+  quota: ApiFootballOddsQuotaSnapshot;
+  error: string | null;
+};
+
 export type ApiFootballOddsPageDiagnostic = {
   page: number;
   ok: boolean;
@@ -28,6 +38,9 @@ export type ApiFootballOddsPageDiagnostic = {
   rowsReceived: number;
   quota: ApiFootballOddsQuotaSnapshot;
   error: string | null;
+  attemptCount: number;
+  retried: boolean;
+  attempts: ApiFootballOddsPageAttemptDiagnostic[];
 };
 
 export type ApiFootballOddsSourceBookmaker = {
@@ -59,6 +72,8 @@ export type ApiFootballOddsFetchResult = {
     pagesRequested: number;
     pagesSucceeded: number;
     pagesFailed: number;
+    requestAttempts: number;
+    pagesRetried: number;
     pagesSkipped: number;
     cappedByMaxPages: boolean;
     stoppedByQuota: boolean;
@@ -110,6 +125,11 @@ type ParsedPage = {
   rows: unknown[];
   quota: ApiFootballOddsQuotaSnapshot;
   error: string | null;
+};
+
+type ParsedPageRecord = {
+  final: ParsedPage;
+  attempts: ParsedPage[];
 };
 
 const EMPTY_QUOTA: ApiFootballOddsQuotaSnapshot = {
@@ -434,7 +454,16 @@ function availableQuotaRequests(quota: ApiFootballOddsQuotaSnapshot, requestsRes
   return balances.length ? Math.min(...balances) : null;
 }
 
-function pageDiagnostic(page: ParsedPage): ApiFootballOddsPageDiagnostic {
+function isTransientPageFailure(page: ParsedPage): boolean {
+  if (page.ok) return false;
+  return page.httpStatus === null
+    || page.httpStatus === 408
+    || page.httpStatus === 425
+    || (page.httpStatus >= 500 && page.httpStatus <= 599);
+}
+
+function pageDiagnostic(record: ParsedPageRecord): ApiFootballOddsPageDiagnostic {
+  const page = record.final;
   return {
     page: page.page,
     ok: page.ok,
@@ -443,7 +472,18 @@ function pageDiagnostic(page: ParsedPage): ApiFootballOddsPageDiagnostic {
     providerTotalPages: page.totalPages,
     rowsReceived: page.rows.length,
     quota: page.quota,
-    error: page.error
+    error: page.error,
+    attemptCount: record.attempts.length,
+    retried: record.attempts.length > 1,
+    attempts: record.attempts.map((attempt, index) => ({
+      page: attempt.page,
+      attempt: index + 1,
+      ok: attempt.ok,
+      httpStatus: attempt.httpStatus,
+      rowsReceived: attempt.rows.length,
+      quota: attempt.quota,
+      error: attempt.error
+    }))
   };
 }
 
@@ -472,13 +512,34 @@ export async function fetchApiFootballMatchWinnerOdds({
   const rateReserve = boundedReserve(requestedRateReserve, 1);
   const shared = { date, apiKey: cleanedKey, baseUrl, fetchImpl, signal };
 
-  const pages: ParsedPage[] = [await fetchPage({ ...shared, page: 1 })];
-  const first = pages[0]!;
+  const firstAttempts = [await fetchPage({ ...shared, page: 1 })];
+  let first = firstAttempts[0]!;
+  let localQuotaAllowance = availableQuotaRequests(first.quota, requestsReserve, rateReserve);
+  let stoppedByQuota = first.httpStatus === 429;
+  if (isTransientPageFailure(first)) {
+    if (localQuotaAllowance !== null && localQuotaAllowance > 0) {
+      localQuotaAllowance -= 1;
+      first = await fetchPage({ ...shared, page: 1 });
+      firstAttempts.push(first);
+      const reportedAllowance = availableQuotaRequests(
+        conservativeQuota(firstAttempts.map((attempt) => attempt.quota)),
+        requestsReserve,
+        rateReserve
+      );
+      if (reportedAllowance !== null) localQuotaAllowance = Math.min(localQuotaAllowance, reportedAllowance);
+      if (first.httpStatus === 429) stoppedByQuota = true;
+    } else {
+      // A retry is still a provider request. Without proved headroom, preserve
+      // the configured reserve instead of retrying blindly.
+      stoppedByQuota = true;
+    }
+  }
+
+  const pages: ParsedPageRecord[] = [{ final: first, attempts: firstAttempts }];
+  const allAttempts: ParsedPage[] = [...firstAttempts];
   const providerTotalPages = first.totalPages ?? 1;
   const plannedTotal = Math.min(providerTotalPages, maxPages);
   const remainingPages = Array.from({ length: Math.max(0, plannedTotal - 1) }, (_, index) => index + 2);
-  let stoppedByQuota = first.httpStatus === 429;
-  let localQuotaAllowance = availableQuotaRequests(first.quota, requestsReserve, rateReserve);
   // Without a provider balance we cannot prove that another request preserves
   // the configured reserve. Keep the useful first page and stop safely.
   if (first.ok && remainingPages.length > 0 && localQuotaAllowance === null) stoppedByQuota = true;
@@ -494,19 +555,40 @@ export async function fetchApiFootballMatchWinnerOdds({
     // headers, the last known provider balance must still move pessimistically.
     if (localQuotaAllowance !== null) localQuotaAllowance -= batch.length;
     const results = await Promise.all(batch.map((page) => fetchPage({ ...shared, page })));
-    pages.push(...results);
-    const reportedAllowance = availableQuotaRequests(conservativeQuota(pages.map((page) => page.quota)), requestsReserve, rateReserve);
+    allAttempts.push(...results);
+    let reportedAllowance = availableQuotaRequests(conservativeQuota(allAttempts.map((page) => page.quota)), requestsReserve, rateReserve);
     if (reportedAllowance !== null) {
       localQuotaAllowance = localQuotaAllowance === null ? reportedAllowance : Math.min(localQuotaAllowance, reportedAllowance);
     }
-    if (results.some((page) => page.httpStatus === 429)) {
+
+    const transientFailures = results.filter(isTransientPageFailure);
+    const retryCapacity = localQuotaAllowance === null
+      ? 0
+      : Math.min(transientFailures.length, Math.max(0, localQuotaAllowance));
+    const retryPages = transientFailures.slice(0, retryCapacity).map((page) => page.page);
+    const retryResults = new Map<number, ParsedPage>();
+    if (retryPages.length) {
+      localQuotaAllowance! -= retryPages.length;
+      const retried = await Promise.all(retryPages.map((page) => fetchPage({ ...shared, page })));
+      retried.forEach((page) => retryResults.set(page.page, page));
+      allAttempts.push(...retried);
+      reportedAllowance = availableQuotaRequests(conservativeQuota(allAttempts.map((page) => page.quota)), requestsReserve, rateReserve);
+      if (reportedAllowance !== null) localQuotaAllowance = Math.min(localQuotaAllowance!, reportedAllowance);
+    }
+    if (retryCapacity < transientFailures.length) stoppedByQuota = true;
+
+    pages.push(...results.map((page) => {
+      const retry = retryResults.get(page.page);
+      return { final: retry ?? page, attempts: retry ? [page, retry] : [page] };
+    }));
+    if (results.some((page) => page.httpStatus === 429) || [...retryResults.values()].some((page) => page.httpStatus === 429)) {
       stoppedByQuota = true;
       break;
     }
   }
 
-  const successful = pages.filter((page) => page.ok);
-  const rawRows = successful.flatMap((page) => page.rows);
+  const successful = pages.filter((page) => page.final.ok);
+  const rawRows = successful.flatMap((page) => page.final.rows);
   const normalizedRows = rawRows.map(normalizeRow);
   const acceptedRows = normalizedRows.filter((row): row is NormalizedRow => row !== null);
   const bookmakerCandidates = acceptedRows.reduce((sum, row) => sum + row.bookmakerCandidates, 0);
@@ -515,12 +597,14 @@ export async function fetchApiFootballMatchWinnerOdds({
   const pagesRequested = pages.length;
   const pagesSucceeded = successful.length;
   const pagesFailed = pagesRequested - pagesSucceeded;
+  const requestAttempts = allAttempts.length;
+  const pagesRetried = pages.filter((page) => page.attempts.length > 1).length;
   const cappedByMaxPages = providerTotalPages > maxPages;
   const pagesSkipped = Math.max(0, providerTotalPages - pagesRequested);
 
   return {
     fixtures,
-    quota: conservativeQuota(pages.map((page) => page.quota)),
+    quota: conservativeQuota(allAttempts.map((page) => page.quota)),
     pagination: {
       pageSize: API_FOOTBALL_ODDS_PAGE_SIZE,
       providerTotalPages,
@@ -529,6 +613,8 @@ export async function fetchApiFootballMatchWinnerOdds({
       pagesRequested,
       pagesSucceeded,
       pagesFailed,
+      requestAttempts,
+      pagesRetried,
       pagesSkipped,
       cappedByMaxPages,
       stoppedByQuota,
