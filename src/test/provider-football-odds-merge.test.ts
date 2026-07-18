@@ -59,14 +59,18 @@ describe("provider-backed football odds merge", () => {
               sport_key: "soccer_epl",
               sport_title: "EPL",
               commence_time: "2026-08-23T14:00:00Z",
+              last_update: "2026-08-23T13:20:00Z",
               home_team: "Brighton & Hove Albion",
               away_team: "Aston Villa",
               bookmakers: [
                 {
+                  key: "book",
                   title: "Book",
+                  last_update: "2026-08-23T13:20:00Z",
                   markets: [
                     {
                       key: "h2h",
+                      last_update: "2026-08-23T13:20:00Z",
                       outcomes: [
                         { name: "Brighton", price: 2.35 },
                         { name: "Draw", price: 3.45 },
@@ -82,14 +86,18 @@ describe("provider-backed football odds merge", () => {
               sport_key: "soccer_epl",
               sport_title: "EPL",
               commence_time: "2026-08-23T14:00:00Z",
+              last_update: "2026-08-23T13:20:00Z",
               home_team: "Man City",
               away_team: "AFC Bournemouth",
               bookmakers: [
                 {
+                  key: "book",
                   title: "Book",
+                  last_update: "2026-08-23T13:20:00Z",
                   markets: [
                     {
                       key: "h2h",
+                      last_update: "2026-08-23T13:20:00Z",
                       outcomes: [
                         { name: "Man City", price: 1.42 },
                         { name: "Draw", price: 5.2 },
@@ -110,7 +118,8 @@ describe("provider-backed football odds merge", () => {
 
     const provider = new ProviderBackedSportsDataProvider({
       env: { API_FOOTBALL_KEY: "football-key", THE_ODDS_API_KEY: "odds-key" },
-      fetchImpl
+      fetchImpl,
+      now: () => new Date("2026-08-23T13:30:00Z")
     });
 
     const matches = await provider.getFixtures("2026-08-23", "football");

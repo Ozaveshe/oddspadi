@@ -556,6 +556,7 @@ Do not hardcode keys. Use:
 
 - `SPORTS_API_KEY`
 - `API_FOOTBALL_KEY` or `APISPORTS_KEY`
+- `API_FOOTBALL_ODDS_ENABLED=true` only after verifying paid API-Football odds capacity; it enables exact fixture-ID Match Winner fallback prices without relaxing freshness or publication gates
 - `ODDS_API_KEY`
 - `THE_ODDS_API_KEY`
 - `ODDS_API_FOOTBALL_SPORT_KEY` for the current football odds sport key; defaults to `soccer_epl`

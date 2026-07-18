@@ -2,6 +2,11 @@ import { firstConfiguredEnv } from "@/lib/env";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
 import { fetchOpenMeteoForecast } from "@/lib/sports/providers/openMeteo";
 import {
+  fetchApiFootballMatchWinnerOdds,
+  type ApiFootballMatchWinnerOdds,
+  type ApiFootballOddsFetchResult
+} from "@/lib/sports/providers/apiFootballOdds";
+import {
   getHistoricalFootballElo,
   loadHistoricalFootballElo,
   type HistoricalFootballEloMap
@@ -287,6 +292,11 @@ type OddsEventIdentityCacheEntry = {
 type OddsSportsCacheEntry = {
   expiresAt: number;
   sports: Promise<OddsApiSport[]>;
+};
+
+type ApiFootballOddsCacheEntry = {
+  expiresAt: number;
+  result: Promise<ApiFootballOddsFetchResult | null>;
 };
 
 type FixtureCacheEntry = {
@@ -1221,9 +1231,31 @@ function eventKeys(homeName: string, awayName: string, date: string): string[] {
   return teamAliasKeys(homeName).flatMap((home) => teamAliasKeys(awayName).map((away) => `${home}:${away}:${day}`));
 }
 
-function hasCompleteFootballMatchWinnerOdds(markets: OddsMarket[]): boolean {
+const FOOTBALL_ODDS_MAX_AGE_MS = 60 * 60_000;
+const PROVIDER_CLOCK_SKEW_TOLERANCE_MS = 5 * 60_000;
+
+/**
+ * Return the conservative observation instant for a complete, executable
+ * football 1X2 receipt. Raw provider timestamps and bookmaker identities are
+ * mandatory here because this predicate controls both slate widening and which
+ * source is allowed onto public/training surfaces.
+ */
+function freshFootballMatchWinnerReceiptAt(markets: OddsMarket[], now: Date): number | null {
   const market = markets.find((item) => item.id === "match_winner");
-  return (["home", "draw", "away"] as const).every((selection) => market?.selections.some((item) => item.id === selection && item.decimalOdds > 1));
+  if (!market) return null;
+  const observations = (["home", "draw", "away"] as const).map((selectionId) => {
+    const selection = market.selections.find((item) => item.id === selectionId);
+    const observedAt = selection?.observedAt ? Date.parse(selection.observedAt) : Number.NaN;
+    return selection && selection.decimalOdds > 1 && selection.bookmaker?.id?.trim() && selection.bookmaker.name?.trim() && Number.isFinite(observedAt)
+      ? observedAt
+      : Number.NaN;
+  });
+  if (observations.some((value) => !Number.isFinite(value))) return null;
+  const conservativeObservation = Math.min(...observations);
+  const nowMs = now.getTime();
+  if (!Number.isFinite(nowMs)) return null;
+  if (conservativeObservation > nowMs + PROVIDER_CLOCK_SKEW_TOLERANCE_MS) return null;
+  return nowMs - conservativeObservation <= FOOTBALL_ODDS_MAX_AGE_MS ? conservativeObservation : null;
 }
 
 function oddsMarketsByEvent(events: OddsApiEvent[], sport: Extract<Sport, "football" | "basketball" | "tennis">): Map<string, OddsMarket[]> {
@@ -1310,11 +1342,16 @@ function firstOddsMarketsForFixture(
   kickoffTime: string,
   events: OddsApiEvent[] = []
 ): OddsMarket[] {
-  for (const key of eventKeys(homeName, awayName, kickoffTime)) {
-    const markets = oddsByEvent.get(key);
-    if (markets?.length) return markets;
-  }
-  const aligned = events.find((event) => oddsEventAlignsWithFixture(event, homeName, awayName, kickoffTime));
+  const fixtureKeys = new Set(eventKeys(homeName, awayName, kickoffTime));
+  const aligned =
+    events.find((event) => {
+      const eventKickoff = cleanText(event.commence_time);
+      return kickoffsAlign(eventKickoff, kickoffTime) && eventKeys(cleanText(event.home_team), cleanText(event.away_team), eventKickoff).some((key) => fixtureKeys.has(key));
+    }) ?? events.find((event) => oddsEventAlignsWithFixture(event, homeName, awayName, kickoffTime));
+  // `oddsByEvent` is retained in the signature for the basketball/tennis-style
+  // lookup contract, but football must prove kickoff alignment before using a
+  // same-team/same-day key.
+  void oddsByEvent;
   return aligned ? oddsMarketsForEvent(aligned, "football") : [];
 }
 
@@ -1325,7 +1362,7 @@ function firstOddsEventForFixture(events: OddsApiEvent[], homeName: string, away
       const eventKickoff = cleanText(event.commence_time);
       const eventHome = cleanText(event.home_team);
       const eventAway = cleanText(event.away_team);
-      return eventKeys(eventHome, eventAway, eventKickoff).some((key) => fixtureKeys.has(key));
+      return kickoffsAlign(eventKickoff, kickoffTime) && eventKeys(eventHome, eventAway, eventKickoff).some((key) => fixtureKeys.has(key));
     }) ??
     events.find((event) => oddsEventAlignsWithFixture(event, homeName, awayName, kickoffTime)) ??
     null
@@ -1349,7 +1386,7 @@ function matchesByEventKey(matches: Match[]): Map<string, Match> {
 function firstMatchForFixture(matchByEvent: Map<string, Match>, homeName: string, awayName: string, kickoffTime: string): Match | null {
   for (const key of eventKeys(homeName, awayName, kickoffTime)) {
     const match = matchByEvent.get(key);
-    if (match) return match;
+    if (match && kickoffsAlign(match.kickoffTime, kickoffTime)) return match;
   }
   return null;
 }
@@ -1685,6 +1722,27 @@ function oddsCacheTtlMs(env: EnvMap): number {
   const configured = Number(env.ODDS_API_CACHE_TTL_MS);
   if (!Number.isFinite(configured) || configured <= 0) return 5 * 60 * 1000;
   return Math.round(clampRange(configured, 10_000, 60 * 60 * 1000));
+}
+
+function apiFootballOddsCacheTtlMs(env: EnvMap): number {
+  const configured = Number(env.API_FOOTBALL_ODDS_CACHE_TTL_MS);
+  if (!Number.isFinite(configured) || configured <= 0) return 30 * 60 * 1000;
+  return Math.round(clampRange(configured, 60_000, 3 * 60 * 60 * 1000));
+}
+
+function apiFootballOddsMaxPages(env: EnvMap): number {
+  const configured = Number(env.API_FOOTBALL_ODDS_MAX_PAGES);
+  return Number.isFinite(configured) && configured > 0 ? Math.round(clampRange(configured, 1, 50)) : 20;
+}
+
+function apiFootballOddsConcurrency(env: EnvMap): number {
+  const configured = Number(env.API_FOOTBALL_ODDS_CONCURRENCY);
+  return Number.isFinite(configured) && configured > 0 ? Math.round(clampRange(configured, 1, 5)) : 3;
+}
+
+function apiFootballOddsRequestsReserve(env: EnvMap): number {
+  const configured = Number(env.API_FOOTBALL_ODDS_REQUESTS_RESERVE);
+  return Number.isFinite(configured) && configured >= 0 ? Math.round(clampRange(configured, 0, 10_000)) : 500;
 }
 
 function fixtureCacheTtlMs(env: EnvMap, date: string): number {
@@ -2130,6 +2188,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private readonly oddsRawFeedCache = new Map<string, OddsEventCacheEntry>();
   private readonly oddsEventIdentityCache = new Map<string, OddsEventIdentityCacheEntry>();
   private oddsSportsCache: OddsSportsCacheEntry | null = null;
+  private readonly apiFootballOddsCache = new Map<string, ApiFootballOddsCacheEntry>();
   private readonly fixtureCache = new Map<string, FixtureCacheEntry>();
   private readonly matchCache = new Map<string, MatchCacheEntry>();
   private readonly headToHeadCache = new Map<string, HeadToHeadCacheEntry>();
@@ -2167,6 +2226,30 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     if (!this.requestLimiter) this.requestLimiter = new RequestSemaphore(providerMaxConcurrency(this.env));
     const timeoutMs = providerRequestTimeoutMs(this.env);
     return this.requestLimiter.run(() => fetchJson(this.fetchImpl, url, init, timeoutMs));
+  }
+
+  /**
+   * Raw-response counterpart to `limitedFetch` for adapters that need provider
+   * quota headers. It shares the same global semaphore and hard timeout, while
+   * leaving status/body interpretation to the adapter.
+   */
+  private limitedResponseFetch(input: string | URL, init?: RequestInit): Promise<Response> {
+    if (!this.requestLimiter) this.requestLimiter = new RequestSemaphore(providerMaxConcurrency(this.env));
+    const timeoutMs = providerRequestTimeoutMs(this.env);
+    return this.requestLimiter.run(async () => {
+      const controller = new AbortController();
+      const parentSignal = init?.signal;
+      const abortFromParent = () => controller.abort();
+      if (parentSignal?.aborted) throw new DOMException("Provider request aborted.", "AbortError");
+      parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await this.fetchImpl(input, { ...init, signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+        parentSignal?.removeEventListener("abort", abortFromParent);
+      }
+    });
   }
 
   private now(): Date {
@@ -2255,6 +2338,56 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     return live.length ? live : (configured.length ? configured : fallbackOddsSportKeys(this.env, sport)).slice(0, 8);
   }
 
+  private async getApiFootballOdds(date: string, apiKey: string): Promise<ApiFootballOddsFetchResult | null> {
+    if (!enabledEnvFlag(this.env.API_FOOTBALL_ODDS_ENABLED)) return null;
+    const cached = this.apiFootballOddsCache.get(date);
+    if (cached && cached.expiresAt > Date.now()) return cached.result;
+
+    const endpoint = new URL("https://v3.football.api-sports.io/odds");
+    const result = fetchApiFootballMatchWinnerOdds({
+      date,
+      apiKey,
+      fetchImpl: (input, init) => this.limitedResponseFetch(input, init),
+      maxPages: apiFootballOddsMaxPages(this.env),
+      concurrency: apiFootballOddsConcurrency(this.env),
+      requestsReserve: apiFootballOddsRequestsReserve(this.env)
+    })
+      .then((outcome) => {
+        if (!outcome.pagination.complete) {
+          const reasons = [
+            outcome.pagination.cappedByMaxPages ? `capped at ${outcome.pagination.maxPages} page(s)` : "",
+            outcome.pagination.stoppedByQuota ? "stopped by quota reserve" : "",
+            outcome.pagination.pagesFailed ? `${outcome.pagination.pagesFailed} page(s) failed` : ""
+          ].filter(Boolean);
+          warnProviderIssue(
+            endpoint,
+            `partial match-winner odds coverage (${outcome.pagination.pagesSucceeded}/${outcome.pagination.providerTotalPages} pages${reasons.length ? `; ${reasons.join(", ")}` : ""})`
+          );
+        }
+        return outcome;
+      })
+      .catch((error) => {
+        warnProviderIssue(endpoint, error instanceof Error ? error.message : "API-Football odds request failed");
+        return null;
+      });
+
+    setBoundedCache(this.apiFootballOddsCache, date, { expiresAt: Date.now() + apiFootballOddsCacheTtlMs(this.env), result });
+    void result.then((outcome) => {
+      const entry = this.apiFootballOddsCache.get(date);
+      if (!entry || entry.result !== result) return;
+      if (!outcome) {
+        this.apiFootballOddsCache.delete(date);
+        return;
+      }
+      // Quota stops and explicit page caps are intentional and stay cached to
+      // prevent retry storms. Transient page failures get a short retry window.
+      if (outcome.pagination.pagesFailed > 0 && !outcome.pagination.stoppedByQuota) {
+        entry.expiresAt = Math.min(entry.expiresAt, Date.now() + 60_000);
+      }
+    });
+    return result;
+  }
+
   async getFixtures(date: string, sport: Sport, readOptions: ProviderFixtureReadOptions = {}): Promise<Match[]> {
     const storedEnrichment = readOptions.storedEnrichment !== false;
     const cacheKey = `${storedEnrichment ? "full" : "public"}:${sport}:${date}`;
@@ -2319,8 +2452,27 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     const endpoint = new URL("https://v3.football.api-sports.io/fixtures");
     endpoint.searchParams.set("date", date);
     endpoint.searchParams.set("timezone", "UTC");
-    const data = (await this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } })) as ApiFootballResponse | null;
-    const fixtures = filterFootballFixtures(Array.isArray(data?.response) ? data.response : [], this.env);
+    const [data, apiFootballOdds] = await Promise.all([
+      this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } }) as Promise<ApiFootballResponse | null>,
+      this.getApiFootballOdds(date, apiKey)
+    ]);
+    const rawFixtures = Array.isArray(data?.response) ? data.response : [];
+    const sourceNow = this.now();
+    const apiFootballOddsByFixture = new Map<string, ApiFootballMatchWinnerOdds>(
+      (apiFootballOdds?.fixtures ?? [])
+        .filter((fixture) => freshFootballMatchWinnerReceiptAt(fixture.oddsMarkets, sourceNow) !== null)
+        .map((fixture) => [fixture.providerFixtureId, fixture])
+    );
+    const configuredFixtureIds = new Set(
+      filterFootballFixtures(rawFixtures, this.env).map((fixture) => String(fixture.fixture?.id ?? "").trim()).filter(Boolean)
+    );
+    // The paid odds feed can safely broaden the year-round slate beyond the
+    // curated league registry, but only by exact API-Football fixture ID. Team
+    // names are never fuzzy-matched across API-Sports products.
+    const fixtures = rawFixtures.filter((fixture) => {
+      const fixtureId = String(fixture.fixture?.id ?? "").trim();
+      return fixtureId && (configuredFixtureIds.has(fixtureId) || apiFootballOddsByFixture.has(fixtureId));
+    });
     if (!fixtures.length) {
       const oddsBackedMatches = await this.getOddsBackedFootballFixtures(date);
       return oddsBackedMatches.length ? oddsBackedMatches : this.fallback.getFixtures(date, sport);
@@ -2374,8 +2526,25 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       const directOddsMarkets = firstOddsMarketsForFixture(oddsByEvent, homeName, awayName, kickoffTime, oddsEvents);
       const directOddsEvent = firstOddsEventForFixture(oddsEvents, homeName, awayName, kickoffTime);
       const oddsBackedMatch = firstMatchForFixture(oddsBackedByEvent, homeName, awayName, kickoffTime);
-      const mergedOddsFromOddsEvent = !hasCompleteFootballMatchWinnerOdds(directOddsMarkets) && hasCompleteFootballMatchWinnerOdds(oddsBackedMatch?.oddsMarkets ?? []);
-      const oddsMarkets = mergedOddsFromOddsEvent ? (oddsBackedMatch?.oddsMarkets ?? []) : directOddsMarkets;
+      const directOddsReceiptAt = freshFootballMatchWinnerReceiptAt(directOddsMarkets, sourceNow);
+      const oddsBackedReceiptAt = freshFootballMatchWinnerReceiptAt(oddsBackedMatch?.oddsMarkets ?? [], sourceNow);
+      const mergedOddsFromOddsEvent = directOddsReceiptAt === null && oddsBackedReceiptAt !== null;
+      const theOddsApiMarkets = mergedOddsFromOddsEvent ? (oddsBackedMatch?.oddsMarkets ?? []) : directOddsMarkets;
+      const theOddsApiReceiptAt = mergedOddsFromOddsEvent ? oddsBackedReceiptAt : directOddsReceiptAt;
+      const fixtureId = String(fixture.fixture?.id ?? "").trim();
+      const apiFootballFixtureOdds = apiFootballOddsByFixture.get(fixtureId);
+      const apiFootballReceiptAt = freshFootballMatchWinnerReceiptAt(apiFootballFixtureOdds?.oddsMarkets ?? [], sourceNow);
+      const apiFootballOddsFallback =
+        apiFootballReceiptAt !== null &&
+        (theOddsApiReceiptAt === null || apiFootballReceiptAt > theOddsApiReceiptAt);
+      // Select one whole provider receipt for this fixture. We never blend
+      // selections across aggregators because their bookmaker namespaces and
+      // observation times are not one coherent market snapshot.
+      const oddsMarkets = apiFootballOddsFallback
+        ? (apiFootballFixtureOdds?.oddsMarkets ?? [])
+        : theOddsApiReceiptAt !== null
+          ? theOddsApiMarkets
+          : [];
       const homeProviderForm = recentFormByTeam.get(homeId);
       const awayProviderForm = recentFormByTeam.get(awayId);
       const hasProviderForm = Boolean(homeProviderForm && awayProviderForm);
@@ -2403,9 +2572,11 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
         ...(mergedOddsFromOddsEvent ? (oddsBackedMatch?.providerContextSignals ?? []) : [])
       ];
       const oddsProviderEventId =
-        cleanText(directOddsEvent?.id) ||
-        (oddsBackedMatch?.id.startsWith("the-odds-api:") ? oddsBackedMatch.id.replace("the-odds-api:", "") : "") ||
-        undefined;
+        apiFootballOddsFallback
+          ? fixtureId || undefined
+          : cleanText(directOddsEvent?.id) ||
+            (oddsBackedMatch?.id.startsWith("the-odds-api:") ? oddsBackedMatch.id.replace("the-odds-api:", "") : "") ||
+            undefined;
       return [
         {
           id: `api-football:${safeId(fixture.fixture?.id, `${slug(homeName)}-${slug(awayName)}-${date}`)}`,
@@ -2460,9 +2631,13 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
             fixtureProviderId: String(fixture.fixture?.id ?? "") || undefined,
             season: String(fixture.league?.season ?? "") || undefined,
             round: cleanText((fixture.league as { round?: unknown } | undefined)?.round) || undefined,
-            oddsProvider: oddsMarkets.length ? "the-odds-api" : undefined,
+            oddsProvider: oddsMarkets.length ? (apiFootballOddsFallback ? "api-football-odds" : "the-odds-api") : undefined,
             oddsProviderEventId: oddsMarkets.length ? oddsProviderEventId : undefined,
-            oddsCapturedAt: oddsMarkets.length ? cleanText(directOddsEvent?.last_update) || new Date().toISOString() : undefined,
+            oddsCapturedAt: oddsMarkets.length
+              ? apiFootballOddsFallback
+                ? apiFootballFixtureOdds?.providerUpdatedAt
+                : cleanText(directOddsEvent?.last_update) || new Date().toISOString()
+              : undefined,
             formProvider: hasProviderForm ? "api-football-recent-fixtures" : "deterministic-provider-proxy",
             strengthProvider: combinedStrengthProvider(homeRating, awayRating),
             fetchedAt: new Date().toISOString(),
@@ -2472,6 +2647,9 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
                 ? ["Team strength includes historical Elo learned from real football-data results stored in OddsPadi Supabase."]
                 : ["Historical EPL Elo was unavailable or not applicable; provider form or a league baseline supplies team strength."]),
               ...(mergedOddsFromOddsEvent ? ["Odds were merged from The Odds API event identity after API-Football fixture identity was present without a direct odds match."] : []),
+              ...(apiFootballOddsFallback
+                ? ["Match-winner prices use API-Football's exact fixture-ID odds receipt because it is the freshest complete executable market for this fixture."]
+                : []),
               ...(oddsMarkets.length ? [] : ["No matching live odds snapshot was found for this fixture."]),
               ...(hasProviderForm ? [] : ["Recent provider form was unavailable, so deterministic team-form proxies were used."]),
               ...(playerFormByFixture.has(`api-football:${String(fixture.fixture?.id ?? "")}`)
