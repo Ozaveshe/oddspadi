@@ -10,6 +10,8 @@ import {
   isStoredFixtureFresh,
   normalizeCanonicalFixture,
   normalizeOddsSnapshots,
+  reconcileStoredFixtureStatus,
+  STORED_LIVE_STATUS_MAX_AGE_MS,
   utcDateWindow
 } from "@/lib/sports/intelligence/canonical";
 import { classifyProviderRunStatus, productionPredictionFilters, refreshOdds, runDailyEngine } from "@/lib/sports/intelligence/pipeline";
@@ -193,6 +195,25 @@ describe("production daily sports intelligence", () => {
     expect(isStoredFixtureFresh("2026-07-16T05:59:59.000Z", now)).toBe(false);
     expect(isStoredFixtureFresh("2026-07-16T13:00:00.000Z", now)).toBe(false);
     expect(isStoredFixtureFresh(null, now)).toBe(false);
+  });
+
+  it("suspends a stale stored live label even when a partial score was retained", () => {
+    const fixture = {
+      status: "live" as const,
+      kickoffAt: "2026-07-18T00:30:00.000Z",
+      lastSyncedAt: "2026-07-18T02:00:00.000Z",
+      homeScore: 80,
+      awayScore: 102
+    };
+
+    expect(reconcileStoredFixtureStatus(
+      fixture,
+      new Date(Date.parse(fixture.lastSyncedAt) + STORED_LIVE_STATUS_MAX_AGE_MS - 1)
+    )).toBe("live");
+    expect(reconcileStoredFixtureStatus(
+      fixture,
+      new Date(Date.parse(fixture.lastSyncedAt) + STORED_LIVE_STATUS_MAX_AGE_MS + 1)
+    )).toBe("suspended");
   });
 
   it("blocks mock fallback fixtures in production public reads", async () => {

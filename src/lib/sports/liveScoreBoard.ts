@@ -12,7 +12,7 @@ import { providerBackedSportsDataProvider } from "@/lib/sports/providers/provide
 import type { Match, Sport } from "@/lib/sports/types";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { configuredPredictionLeagueIds, footballLeaguePriority } from "@/lib/sports/footballLeagues";
-import { isStoredFixtureFresh } from "@/lib/sports/intelligence/canonical";
+import { isStoredFixtureFresh, STORED_LIVE_STATUS_MAX_AGE_MS } from "@/lib/sports/intelligence/canonical";
 
 export type LiveFixturePhase = "live" | "upcoming" | "finished" | "other";
 
@@ -192,7 +192,6 @@ const EXCLUDED_NAME_PATTERN = /friendl/i;
 const BOARD_TTL_MS = 30_000;
 const MAX_FIXTURES = 500;
 const REPOSITORY_COVERAGE_TIMEOUT_MS = 5_000;
-const STORED_LIVE_STATUS_MAX_AGE_MS = 20 * 60_000;
 
 /** NaN from an invalid kickoff makes Array.sort's comparator inconsistent
  *  (order becomes engine-dependent); park unparseable dates at the end. */
