@@ -18,6 +18,7 @@ describe("mobile performance contract", () => {
     expect(board).toContain("ProviderArtwork");
     expect(board).toContain("CONFIRMED_MISSING_PROVIDER_ARTWORK");
     expect(board).toContain("football/teams/28004.png");
+    expect(board).toContain("basketball/teams/6301.png");
     expect(config).toContain('hostname: "media.api-sports.io"');
     expect(config).toContain("minimumCacheTTL: 86_400");
   });
