@@ -20,6 +20,7 @@ export type ActiveCalibrationPromotion = {
   expiresAt: string | null;
   approvedBy: string;
   rationale: string;
+  comparisonReceiptId?: string | null;
   candidate: {
     id: string;
     source: string;
@@ -70,6 +71,7 @@ type PromotionRow = {
   expires_at: string | null;
   approved_by: string;
   rationale: string;
+  comparison_receipt_id: string | null;
 };
 
 function stableHash(value: unknown): string {
@@ -102,6 +104,13 @@ function text(value: unknown): string | null {
 function tableMissing(reason: string | undefined, table: string): boolean {
   const message = reason?.toLowerCase() ?? "";
   return message.includes(table) && (message.includes("does not exist") || message.includes("schema cache") || message.includes("could not find"));
+}
+
+function championGovernanceMigrationMissing(reason: string | undefined): boolean {
+  const message = reason?.toLowerCase() ?? "";
+  return tableMissing(reason, "op_promote_calibration_challenger") ||
+    tableMissing(reason, "op_model_comparison_receipts") ||
+    (message.includes("comparison_receipt_id") && (message.includes("does not exist") || message.includes("schema cache") || message.includes("could not find")));
 }
 
 function normalizeProbabilityBuckets(value: unknown): ProbabilityCalibrationBucket[] {
@@ -171,6 +180,7 @@ function activePromotionFromRows(promotion: PromotionRow, candidate: CandidateRo
     expiresAt: promotion.expires_at,
     approvedBy: promotion.approved_by,
     rationale: promotion.rationale,
+    comparisonReceiptId: promotion.comparison_receipt_id,
     candidate: {
       id: candidate.id,
       source: candidate.source,
@@ -293,47 +303,50 @@ export async function readActiveCalibrationPromotion(sport: Sport, now = new Dat
 
   const promotions = await client
     .from("op_calibration_promotions")
-    .select("id,candidate_id,sport,model_key,engine_version,approved_at,expires_at,approved_by,rationale")
+    .select("id,candidate_id,sport,model_key,engine_version,approved_at,expires_at,approved_by,rationale,comparison_receipt_id")
     .eq("sport", sport)
     .eq("status", "approved")
     .is("revoked_at", null)
     .order("approved_at", { ascending: false })
     .limit(8);
   if (promotions.error) {
-    if (tableMissing(promotions.error.message, "op_calibration_promotions")) return { status: "pending-migration", reason: promotions.error.message };
+    if (tableMissing(promotions.error.message, "op_calibration_promotions") || championGovernanceMigrationMissing(promotions.error.message)) return { status: "pending-migration", reason: promotions.error.message };
     return { status: "failed", reason: promotions.error.message };
   }
 
-  for (const rawPromotion of (promotions.data ?? []) as PromotionRow[]) {
-    const expiry = rawPromotion.expires_at ? Date.parse(rawPromotion.expires_at) : Number.POSITIVE_INFINITY;
-    if (Number.isFinite(expiry) && expiry <= now.getTime()) continue;
-    const candidateResult = await client
-      .from("op_calibration_candidates")
-      .select("id,sport,model_key,engine_version,source,window_start,window_end,sample_size,settled_size,outcome_hash,metrics,calibration_buckets")
-      .eq("id", rawPromotion.candidate_id)
-      .maybeSingle();
-    if (candidateResult.error) {
-      if (tableMissing(candidateResult.error.message, "op_calibration_candidates")) return { status: "pending-migration", reason: candidateResult.error.message };
-      return { status: "failed", reason: candidateResult.error.message };
-    }
-    if (!candidateResult.data) continue;
-    const promotion = activePromotionFromRows(rawPromotion, candidateResult.data as CandidateRow);
-    if (promotion) return { status: "found", promotion };
+  const activeRows = ((promotions.data ?? []) as PromotionRow[]).filter((promotion) => {
+    const expiry = promotion.expires_at ? Date.parse(promotion.expires_at) : Number.POSITIVE_INFINITY;
+    return !Number.isFinite(expiry) || expiry > now.getTime();
+  });
+  if (activeRows.length > 1) return { status: "failed", reason: `Ambiguous champion state: ${activeRows.length} active ${sport} promotions exist.` };
+  const rawPromotion = activeRows[0];
+  if (!rawPromotion) return { status: "not-found" };
+  const candidateResult = await client
+    .from("op_calibration_candidates")
+    .select("id,sport,model_key,engine_version,source,window_start,window_end,sample_size,settled_size,outcome_hash,metrics,calibration_buckets")
+    .eq("id", rawPromotion.candidate_id)
+    .maybeSingle();
+  if (candidateResult.error) {
+    if (tableMissing(candidateResult.error.message, "op_calibration_candidates")) return { status: "pending-migration", reason: candidateResult.error.message };
+    return { status: "failed", reason: candidateResult.error.message };
   }
-
-  return { status: "not-found" };
+  if (!candidateResult.data) return { status: "failed", reason: "The active champion candidate is missing." };
+  const promotion = activePromotionFromRows(rawPromotion, candidateResult.data as CandidateRow);
+  return promotion ? { status: "found", promotion } : { status: "failed", reason: "The active champion promotion does not match a promotion-ready candidate." };
 }
 
 export async function approveCalibrationCandidate({
   candidateId,
   approvedBy,
   rationale,
-  expiresAt
+  expiresAt,
+  comparisonReceiptId
 }: {
   candidateId: string;
   approvedBy: string;
   rationale: string;
   expiresAt?: string | null;
+  comparisonReceiptId?: string | null;
 }): Promise<CalibrationPromotionWriteResult> {
   const runtime = getSupabaseRuntimeStatus();
   if (!runtime.serverWriteReady) {
@@ -359,37 +372,20 @@ export async function approveCalibrationCandidate({
     return { status: "failed", configured: true, table: "op_calibration_promotions", reason: "Promotion expiry must be a valid future timestamp." };
   }
 
-  const revoke = await client
-    .from("op_calibration_promotions")
-    .update({ status: "revoked", revoked_at: new Date().toISOString(), revoked_by: approvedBy, revocation_reason: "Superseded by a new approved candidate." })
-    .eq("sport", candidate.sport)
-    .eq("model_key", candidate.model_key)
-    .eq("engine_version", candidate.engine_version)
-    .eq("status", "approved")
-    .is("revoked_at", null);
-  if (revoke.error && !tableMissing(revoke.error.message, "op_calibration_promotions")) {
-    return { status: "failed", configured: true, table: "op_calibration_promotions", reason: revoke.error.message };
-  }
-
-  const { data, error } = await client
-    .from("op_calibration_promotions")
-    .insert({
-      candidate_id: candidate.id,
-      sport: candidate.sport,
-      model_key: candidate.model_key,
-      engine_version: candidate.engine_version,
-      status: "approved",
-      approved_by: approvedBy,
-      rationale,
-      expires_at: expiresAt ?? null
-    })
-    .select("id")
-    .single();
+  const { data, error } = await client.rpc("op_promote_calibration_challenger", {
+    p_candidate_id: candidate.id,
+    p_approved_by: approvedBy,
+    p_rationale: rationale,
+    p_expires_at: expiresAt ?? null,
+    p_comparison_receipt_id: comparisonReceiptId ?? null
+  });
   if (error) {
-    if (tableMissing(error.message, "op_calibration_promotions")) return { status: "pending-migration", configured: true, table: "op_calibration_promotions", reason: error.message };
+    if (championGovernanceMigrationMissing(error.message)) {
+      return { status: "pending-migration", configured: true, table: "op_calibration_promotions", reason: error.message };
+    }
     return { status: "failed", configured: true, table: "op_calibration_promotions", reason: error.message };
   }
-  return { status: "approved", configured: true, table: "op_calibration_promotions", id: typeof data?.id === "string" ? data.id : undefined };
+  return { status: "approved", configured: true, table: "op_calibration_promotions", id: typeof data === "string" ? data : undefined };
 }
 
 export async function revokeCalibrationPromotion({

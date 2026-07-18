@@ -1639,6 +1639,7 @@ export interface DecisionLearningProfile {
     candidateId: string;
     approvedAt: string;
     expiresAt: string | null;
+    comparisonReceiptId?: string | null;
   } | null;
   calibrationDriftStatus?: CalibrationDriftStatus | null;
   calibrationDriftReceipt?: CalibrationDriftReceipt | null;

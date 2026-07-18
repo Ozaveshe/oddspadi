@@ -218,6 +218,14 @@ A frozen candidate is not allowed to remain live on approval evidence alone. Pro
 
 The receipt uses the latest 100 immutable won/lost outcomes after that boundary and requires at least 30. It recomputes Brier score, log loss, expected calibration error, Brier skill, and ROI yield; splits the outcomes into at least 15 earlier and 15 recent rows at a strict settlement-time boundary; and measures probability-population shift with the population stability index. Identical settlement cohorts are never divided to manufacture stability. A receipt blocks activation when aggregate Brier deterioration exceeds `0.05`, log-loss deterioration exceeds `0.12`, current expected calibration error exceeds `0.10`, recent Brier deterioration from baseline exceeds `0.07`, recent-versus-earlier Brier deterioration exceeds `0.06`, or probability PSI exceeds `0.25`. It is also fail-closed when evidence is sparse, stale, malformed, identity-mismatched, or older than the governed promotion/outcome freshness limits. ROI remains operator context rather than an independent short-window activation gate.
 
+### 4.4 Paired champion-challenger promotion
+
+OddsPadi permits one active champion per sport. A distinct model or engine challenger cannot replace it using an aggregate backtest, a newer timestamp, or operator preference alone. Both identities must emit predictions for the exact same fixture, market, and selection after the challenger's frozen training window. The comparison rejects duplicate forecasts, conflicting settlements, malformed proposition identities, and unpaired cherry-picking.
+
+The latest 200 exact pairs are eligible. Promotion requires at least 60 pairs, at least 80% pair coverage for both models, and a strict settlement-time split with at least 30 earlier and 30 recent observations. Challenger-minus-champion loss is measured for Brier score and log loss. A paired normal 95% upper confidence bound must stay within the non-inferiority margins (`0.01` Brier and `0.02` log loss), and at least one primary score must prove superiority with an upper bound below zero. Both chronological regimes must remain inside point-regression limits (`0.02` Brier and `0.04` log loss), expected calibration error may regress by no more than `0.02`, and the latest pair must be no older than seven days. Equality is inconclusive, not a win.
+
+`op_model_comparison_receipts` stores the immutable evidence hash and full metric receipt. Database promotion is atomic: a distinct challenger must reference a fresh `challenger-promotable` receipt binding the currently active promotion to the exact candidate. The first sport champion is an explicit bootstrap exception. A calibration refresh for the same model/engine identity does not pretend to be a challenger; it is allowed only when it uses a distinct promotion-ready candidate with a strictly later frozen window. No comparison path auto-promotes.
+
 ## 5. Fair Odds
 
 The agent estimates model fair odds:

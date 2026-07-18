@@ -41,11 +41,15 @@ export const POST = withApiHandler(async (request: Request) => {
 
   if (action === "approve") {
     const candidateId = boundedText(body.candidateId, 80);
+    const comparisonReceiptId = body.comparisonReceiptId === undefined || body.comparisonReceiptId === null
+      ? null
+      : boundedText(body.comparisonReceiptId, 80);
     const rationale = boundedText(body.rationale, 800);
     const expiresAt = body.expiresAt === undefined || body.expiresAt === null ? null : boundedText(body.expiresAt, 64);
     if (!candidateId || !rationale) return apiError("Approve requires candidateId and rationale.");
+    if (body.comparisonReceiptId !== undefined && body.comparisonReceiptId !== null && !comparisonReceiptId) return apiError("comparisonReceiptId is invalid.");
     if (body.expiresAt !== undefined && body.expiresAt !== null && !expiresAt) return apiError("expiresAt is invalid.");
-    const result = await approveCalibrationCandidate({ candidateId, approvedBy, rationale, expiresAt });
+    const result = await approveCalibrationCandidate({ candidateId, approvedBy, rationale, expiresAt, comparisonReceiptId });
     const status = result.status === "approved" ? 200 : result.status === "not-configured" ? 503 : result.status === "pending-migration" ? 409 : 422;
     return apiSuccess(result, { status });
   }

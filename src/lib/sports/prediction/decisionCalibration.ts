@@ -10,6 +10,8 @@ export type OutcomeRow = {
   decision_run_id: string | null;
   fixture_external_id: string;
   sport: string;
+  market?: string;
+  selection?: string;
   model_probability: number | null;
   implied_probability: number | null;
   value_edge: number | null;
