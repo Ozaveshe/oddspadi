@@ -8,7 +8,7 @@ export default defineConfig({
     // Keep Windows release runs from spawning a worker per logical core and
     // starving module transforms. Failure-path storage tests legitimately
     // exercise several dynamic imports before their bounded network timeout.
-    maxWorkers: 1,
+    maxWorkers: 2,
     testTimeout: 30_000
   },
   resolve: {
