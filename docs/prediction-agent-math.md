@@ -156,11 +156,12 @@ expectedValue = modelProbability * decimalOdds - 1
 Before value-edge ranking, the live prediction pipeline applies a bounded market-prior blend when a model market matches priced bookmaker selections:
 
 ```txt
-marketPriorWeight = f(dataQuality, bookmakerMargin, selectionCount)
+heuristicMarketPriorWeight = f(dataQuality, bookmakerMargin, selectionCount)
+marketPriorWeight = max(heuristicMarketPriorWeight * learnedWeightScale, footballEvidenceFloor)
 adjustedModelProbability = normalize(modelProbability * (1 - marketPriorWeight) + noVigImpliedProbability * marketPriorWeight)
 ```
 
-The weight rises when model data quality is lower and falls when bookmaker margin is high. This lets the agent respect the market as a signal without letting high-overround prices overwrite the sport model.
+The heuristic weight rises when model data quality is lower and falls when bookmaker margin is high. The scale is fit chronologically on priced training observations after probability-temperature calibration, accepted only when a strictly later validation window improves log loss without material Brier regression, and frozen before the outer holdout. A scale of `1` preserves the original heuristic, while football evidence floors still protect thin-history teams even if the learned scale is lower. Identical kickoff cohorts are never divided between evidence windows; when no strict timestamp boundary exists, training fails closed.
 
 Example:
 

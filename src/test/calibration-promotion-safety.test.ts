@@ -133,6 +133,25 @@ function readySnapshot(): TrainingDataSnapshot {
           calibratedValidation: { sampleSize: 252, brierScore: 0.205, logLoss: 0.615 },
           reason: "validated-proper-score-improvement"
         },
+        marketPriorScalingPolicy: {
+          version: "market-prior-scaling-v1",
+          source: "chronological-priced-training-window",
+          status: "identity",
+          weightScale: 1,
+          candidateWeightScale: 1,
+          fitSampleSize: 126,
+          validationSampleSize: 126,
+          fitWindowStart: "2025-01-01T12:00:00.000Z",
+          fitWindowEnd: "2025-03-31T12:00:00.000Z",
+          validationWindowStart: "2025-04-01T12:00:00.000Z",
+          validationWindowEnd: "2025-06-30T12:00:00.000Z",
+          holdoutWindowStart: "2025-07-01T12:00:00.000Z",
+          baselineFit: { sampleSize: 126, brierScore: 0.205, logLoss: 0.615 },
+          candidateFit: { sampleSize: 126, brierScore: 0.205, logLoss: 0.615 },
+          baselineValidation: { sampleSize: 126, brierScore: 0.204, logLoss: 0.614 },
+          candidateValidation: { sampleSize: 126, brierScore: 0.204, logLoss: 0.614 },
+          reason: "identity-won-fit"
+        },
         marketPriorEvidence: {
           version: "runtime-market-prior-parity-v1",
           status: "applied",
@@ -416,6 +435,67 @@ describe("calibration promotion safety", () => {
     expect(inconsistentProfile.reason).toContain("lacks a valid pre-match market-prior parity receipt");
   });
 
+  it("requires a complete chronology-safe market-prior scaling receipt", () => {
+    const valid = buildDecisionLearningProfileFromSnapshot(readySnapshot(), {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(valid.marketPriorScalingPolicy).toMatchObject({ status: "identity", weightScale: 1 });
+
+    const activeSnapshot = readySnapshot();
+    activeSnapshot.latestBacktest = {
+      ...activeSnapshot.latestBacktest!,
+      config: {
+        ...activeSnapshot.latestBacktest!.config,
+        marketPriorScalingPolicy: {
+          ...activeSnapshot.latestBacktest!.config?.marketPriorScalingPolicy as Record<string, unknown>,
+          status: "active",
+          weightScale: 2,
+          candidateWeightScale: 2,
+          candidateFit: { sampleSize: 126, brierScore: 0.2, logLoss: 0.61 },
+          candidateValidation: { sampleSize: 126, brierScore: 0.202, logLoss: 0.61 },
+          reason: "validated-proper-score-improvement"
+        }
+      }
+    };
+    const activeProfile = buildDecisionLearningProfileFromSnapshot(activeSnapshot, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(activeProfile.active).toBe(true);
+    expect(activeProfile.marketPriorScalingPolicy).toMatchObject({ status: "active", weightScale: 2 });
+
+    const missing = readySnapshot();
+    const missingConfig = { ...missing.latestBacktest!.config };
+    delete missingConfig.marketPriorScalingPolicy;
+    missing.latestBacktest = { ...missing.latestBacktest!, config: missingConfig };
+    const missingProfile = buildDecisionLearningProfileFromSnapshot(missing, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(missingProfile.active).toBe(false);
+    expect(missingProfile.marketPriorScalingPolicy).toBeNull();
+    expect(missingProfile.reason).toContain("lacks a valid training-only market-prior scaling policy");
+
+    const overlapping = readySnapshot();
+    overlapping.latestBacktest = {
+      ...overlapping.latestBacktest!,
+      config: {
+        ...overlapping.latestBacktest!.config,
+        marketPriorScalingPolicy: {
+          ...overlapping.latestBacktest!.config?.marketPriorScalingPolicy as Record<string, unknown>,
+          validationWindowEnd: "2025-07-01T12:00:00.000Z"
+        }
+      }
+    };
+    const overlappingProfile = buildDecisionLearningProfileFromSnapshot(overlapping, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(overlappingProfile.active).toBe(false);
+    expect(overlappingProfile.marketPriorScalingPolicy).toBeNull();
+  });
+
   it("accepts learned weights sourced from the complete prospective training-validation window", () => {
     const snapshot = readySnapshot();
     snapshot.latestBacktest = {
@@ -424,9 +504,9 @@ describe("calibration promotion safety", () => {
         ...snapshot.latestBacktest!.config,
         learnedWeightsProvenance: {
           source: "training-validation-window",
-          sampleSize: 252,
+          sampleSize: 126,
           pickCount: 40,
-          windowStart: "2025-01-01T12:00:00.000Z",
+          windowStart: "2025-04-01T12:00:00.000Z",
           windowEnd: "2025-06-30T12:00:00.000Z",
           holdoutWindowStart: "2025-07-01T12:00:00.000Z",
           yield: 0.03,

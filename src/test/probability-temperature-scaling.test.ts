@@ -77,4 +77,18 @@ describe("chronological probability temperature scaling", () => {
     expect(split).toBe(2);
     expect(Date.parse(timestamps[split - 1]!.kickoffAt)).toBeLessThan(Date.parse(timestamps[split]!.kickoffAt));
   });
+
+  it("fails closed when every fixture shares the same kickoff timestamp", () => {
+    const timestamps = Array.from({ length: 80 }, () => ({ kickoffAt: "2024-01-01T12:00:00.000Z" }));
+
+    expect(strictChronologicalSplitIndex(timestamps, 56, { minimumLeft: 40, minimumRight: 20 })).toBe(0);
+    expect(learnProbabilityTemperaturePolicy({
+      trainingRows: timestamps.map((row, index) => ({
+        ...row,
+        probabilities: { home: 0.9, away: 0.1 },
+        actualOutcome: index % 10 < 7 ? "home" : "away"
+      })),
+      holdoutWindowStart: "2024-02-01T12:00:00.000Z"
+    })).toMatchObject({ status: "identity", temperature: 1, reason: "invalid-chronology" });
+  });
 });

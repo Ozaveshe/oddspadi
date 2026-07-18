@@ -75,6 +75,12 @@ describe("basketball and tennis exact runtime replay", () => {
       reason: "insufficient-training-sample"
     });
     expect(result.probabilityCalibrationComparison.baseline.sampleSize).toBe(result.testSize);
+    expect(result.marketPriorScalingPolicy).toMatchObject({
+      source: "chronological-priced-training-window",
+      status: "identity",
+      weightScale: 1,
+      reason: "insufficient-priced-sample"
+    });
     expect(result.marketPriorEvidence).toMatchObject({
       version: "runtime-market-prior-parity-v1",
       status: "applied",
@@ -103,6 +109,7 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(home.learnedWeights).toEqual(away.learnedWeights);
     expect(home.selectionPolicy).toEqual(away.selectionPolicy);
     expect(home.probabilityCalibrationPolicy).toEqual(away.probabilityCalibrationPolicy);
+    expect(home.marketPriorScalingPolicy).toEqual(away.marketPriorScalingPolicy);
   });
 
   it("uses coherent decision prices for the basketball posterior and never closing or post-kickoff prices", () => {
@@ -178,6 +185,7 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(last(away).actualOutcome).toBe("away");
     expect(home.selectionPolicy).toEqual(away.selectionPolicy);
     expect(home.probabilityCalibrationPolicy).toEqual(away.probabilityCalibrationPolicy);
+    expect(home.marketPriorScalingPolicy).toEqual(away.marketPriorScalingPolicy);
     expect(home.marketPriorEvidence.status).toBe("applied");
     expect(historicalModelCompatibility({
       sport: "tennis",
@@ -193,5 +201,17 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(tennis.featureContract.status).toBe("failed");
     expect(() => twoWayRuntimeReplayIdentityReceipt(basketball)).toThrow("failed feature contract");
     expect(() => twoWayRuntimeReplayIdentityReceipt(tennis)).toThrow("failed feature contract");
+  });
+
+  it("fails the outer replay contract when no strict kickoff boundary exists", () => {
+    const fixtures = basketballHistory().map((fixture) => ({
+      ...fixture,
+      kickoffAt: "2025-01-01T20:00:00.000Z"
+    }));
+    const result = runBasketballRuntimeReplay(fixtures, { trainRatio: 0.5, minPriorMatches: 3 });
+
+    expect(result.trainSize).toBe(0);
+    expect(result.featureContract.status).toBe("failed");
+    expect(() => twoWayRuntimeReplayIdentityReceipt(result)).toThrow("failed feature contract");
   });
 });

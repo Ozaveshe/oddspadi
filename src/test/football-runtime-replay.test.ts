@@ -113,6 +113,12 @@ describe("football exact runtime replay", () => {
       reason: "insufficient-training-sample"
     });
     expect(result.probabilityCalibrationComparison.baseline.sampleSize).toBe(result.testSize);
+    expect(result.marketPriorScalingPolicy).toMatchObject({
+      source: "chronological-priced-training-window",
+      status: "identity",
+      weightScale: 1,
+      reason: "insufficient-priced-sample"
+    });
     expect(result.marketPriorEvidence).toMatchObject({
       version: "runtime-market-prior-parity-v1",
       status: "applied",
@@ -146,6 +152,7 @@ describe("football exact runtime replay", () => {
     expect(homeWin.learnedWeightsProvenance).toEqual(awayWin.learnedWeightsProvenance);
     expect(homeWin.selectionPolicy).toEqual(awayWin.selectionPolicy);
     expect(homeWin.probabilityCalibrationPolicy).toEqual(awayWin.probabilityCalibrationPolicy);
+    expect(homeWin.marketPriorScalingPolicy).toEqual(awayWin.marketPriorScalingPolicy);
   });
 
   it("keeps explicit closing prices out of the final posterior while retaining them for evaluation", () => {

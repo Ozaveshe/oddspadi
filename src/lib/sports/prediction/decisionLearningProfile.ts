@@ -205,6 +205,111 @@ function probabilityTemperaturePolicy(
   };
 }
 
+function marketPriorScalingPolicy(
+  backtest: StoredBacktestRun | null,
+  temperaturePolicy: NonNullable<DecisionLearningProfile["probabilityTemperaturePolicy"]> | null
+): NonNullable<DecisionLearningProfile["marketPriorScalingPolicy"]> | null {
+  if (!backtest || !temperaturePolicy) return null;
+  const policy = record(backtest.config?.marketPriorScalingPolicy);
+  const baselineFit = record(policy.baselineFit);
+  const candidateFit = record(policy.candidateFit);
+  const baselineValidation = record(policy.baselineValidation);
+  const candidateValidation = record(policy.candidateValidation);
+  const status = policy.status === "active" || policy.status === "identity" ? policy.status : null;
+  const weightScale = finiteNumber(policy.weightScale);
+  const candidateWeightScale = finiteNumber(policy.candidateWeightScale);
+  const fitSampleSize = finiteNumber(policy.fitSampleSize);
+  const validationSampleSize = finiteNumber(policy.validationSampleSize);
+  const fitWindowStart = typeof policy.fitWindowStart === "string" ? policy.fitWindowStart : null;
+  const fitWindowEnd = typeof policy.fitWindowEnd === "string" ? policy.fitWindowEnd : null;
+  const validationWindowStart = typeof policy.validationWindowStart === "string" ? policy.validationWindowStart : null;
+  const validationWindowEnd = typeof policy.validationWindowEnd === "string" ? policy.validationWindowEnd : null;
+  const holdoutWindowStart = typeof policy.holdoutWindowStart === "string" ? policy.holdoutWindowStart : null;
+  const reason = policy.reason;
+  const validReason =
+    reason === "validated-proper-score-improvement" ||
+    reason === "insufficient-priced-sample" ||
+    reason === "invalid-chronology" ||
+    reason === "identity-won-fit" ||
+    reason === "validation-did-not-improve";
+  const contractValid =
+    policy.version === "market-prior-scaling-v1" &&
+    policy.source === "chronological-priced-training-window" &&
+    status !== null &&
+    weightScale !== null && weightScale >= 0 && weightScale <= 3 &&
+    candidateWeightScale !== null && candidateWeightScale >= 0 && candidateWeightScale <= 3 &&
+    fitSampleSize !== null && Number.isInteger(fitSampleSize) && fitSampleSize >= 20 &&
+    validationSampleSize !== null && Number.isInteger(validationSampleSize) && validationSampleSize >= 20 &&
+    fitSampleSize + validationSampleSize <= temperaturePolicy.validationSampleSize &&
+    validReason;
+  if (!contractValid) return null;
+
+  const timestamps = [fitWindowStart, fitWindowEnd, validationWindowStart, validationWindowEnd, holdoutWindowStart];
+  const chronologyValid = timestamps.every((value) => value && Number.isFinite(Date.parse(value))) &&
+    Date.parse(fitWindowStart!) >= Date.parse(temperaturePolicy.validationWindowStart!) &&
+    Date.parse(fitWindowStart!) <= Date.parse(fitWindowEnd!) &&
+    Date.parse(fitWindowEnd!) < Date.parse(validationWindowStart!) &&
+    Date.parse(validationWindowStart!) <= Date.parse(validationWindowEnd!) &&
+    Date.parse(validationWindowEnd!) <= Date.parse(temperaturePolicy.validationWindowEnd!) &&
+    Date.parse(validationWindowEnd!) < Date.parse(holdoutWindowStart!) &&
+    holdoutWindowStart === temperaturePolicy.holdoutWindowStart;
+  if (!chronologyValid) return null;
+
+  const scoreSummary = (value: Record<string, unknown>, expectedSampleSize: number) => {
+    const sampleSize = finiteNumber(value.sampleSize);
+    const brierScore = finiteNumber(value.brierScore);
+    const logLoss = finiteNumber(value.logLoss);
+    return sampleSize === expectedSampleSize && brierScore !== null && brierScore >= 0 && logLoss !== null && logLoss >= 0
+      ? { sampleSize, brierScore, logLoss }
+      : null;
+  };
+  const resolvedBaselineFit = scoreSummary(baselineFit, fitSampleSize!);
+  const resolvedCandidateFit = scoreSummary(candidateFit, fitSampleSize!);
+  const resolvedBaselineValidation = scoreSummary(baselineValidation, validationSampleSize!);
+  const resolvedCandidateValidation = scoreSummary(candidateValidation, validationSampleSize!);
+  if (!resolvedBaselineFit || !resolvedCandidateFit || !resolvedBaselineValidation || !resolvedCandidateValidation) return null;
+  if (resolvedCandidateFit.logLoss > resolvedBaselineFit.logLoss + 0.000001) return null;
+
+  const candidateImproved =
+    resolvedBaselineValidation.logLoss - resolvedCandidateValidation.logLoss >= 0.0005 - 0.000001 &&
+    resolvedCandidateValidation.brierScore - resolvedBaselineValidation.brierScore <= 0.00025 + 0.000001;
+  if (status === "active") {
+    if (
+      !candidateImproved ||
+      Math.abs(weightScale! - candidateWeightScale!) > 0.000001 ||
+      Math.abs(weightScale! - 1) < 0.000001 ||
+      reason !== "validated-proper-score-improvement"
+    ) return null;
+  } else if (
+    Math.abs(weightScale! - 1) >= 0.000001 ||
+    (reason !== "identity-won-fit" && reason !== "validation-did-not-improve") ||
+    (reason === "identity-won-fit" && Math.abs(candidateWeightScale! - 1) >= 0.000001) ||
+    (reason === "validation-did-not-improve" && (Math.abs(candidateWeightScale! - 1) < 0.000001 || candidateImproved))
+  ) {
+    return null;
+  }
+
+  return {
+    version: "market-prior-scaling-v1",
+    source: "chronological-priced-training-window",
+    status,
+    weightScale: weightScale!,
+    candidateWeightScale: candidateWeightScale!,
+    fitSampleSize: fitSampleSize!,
+    validationSampleSize: validationSampleSize!,
+    fitWindowStart,
+    fitWindowEnd,
+    validationWindowStart,
+    validationWindowEnd,
+    holdoutWindowStart,
+    baselineFit: resolvedBaselineFit,
+    candidateFit: resolvedCandidateFit,
+    baselineValidation: resolvedBaselineValidation,
+    candidateValidation: resolvedCandidateValidation,
+    reason: reason as NonNullable<DecisionLearningProfile["marketPriorScalingPolicy"]>["reason"]
+  };
+}
+
 type MarketPriorReplayReceipt = {
   valid: boolean;
   status: "applied" | "no-priced-market" | null;
@@ -252,7 +357,7 @@ function marketPriorReplayReceipt(backtest: StoredBacktestRun | null): MarketPri
     (status === "no-priced-market" && adjustedFixtures === 0);
   const weightValid = adjustedFixtures === 0
     ? evidence.averageWeight === null && evidence.averageBookmakerMargin === null
-    : averageWeight !== null && averageWeight >= 0.03 && averageWeight <= 0.9 && averageBookmakerMargin !== null;
+    : averageWeight !== null && averageWeight >= 0 && averageWeight <= 0.9 && averageBookmakerMargin !== null;
   const comparisonValid =
     baselineSampleSize === backtest.testSize &&
     posteriorSampleSize === backtest.testSize &&
@@ -289,7 +394,8 @@ function footballLearningProvenanceBlocker(backtest: StoredBacktestRun): string 
 
   const sampleSize = finiteNumber(provenance.sampleSize);
   const expectedSampleSize = provenance.source === "training-validation-window"
-    ? probabilityTemperaturePolicy(backtest)?.validationSampleSize ?? null
+    ? marketPriorScalingPolicy(backtest, probabilityTemperaturePolicy(backtest))?.validationSampleSize ??
+      probabilityTemperaturePolicy(backtest)?.validationSampleSize ?? null
     : backtest.trainSize;
   if (sampleSize === null || sampleSize <= 0 || expectedSampleSize === null || sampleSize !== expectedSampleSize) {
     return provenance.source === "training-validation-window"
@@ -345,6 +451,9 @@ function liveMetricBlockers(
     const calibrationPolicy = probabilityTemperaturePolicy(backtest);
     if (!calibrationPolicy) {
       blockers.push("runtime replay lacks a valid training-only probability calibration policy");
+    }
+    if (!marketPriorScalingPolicy(backtest, calibrationPolicy)) {
+      blockers.push("runtime replay lacks a valid training-only market-prior scaling policy");
     }
     if (!marketPriorReplayReceipt(backtest).valid) {
       blockers.push("runtime replay lacks a valid pre-match market-prior parity receipt");
@@ -427,6 +536,7 @@ export function buildDecisionLearningProfileFromSnapshot(
   const metricBlockers = liveMetricBlockers(snapshot, backtest, runtimeEvidence);
   const selectionPolicy = economicSelectionPolicy(backtest);
   const temperaturePolicy = probabilityTemperaturePolicy(backtest);
+  const scalingPolicy = marketPriorScalingPolicy(backtest, temperaturePolicy);
   const marketPriorReceipt = marketPriorReplayReceipt(backtest);
   const shadowReady = snapshot.status === "ready" && Boolean(backtest) && snapshot.readiness.readyForTraining && !demoOnly;
   const active = shadowReady && promotionApproved && metricBlockers.length === 0;
@@ -465,6 +575,7 @@ export function buildDecisionLearningProfileFromSnapshot(
     economicSelectionPolicyStatus: selectionPolicy.status,
     allowedConfidenceBands: selectionPolicy.allowedConfidenceBands,
     probabilityTemperaturePolicy: temperaturePolicy,
+    marketPriorScalingPolicy: scalingPolicy,
     marketPriorReplayStatus: marketPriorReceipt.status,
     marketPriorReplayAdjustedFixtures: marketPriorReceipt.adjustedFixtures,
     marketPriorReplayCoverage: marketPriorReceipt.coverage,

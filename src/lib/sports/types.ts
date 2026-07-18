@@ -243,6 +243,7 @@ export interface MatchContextAdjustment {
 
 export interface MarketPriorAdjustment {
   applied: boolean;
+  weightScale: number;
   adjustedMarkets: number;
   adjustedSelections: number;
   averageWeight: number;
@@ -429,6 +430,31 @@ export interface ProbabilityTemperatureScalingPolicy {
   reason:
     | "validated-proper-score-improvement"
     | "insufficient-training-sample"
+    | "invalid-chronology"
+    | "identity-won-fit"
+    | "validation-did-not-improve";
+}
+
+export interface MarketPriorScalingPolicy {
+  version: "market-prior-scaling-v1";
+  source: "chronological-priced-training-window";
+  status: "active" | "identity";
+  weightScale: number;
+  candidateWeightScale: number;
+  fitSampleSize: number;
+  validationSampleSize: number;
+  fitWindowStart: string | null;
+  fitWindowEnd: string | null;
+  validationWindowStart: string | null;
+  validationWindowEnd: string | null;
+  holdoutWindowStart: string | null;
+  baselineFit: ProbabilityCalibrationScoreSummary;
+  candidateFit: ProbabilityCalibrationScoreSummary;
+  baselineValidation: ProbabilityCalibrationScoreSummary;
+  candidateValidation: ProbabilityCalibrationScoreSummary;
+  reason:
+    | "validated-proper-score-improvement"
+    | "insufficient-priced-sample"
     | "invalid-chronology"
     | "identity-won-fit"
     | "validation-did-not-improve";
@@ -1466,6 +1492,7 @@ export interface DecisionLearningProfile {
   economicSelectionPolicyStatus?: "active" | "abstain" | null;
   allowedConfidenceBands?: ConfidenceLevel[] | null;
   probabilityTemperaturePolicy?: ProbabilityTemperatureScalingPolicy | null;
+  marketPriorScalingPolicy?: MarketPriorScalingPolicy | null;
   marketPriorReplayStatus?: "applied" | "no-priced-market" | null;
   marketPriorReplayAdjustedFixtures?: number | null;
   marketPriorReplayCoverage?: number | null;

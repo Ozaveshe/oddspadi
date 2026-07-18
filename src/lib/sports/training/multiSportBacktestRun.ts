@@ -74,6 +74,13 @@ export type MultiSportBacktestJob = {
     baselineHoldoutLogLoss: number | null;
     calibratedHoldoutLogLoss: number | null;
     holdoutLogLossDelta: number | null;
+    marketPriorScalingPolicyStatus: "active" | "identity" | null;
+    marketPriorWeightScale: number | null;
+    marketPriorCandidateWeightScale: number | null;
+    marketPriorScalingFitSampleSize: number | null;
+    marketPriorScalingValidationSampleSize: number | null;
+    marketPriorScalingValidationBrierDelta: number | null;
+    marketPriorScalingValidationLogLossDelta: number | null;
     marketPriorStatus: "applied" | "no-priced-market" | null;
     marketPriorAdjustedFixtures: number | null;
     marketPriorCoverage: number | null;
@@ -159,6 +166,13 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
       baselineHoldoutLogLoss: null,
       calibratedHoldoutLogLoss: null,
       holdoutLogLossDelta: null,
+      marketPriorScalingPolicyStatus: null,
+      marketPriorWeightScale: null,
+      marketPriorCandidateWeightScale: null,
+      marketPriorScalingFitSampleSize: null,
+      marketPriorScalingValidationSampleSize: null,
+      marketPriorScalingValidationBrierDelta: null,
+      marketPriorScalingValidationLogLossDelta: null,
       marketPriorStatus: null,
       marketPriorAdjustedFixtures: null,
       marketPriorCoverage: null,
@@ -170,6 +184,13 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
   }
 
   const runtimeResult = result.result && "selectionPolicy" in result.result ? result.result : null;
+  const marketPolicy = runtimeResult?.marketPriorScalingPolicy ?? null;
+  const marketValidationBrierDelta = marketPolicy && marketPolicy.baselineValidation.brierScore !== null && marketPolicy.candidateValidation.brierScore !== null
+    ? marketPolicy.candidateValidation.brierScore - marketPolicy.baselineValidation.brierScore
+    : null;
+  const marketValidationLogLossDelta = marketPolicy && marketPolicy.baselineValidation.logLoss !== null && marketPolicy.candidateValidation.logLoss !== null
+    ? marketPolicy.candidateValidation.logLoss - marketPolicy.baselineValidation.logLoss
+    : null;
   return {
     status: result.status,
     id: result.status === "stored" ? result.id : null,
@@ -188,6 +209,13 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
     baselineHoldoutLogLoss: runtimeResult?.probabilityCalibrationComparison.baseline.logLoss ?? null,
     calibratedHoldoutLogLoss: runtimeResult?.probabilityCalibrationComparison.calibrated.logLoss ?? null,
     holdoutLogLossDelta: runtimeResult?.probabilityCalibrationComparison.logLossDelta ?? null,
+    marketPriorScalingPolicyStatus: marketPolicy?.status ?? null,
+    marketPriorWeightScale: marketPolicy?.weightScale ?? null,
+    marketPriorCandidateWeightScale: marketPolicy?.candidateWeightScale ?? null,
+    marketPriorScalingFitSampleSize: marketPolicy?.fitSampleSize ?? null,
+    marketPriorScalingValidationSampleSize: marketPolicy?.validationSampleSize ?? null,
+    marketPriorScalingValidationBrierDelta: marketValidationBrierDelta,
+    marketPriorScalingValidationLogLossDelta: marketValidationLogLossDelta,
     marketPriorStatus: runtimeResult?.marketPriorEvidence.status ?? null,
     marketPriorAdjustedFixtures: runtimeResult?.marketPriorEvidence.adjustedFixtures ?? null,
     marketPriorCoverage: runtimeResult?.marketPriorEvidence.coverage ?? null,

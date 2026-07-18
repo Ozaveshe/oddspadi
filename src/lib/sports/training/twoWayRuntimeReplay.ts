@@ -3,6 +3,11 @@ import { confidenceFromEdgeAndProbability } from "@/lib/sports/prediction/confid
 import { modelBasketballMatch } from "@/lib/sports/prediction/basketballModel";
 import { decisionModelIdentity, runtimeModelIdentityReceipt } from "@/lib/sports/prediction/modelIdentity";
 import { applyMarketPriorAdjustmentToMarkets } from "@/lib/sports/prediction/odds";
+import {
+  learnMarketPriorScalingPolicy,
+  marketPriorPolicyValidationRows,
+  type MarketPriorScalingObservation
+} from "@/lib/sports/prediction/marketPriorScaling";
 import { tennisModelRatingFromElo } from "@/lib/sports/prediction/historicalTennisStrength";
 import { modelTennisMatch } from "@/lib/sports/prediction/tennisModel";
 import {
@@ -15,6 +20,7 @@ import {
 import type {
   Match,
   MarketPriorAdjustment,
+  MarketPriorScalingPolicy,
   OddsMarket,
   ProbabilityCalibrationComparison,
   ProbabilityTemperatureScalingPolicy
@@ -121,6 +127,7 @@ export type TwoWayRuntimeReplayResult = {
   economicSelectionComparison: EconomicSelectionComparison;
   probabilityCalibrationPolicy: ProbabilityTemperatureScalingPolicy;
   probabilityCalibrationComparison: ProbabilityCalibrationComparison;
+  marketPriorScalingPolicy: MarketPriorScalingPolicy;
   marketPriorEvidence: MarketPriorReplayEvidence;
   config: ResolvedConfig;
   notes: string[];
@@ -690,7 +697,8 @@ function run(
     rows: readonly ModeledPrepared[],
     selectionConfig: ResolvedConfig,
     calibrationPolicy?: ProbabilityTemperatureScalingPolicy,
-    applyMarketPrior = false
+    applyMarketPrior = false,
+    marketPriorScalingPolicy?: MarketPriorScalingPolicy
   ): EvaluatedRows => {
     const marketPriorAdjustments: MarketPriorAdjustment[] = [];
     const results = rows.map((row) => {
@@ -701,7 +709,9 @@ function run(
         const prior = applyMarketPriorAdjustmentToMarkets(
           [{ marketId: "match_winner", probabilities }],
           row.prepared.match.oddsMarkets,
-          row.prepared.match.dataQualityScore
+          row.prepared.match.dataQualityScore,
+          undefined,
+          marketPriorScalingPolicy
         );
         marketPriorAdjustments.push(prior.adjustment);
         const posterior = prior.markets.find((market) => market.marketId === "match_winner")?.probabilities;
@@ -718,12 +728,42 @@ function run(
     trainingRows: rawTrainingResults,
     holdoutWindowStart: holdoutRows[0]?.kickoffAt ?? null
   });
-  const trainingPosterior = evaluateRows(modeledTraining, resolved, probabilityCalibrationPolicy, true);
+  const calibratedMarketObservations: MarketPriorScalingObservation[] = modeledTraining.map((modeled, index) => ({
+    kickoffAt: modeled.prepared.kickoffAt,
+    markets: [{
+      marketId: "match_winner",
+      probabilities: applyProbabilityTemperaturePolicy(modeled.probabilities, probabilityCalibrationPolicy)
+    }],
+    oddsMarkets: modeled.prepared.match.oddsMarkets,
+    dataQuality: modeled.prepared.match.dataQualityScore,
+    actualOutcome: rawTrainingResults[index]!.actualOutcome
+  }));
+  const marketPriorScalingPolicy = learnMarketPriorScalingPolicy({
+    trainingRows: probabilityPolicyValidationRows(calibratedMarketObservations, probabilityCalibrationPolicy),
+    holdoutWindowStart: holdoutRows[0]?.kickoffAt ?? null
+  });
+  const trainingPosterior = evaluateRows(
+    modeledTraining,
+    resolved,
+    probabilityCalibrationPolicy,
+    true,
+    marketPriorScalingPolicy
+  );
   const trainingResults = trainingPosterior.results;
-  const selectionTrainingResults = probabilityPolicyValidationRows(trainingResults, probabilityCalibrationPolicy);
+  const temperatureValidationResults = probabilityPolicyValidationRows(trainingResults, probabilityCalibrationPolicy);
+  const pricedTrainingFixtures = new Set(trainingResults.flatMap((result, index) =>
+    trainingPosterior.marketPriorAdjustments[index]?.applied ? [result.fixtureExternalId] : []
+  ));
+  const selectionTrainingResults = marketPriorPolicyValidationRows(
+    temperatureValidationResults,
+    marketPriorScalingPolicy,
+    (result) => pricedTrainingFixtures.has(result.fixtureExternalId)
+  );
   const usedTrainingValidation =
-    probabilityCalibrationPolicy.validationSampleSize >= 20 &&
-    selectionTrainingResults.length === probabilityCalibrationPolicy.validationSampleSize;
+    marketPriorScalingPolicy.validationSampleSize >= 20
+      ? selectionTrainingResults.length === marketPriorScalingPolicy.validationSampleSize
+      : probabilityCalibrationPolicy.validationSampleSize >= 20 &&
+        selectionTrainingResults.length === probabilityCalibrationPolicy.validationSampleSize;
   const trainingSummary = summary(selectionTrainingResults);
   const minimumEdge = clamp(resolved.minEdge + ((trainingSummary.yield ?? 0) < 0 ? 0.015 : 0), 0.02, 0.09);
   const holdoutSelectionConfig = { ...resolved, minEdge: minimumEdge };
@@ -739,7 +779,8 @@ function run(
     modeledHoldout,
     holdoutSelectionConfig,
     probabilityCalibrationPolicy,
-    true
+    true,
+    marketPriorScalingPolicy
   );
   const posteriorResults = holdoutPosterior.results;
   const probabilityCalibrationComparison = buildProbabilityCalibrationComparison({
@@ -756,7 +797,7 @@ function run(
   const holdoutSummary = summary(results);
   const identity = decisionModelIdentity(sport);
   const contract: TwoWayRuntimeFeatureContract = {
-    status: results.length > 0 && results.length === holdoutRows.length && trainingResults.length === trainingRows.length ? "passed" : "failed",
+    status: trainingRows.length > 0 && results.length > 0 && results.length === holdoutRows.length && trainingResults.length === trainingRows.length ? "passed" : "failed",
     version: identity.featureContractVersion,
     chronologyVersion: CHRONOLOGY_VERSION[sport],
     sourceFixtures: sourceCount,
@@ -789,6 +830,7 @@ function run(
     },
     probabilityCalibrationPolicy,
     probabilityCalibrationComparison,
+    marketPriorScalingPolicy,
     marketPriorEvidence
   });
   return {
@@ -822,6 +864,7 @@ function run(
     economicSelectionComparison,
     probabilityCalibrationPolicy,
     probabilityCalibrationComparison,
+    marketPriorScalingPolicy,
     marketPriorEvidence,
     config: resolved,
     notes: [
@@ -831,6 +874,9 @@ function run(
       probabilityCalibrationPolicy.status === "active"
         ? `Training fit/validation evidence activated temperature ${probabilityCalibrationPolicy.temperature.toFixed(3)}; it was frozen before holdout and changed holdout log loss by ${probabilityCalibrationComparison.logLossDelta ?? "n/a"}.`
         : `Training fit/validation evidence kept identity calibration (${probabilityCalibrationPolicy.reason}); holdout probabilities were not tuned.`,
+      marketPriorScalingPolicy.status === "active"
+        ? `A later priced training window validated market-prior scale ${marketPriorScalingPolicy.weightScale.toFixed(1)}; it was frozen before holdout.`
+        : `The market-prior blend retained identity scale 1 (${marketPriorScalingPolicy.reason}).`,
       marketPriorEvidence.status === "applied"
         ? `The live no-vig market prior adjusted ${marketPriorEvidence.adjustedFixtures}/${marketPriorEvidence.evaluatedFixtures} holdout fixture(s) at average weight ${marketPriorEvidence.averageWeight}; final-posterior log-loss delta ${marketPriorEvidence.probabilityComparison.logLossDelta ?? "n/a"}.`
         : "No coherent pre-match holdout market was available for live market-prior parity.",

@@ -197,7 +197,8 @@ export function buildPrediction(
     learnedCalibration.markets,
     match.oddsMarkets,
     learnedCalibrationDiagnostics.dataQualityScore,
-    marketPriorEvidencePolicy
+    marketPriorEvidencePolicy,
+    runtimeLearningProfile?.marketPriorScalingPolicy ?? undefined
   );
   const markets = marketPrior.markets;
   const diagnostics = applyMarketPriorAdjustmentToDiagnostics(learnedCalibrationDiagnostics, marketPrior.adjustment);

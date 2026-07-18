@@ -5630,6 +5630,56 @@ describe("prediction utilities", () => {
     expect(prediction.decision.saferAlternatives.some((alternative) => alternative.market === "Spread")).toBe(true);
   });
 
+  it("applies a model-bound market-prior scale in the live prediction path", async () => {
+    const [match] = await mockSportsDataProvider.getFixtures("2026-06-24", "basketball");
+    const baseline = buildPrediction(match);
+    const profile: DecisionLearningProfile = {
+      status: "active",
+      source: "prospective-runtime-replay",
+      active: true,
+      modelKey: baseline.diagnostics.modelVersion,
+      engineVersion: baseline.decision.engineVersion,
+      sampleSize: 1200,
+      realFinishedFixtures: 1200,
+      minimumRecommendedFixtures: 1000,
+      minimumEdge: null,
+      valueEdgeWeight: null,
+      dataQualityWeight: null,
+      marketAdjustmentWeight: null,
+      homeAdvantageElo: null,
+      marketPriorScalingPolicy: {
+        version: "market-prior-scaling-v1",
+        source: "chronological-priced-training-window",
+        status: "active",
+        weightScale: 0,
+        candidateWeightScale: 0,
+        fitSampleSize: 100,
+        validationSampleSize: 100,
+        fitWindowStart: "2025-01-01T00:00:00.000Z",
+        fitWindowEnd: "2025-03-31T00:00:00.000Z",
+        validationWindowStart: "2025-04-01T00:00:00.000Z",
+        validationWindowEnd: "2025-06-30T00:00:00.000Z",
+        holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+        baselineFit: { sampleSize: 100, brierScore: 0.2, logLoss: 0.6 },
+        candidateFit: { sampleSize: 100, brierScore: 0.19, logLoss: 0.59 },
+        baselineValidation: { sampleSize: 100, brierScore: 0.2, logLoss: 0.6 },
+        candidateValidation: { sampleSize: 100, brierScore: 0.19, logLoss: 0.59 },
+        reason: "validated-proper-score-improvement"
+      },
+      brierScore: 0.19,
+      yield: 0.04,
+      closingLineValue: 0.02,
+      generatedAt: "2026-06-24T10:00:00.000Z",
+      reason: "Model-bound replay policy is active.",
+      notes: []
+    };
+    const governed = buildPrediction(match, { learningProfile: profile });
+
+    expect(baseline.decision.marketPriorAdjustment?.averageWeight).toBeGreaterThan(0);
+    expect(governed.decision.marketPriorAdjustment).toMatchObject({ applied: true, weightScale: 0, averageWeight: 0 });
+    expect(governed.decision.learningProfile?.marketPriorScalingPolicy?.weightScale).toBe(0);
+  });
+
   it("builds tennis predictions with Elo, surface, set handicap, and total-games logic", async () => {
     const [match] = await mockSportsDataProvider.getFixtures("2026-06-24", "tennis");
     const prediction = buildPrediction(match);
@@ -13642,6 +13692,25 @@ describe("prediction utilities", () => {
                 baselineValidation: { sampleSize: 252, brierScore: 0.21, logLoss: 0.62 },
                 calibratedValidation: { sampleSize: 252, brierScore: 0.205, logLoss: 0.615 },
                 reason: "validated-proper-score-improvement"
+              },
+              marketPriorScalingPolicy: {
+                version: "market-prior-scaling-v1",
+                source: "chronological-priced-training-window",
+                status: "identity",
+                weightScale: 1,
+                candidateWeightScale: 1,
+                fitSampleSize: 126,
+                validationSampleSize: 126,
+                fitWindowStart: "2025-01-01T00:00:00.000Z",
+                fitWindowEnd: "2025-03-31T00:00:00.000Z",
+                validationWindowStart: "2025-04-01T00:00:00.000Z",
+                validationWindowEnd: "2025-06-30T00:00:00.000Z",
+                holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+                baselineFit: { sampleSize: 126, brierScore: 0.205, logLoss: 0.615 },
+                candidateFit: { sampleSize: 126, brierScore: 0.205, logLoss: 0.615 },
+                baselineValidation: { sampleSize: 126, brierScore: 0.204, logLoss: 0.614 },
+                candidateValidation: { sampleSize: 126, brierScore: 0.204, logLoss: 0.614 },
+                reason: "identity-won-fit"
               },
               marketPriorEvidence: {
                 version: "runtime-market-prior-parity-v1",

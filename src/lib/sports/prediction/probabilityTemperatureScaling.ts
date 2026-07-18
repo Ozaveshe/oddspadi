@@ -126,7 +126,9 @@ export function strictChronologicalSplitIndex<T extends { kickoffAt: string }>(
     const right = Date.parse(rows[index]!.kickoffAt);
     if (Number.isFinite(left) && Number.isFinite(right) && left < right) candidates.push(index);
   }
-  if (!candidates.length) return Math.max(minimum, Math.min(maximum, desiredSize));
+  // A numeric fallback would split an identical kickoff cohort across windows.
+  // Return 0 so callers fail closed when no strict timestamp boundary exists.
+  if (!candidates.length) return 0;
   return candidates.reduce((best, candidate) => {
     const distance = Math.abs(candidate - desiredSize);
     const bestDistance = Math.abs(best - desiredSize);

@@ -55,6 +55,7 @@ async function main(): Promise<void> {
       economicSelectionComparison: "economicSelectionComparison" in result ? result.economicSelectionComparison : null,
       probabilityCalibrationPolicy: "probabilityCalibrationPolicy" in result ? result.probabilityCalibrationPolicy : null,
       probabilityCalibrationComparison: "probabilityCalibrationComparison" in result ? result.probabilityCalibrationComparison : null,
+      marketPriorScalingPolicy: "marketPriorScalingPolicy" in result ? result.marketPriorScalingPolicy : null,
       marketPriorEvidence: "marketPriorEvidence" in result ? result.marketPriorEvidence : null
     }));
   }
