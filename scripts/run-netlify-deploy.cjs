@@ -41,8 +41,6 @@ const netlifyArgs = [
   functionsDirectory,
   "--site",
   siteId,
-  "--context",
-  context,
   "--alias",
   alias,
   "--message",
