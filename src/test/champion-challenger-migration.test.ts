@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
-const migration = "supabase/migrations/20260718033330_champion_challenger_governance.sql";
+const migration = "supabase/migrations/20260718043559_champion_challenger_governance.sql";
 
 describe("champion challenger migration", () => {
   it("keeps receipts immutable and private to the service role", async () => {
