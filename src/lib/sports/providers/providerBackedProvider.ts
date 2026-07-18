@@ -31,6 +31,13 @@ type EnvMap = Record<string, string | undefined>;
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 export type ProviderFixtureReadOptions = { storedEnrichment?: boolean };
 
+const NETLIFY_DEPLOY_CONTEXTS = new Set(["production", "deploy-preview", "branch-deploy"]);
+
+function isDeployedRuntime(env: EnvMap): boolean {
+  const context = env.CONTEXT?.trim().toLowerCase();
+  return env.NODE_ENV === "production" || (context ? NETLIFY_DEPLOY_CONTEXTS.has(context) : false);
+}
+
 type ApiFootballFixture = {
   fixture?: {
     id?: number | string;
@@ -2029,7 +2036,7 @@ export function getSportsProviderRuntimeStatus(env: EnvMap = process.env): Provi
   const oddsApiConfigured = Boolean(firstEnv(env, ["THE_ODDS_API_KEY", "ODDS_API_KEY"]));
   const weatherApiConfigured = Boolean(firstEnv(env, ["WEATHER_API_KEY", "OPENWEATHER_API_KEY"]));
   const liveRuntimeBacked = sportsApiConfigured || oddsApiConfigured;
-  const production = env.NODE_ENV === "production" || env.CONTEXT === "production";
+  const production = isDeployedRuntime(env);
   return {
     runtimeProvider: liveRuntimeBacked ? "providerBackedSportsDataProvider" : production ? "unavailable" : "mockSportsDataProvider",
     liveRuntimeBacked,
@@ -2113,7 +2120,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
 
   private get fallback(): SportsDataProvider {
     if (this.options.fallback) return this.options.fallback;
-    return this.env.NODE_ENV === "production" || this.env.CONTEXT === "production"
+    return isDeployedRuntime(this.env)
       ? unavailableSportsDataProvider
       : mockSportsDataProvider;
   }
