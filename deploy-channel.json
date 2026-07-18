@@ -6,7 +6,8 @@
   "netlify": {
     "siteId": "3ba4bf38-60ec-4bc4-b49f-aca9495a9aa2",
     "siteName": "oddspadi",
-    "productionUrl": "https://oddspadi.com"
+    "productionUrl": "https://oddspadi.com",
+    "releaseAlias": "release-524c0b5-prod"
   },
   "supabase": {
     "projectRef": "wncwtzqipnoqwmqlznqn",

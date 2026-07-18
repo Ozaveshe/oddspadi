@@ -7,9 +7,10 @@ const { spawnSync } = require("node:child_process");
 const workspaceRoot = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(workspaceRoot, "deploy-channel.json"), "utf8"));
 const siteId = manifest?.netlify?.siteId;
+const releaseAlias = manifest?.netlify?.releaseAlias;
 
-if (!siteId || manifest?.product !== "OddsPadi") {
-  console.error("OddsPadi deploy manifest is missing its locked Netlify site ID.");
+if (!siteId || !releaseAlias || manifest?.product !== "OddsPadi") {
+  console.error("OddsPadi deploy manifest is missing its locked Netlify site ID or release alias.");
   process.exit(1);
 }
 
@@ -21,11 +22,12 @@ const gitResult = spawnSync("git", ["rev-parse", "--short=8", "HEAD"], {
   windowsHide: true
 });
 const shortSha = gitResult.status === 0 ? gitResult.stdout.trim() : "candidate";
-const alias = `release-${shortSha}-candidate`;
+const alias = releaseAlias;
+const context = `branch:${releaseAlias}`;
 const message = production
   ? `OddsPadi production candidate ${shortSha}`
   : `OddsPadi verified preview ${shortSha}`;
-const buildArgs = ["netlify", "build", "--context", "deploy-preview"];
+const buildArgs = ["netlify", "build", "--context", context];
 const functionsDirectory = path.join(workspaceRoot, ".netlify", "functions");
 const functionsManifestPath = path.join(functionsDirectory, "manifest.json");
 const publishDirectory = path.join(workspaceRoot, ".netlify", "static");
@@ -40,7 +42,7 @@ const netlifyArgs = [
   "--site",
   siteId,
   "--context",
-  "deploy-preview",
+  context,
   "--alias",
   alias,
   "--message",

@@ -14,7 +14,8 @@ const expected = {
   netlify: {
     siteId: "3ba4bf38-60ec-4bc4-b49f-aca9495a9aa2",
     siteName: "oddspadi",
-    productionUrl: "https://oddspadi.com"
+    productionUrl: "https://oddspadi.com",
+    releaseAlias: "release-524c0b5-prod"
   },
   supabase: {
     projectRef: "wncwtzqipnoqwmqlznqn",
@@ -88,6 +89,7 @@ if (manifest) {
   assertEqual("Netlify site ID", manifest.netlify?.siteId, expected.netlify.siteId);
   assertEqual("Netlify site name", manifest.netlify?.siteName, expected.netlify.siteName);
   assertEqual("Netlify production URL", manifest.netlify?.productionUrl, expected.netlify.productionUrl);
+  assertEqual("Netlify release alias", manifest.netlify?.releaseAlias, expected.netlify.releaseAlias);
   assertEqual("Supabase project ref", manifest.supabase?.projectRef, expected.supabase.projectRef);
   assertEqual("Supabase project URL", manifest.supabase?.projectUrl, expected.supabase.projectUrl);
 }
