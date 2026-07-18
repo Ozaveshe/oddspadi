@@ -107,9 +107,9 @@ describe("basketball and tennis exact runtime replay", () => {
       reason: "insufficient-priced-sample"
     });
     expect(result.empiricalValueGuardPolicy).toMatchObject({
-      source: "chronological-final-posterior-training-window",
+      source: "chronological-final-posterior-regime-windows",
       status: "abstain",
-      reason: expect.stringMatching(/insufficient-bucket-sample|invalid-chronology/)
+      reason: expect.stringMatching(/insufficient-regime-sample|invalid-chronology/)
     });
     expect(result.empiricalValueGuardComparison.selected.pickCount).toBeLessThanOrEqual(
       result.empiricalValueGuardComparison.baseline.pickCount
@@ -153,8 +153,20 @@ describe("basketball and tennis exact runtime replay", () => {
     const baseline = runBasketballRuntimeReplay(longBasketballHistory(), { trainRatio: 0.75, minPriorMatches: 3 });
     const reversedHoldout = runBasketballRuntimeReplay(longBasketballHistory(true), { trainRatio: 0.75, minPriorMatches: 3 });
 
-    expect(baseline.empiricalValueGuardPolicy).toMatchObject({ status: "active", reason: "eligible-probability-buckets" });
+    expect(baseline.empiricalValueGuardPolicy).toMatchObject({ status: "active", reason: "stable-regime-buckets" });
     expect(baseline.empiricalValueGuardPolicy.buckets.some((bucket) => bucket.eligible)).toBe(true);
+    expect(Date.parse(baseline.empiricalValueGuardPolicy.earlierWindow.windowEnd!)).toBeLessThan(
+      Date.parse(baseline.empiricalValueGuardPolicy.recentWindow.windowStart!)
+    );
+    expect(baseline.empiricalValueGuardPolicy.buckets.filter((bucket) => bucket.eligible).every((bucket) =>
+      bucket.earlier.sampleSize >= baseline.empiricalValueGuardPolicy.minimumRegimeSample &&
+      bucket.recent.sampleSize >= baseline.empiricalValueGuardPolicy.minimumRegimeSample &&
+      bucket.probabilityFloor === Math.min(
+        bucket.aggregateProbabilityFloor!,
+        bucket.earlier.probabilityFloor!,
+        bucket.recent.probabilityFloor!
+      )
+    )).toBe(true);
     expect(reversedHoldout.empiricalValueGuardPolicy).toEqual(baseline.empiricalValueGuardPolicy);
     expect(Date.parse(baseline.empiricalValueGuardPolicy.windowEnd!)).toBeLessThan(Date.parse(baseline.testWindowStart!));
     expect(baseline.empiricalValueGuardComparison.picksRemoved).toBeGreaterThanOrEqual(0);

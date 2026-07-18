@@ -467,27 +467,50 @@ export interface EmpiricalValueGuardBucket {
   sampleSize: number;
   averageProbability: number;
   observedRate: number;
+  aggregateProbabilityFloor: number | null;
   probabilityFloor: number | null;
   eligible: boolean;
+  earlier: EmpiricalValueGuardRegimeEvidence;
+  recent: EmpiricalValueGuardRegimeEvidence;
+}
+
+export interface EmpiricalValueGuardRegimeEvidence {
+  sampleSize: number;
+  averageProbability: number | null;
+  observedRate: number | null;
+  probabilityFloor: number | null;
+}
+
+export interface EmpiricalValueGuardWindow {
+  windowStart: string | null;
+  windowEnd: string | null;
+  sampleSize: number;
 }
 
 export interface EmpiricalValueGuardPolicy {
-  version: "empirical-value-guard-v1";
-  source: "chronological-final-posterior-training-window";
+  version: "empirical-value-guard-v2";
+  source: "chronological-final-posterior-regime-windows";
   status: "active" | "abstain";
   confidenceLevel: 0.95;
+  regimeConfidenceLevel: 0.975;
   minimumBucketSample: number;
+  minimumRegimeSample: number;
   sampleSize: number;
   windowStart: string | null;
   windowEnd: string | null;
   holdoutWindowStart: string | null;
+  earlierWindow: EmpiricalValueGuardWindow;
+  recentWindow: EmpiricalValueGuardWindow;
   buckets: EmpiricalValueGuardBucket[];
-  reason: "eligible-probability-buckets" | "insufficient-bucket-sample" | "invalid-chronology";
+  reason: "stable-regime-buckets" | "insufficient-regime-sample" | "invalid-chronology";
 }
 
 export interface EmpiricalValueGuardDecision {
   status: "passed" | "blocked" | "not-applied";
   probabilityFloor: number | null;
+  earlierProbabilityFloor: number | null;
+  recentProbabilityFloor: number | null;
+  regimeObservedRateDrift: number | null;
   conservativeEdge: number | null;
   conservativeExpectedValue: number | null;
   bucketSampleSize: number | null;

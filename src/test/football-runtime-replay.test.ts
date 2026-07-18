@@ -120,9 +120,9 @@ describe("football exact runtime replay", () => {
       reason: "insufficient-priced-sample"
     });
     expect(result.empiricalValueGuardPolicy).toMatchObject({
-      source: "chronological-final-posterior-training-window",
+      source: "chronological-final-posterior-regime-windows",
       status: "abstain",
-      reason: expect.stringMatching(/insufficient-bucket-sample|invalid-chronology/)
+      reason: expect.stringMatching(/insufficient-regime-sample|invalid-chronology/)
     });
     expect(result.empiricalValueGuardComparison.selected.pickCount).toBeLessThanOrEqual(
       result.empiricalValueGuardComparison.baseline.pickCount

@@ -84,6 +84,10 @@ export type MultiSportBacktestJob = {
     empiricalValueGuardStatus: "active" | "abstain" | null;
     empiricalValueGuardSampleSize: number | null;
     empiricalValueGuardEligibleBuckets: number | null;
+    empiricalValueGuardMinimumRegimeSample: number | null;
+    empiricalValueGuardEarlierSampleSize: number | null;
+    empiricalValueGuardRecentSampleSize: number | null;
+    empiricalValueGuardLargestRateDrift: number | null;
     empiricalValueGuardBaselinePickCount: number | null;
     empiricalValueGuardSelectedPickCount: number | null;
     empiricalValueGuardPicksRemoved: number | null;
@@ -182,6 +186,10 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
       empiricalValueGuardStatus: null,
       empiricalValueGuardSampleSize: null,
       empiricalValueGuardEligibleBuckets: null,
+      empiricalValueGuardMinimumRegimeSample: null,
+      empiricalValueGuardEarlierSampleSize: null,
+      empiricalValueGuardRecentSampleSize: null,
+      empiricalValueGuardLargestRateDrift: null,
       empiricalValueGuardBaselinePickCount: null,
       empiricalValueGuardSelectedPickCount: null,
       empiricalValueGuardPicksRemoved: null,
@@ -202,6 +210,12 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
     : null;
   const marketValidationLogLossDelta = marketPolicy && marketPolicy.baselineValidation.logLoss !== null && marketPolicy.candidateValidation.logLoss !== null
     ? marketPolicy.candidateValidation.logLoss - marketPolicy.baselineValidation.logLoss
+    : null;
+  const eligibleValueGuardBuckets = runtimeResult?.empiricalValueGuardPolicy.buckets.filter((bucket) => bucket.eligible) ?? [];
+  const largestValueGuardRateDrift = eligibleValueGuardBuckets.length
+    ? Math.max(...eligibleValueGuardBuckets.map((bucket) => Math.abs(
+        (bucket.recent.observedRate ?? 0) - (bucket.earlier.observedRate ?? 0)
+      )))
     : null;
   return {
     status: result.status,
@@ -233,6 +247,10 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
     empiricalValueGuardEligibleBuckets: runtimeResult
       ? runtimeResult.empiricalValueGuardPolicy.buckets.filter((bucket) => bucket.eligible).length
       : null,
+    empiricalValueGuardMinimumRegimeSample: runtimeResult?.empiricalValueGuardPolicy.minimumRegimeSample ?? null,
+    empiricalValueGuardEarlierSampleSize: runtimeResult?.empiricalValueGuardPolicy.earlierWindow.sampleSize ?? null,
+    empiricalValueGuardRecentSampleSize: runtimeResult?.empiricalValueGuardPolicy.recentWindow.sampleSize ?? null,
+    empiricalValueGuardLargestRateDrift: largestValueGuardRateDrift,
     empiricalValueGuardBaselinePickCount: runtimeResult?.empiricalValueGuardComparison.baseline.pickCount ?? null,
     empiricalValueGuardSelectedPickCount: runtimeResult?.empiricalValueGuardComparison.selected.pickCount ?? null,
     empiricalValueGuardPicksRemoved: runtimeResult?.empiricalValueGuardComparison.picksRemoved ?? null,

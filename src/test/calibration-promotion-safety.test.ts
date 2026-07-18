@@ -61,21 +61,48 @@ function activeProfile(): DecisionLearningProfile {
 
 function empiricalValueGuardPolicy() {
   return {
-    version: "empirical-value-guard-v1",
-    source: "chronological-final-posterior-training-window",
+    version: "empirical-value-guard-v2",
+    source: "chronological-final-posterior-regime-windows",
     status: "active",
     confidenceLevel: 0.95,
-    minimumBucketSample: 30,
+    regimeConfidenceLevel: 0.975,
+    minimumBucketSample: 60,
+    minimumRegimeSample: 30,
     sampleSize: 378,
     windowStart: "2025-04-01T12:00:00.000Z",
     windowEnd: "2025-06-30T12:00:00.000Z",
     holdoutWindowStart: "2025-07-01T12:00:00.000Z",
+    earlierWindow: {
+      windowStart: "2025-04-01T12:00:00.000Z",
+      windowEnd: "2025-05-15T12:00:00.000Z",
+      sampleSize: 189
+    },
+    recentWindow: {
+      windowStart: "2025-05-16T12:00:00.000Z",
+      windowEnd: "2025-06-30T12:00:00.000Z",
+      sampleSize: 189
+    },
     buckets: [
-      { minProbability: 0.2, maxProbability: 0.3, sampleSize: 126, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.181603, eligible: true },
-      { minProbability: 0.3, maxProbability: 0.4, sampleSize: 126, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.268399, eligible: true },
-      { minProbability: 0.4, maxProbability: 0.5, sampleSize: 126, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.388882, eligible: true }
+      {
+        minProbability: 0.2, maxProbability: 0.3, sampleSize: 126, averageProbability: 0.25, observedRate: 0.238095,
+        aggregateProbabilityFloor: 0.181603, probabilityFloor: 0.149938, eligible: true,
+        earlier: { sampleSize: 63, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.149938 },
+        recent: { sampleSize: 63, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.149938 }
+      },
+      {
+        minProbability: 0.3, maxProbability: 0.4, sampleSize: 126, averageProbability: 0.35, observedRate: 0.333333,
+        aggregateProbabilityFloor: 0.268399, probabilityFloor: 0.229496, eligible: true,
+        earlier: { sampleSize: 63, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.229496 },
+        recent: { sampleSize: 63, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.229496 }
+      },
+      {
+        minProbability: 0.4, maxProbability: 0.5, sampleSize: 126, averageProbability: 0.45, observedRate: 0.460317,
+        aggregateProbabilityFloor: 0.388882, probabilityFloor: 0.343089, eligible: true,
+        earlier: { sampleSize: 63, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.343089 },
+        recent: { sampleSize: 63, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.343089 }
+      }
     ],
-    reason: "eligible-probability-buckets"
+    reason: "stable-regime-buckets"
   };
 }
 
@@ -573,6 +600,49 @@ describe("calibration promotion safety", () => {
     });
     expect(forgedProfile.active).toBe(false);
     expect(forgedProfile.empiricalValueGuardPolicy).toBeNull();
+
+    const forgedRecentFloor = readySnapshot();
+    const recentFloorPolicy = forgedRecentFloor.latestBacktest!.config?.empiricalValueGuardPolicy as ReturnType<typeof empiricalValueGuardPolicy>;
+    forgedRecentFloor.latestBacktest = {
+      ...forgedRecentFloor.latestBacktest!,
+      config: {
+        ...forgedRecentFloor.latestBacktest!.config,
+        empiricalValueGuardPolicy: {
+          ...recentFloorPolicy,
+          buckets: recentFloorPolicy.buckets.map((bucket, index) => index === 0
+            ? { ...bucket, recent: { ...bucket.recent, probabilityFloor: 0.2 } }
+            : bucket)
+        }
+      }
+    };
+    const forgedRecentFloorProfile = buildDecisionLearningProfileFromSnapshot(forgedRecentFloor, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(forgedRecentFloorProfile.active).toBe(false);
+    expect(forgedRecentFloorProfile.empiricalValueGuardPolicy).toBeNull();
+
+    const overlappingRegimes = readySnapshot();
+    const overlappingPolicy = overlappingRegimes.latestBacktest!.config?.empiricalValueGuardPolicy as ReturnType<typeof empiricalValueGuardPolicy>;
+    overlappingRegimes.latestBacktest = {
+      ...overlappingRegimes.latestBacktest!,
+      config: {
+        ...overlappingRegimes.latestBacktest!.config,
+        empiricalValueGuardPolicy: {
+          ...overlappingPolicy,
+          recentWindow: {
+            ...overlappingPolicy.recentWindow,
+            windowStart: overlappingPolicy.earlierWindow.windowEnd
+          }
+        }
+      }
+    };
+    const overlappingRegimesProfile = buildDecisionLearningProfileFromSnapshot(overlappingRegimes, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(overlappingRegimesProfile.active).toBe(false);
+    expect(overlappingRegimesProfile.empiricalValueGuardPolicy).toBeNull();
 
     const forgedComparison = readySnapshot();
     forgedComparison.latestBacktest = {

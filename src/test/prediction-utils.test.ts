@@ -5699,25 +5699,32 @@ describe("prediction utilities", () => {
       homeAdvantageElo: null,
       allowedConfidenceBands: ["medium", "high"],
       empiricalValueGuardPolicy: {
-        version: "empirical-value-guard-v1",
-        source: "chronological-final-posterior-training-window",
+        version: "empirical-value-guard-v2",
+        source: "chronological-final-posterior-regime-windows",
         status: "active",
         confidenceLevel: 0.95,
-        minimumBucketSample: 30,
-        sampleSize: 300,
+        regimeConfidenceLevel: 0.975,
+        minimumBucketSample: 60,
+        minimumRegimeSample: 30,
+        sampleSize: 600,
         windowStart: "2025-04-01T00:00:00.000Z",
         windowEnd: "2025-06-30T00:00:00.000Z",
         holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+        earlierWindow: { windowStart: "2025-04-01T00:00:00.000Z", windowEnd: "2025-05-15T00:00:00.000Z", sampleSize: 300 },
+        recentWindow: { windowStart: "2025-05-16T00:00:00.000Z", windowEnd: "2025-06-30T00:00:00.000Z", sampleSize: 300 },
         buckets: Array.from({ length: 10 }, (_, index) => ({
           minProbability: index / 10,
           maxProbability: (index + 1) / 10,
-          sampleSize: 30,
+          sampleSize: 60,
           averageProbability: (index + 0.5) / 10,
           observedRate: 0,
+          aggregateProbabilityFloor: 0,
           probabilityFloor: 0,
-          eligible: true
+          eligible: true,
+          earlier: { sampleSize: 30, averageProbability: (index + 0.5) / 10, observedRate: 0, probabilityFloor: 0 },
+          recent: { sampleSize: 30, averageProbability: (index + 0.5) / 10, observedRate: 0, probabilityFloor: 0 }
         })),
-        reason: "eligible-probability-buckets"
+        reason: "stable-regime-buckets"
       },
       brierScore: 0.19,
       yield: 0.04,
@@ -13767,21 +13774,40 @@ describe("prediction utilities", () => {
                 reason: "identity-won-fit"
               },
               empiricalValueGuardPolicy: {
-                version: "empirical-value-guard-v1",
-                source: "chronological-final-posterior-training-window",
+                version: "empirical-value-guard-v2",
+                source: "chronological-final-posterior-regime-windows",
                 status: "active",
                 confidenceLevel: 0.95,
-                minimumBucketSample: 30,
+                regimeConfidenceLevel: 0.975,
+                minimumBucketSample: 60,
+                minimumRegimeSample: 30,
                 sampleSize: 378,
                 windowStart: "2025-04-01T00:00:00.000Z",
                 windowEnd: "2025-06-30T00:00:00.000Z",
                 holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+                earlierWindow: { windowStart: "2025-04-01T00:00:00.000Z", windowEnd: "2025-05-15T00:00:00.000Z", sampleSize: 189 },
+                recentWindow: { windowStart: "2025-05-16T00:00:00.000Z", windowEnd: "2025-06-30T00:00:00.000Z", sampleSize: 189 },
                 buckets: [
-                  { minProbability: 0.2, maxProbability: 0.3, sampleSize: 126, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.181603, eligible: true },
-                  { minProbability: 0.3, maxProbability: 0.4, sampleSize: 126, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.268399, eligible: true },
-                  { minProbability: 0.4, maxProbability: 0.5, sampleSize: 126, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.388882, eligible: true }
+                  {
+                    minProbability: 0.2, maxProbability: 0.3, sampleSize: 126, averageProbability: 0.25, observedRate: 0.238095,
+                    aggregateProbabilityFloor: 0.181603, probabilityFloor: 0.149938, eligible: true,
+                    earlier: { sampleSize: 63, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.149938 },
+                    recent: { sampleSize: 63, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.149938 }
+                  },
+                  {
+                    minProbability: 0.3, maxProbability: 0.4, sampleSize: 126, averageProbability: 0.35, observedRate: 0.333333,
+                    aggregateProbabilityFloor: 0.268399, probabilityFloor: 0.229496, eligible: true,
+                    earlier: { sampleSize: 63, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.229496 },
+                    recent: { sampleSize: 63, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.229496 }
+                  },
+                  {
+                    minProbability: 0.4, maxProbability: 0.5, sampleSize: 126, averageProbability: 0.45, observedRate: 0.460317,
+                    aggregateProbabilityFloor: 0.388882, probabilityFloor: 0.343089, eligible: true,
+                    earlier: { sampleSize: 63, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.343089 },
+                    recent: { sampleSize: 63, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.343089 }
+                  }
                 ],
-                reason: "eligible-probability-buckets"
+                reason: "stable-regime-buckets"
               },
               empiricalValueGuardComparison: {
                 baseline: { pickCount: 72, roiUnits: 5.4, yield: 0.075 },

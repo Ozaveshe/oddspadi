@@ -318,7 +318,9 @@ function empiricalValueGuardPolicy(
   const policy = record(backtest.config?.empiricalValueGuardPolicy);
   const status = policy.status === "active" || policy.status === "abstain" ? policy.status : null;
   const confidenceLevel = finiteNumber(policy.confidenceLevel);
+  const regimeConfidenceLevel = finiteNumber(policy.regimeConfidenceLevel);
   const minimumBucketSample = finiteNumber(policy.minimumBucketSample);
+  const minimumRegimeSample = finiteNumber(policy.minimumRegimeSample);
   const sampleSize = finiteNumber(policy.sampleSize);
   const windowStart = typeof policy.windowStart === "string" ? policy.windowStart : null;
   const windowEnd = typeof policy.windowEnd === "string" ? policy.windowEnd : null;
@@ -326,34 +328,59 @@ function empiricalValueGuardPolicy(
   const reason = policy.reason;
   const selectionCount = backtest.sport === "football" ? 3 : backtest.sport === "basketball" || backtest.sport === "tennis" ? 2 : 0;
   const contractValid =
-    policy.version === "empirical-value-guard-v1" &&
-    policy.source === "chronological-final-posterior-training-window" &&
+    policy.version === "empirical-value-guard-v2" &&
+    policy.source === "chronological-final-posterior-regime-windows" &&
     status !== null &&
     confidenceLevel === 0.95 &&
-    minimumBucketSample !== null && Number.isInteger(minimumBucketSample) && minimumBucketSample >= 30 &&
+    regimeConfidenceLevel === 0.975 &&
+    minimumBucketSample !== null && Number.isInteger(minimumBucketSample) && minimumBucketSample >= 60 &&
+    minimumRegimeSample !== null && Number.isInteger(minimumRegimeSample) && minimumRegimeSample >= 30 &&
+    minimumBucketSample === minimumRegimeSample * 2 &&
     sampleSize !== null && Number.isInteger(sampleSize) && sampleSize === marketPolicy.validationSampleSize * selectionCount &&
-    (reason === "eligible-probability-buckets" || reason === "insufficient-bucket-sample");
+    (reason === "stable-regime-buckets" || reason === "insufficient-regime-sample");
   if (!contractValid) return null;
 
+  const earlierWindowRow = record(policy.earlierWindow);
+  const recentWindowRow = record(policy.recentWindow);
+  const parseWindow = (value: Record<string, unknown>) => {
+    const resolvedStart = typeof value.windowStart === "string" ? value.windowStart : null;
+    const resolvedEnd = typeof value.windowEnd === "string" ? value.windowEnd : null;
+    const resolvedSample = finiteNumber(value.sampleSize);
+    return resolvedStart && resolvedEnd &&
+      Number.isFinite(Date.parse(resolvedStart)) && Number.isFinite(Date.parse(resolvedEnd)) &&
+      Date.parse(resolvedStart) <= Date.parse(resolvedEnd) &&
+      resolvedSample !== null && Number.isInteger(resolvedSample) && resolvedSample > 0
+      ? { windowStart: resolvedStart, windowEnd: resolvedEnd, sampleSize: resolvedSample }
+      : null;
+  };
+  const earlierWindow = parseWindow(earlierWindowRow);
+  const recentWindow = parseWindow(recentWindowRow);
   const chronologyValid = Boolean(
-    windowStart && windowEnd && holdoutWindowStart && marketPolicy.validationWindowStart && marketPolicy.validationWindowEnd &&
+    windowStart && windowEnd && holdoutWindowStart && earlierWindow && recentWindow &&
+    marketPolicy.validationWindowStart && marketPolicy.validationWindowEnd &&
     Number.isFinite(Date.parse(windowStart)) &&
     Date.parse(windowStart) >= Date.parse(marketPolicy.validationWindowStart) &&
-    Date.parse(windowStart) <= Date.parse(windowEnd) &&
+    earlierWindow!.windowStart === windowStart &&
+    Date.parse(earlierWindow!.windowEnd) < Date.parse(recentWindow!.windowStart) &&
+    recentWindow!.windowEnd === windowEnd &&
     Date.parse(windowEnd) <= Date.parse(marketPolicy.validationWindowEnd) &&
     Date.parse(windowEnd) < Date.parse(holdoutWindowStart) &&
-    holdoutWindowStart === marketPolicy.holdoutWindowStart
+    holdoutWindowStart === marketPolicy.holdoutWindowStart &&
+    earlierWindow!.sampleSize + recentWindow!.sampleSize === sampleSize &&
+    earlierWindow!.sampleSize % selectionCount === 0 &&
+    recentWindow!.sampleSize % selectionCount === 0
   );
   if (!chronologyValid || !Array.isArray(policy.buckets)) return null;
 
-  const z = 1.6448536269514722;
-  const wilsonFloor = (observedRate: number, count: number) => {
+  const wilsonFloor = (observedRate: number, count: number, z: number) => {
     const zSquared = z * z;
     const denominator = 1 + zSquared / count;
     const center = (observedRate + zSquared / (2 * count)) / denominator;
     const margin = z * Math.sqrt((observedRate * (1 - observedRate)) / count + zSquared / (4 * count * count)) / denominator;
     return Math.max(0, center - margin);
   };
+  const successCountValid = (observedRate: number, count: number) =>
+    Math.abs(observedRate * count - Math.round(observedRate * count)) <= Math.max(0.0001, count * 0.00000051);
   const buckets = policy.buckets.flatMap((value) => {
     const bucket = record(value);
     const minProbability = finiteNumber(bucket.minProbability);
@@ -361,8 +388,41 @@ function empiricalValueGuardPolicy(
     const bucketSampleSize = finiteNumber(bucket.sampleSize);
     const averageProbability = finiteNumber(bucket.averageProbability);
     const observedRate = finiteNumber(bucket.observedRate);
+    const aggregateProbabilityFloor = bucket.aggregateProbabilityFloor === null ? null : finiteNumber(bucket.aggregateProbabilityFloor);
     const probabilityFloor = bucket.probabilityFloor === null ? null : finiteNumber(bucket.probabilityFloor);
     const eligible = bucket.eligible === true;
+    const regimeEvidence = (input: unknown) => {
+      const row = record(input);
+      const regimeSampleSize = finiteNumber(row.sampleSize);
+      const regimeAverageProbability = row.averageProbability === null ? null : finiteNumber(row.averageProbability);
+      const regimeObservedRate = row.observedRate === null ? null : finiteNumber(row.observedRate);
+      const regimeProbabilityFloor = row.probabilityFloor === null ? null : finiteNumber(row.probabilityFloor);
+      if (regimeSampleSize === null || !Number.isInteger(regimeSampleSize) || regimeSampleSize < 0) return null;
+      if (regimeSampleSize === 0) {
+        return row.averageProbability === null && row.observedRate === null && row.probabilityFloor === null
+          ? { sampleSize: 0, averageProbability: null, observedRate: null, probabilityFloor: null }
+          : null;
+      }
+      const valid =
+        regimeAverageProbability !== null && regimeAverageProbability >= minProbability! && regimeAverageProbability <= maxProbability! &&
+        regimeObservedRate !== null && regimeObservedRate >= 0 && regimeObservedRate <= 1 &&
+        successCountValid(regimeObservedRate, regimeSampleSize) &&
+        regimeProbabilityFloor !== null &&
+        Math.abs(regimeProbabilityFloor - wilsonFloor(regimeObservedRate, regimeSampleSize, 1.959963984540054)) <= 0.000002;
+      return valid
+        ? { sampleSize: regimeSampleSize, averageProbability: regimeAverageProbability, observedRate: regimeObservedRate, probabilityFloor: regimeProbabilityFloor }
+        : null;
+    };
+    const earlier = regimeEvidence(bucket.earlier);
+    const recent = regimeEvidence(bucket.recent);
+    const expectedEligible = Boolean(
+      bucketSampleSize !== null && bucketSampleSize >= minimumBucketSample! &&
+      earlier && earlier.sampleSize >= minimumRegimeSample! &&
+      recent && recent.sampleSize >= minimumRegimeSample!
+    );
+    const expectedStableFloor = expectedEligible && aggregateProbabilityFloor !== null && earlier && recent && earlier.probabilityFloor !== null && recent.probabilityFloor !== null
+      ? Math.min(aggregateProbabilityFloor, earlier.probabilityFloor, recent.probabilityFloor)
+      : null;
     const valid =
       minProbability !== null && minProbability >= 0 &&
       maxProbability !== null && maxProbability <= 1 && maxProbability > minProbability &&
@@ -371,32 +431,59 @@ function empiricalValueGuardPolicy(
       bucketSampleSize !== null && Number.isInteger(bucketSampleSize) && bucketSampleSize > 0 &&
       averageProbability !== null && averageProbability >= minProbability && averageProbability <= maxProbability &&
       observedRate !== null && observedRate >= 0 && observedRate <= 1 &&
-      Math.abs(observedRate * bucketSampleSize - Math.round(observedRate * bucketSampleSize)) <= 0.0001 &&
-      eligible === (bucketSampleSize >= minimumBucketSample!) &&
+      successCountValid(observedRate, bucketSampleSize) &&
+      aggregateProbabilityFloor !== null &&
+      Math.abs(aggregateProbabilityFloor - wilsonFloor(observedRate, bucketSampleSize, 1.6448536269514722)) <= 0.000002 &&
+      earlier !== null && recent !== null &&
+      bucketSampleSize === earlier.sampleSize + recent.sampleSize &&
+      Math.abs(averageProbability - (
+        ((earlier.averageProbability ?? 0) * earlier.sampleSize + (recent.averageProbability ?? 0) * recent.sampleSize) / bucketSampleSize
+      )) <= 0.000002 &&
+      Math.abs(observedRate - (
+        ((earlier.observedRate ?? 0) * earlier.sampleSize + (recent.observedRate ?? 0) * recent.sampleSize) / bucketSampleSize
+      )) <= 0.000002 &&
+      eligible === expectedEligible &&
       (eligible
-        ? probabilityFloor !== null && Math.abs(probabilityFloor - wilsonFloor(observedRate, bucketSampleSize)) <= 0.000002
+        ? probabilityFloor !== null && expectedStableFloor !== null && Math.abs(probabilityFloor - expectedStableFloor) <= 0.000002
         : probabilityFloor === null);
-    return valid ? [{ minProbability, maxProbability, sampleSize: bucketSampleSize, averageProbability, observedRate, probabilityFloor, eligible }] : [];
+    return valid ? [{
+      minProbability,
+      maxProbability,
+      sampleSize: bucketSampleSize,
+      averageProbability,
+      observedRate,
+      aggregateProbabilityFloor,
+      probabilityFloor,
+      eligible,
+      earlier,
+      recent
+    }] : [];
   }).sort((left, right) => left.minProbability - right.minProbability);
   if (buckets.length !== policy.buckets.length || !buckets.length) return null;
   if (buckets.some((bucket, index) => index > 0 && bucket.minProbability < buckets[index - 1]!.maxProbability)) return null;
   if (buckets.reduce((sum, bucket) => sum + bucket.sampleSize, 0) !== sampleSize) return null;
+  if (buckets.reduce((sum, bucket) => sum + bucket.earlier.sampleSize, 0) !== earlierWindow!.sampleSize) return null;
+  if (buckets.reduce((sum, bucket) => sum + bucket.recent.sampleSize, 0) !== recentWindow!.sampleSize) return null;
   const eligibleBuckets = buckets.filter((bucket) => bucket.eligible);
   if (
-    (status === "active" && (!eligibleBuckets.length || reason !== "eligible-probability-buckets")) ||
-    (status === "abstain" && (eligibleBuckets.length > 0 || reason !== "insufficient-bucket-sample"))
+    (status === "active" && (!eligibleBuckets.length || reason !== "stable-regime-buckets")) ||
+    (status === "abstain" && (eligibleBuckets.length > 0 || reason !== "insufficient-regime-sample"))
   ) return null;
 
   return {
-    version: "empirical-value-guard-v1",
-    source: "chronological-final-posterior-training-window",
+    version: "empirical-value-guard-v2",
+    source: "chronological-final-posterior-regime-windows",
     status,
     confidenceLevel: 0.95,
+    regimeConfidenceLevel: 0.975,
     minimumBucketSample: minimumBucketSample!,
+    minimumRegimeSample: minimumRegimeSample!,
     sampleSize: sampleSize!,
     windowStart,
     windowEnd,
     holdoutWindowStart,
+    earlierWindow: earlierWindow!,
+    recentWindow: recentWindow!,
     buckets,
     reason: reason as NonNullable<DecisionLearningProfile["empiricalValueGuardPolicy"]>["reason"]
   };

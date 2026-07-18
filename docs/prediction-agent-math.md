@@ -176,14 +176,18 @@ expectedValue = +14.40%
 
 ### 4.1 Empirical value durability
 
-A positive point estimate is necessary but no longer sufficient for a governed live pick. After temperature calibration and the learned market-prior blend, the engine groups every final-posterior training selection into canonical probability buckets of width `0.10`. A bucket is eligible only with at least 30 observations. Its conservative probability is the one-sided 95% Wilson lower bound:
+A positive point estimate is necessary but no longer sufficient for a governed live pick. After temperature calibration and the learned market-prior blend, the engine splits the final-posterior training-validation cohort at the nearest strict kickoff boundary into earlier and recent regimes. It then groups selections into canonical probability buckets of width `0.10`. A bucket is eligible only with at least 30 observations in each regime and 60 total.
+
+The aggregate floor uses a one-sided 95% Wilson bound. Each regime uses a 97.5% bound; by Bonferroni, both regime bounds jointly retain at least 95% coverage:
 
 ```txt
-z = 1.6448536269514722
+aggregateZ = 1.6448536269514722
+regimeZ = 1.959963984540054
 denominator = 1 + z^2 / n
 center = (observedRate + z^2 / (2n)) / denominator
 margin = z * sqrt(observedRate * (1 - observedRate) / n + z^2 / (4n^2)) / denominator
-probabilityFloor = max(0, center - margin)
+wilsonFloor = max(0, center - margin)
+probabilityFloor = min(aggregateFloor, earlierRegimeFloor, recentRegimeFloor)
 ```
 
 The candidate survives only when value remains positive at that floor:
@@ -194,7 +198,7 @@ conservativeExpectedValue = probabilityFloor * decimalOdds - 1
 eligiblePick = conservativeEdge > 0 AND conservativeExpectedValue > 0
 ```
 
-The policy is learned only from a strictly earlier final-posterior training-validation window and is frozen before the outer holdout. Missing, thin, malformed, or chronology-invalid buckets fail closed. Replay stores both the unguarded point-estimate pick metrics and the guarded metrics; promotion validates the exact pick-count delta and ROI/yield arithmetic before the policy can reach the live engine.
+The policy is learned only from a strictly earlier final-posterior training-validation window and is frozen before the outer holdout. Identical kickoff cohorts are never split between regimes. Missing, thin, malformed, unsplittable, or chronology-invalid regimes fail closed. Replay stores both the unguarded point-estimate pick metrics and the guarded metrics; promotion recomputes every aggregate and regime floor, validates window/sample conservation, and checks the exact pick-count delta plus ROI/yield arithmetic before the policy can reach the live engine.
 
 ## 5. Fair Odds
 

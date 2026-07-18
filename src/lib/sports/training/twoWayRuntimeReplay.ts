@@ -945,8 +945,8 @@ function run(
         ? `A later priced training window validated market-prior scale ${marketPriorScalingPolicy.weightScale.toFixed(1)}; it was frozen before holdout.`
         : `The market-prior blend retained identity scale 1 (${marketPriorScalingPolicy.reason}).`,
       empiricalValueGuardPolicy.status === "active"
-        ? `${empiricalValueGuardPolicy.buckets.filter((bucket) => bucket.eligible).length} empirical probability bucket(s) require edge and EV to survive a one-sided 95% outcome-rate floor; ${empiricalValueGuardComparison.picksRemoved} holdout point-estimate pick(s) were removed.`
-        : `The empirical value guard abstained (${empiricalValueGuardPolicy.reason}); no point-estimate pick can bypass it.`,
+        ? `${empiricalValueGuardPolicy.buckets.filter((bucket) => bucket.eligible).length} regime-stable probability bucket(s) require edge and EV to survive both earlier and recent 97.5% floors at 95% joint confidence; ${empiricalValueGuardComparison.picksRemoved} holdout point-estimate pick(s) were removed.`
+        : `The temporal empirical value guard abstained (${empiricalValueGuardPolicy.reason}); no point-estimate pick can bypass it.`,
       marketPriorEvidence.status === "applied"
         ? `The live no-vig market prior adjusted ${marketPriorEvidence.adjustedFixtures}/${marketPriorEvidence.evaluatedFixtures} holdout fixture(s) at average weight ${marketPriorEvidence.averageWeight}; final-posterior log-loss delta ${marketPriorEvidence.probabilityComparison.logLossDelta ?? "n/a"}.`
         : "No coherent pre-match holdout market was available for live market-prior parity.",
