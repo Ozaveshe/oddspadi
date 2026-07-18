@@ -4,6 +4,7 @@ const isTrainingAdminAuthorized = vi.hoisted(() => vi.fn());
 const readActiveCalibrationPromotion = vi.hoisted(() => vi.fn());
 const approveCalibrationCandidate = vi.hoisted(() => vi.fn());
 const revokeCalibrationPromotion = vi.hoisted(() => vi.fn());
+const readCalibrationDriftReceipt = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/sports/training/adminAuth", () => ({ isTrainingAdminAuthorized }));
 vi.mock("@/lib/sports/prediction/decisionCalibrationPromotion", () => ({
@@ -11,6 +12,7 @@ vi.mock("@/lib/sports/prediction/decisionCalibrationPromotion", () => ({
   approveCalibrationCandidate,
   revokeCalibrationPromotion
 }));
+vi.mock("@/lib/sports/prediction/calibrationDriftGuard", () => ({ readCalibrationDriftReceipt }));
 
 import { GET, POST } from "@/app/api/sports/decision/training/calibration-promotion/route";
 
@@ -27,6 +29,22 @@ describe("calibration promotion route", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true, data: { status: "not-found" } });
     expect(readActiveCalibrationPromotion).toHaveBeenCalledWith("football");
+  });
+
+  it("returns the exact out-of-sample drift receipt with an active promotion", async () => {
+    const activePromotion = { id: "promotion-1", candidateId: "candidate-1", sport: "football", modelKey: "model-1", engineVersion: "engine-1" };
+    const driftReceipt = { version: "live-calibration-drift-v1", status: "pass", eligibleForLive: true };
+    readActiveCalibrationPromotion.mockResolvedValue({ status: "found", promotion: activePromotion });
+    readCalibrationDriftReceipt.mockResolvedValue(driftReceipt);
+
+    const response = await GET(new Request("http://localhost/api/sports/decision/training/calibration-promotion?sport=football"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      success: true,
+      data: { status: "found", promotion: activePromotion, driftReceipt }
+    });
+    expect(readCalibrationDriftReceipt).toHaveBeenCalledWith(activePromotion);
   });
 
   it("requires an admin token before any approval write", async () => {

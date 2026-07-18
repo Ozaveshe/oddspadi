@@ -28655,6 +28655,7 @@ describe("prediction utilities", () => {
     expect(payload.abstention_rules).toEqual(prediction.decision.abstentionRules);
     expect((payload.model_snapshot as { contextAdjustment?: unknown }).contextAdjustment).toEqual(prediction.contextAdjustment);
     expect((payload.model_snapshot as { marketPriorAdjustment?: unknown }).marketPriorAdjustment).toEqual(prediction.marketPriorAdjustment);
+    expect((payload.model_snapshot as { learningProfile?: unknown }).learningProfile).toEqual(prediction.decision.learningProfile ?? null);
     expect((payload.model_snapshot as { caseMemory?: unknown }).caseMemory).toEqual(prediction.decision.caseMemory);
     expect((payload.model_snapshot as { beliefState?: unknown }).beliefState).toEqual(prediction.decision.beliefState);
     expect((payload.model_snapshot as { deliberation?: unknown }).deliberation).toEqual(prediction.decision.deliberation);
