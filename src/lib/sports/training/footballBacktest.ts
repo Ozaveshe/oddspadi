@@ -3,6 +3,8 @@ import { buildScoreMatrix, probabilityFromScoreMatrix } from "@/lib/sports/predi
 import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "@/lib/sports/training/probabilityCalibration";
 import { benchmarkBacktestModelKey } from "@/lib/sports/prediction/modelIdentity";
 import { confidenceFromEdgeAndProbability } from "@/lib/sports/prediction/confidence";
+import { evaluateEmpiricalValueGuard } from "@/lib/sports/prediction/empiricalValueGuard";
+import type { EmpiricalValueGuardDecision, EmpiricalValueGuardPolicy } from "@/lib/sports/types";
 import {
   resolveHistoricalFootballOdds,
   type HistoricalFootballOddsAudit,
@@ -70,6 +72,7 @@ export type FootballBacktestPick = {
   won: boolean;
   unitReturn: number;
   closingLineValue: number | null;
+  empiricalValueGuard?: EmpiricalValueGuardDecision;
 };
 
 export type FootballBacktestFixtureResult = {
@@ -352,7 +355,8 @@ function selectBacktestPick(
   probabilities: Record<FootballOutcome, number>,
   odds: Record<FootballOutcome, SelectionOdds>,
   actual: FootballOutcome,
-  config: Required<FootballBacktestConfig>
+  config: Required<FootballBacktestConfig>,
+  empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy
 ): FootballBacktestPick | null {
   const dataQuality = clamp(safeNumber(fixture.dataQuality, 0.72), 0, 1);
   const candidates = (["home", "draw", "away"] as const)
@@ -361,6 +365,12 @@ function selectBacktestPick(
       const modelProbability = probabilities[selection];
       const edge = modelProbability - quote.impliedProbability;
       const confidence = confidenceForPick(edge, modelProbability, dataQuality);
+      const empiricalValueGuard = evaluateEmpiricalValueGuard({
+        modelProbability,
+        impliedProbability: quote.impliedProbability,
+        odds: quote.odds,
+        policy: empiricalValueGuardPolicy
+      });
 
       return {
         selection,
@@ -372,10 +382,15 @@ function selectBacktestPick(
         bookmaker: quote.bookmaker,
         observedAt: quote.observedAt,
         closingObservedAt: quote.closingObservedAt,
-        confidence
+        confidence,
+        empiricalValueGuard
       };
     })
-    .filter((pick) => pick.edge >= config.minEdge && pick.modelProbability >= config.minModelProbability)
+    .filter((pick) =>
+      pick.edge >= config.minEdge &&
+      pick.modelProbability >= config.minModelProbability &&
+      pick.empiricalValueGuard.status !== "blocked"
+    )
     .sort((a, b) => b.edge - a.edge);
 
   const pick = candidates[0];
@@ -474,12 +489,14 @@ export function evaluateFootballPrediction({
   fixture,
   probabilities,
   expectedGoals,
-  config
+  config,
+  empiricalValueGuardPolicy
 }: {
   fixture: HistoricalFootballFixture;
   probabilities: Record<FootballOutcome, number>;
   expectedGoals: FootballBacktestFixtureResult["expectedGoals"];
   config: Required<FootballBacktestConfig>;
+  empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy;
 }): FootballBacktestFixtureResult {
   const actual = actualOutcome(fixture.homeScore, fixture.awayScore);
   const odds = winnerOdds(fixture);
@@ -491,7 +508,7 @@ export function evaluateFootballPrediction({
     expectedGoals,
     brierScore: brierScore(probabilities, actual),
     logLoss: logLoss(probabilities, actual),
-    pick: odds.selections ? selectBacktestPick(fixture, probabilities, odds.selections, actual, config) : null,
+    pick: odds.selections ? selectBacktestPick(fixture, probabilities, odds.selections, actual, config, empiricalValueGuardPolicy) : null,
     oddsEvidence: odds.audit
   };
 }

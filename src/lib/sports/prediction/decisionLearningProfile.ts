@@ -310,6 +310,134 @@ function marketPriorScalingPolicy(
   };
 }
 
+function empiricalValueGuardPolicy(
+  backtest: StoredBacktestRun | null,
+  marketPolicy: NonNullable<DecisionLearningProfile["marketPriorScalingPolicy"]> | null
+): NonNullable<DecisionLearningProfile["empiricalValueGuardPolicy"]> | null {
+  if (!backtest || !marketPolicy) return null;
+  const policy = record(backtest.config?.empiricalValueGuardPolicy);
+  const status = policy.status === "active" || policy.status === "abstain" ? policy.status : null;
+  const confidenceLevel = finiteNumber(policy.confidenceLevel);
+  const minimumBucketSample = finiteNumber(policy.minimumBucketSample);
+  const sampleSize = finiteNumber(policy.sampleSize);
+  const windowStart = typeof policy.windowStart === "string" ? policy.windowStart : null;
+  const windowEnd = typeof policy.windowEnd === "string" ? policy.windowEnd : null;
+  const holdoutWindowStart = typeof policy.holdoutWindowStart === "string" ? policy.holdoutWindowStart : null;
+  const reason = policy.reason;
+  const selectionCount = backtest.sport === "football" ? 3 : backtest.sport === "basketball" || backtest.sport === "tennis" ? 2 : 0;
+  const contractValid =
+    policy.version === "empirical-value-guard-v1" &&
+    policy.source === "chronological-final-posterior-training-window" &&
+    status !== null &&
+    confidenceLevel === 0.95 &&
+    minimumBucketSample !== null && Number.isInteger(minimumBucketSample) && minimumBucketSample >= 30 &&
+    sampleSize !== null && Number.isInteger(sampleSize) && sampleSize === marketPolicy.validationSampleSize * selectionCount &&
+    (reason === "eligible-probability-buckets" || reason === "insufficient-bucket-sample");
+  if (!contractValid) return null;
+
+  const chronologyValid = Boolean(
+    windowStart && windowEnd && holdoutWindowStart && marketPolicy.validationWindowStart && marketPolicy.validationWindowEnd &&
+    Number.isFinite(Date.parse(windowStart)) &&
+    Date.parse(windowStart) >= Date.parse(marketPolicy.validationWindowStart) &&
+    Date.parse(windowStart) <= Date.parse(windowEnd) &&
+    Date.parse(windowEnd) <= Date.parse(marketPolicy.validationWindowEnd) &&
+    Date.parse(windowEnd) < Date.parse(holdoutWindowStart) &&
+    holdoutWindowStart === marketPolicy.holdoutWindowStart
+  );
+  if (!chronologyValid || !Array.isArray(policy.buckets)) return null;
+
+  const z = 1.6448536269514722;
+  const wilsonFloor = (observedRate: number, count: number) => {
+    const zSquared = z * z;
+    const denominator = 1 + zSquared / count;
+    const center = (observedRate + zSquared / (2 * count)) / denominator;
+    const margin = z * Math.sqrt((observedRate * (1 - observedRate)) / count + zSquared / (4 * count * count)) / denominator;
+    return Math.max(0, center - margin);
+  };
+  const buckets = policy.buckets.flatMap((value) => {
+    const bucket = record(value);
+    const minProbability = finiteNumber(bucket.minProbability);
+    const maxProbability = finiteNumber(bucket.maxProbability);
+    const bucketSampleSize = finiteNumber(bucket.sampleSize);
+    const averageProbability = finiteNumber(bucket.averageProbability);
+    const observedRate = finiteNumber(bucket.observedRate);
+    const probabilityFloor = bucket.probabilityFloor === null ? null : finiteNumber(bucket.probabilityFloor);
+    const eligible = bucket.eligible === true;
+    const valid =
+      minProbability !== null && minProbability >= 0 &&
+      maxProbability !== null && maxProbability <= 1 && maxProbability > minProbability &&
+      Math.abs(maxProbability - minProbability - 0.1) <= 0.000001 &&
+      Math.abs(minProbability * 10 - Math.round(minProbability * 10)) <= 0.000001 &&
+      bucketSampleSize !== null && Number.isInteger(bucketSampleSize) && bucketSampleSize > 0 &&
+      averageProbability !== null && averageProbability >= minProbability && averageProbability <= maxProbability &&
+      observedRate !== null && observedRate >= 0 && observedRate <= 1 &&
+      Math.abs(observedRate * bucketSampleSize - Math.round(observedRate * bucketSampleSize)) <= 0.0001 &&
+      eligible === (bucketSampleSize >= minimumBucketSample!) &&
+      (eligible
+        ? probabilityFloor !== null && Math.abs(probabilityFloor - wilsonFloor(observedRate, bucketSampleSize)) <= 0.000002
+        : probabilityFloor === null);
+    return valid ? [{ minProbability, maxProbability, sampleSize: bucketSampleSize, averageProbability, observedRate, probabilityFloor, eligible }] : [];
+  }).sort((left, right) => left.minProbability - right.minProbability);
+  if (buckets.length !== policy.buckets.length || !buckets.length) return null;
+  if (buckets.some((bucket, index) => index > 0 && bucket.minProbability < buckets[index - 1]!.maxProbability)) return null;
+  if (buckets.reduce((sum, bucket) => sum + bucket.sampleSize, 0) !== sampleSize) return null;
+  const eligibleBuckets = buckets.filter((bucket) => bucket.eligible);
+  if (
+    (status === "active" && (!eligibleBuckets.length || reason !== "eligible-probability-buckets")) ||
+    (status === "abstain" && (eligibleBuckets.length > 0 || reason !== "insufficient-bucket-sample"))
+  ) return null;
+
+  return {
+    version: "empirical-value-guard-v1",
+    source: "chronological-final-posterior-training-window",
+    status,
+    confidenceLevel: 0.95,
+    minimumBucketSample: minimumBucketSample!,
+    sampleSize: sampleSize!,
+    windowStart,
+    windowEnd,
+    holdoutWindowStart,
+    buckets,
+    reason: reason as NonNullable<DecisionLearningProfile["empiricalValueGuardPolicy"]>["reason"]
+  };
+}
+
+function empiricalValueGuardComparison(
+  backtest: StoredBacktestRun | null,
+  policy: NonNullable<DecisionLearningProfile["empiricalValueGuardPolicy"]> | null
+): NonNullable<DecisionLearningProfile["empiricalValueGuardComparison"]> | null {
+  if (!backtest || !policy) return null;
+  const comparison = record(backtest.config?.empiricalValueGuardComparison);
+  const baseline = record(comparison.baseline);
+  const selected = record(comparison.selected);
+  const picksRemoved = finiteNumber(comparison.picksRemoved);
+  const metrics = (value: Record<string, unknown>) => {
+    const pickCount = finiteNumber(value.pickCount);
+    const roiUnits = finiteNumber(value.roiUnits);
+    const yieldValue = value.yield === null ? null : finiteNumber(value.yield);
+    const expectedYield = pickCount && roiUnits !== null
+      ? Math.round((roiUnits / pickCount) * 1_000_000) / 1_000_000
+      : null;
+    const valid =
+      pickCount !== null && Number.isInteger(pickCount) && pickCount >= 0 && pickCount <= backtest.testSize &&
+      roiUnits !== null &&
+      (pickCount === 0
+        ? roiUnits === 0 && value.yield === null
+        : yieldValue !== null && Math.abs(yieldValue - expectedYield!) <= 0.000001);
+    return valid ? { pickCount, roiUnits, yield: yieldValue } : null;
+  };
+  const resolvedBaseline = metrics(baseline);
+  const resolvedSelected = metrics(selected);
+  if (
+    !resolvedBaseline || !resolvedSelected ||
+    picksRemoved === null || !Number.isInteger(picksRemoved) ||
+    resolvedSelected.pickCount > resolvedBaseline.pickCount ||
+    picksRemoved !== resolvedBaseline.pickCount - resolvedSelected.pickCount ||
+    (policy.status === "abstain" && resolvedSelected.pickCount !== 0)
+  ) return null;
+  return { baseline: resolvedBaseline, selected: resolvedSelected, picksRemoved };
+}
+
 type MarketPriorReplayReceipt = {
   valid: boolean;
   status: "applied" | "no-priced-market" | null;
@@ -455,6 +583,15 @@ function liveMetricBlockers(
     if (!marketPriorScalingPolicy(backtest, calibrationPolicy)) {
       blockers.push("runtime replay lacks a valid training-only market-prior scaling policy");
     }
+    const valueGuardPolicy = empiricalValueGuardPolicy(backtest, marketPriorScalingPolicy(backtest, calibrationPolicy));
+    if (!valueGuardPolicy) {
+      blockers.push("runtime replay lacks a valid training-only empirical value guard policy");
+    } else if (valueGuardPolicy.status === "abstain") {
+      blockers.push("training-only empirical value guard policy abstains");
+    }
+    if (!empiricalValueGuardComparison(backtest, valueGuardPolicy)) {
+      blockers.push("runtime replay lacks a valid empirical value guard holdout comparison");
+    }
     if (!marketPriorReplayReceipt(backtest).valid) {
       blockers.push("runtime replay lacks a valid pre-match market-prior parity receipt");
     }
@@ -537,6 +674,8 @@ export function buildDecisionLearningProfileFromSnapshot(
   const selectionPolicy = economicSelectionPolicy(backtest);
   const temperaturePolicy = probabilityTemperaturePolicy(backtest);
   const scalingPolicy = marketPriorScalingPolicy(backtest, temperaturePolicy);
+  const valueGuardPolicy = empiricalValueGuardPolicy(backtest, scalingPolicy);
+  const valueGuardComparison = empiricalValueGuardComparison(backtest, valueGuardPolicy);
   const marketPriorReceipt = marketPriorReplayReceipt(backtest);
   const shadowReady = snapshot.status === "ready" && Boolean(backtest) && snapshot.readiness.readyForTraining && !demoOnly;
   const active = shadowReady && promotionApproved && metricBlockers.length === 0;
@@ -576,6 +715,8 @@ export function buildDecisionLearningProfileFromSnapshot(
     allowedConfidenceBands: selectionPolicy.allowedConfidenceBands,
     probabilityTemperaturePolicy: temperaturePolicy,
     marketPriorScalingPolicy: scalingPolicy,
+    empiricalValueGuardPolicy: valueGuardPolicy,
+    empiricalValueGuardComparison: valueGuardComparison,
     marketPriorReplayStatus: marketPriorReceipt.status,
     marketPriorReplayAdjustedFixtures: marketPriorReceipt.adjustedFixtures,
     marketPriorReplayCoverage: marketPriorReceipt.coverage,

@@ -5680,6 +5680,60 @@ describe("prediction utilities", () => {
     expect(governed.decision.learningProfile?.marketPriorScalingPolicy?.weightScale).toBe(0);
   });
 
+  it("applies the empirical value floor in the live prediction path", async () => {
+    const [match] = await mockSportsDataProvider.getFixtures("2026-06-24", "basketball");
+    const baseline = buildPrediction(match);
+    const profile: DecisionLearningProfile = {
+      status: "active",
+      source: "prospective-runtime-replay",
+      active: true,
+      modelKey: baseline.diagnostics.modelVersion,
+      engineVersion: baseline.decision.engineVersion,
+      sampleSize: 1200,
+      realFinishedFixtures: 1200,
+      minimumRecommendedFixtures: 1000,
+      minimumEdge: null,
+      valueEdgeWeight: null,
+      dataQualityWeight: null,
+      marketAdjustmentWeight: null,
+      homeAdvantageElo: null,
+      allowedConfidenceBands: ["medium", "high"],
+      empiricalValueGuardPolicy: {
+        version: "empirical-value-guard-v1",
+        source: "chronological-final-posterior-training-window",
+        status: "active",
+        confidenceLevel: 0.95,
+        minimumBucketSample: 30,
+        sampleSize: 300,
+        windowStart: "2025-04-01T00:00:00.000Z",
+        windowEnd: "2025-06-30T00:00:00.000Z",
+        holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+        buckets: Array.from({ length: 10 }, (_, index) => ({
+          minProbability: index / 10,
+          maxProbability: (index + 1) / 10,
+          sampleSize: 30,
+          averageProbability: (index + 0.5) / 10,
+          observedRate: 0,
+          probabilityFloor: 0,
+          eligible: true
+        })),
+        reason: "eligible-probability-buckets"
+      },
+      brierScore: 0.19,
+      yield: 0.04,
+      closingLineValue: 0.02,
+      generatedAt: "2026-06-24T10:00:00.000Z",
+      reason: "Model-bound empirical value guard is active.",
+      notes: []
+    };
+
+    const governed = buildPrediction(match, { learningProfile: profile });
+
+    expect(governed.valueEdges.length).toBeGreaterThan(0);
+    expect(governed.valueEdges.every((edge) => edge.empiricalValueGuard?.status === "blocked")).toBe(true);
+    expect(governed.bestPick.hasValue).toBe(false);
+  });
+
   it("builds tennis predictions with Elo, surface, set handicap, and total-games logic", async () => {
     const [match] = await mockSportsDataProvider.getFixtures("2026-06-24", "tennis");
     const prediction = buildPrediction(match);
@@ -13711,6 +13765,28 @@ describe("prediction utilities", () => {
                 baselineValidation: { sampleSize: 126, brierScore: 0.204, logLoss: 0.614 },
                 candidateValidation: { sampleSize: 126, brierScore: 0.204, logLoss: 0.614 },
                 reason: "identity-won-fit"
+              },
+              empiricalValueGuardPolicy: {
+                version: "empirical-value-guard-v1",
+                source: "chronological-final-posterior-training-window",
+                status: "active",
+                confidenceLevel: 0.95,
+                minimumBucketSample: 30,
+                sampleSize: 378,
+                windowStart: "2025-04-01T00:00:00.000Z",
+                windowEnd: "2025-06-30T00:00:00.000Z",
+                holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+                buckets: [
+                  { minProbability: 0.2, maxProbability: 0.3, sampleSize: 126, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.181603, eligible: true },
+                  { minProbability: 0.3, maxProbability: 0.4, sampleSize: 126, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.268399, eligible: true },
+                  { minProbability: 0.4, maxProbability: 0.5, sampleSize: 126, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.388882, eligible: true }
+                ],
+                reason: "eligible-probability-buckets"
+              },
+              empiricalValueGuardComparison: {
+                baseline: { pickCount: 72, roiUnits: 5.4, yield: 0.075 },
+                selected: { pickCount: 48, roiUnits: 4.8, yield: 0.1 },
+                picksRemoved: 24
               },
               marketPriorEvidence: {
                 version: "runtime-market-prior-parity-v1",

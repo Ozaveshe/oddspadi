@@ -202,7 +202,7 @@ export function buildPrediction(
   );
   const markets = marketPrior.markets;
   const diagnostics = applyMarketPriorAdjustmentToDiagnostics(learnedCalibrationDiagnostics, marketPrior.adjustment);
-  const valueEdges = buildValueEdges(markets, match.oddsMarkets, diagnostics.dataQualityScore);
+  const valueEdges = buildValueEdges(markets, match.oddsMarkets, diagnostics.dataQualityScore, runtimeLearningProfile);
   const candidatePick = selectBestPick(valueEdges, { learningProfile: runtimeLearningProfile, caseMemoryBank });
   const selectedStageProbability = (stageMarkets: typeof markets): number | null => {
     if (!candidatePick.hasValue) return null;

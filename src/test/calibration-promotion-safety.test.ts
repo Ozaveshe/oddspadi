@@ -59,6 +59,26 @@ function activeProfile(): DecisionLearningProfile {
   };
 }
 
+function empiricalValueGuardPolicy() {
+  return {
+    version: "empirical-value-guard-v1",
+    source: "chronological-final-posterior-training-window",
+    status: "active",
+    confidenceLevel: 0.95,
+    minimumBucketSample: 30,
+    sampleSize: 378,
+    windowStart: "2025-04-01T12:00:00.000Z",
+    windowEnd: "2025-06-30T12:00:00.000Z",
+    holdoutWindowStart: "2025-07-01T12:00:00.000Z",
+    buckets: [
+      { minProbability: 0.2, maxProbability: 0.3, sampleSize: 126, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.181603, eligible: true },
+      { minProbability: 0.3, maxProbability: 0.4, sampleSize: 126, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.268399, eligible: true },
+      { minProbability: 0.4, maxProbability: 0.5, sampleSize: 126, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.388882, eligible: true }
+    ],
+    reason: "eligible-probability-buckets"
+  };
+}
+
 function readySnapshot(): TrainingDataSnapshot {
   return {
     generatedAt: "2026-08-21T12:00:00.000Z",
@@ -151,6 +171,12 @@ function readySnapshot(): TrainingDataSnapshot {
           baselineValidation: { sampleSize: 126, brierScore: 0.204, logLoss: 0.614 },
           candidateValidation: { sampleSize: 126, brierScore: 0.204, logLoss: 0.614 },
           reason: "identity-won-fit"
+        },
+        empiricalValueGuardPolicy: empiricalValueGuardPolicy(),
+        empiricalValueGuardComparison: {
+          baseline: { pickCount: 72, roiUnits: 5.4, yield: 0.075 },
+          selected: { pickCount: 48, roiUnits: 4.8, yield: 0.1 },
+          picksRemoved: 24
         },
         marketPriorEvidence: {
           version: "runtime-market-prior-parity-v1",
@@ -494,6 +520,79 @@ describe("calibration promotion safety", () => {
     });
     expect(overlappingProfile.active).toBe(false);
     expect(overlappingProfile.marketPriorScalingPolicy).toBeNull();
+  });
+
+  it("requires an exact training-only empirical value-floor receipt", () => {
+    const valid = buildDecisionLearningProfileFromSnapshot(readySnapshot(), {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(valid.active).toBe(true);
+    expect(valid.empiricalValueGuardPolicy).toMatchObject({ status: "active", sampleSize: 378 });
+    expect(valid.empiricalValueGuardComparison).toMatchObject({ picksRemoved: 24 });
+
+    const missing = readySnapshot();
+    const missingConfig = { ...missing.latestBacktest!.config };
+    delete missingConfig.empiricalValueGuardPolicy;
+    missing.latestBacktest = { ...missing.latestBacktest!, config: missingConfig };
+    const missingProfile = buildDecisionLearningProfileFromSnapshot(missing, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(missingProfile.active).toBe(false);
+    expect(missingProfile.empiricalValueGuardPolicy).toBeNull();
+    expect(missingProfile.reason).toContain("lacks a valid training-only empirical value guard policy");
+
+    const missingComparison = readySnapshot();
+    const missingComparisonConfig = { ...missingComparison.latestBacktest!.config };
+    delete missingComparisonConfig.empiricalValueGuardComparison;
+    missingComparison.latestBacktest = { ...missingComparison.latestBacktest!, config: missingComparisonConfig };
+    const missingComparisonProfile = buildDecisionLearningProfileFromSnapshot(missingComparison, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(missingComparisonProfile.active).toBe(false);
+    expect(missingComparisonProfile.empiricalValueGuardComparison).toBeNull();
+    expect(missingComparisonProfile.reason).toContain("lacks a valid empirical value guard holdout comparison");
+
+    const forged = readySnapshot();
+    const original = forged.latestBacktest!.config?.empiricalValueGuardPolicy as ReturnType<typeof empiricalValueGuardPolicy>;
+    forged.latestBacktest = {
+      ...forged.latestBacktest!,
+      config: {
+        ...forged.latestBacktest!.config,
+        empiricalValueGuardPolicy: {
+          ...original,
+          buckets: original.buckets.map((bucket, index) => index === 0 ? { ...bucket, probabilityFloor: 0.23 } : bucket)
+        }
+      }
+    };
+    const forgedProfile = buildDecisionLearningProfileFromSnapshot(forged, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(forgedProfile.active).toBe(false);
+    expect(forgedProfile.empiricalValueGuardPolicy).toBeNull();
+
+    const forgedComparison = readySnapshot();
+    forgedComparison.latestBacktest = {
+      ...forgedComparison.latestBacktest!,
+      config: {
+        ...forgedComparison.latestBacktest!.config,
+        empiricalValueGuardComparison: {
+          baseline: { pickCount: 72, roiUnits: 5.4, yield: 0.075 },
+          selected: { pickCount: 48, roiUnits: 4.8, yield: 0.1 },
+          picksRemoved: 23
+        }
+      }
+    };
+    const forgedComparisonProfile = buildDecisionLearningProfileFromSnapshot(forgedComparison, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(forgedComparisonProfile.active).toBe(false);
+    expect(forgedComparisonProfile.empiricalValueGuardComparison).toBeNull();
+    expect(forgedComparisonProfile.reason).toContain("lacks a valid empirical value guard holdout comparison");
   });
 
   it("accepts learned weights sourced from the complete prospective training-validation window", () => {

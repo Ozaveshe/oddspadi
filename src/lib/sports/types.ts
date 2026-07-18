@@ -272,6 +272,7 @@ export interface ValueEdge {
   odds: number;
   confidence: ConfidenceLevel;
   risk: RiskLevel;
+  empiricalValueGuard?: EmpiricalValueGuardDecision;
   uncertaintyAdjustedScore?: number;
   scoreComponents?: {
     expectedValue: number;
@@ -458,6 +459,40 @@ export interface MarketPriorScalingPolicy {
     | "invalid-chronology"
     | "identity-won-fit"
     | "validation-did-not-improve";
+}
+
+export interface EmpiricalValueGuardBucket {
+  minProbability: number;
+  maxProbability: number;
+  sampleSize: number;
+  averageProbability: number;
+  observedRate: number;
+  probabilityFloor: number | null;
+  eligible: boolean;
+}
+
+export interface EmpiricalValueGuardPolicy {
+  version: "empirical-value-guard-v1";
+  source: "chronological-final-posterior-training-window";
+  status: "active" | "abstain";
+  confidenceLevel: 0.95;
+  minimumBucketSample: number;
+  sampleSize: number;
+  windowStart: string | null;
+  windowEnd: string | null;
+  holdoutWindowStart: string | null;
+  buckets: EmpiricalValueGuardBucket[];
+  reason: "eligible-probability-buckets" | "insufficient-bucket-sample" | "invalid-chronology";
+}
+
+export interface EmpiricalValueGuardDecision {
+  status: "passed" | "blocked" | "not-applied";
+  probabilityFloor: number | null;
+  conservativeEdge: number | null;
+  conservativeExpectedValue: number | null;
+  bucketSampleSize: number | null;
+  confidenceLevel: number | null;
+  reason: string;
 }
 
 export interface ProbabilityCalibrationComparison {
@@ -1493,6 +1528,12 @@ export interface DecisionLearningProfile {
   allowedConfidenceBands?: ConfidenceLevel[] | null;
   probabilityTemperaturePolicy?: ProbabilityTemperatureScalingPolicy | null;
   marketPriorScalingPolicy?: MarketPriorScalingPolicy | null;
+  empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy | null;
+  empiricalValueGuardComparison?: {
+    baseline: { pickCount: number; roiUnits: number; yield: number | null };
+    selected: { pickCount: number; roiUnits: number; yield: number | null };
+    picksRemoved: number;
+  } | null;
   marketPriorReplayStatus?: "applied" | "no-priced-market" | null;
   marketPriorReplayAdjustedFixtures?: number | null;
   marketPriorReplayCoverage?: number | null;

@@ -4,6 +4,10 @@ import { modelBasketballMatch } from "@/lib/sports/prediction/basketballModel";
 import { decisionModelIdentity, runtimeModelIdentityReceipt } from "@/lib/sports/prediction/modelIdentity";
 import { applyMarketPriorAdjustmentToMarkets } from "@/lib/sports/prediction/odds";
 import {
+  evaluateEmpiricalValueGuard,
+  learnEmpiricalValueGuardPolicy
+} from "@/lib/sports/prediction/empiricalValueGuard";
+import {
   learnMarketPriorScalingPolicy,
   marketPriorPolicyValidationRows,
   type MarketPriorScalingObservation
@@ -18,6 +22,8 @@ import {
   strictChronologicalSplitIndex
 } from "@/lib/sports/prediction/probabilityTemperatureScaling";
 import type {
+  EmpiricalValueGuardDecision,
+  EmpiricalValueGuardPolicy,
   Match,
   MarketPriorAdjustment,
   MarketPriorScalingPolicy,
@@ -65,6 +71,7 @@ export type TwoWayRuntimeReplayPick = {
   won: boolean;
   unitReturn: number;
   closingLineValue: number | null;
+  empiricalValueGuard?: EmpiricalValueGuardDecision;
 };
 
 export type TwoWayRuntimeReplayFixtureResult = {
@@ -128,6 +135,8 @@ export type TwoWayRuntimeReplayResult = {
   probabilityCalibrationPolicy: ProbabilityTemperatureScalingPolicy;
   probabilityCalibrationComparison: ProbabilityCalibrationComparison;
   marketPriorScalingPolicy: MarketPriorScalingPolicy;
+  empiricalValueGuardPolicy: EmpiricalValueGuardPolicy;
+  empiricalValueGuardComparison: EconomicSelectionComparison;
   marketPriorEvidence: MarketPriorReplayEvidence;
   config: ResolvedConfig;
   notes: string[];
@@ -589,14 +598,38 @@ function confidence(edge: number, probability: number, quality: number): Confide
   return confidenceFromEdgeAndProbability(edge, probability, quality);
 }
 
-function evaluate(prepared: Prepared, probabilities: Record<TwoWayOutcome, number>, resolved: ResolvedConfig): TwoWayRuntimeReplayFixtureResult {
+function evaluate(
+  prepared: Prepared,
+  probabilities: Record<TwoWayOutcome, number>,
+  resolved: ResolvedConfig,
+  empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy
+): TwoWayRuntimeReplayFixtureResult {
   const actual = prepared.actualOutcome;
   const marketOdds = oddsForEvaluation(prepared.odds, prepared.kickoffAt)?.selections ?? null;
   let pick: TwoWayRuntimeReplayPick | null = null;
   if (marketOdds) {
     const candidate = (["home", "away"] as const)
-      .map((selection) => ({ selection, probability: probabilities[selection], quote: marketOdds[selection], edge: probabilities[selection] - marketOdds[selection].impliedProbability }))
-      .filter((item) => item.edge >= resolved.minEdge && item.probability >= resolved.minModelProbability)
+      .map((selection) => {
+        const probability = probabilities[selection];
+        const quote = marketOdds[selection];
+        return {
+          selection,
+          probability,
+          quote,
+          edge: probability - quote.impliedProbability,
+          empiricalValueGuard: evaluateEmpiricalValueGuard({
+            modelProbability: probability,
+            impliedProbability: quote.impliedProbability,
+            odds: quote.odds,
+            policy: empiricalValueGuardPolicy
+          })
+        };
+      })
+      .filter((item) =>
+        item.edge >= resolved.minEdge &&
+        item.probability >= resolved.minModelProbability &&
+        item.empiricalValueGuard.status !== "blocked"
+      )
       .sort((left, right) => right.edge - left.edge)[0];
     if (candidate) {
       const won = candidate.selection === actual;
@@ -610,7 +643,8 @@ function evaluate(prepared: Prepared, probabilities: Record<TwoWayOutcome, numbe
         confidence: confidence(candidate.edge, candidate.probability, prepared.match.dataQualityScore),
         won,
         unitReturn: round(won ? candidate.quote.odds - 1 : -1)!,
-        closingLineValue: round(candidate.quote.closingOdds ? candidate.quote.odds / candidate.quote.closingOdds - 1 : null)
+        closingLineValue: round(candidate.quote.closingOdds ? candidate.quote.odds / candidate.quote.closingOdds - 1 : null),
+        empiricalValueGuard: candidate.empiricalValueGuard
       };
     }
   }
@@ -698,7 +732,8 @@ function run(
     selectionConfig: ResolvedConfig,
     calibrationPolicy?: ProbabilityTemperatureScalingPolicy,
     applyMarketPrior = false,
-    marketPriorScalingPolicy?: MarketPriorScalingPolicy
+    marketPriorScalingPolicy?: MarketPriorScalingPolicy,
+    empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy
   ): EvaluatedRows => {
     const marketPriorAdjustments: MarketPriorAdjustment[] = [];
     const results = rows.map((row) => {
@@ -717,7 +752,7 @@ function run(
         const posterior = prior.markets.find((market) => market.marketId === "match_winner")?.probabilities;
         if (posterior) probabilities = posterior as Record<TwoWayOutcome, number>;
       }
-      return evaluate(row.prepared, probabilities, selectionConfig);
+      return evaluate(row.prepared, probabilities, selectionConfig, empiricalValueGuardPolicy);
     });
     return { results, marketPriorAdjustments };
   };
@@ -742,18 +777,37 @@ function run(
     trainingRows: probabilityPolicyValidationRows(calibratedMarketObservations, probabilityCalibrationPolicy),
     holdoutWindowStart: holdoutRows[0]?.kickoffAt ?? null
   });
-  const trainingPosterior = evaluateRows(
+  const unguardedTrainingPosterior = evaluateRows(
     modeledTraining,
     resolved,
     probabilityCalibrationPolicy,
     true,
     marketPriorScalingPolicy
   );
+  const unguardedTrainingResults = unguardedTrainingPosterior.results;
+  const unguardedTemperatureValidationResults = probabilityPolicyValidationRows(unguardedTrainingResults, probabilityCalibrationPolicy);
+  const pricedTrainingFixtures = new Set(unguardedTrainingResults.flatMap((result, index) =>
+    unguardedTrainingPosterior.marketPriorAdjustments[index]?.applied ? [result.fixtureExternalId] : []
+  ));
+  const unguardedSelectionTrainingResults = marketPriorPolicyValidationRows(
+    unguardedTemperatureValidationResults,
+    marketPriorScalingPolicy,
+    (result) => pricedTrainingFixtures.has(result.fixtureExternalId)
+  );
+  const empiricalValueGuardPolicy = learnEmpiricalValueGuardPolicy({
+    trainingRows: unguardedSelectionTrainingResults,
+    holdoutWindowStart: holdoutRows[0]?.kickoffAt ?? null
+  });
+  const trainingPosterior = evaluateRows(
+    modeledTraining,
+    resolved,
+    probabilityCalibrationPolicy,
+    true,
+    marketPriorScalingPolicy,
+    empiricalValueGuardPolicy
+  );
   const trainingResults = trainingPosterior.results;
   const temperatureValidationResults = probabilityPolicyValidationRows(trainingResults, probabilityCalibrationPolicy);
-  const pricedTrainingFixtures = new Set(trainingResults.flatMap((result, index) =>
-    trainingPosterior.marketPriorAdjustments[index]?.applied ? [result.fixtureExternalId] : []
-  ));
   const selectionTrainingResults = marketPriorPolicyValidationRows(
     temperatureValidationResults,
     marketPriorScalingPolicy,
@@ -775,14 +829,23 @@ function run(
     holdoutSelectionConfig,
     probabilityCalibrationPolicy
   ).results;
-  const holdoutPosterior = evaluateRows(
+  const unguardedHoldoutPosterior = evaluateRows(
     modeledHoldout,
     holdoutSelectionConfig,
     probabilityCalibrationPolicy,
     true,
     marketPriorScalingPolicy
   );
+  const holdoutPosterior = evaluateRows(
+    modeledHoldout,
+    holdoutSelectionConfig,
+    probabilityCalibrationPolicy,
+    true,
+    marketPriorScalingPolicy,
+    empiricalValueGuardPolicy
+  );
   const posteriorResults = holdoutPosterior.results;
+  const empiricalValueGuardComparison = buildEconomicSelectionComparison(unguardedHoldoutPosterior.results, posteriorResults);
   const probabilityCalibrationComparison = buildProbabilityCalibrationComparison({
     baselineRows: rawHoldoutResults,
     calibratedRows: calibratedHoldoutResults
@@ -817,7 +880,7 @@ function run(
   const executionHash = stableHash({
     sport,
     modelKey: identity.runtimeModelKey,
-    entrypoint: `${identity.runtimeEntrypoint}+temperatureScaling+marketPrior`,
+    entrypoint: `${identity.runtimeEntrypoint}+temperatureScaling+marketPrior+empiricalValueGuard`,
     contract,
     training: trainingResults.map((row) => row.probabilities),
     holdout: results.map((row) => row.probabilities),
@@ -831,6 +894,8 @@ function run(
     probabilityCalibrationPolicy,
     probabilityCalibrationComparison,
     marketPriorScalingPolicy,
+    empiricalValueGuardPolicy,
+    empiricalValueGuardComparison,
     marketPriorEvidence
   });
   return {
@@ -865,6 +930,8 @@ function run(
     probabilityCalibrationPolicy,
     probabilityCalibrationComparison,
     marketPriorScalingPolicy,
+    empiricalValueGuardPolicy,
+    empiricalValueGuardComparison,
     marketPriorEvidence,
     config: resolved,
     notes: [
@@ -877,6 +944,9 @@ function run(
       marketPriorScalingPolicy.status === "active"
         ? `A later priced training window validated market-prior scale ${marketPriorScalingPolicy.weightScale.toFixed(1)}; it was frozen before holdout.`
         : `The market-prior blend retained identity scale 1 (${marketPriorScalingPolicy.reason}).`,
+      empiricalValueGuardPolicy.status === "active"
+        ? `${empiricalValueGuardPolicy.buckets.filter((bucket) => bucket.eligible).length} empirical probability bucket(s) require edge and EV to survive a one-sided 95% outcome-rate floor; ${empiricalValueGuardComparison.picksRemoved} holdout point-estimate pick(s) were removed.`
+        : `The empirical value guard abstained (${empiricalValueGuardPolicy.reason}); no point-estimate pick can bypass it.`,
       marketPriorEvidence.status === "applied"
         ? `The live no-vig market prior adjusted ${marketPriorEvidence.adjustedFixtures}/${marketPriorEvidence.evaluatedFixtures} holdout fixture(s) at average weight ${marketPriorEvidence.averageWeight}; final-posterior log-loss delta ${marketPriorEvidence.probabilityComparison.logLossDelta ?? "n/a"}.`
         : "No coherent pre-match holdout market was available for live market-prior parity.",

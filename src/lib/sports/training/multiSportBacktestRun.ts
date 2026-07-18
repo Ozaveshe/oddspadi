@@ -81,6 +81,12 @@ export type MultiSportBacktestJob = {
     marketPriorScalingValidationSampleSize: number | null;
     marketPriorScalingValidationBrierDelta: number | null;
     marketPriorScalingValidationLogLossDelta: number | null;
+    empiricalValueGuardStatus: "active" | "abstain" | null;
+    empiricalValueGuardSampleSize: number | null;
+    empiricalValueGuardEligibleBuckets: number | null;
+    empiricalValueGuardBaselinePickCount: number | null;
+    empiricalValueGuardSelectedPickCount: number | null;
+    empiricalValueGuardPicksRemoved: number | null;
     marketPriorStatus: "applied" | "no-priced-market" | null;
     marketPriorAdjustedFixtures: number | null;
     marketPriorCoverage: number | null;
@@ -173,6 +179,12 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
       marketPriorScalingValidationSampleSize: null,
       marketPriorScalingValidationBrierDelta: null,
       marketPriorScalingValidationLogLossDelta: null,
+      empiricalValueGuardStatus: null,
+      empiricalValueGuardSampleSize: null,
+      empiricalValueGuardEligibleBuckets: null,
+      empiricalValueGuardBaselinePickCount: null,
+      empiricalValueGuardSelectedPickCount: null,
+      empiricalValueGuardPicksRemoved: null,
       marketPriorStatus: null,
       marketPriorAdjustedFixtures: null,
       marketPriorCoverage: null,
@@ -216,6 +228,14 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
     marketPriorScalingValidationSampleSize: marketPolicy?.validationSampleSize ?? null,
     marketPriorScalingValidationBrierDelta: marketValidationBrierDelta,
     marketPriorScalingValidationLogLossDelta: marketValidationLogLossDelta,
+    empiricalValueGuardStatus: runtimeResult?.empiricalValueGuardPolicy.status ?? null,
+    empiricalValueGuardSampleSize: runtimeResult?.empiricalValueGuardPolicy.sampleSize ?? null,
+    empiricalValueGuardEligibleBuckets: runtimeResult
+      ? runtimeResult.empiricalValueGuardPolicy.buckets.filter((bucket) => bucket.eligible).length
+      : null,
+    empiricalValueGuardBaselinePickCount: runtimeResult?.empiricalValueGuardComparison.baseline.pickCount ?? null,
+    empiricalValueGuardSelectedPickCount: runtimeResult?.empiricalValueGuardComparison.selected.pickCount ?? null,
+    empiricalValueGuardPicksRemoved: runtimeResult?.empiricalValueGuardComparison.picksRemoved ?? null,
     marketPriorStatus: runtimeResult?.marketPriorEvidence.status ?? null,
     marketPriorAdjustedFixtures: runtimeResult?.marketPriorEvidence.adjustedFixtures ?? null,
     marketPriorCoverage: runtimeResult?.marketPriorEvidence.coverage ?? null,

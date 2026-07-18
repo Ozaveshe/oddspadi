@@ -119,6 +119,17 @@ describe("football exact runtime replay", () => {
       weightScale: 1,
       reason: "insufficient-priced-sample"
     });
+    expect(result.empiricalValueGuardPolicy).toMatchObject({
+      source: "chronological-final-posterior-training-window",
+      status: "abstain",
+      reason: expect.stringMatching(/insufficient-bucket-sample|invalid-chronology/)
+    });
+    expect(result.empiricalValueGuardComparison.selected.pickCount).toBeLessThanOrEqual(
+      result.empiricalValueGuardComparison.baseline.pickCount
+    );
+    expect(result.empiricalValueGuardComparison.picksRemoved).toBe(
+      result.empiricalValueGuardComparison.baseline.pickCount - result.empiricalValueGuardComparison.selected.pickCount
+    );
     expect(result.marketPriorEvidence).toMatchObject({
       version: "runtime-market-prior-parity-v1",
       status: "applied",
@@ -153,6 +164,7 @@ describe("football exact runtime replay", () => {
     expect(homeWin.selectionPolicy).toEqual(awayWin.selectionPolicy);
     expect(homeWin.probabilityCalibrationPolicy).toEqual(awayWin.probabilityCalibrationPolicy);
     expect(homeWin.marketPriorScalingPolicy).toEqual(awayWin.marketPriorScalingPolicy);
+    expect(homeWin.empiricalValueGuardPolicy).toEqual(awayWin.empiricalValueGuardPolicy);
   });
 
   it("keeps explicit closing prices out of the final posterior while retaining them for evaluation", () => {

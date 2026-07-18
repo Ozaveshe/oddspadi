@@ -11,6 +11,7 @@ import type {
   ValueEdge
 } from "@/lib/sports/types";
 import { confidenceFromEdgeAndProbability, riskLevelFromConfidenceAndOdds } from "./confidence";
+import { evaluateEmpiricalValueGuard } from "./empiricalValueGuard";
 
 export function clampProbability(value: number): number {
   if (Number.isNaN(value)) return 0;
@@ -412,7 +413,8 @@ export function applyMarketPriorAdjustmentToDiagnostics(
 export function buildValueEdges(
   predictionMarkets: PredictionMarket[],
   oddsMarkets: OddsMarket[],
-  dataQuality: number
+  dataQuality: number,
+  learningProfile?: DecisionLearningProfile
 ): ValueEdge[] {
   return oddsMarkets.flatMap((market) => {
     const predictionMarket = predictionMarkets.find((item) => item.marketId === market.id);
@@ -444,9 +446,15 @@ export function buildValueEdges(
         expectedRoi: expectedValue,
         odds: selection.decimalOdds,
         confidence,
-        risk
+        risk,
+        empiricalValueGuard: evaluateEmpiricalValueGuard({
+          modelProbability,
+          impliedProbability,
+          odds: selection.decimalOdds,
+          policy: learningProfile?.active ? learningProfile.empiricalValueGuardPolicy : null
+        })
       };
-      const scoring = scoreValueEdge(valueEdge);
+      const scoring = scoreValueEdge(valueEdge, { learningProfile });
 
       return {
         ...valueEdge,
@@ -463,8 +471,18 @@ export function selectBestPick(valueEdges: ValueEdge[], options: BestPickSelecti
     ? options.learningProfile.allowedConfidenceBands
     : null;
   const viable = valueEdges
+    .map((edge) => ({
+      ...edge,
+      empiricalValueGuard: evaluateEmpiricalValueGuard({
+        modelProbability: edge.modelProbability,
+        impliedProbability: edge.impliedProbability,
+        odds: edge.odds,
+        policy: options.learningProfile?.active ? options.learningProfile.empiricalValueGuardPolicy : null
+      })
+    }))
     .filter((edge) => {
       if (edge.edge < minimumEdge || edge.expectedValue <= 0 || edge.confidence === "low") return false;
+      if (edge.empiricalValueGuard.status === "blocked") return false;
       return allowedConfidenceBands === null || allowedConfidenceBands === undefined
         ? true
         : allowedConfidenceBands.includes(edge.confidence);

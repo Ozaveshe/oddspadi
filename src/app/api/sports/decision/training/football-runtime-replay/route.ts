@@ -77,6 +77,8 @@ function replaySummary(replay: FootballRuntimeReplayResult, stored?: { id: strin
     probabilityCalibrationPolicy: replay.probabilityCalibrationPolicy,
     probabilityCalibrationComparison: replay.probabilityCalibrationComparison,
     marketPriorScalingPolicy: replay.marketPriorScalingPolicy,
+    empiricalValueGuardPolicy: replay.empiricalValueGuardPolicy,
+    empiricalValueGuardComparison: replay.empiricalValueGuardComparison,
     marketPriorEvidence: replay.marketPriorEvidence,
     config: replay.config,
     notes: replay.notes,
