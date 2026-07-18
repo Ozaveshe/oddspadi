@@ -98,6 +98,21 @@ export interface OddsSelection {
   id: string;
   label: string;
   decimalOdds: number;
+  /** Bookmaker offering this executable selection price, when known. */
+  bookmaker?: {
+    id: string;
+    name: string;
+  };
+  /** Provider-reported update time for this exact quote, when available. */
+  observedAt?: string | null;
+}
+
+export interface OddsMarketConsensus {
+  method: "median-no-vig-v1";
+  bookmakerCount: number;
+  probabilities: Record<string, number>;
+  averageMargin: number;
+  maxProbabilitySpread: number;
 }
 
 export interface OddsMarket {
@@ -118,6 +133,10 @@ export interface OddsMarket {
     id: string;
     name: string;
   };
+  /** How the executable selection prices were chosen. */
+  priceMethod?: "best-price-per-selection-v1" | "selected-coherent-quote";
+  /** Robust multi-book belief receipt. Executable prices remain in `selections`. */
+  consensus?: OddsMarketConsensus;
 }
 
 export interface Match {
@@ -253,8 +272,24 @@ export interface MarketPriorAdjustment {
     selectionCount: number;
     bookmakerMargin: number;
     weight: number;
+    priorMethod: "selected-quote-no-vig" | OddsMarketConsensus["method"];
+    bookmakerCount: number;
+    maxProbabilitySpread: number | null;
   }>;
   notes: string[];
+}
+
+export interface ValueEdgeEconomicConfidence {
+  status: "verified" | "unavailable";
+  method: DecisionConfidenceIntervalMethod;
+  confidenceLevel: number | null;
+  sampleSize: number | null;
+  source: string | null;
+  probabilityLow: number | null;
+  probabilityHigh: number | null;
+  edgeLow: number | null;
+  expectedValueLow: number | null;
+  detail: string;
 }
 
 export interface ValueEdge {
@@ -270,6 +305,19 @@ export interface ValueEdge {
   expectedValue: number;
   expectedRoi: number;
   odds: number;
+  /** Exact executable-price provenance; separate from the market consensus. */
+  bookmaker?: {
+    id: string;
+    name: string;
+  };
+  priceObservedAt?: string | null;
+  priceMethod?: OddsMarket["priceMethod"];
+  /** Independent-book support behind the no-vig comparison used for this edge. */
+  consensusBookmakerCount?: number;
+  /** Widest cross-book no-vig probability gap for this market. */
+  consensusMaxProbabilitySpread?: number | null;
+  /** Empirical lower-bound economics from an active exact-runtime calibration bucket. */
+  economicConfidence?: ValueEdgeEconomicConfidence;
   confidence: ConfidenceLevel;
   risk: RiskLevel;
   empiricalValueGuard?: EmpiricalValueGuardDecision;
@@ -284,6 +332,8 @@ export interface ValueEdge {
     oddsVolatilityPenalty: number;
     priceShorteningTolerance?: number | null;
     priceFragilityPenalty?: number;
+    economicConfidencePenalty?: number;
+    rankedExpectedValue?: number;
     riskPenalty: number;
     caseMemoryPenalty?: number;
     caseMemorySimilarity?: number | null;
@@ -341,6 +391,8 @@ export interface DecisionThresholdConfig {
   minimumConfidenceForValuePick: ConfidenceLevel;
   minimumDataQuality: number;
   maximumOddsAgeMinutes: number;
+  minimumConsensusBookmakers: number;
+  maximumConsensusProbabilitySpread: number;
   minimumOdds: number;
   maximumOdds: number;
   minimumKickoffLeadMinutes: number;
@@ -376,6 +428,8 @@ export interface DecisionAuditSummary {
   contextSignalsSeen: number;
   blockers: string[];
   publicInvariantPassed: boolean;
+  /** Probability-prior receipt retained with canonical and stored decision evidence. */
+  marketPriorAdjustment?: MarketPriorAdjustment;
 }
 
 export interface DecisionSummary {
@@ -1643,6 +1697,10 @@ export interface DecisionLearningProfile {
   } | null;
   calibrationDriftStatus?: CalibrationDriftStatus | null;
   calibrationDriftReceipt?: CalibrationDriftReceipt | null;
+  /** Identifies whether the active curve came from the approved settled-outcome
+   * cohort or from the larger historical backtest fallback. Economic confidence
+   * may only use the former. */
+  calibrationBucketSource?: "promoted-cohort" | "backtest" | null;
   sampleSize: number;
   testSize?: number;
   realFinishedFixtures: number;

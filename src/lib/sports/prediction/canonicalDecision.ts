@@ -10,12 +10,15 @@ import type {
   DecisionThresholdConfig,
   EvidenceQuality,
   FootballModelDiagnostics,
+  MarketPriorAdjustment,
   Match,
   MatchContextSignal,
+  OddsMarket,
   Sport,
   ValueEdge
 } from "@/lib/sports/types";
 import { isRequiredProductionDataSignalBlocked } from "./contextSignalPolicy";
+import { governedHoldoutPublicationBlockers } from "./decisionEngine";
 import { withDecisionSummaryHash } from "./decisionSnapshotIdentity";
 
 const MINUTE_MS = 60_000;
@@ -27,6 +30,8 @@ export const SPORT_DECISION_THRESHOLDS: Record<Extract<Sport, "football" | "bask
     minimumConfidenceForValuePick: "medium",
     minimumDataQuality: 0.62,
     maximumOddsAgeMinutes: 60,
+    minimumConsensusBookmakers: 3,
+    maximumConsensusProbabilitySpread: 0.1,
     minimumOdds: 1.25,
     maximumOdds: 4.5,
     minimumKickoffLeadMinutes: 15,
@@ -38,6 +43,8 @@ export const SPORT_DECISION_THRESHOLDS: Record<Extract<Sport, "football" | "bask
     minimumConfidenceForValuePick: "medium",
     minimumDataQuality: 0.6,
     maximumOddsAgeMinutes: 45,
+    minimumConsensusBookmakers: 3,
+    maximumConsensusProbabilitySpread: 0.1,
     minimumOdds: 1.2,
     maximumOdds: 4,
     minimumKickoffLeadMinutes: 10,
@@ -49,6 +56,8 @@ export const SPORT_DECISION_THRESHOLDS: Record<Extract<Sport, "football" | "bask
     minimumConfidenceForValuePick: "medium",
     minimumDataQuality: 0.62,
     maximumOddsAgeMinutes: 60,
+    minimumConsensusBookmakers: 3,
+    maximumConsensusProbabilitySpread: 0.1,
     minimumOdds: 1.25,
     maximumOdds: 4.5,
     minimumKickoffLeadMinutes: 15,
@@ -64,6 +73,9 @@ export type DecisionOddsSnapshot = {
   decimalOdds: number;
   capturedAt: string | null;
   expiresAt?: string | null;
+  bookmakerId?: string | null;
+  bookmakerName?: string | null;
+  priceMethod?: OddsMarket["priceMethod"];
 };
 
 export type CanonicalDecisionModelOutput = {
@@ -72,12 +84,16 @@ export type CanonicalDecisionModelOutput = {
   evidenceHash?: string;
   modelVersion?: string;
   engineVersion?: string;
+  marketPriorAdjustment?: MarketPriorAdjustment;
   decision?: {
     action?: DecisionEngineReport["action"];
     calibration?: { action?: DecisionEngineReport["calibration"]["action"] };
     actionability?: { status?: DecisionEngineReport["actionability"]["status"] };
     abstentionRules?: Array<{ triggered?: boolean }>;
     dataCoverage?: { signals?: DecisionEngineReport["dataCoverage"]["signals"] };
+    robustness?: { status?: DecisionEngineReport["robustness"]["status"] };
+    uncertainty?: { status?: DecisionEngineReport["uncertainty"]["status"] };
+    learningProfile?: DecisionEngineReport["learningProfile"];
   };
   generatedAt?: string;
 };
@@ -165,6 +181,13 @@ function enginePublicationAllowed(decision: CanonicalDecisionModelOutput["decisi
   if (decision.dataCoverage?.signals?.some(isRequiredProductionDataSignalBlocked)) {
     blockers.push("required production evidence is missing, stale, mock, or computed-only");
   }
+  if (decision.robustness?.status === "fragile") {
+    blockers.push("robustness stress tests classify the recommendation as fragile");
+  }
+  if (decision.uncertainty?.status === "high-risk") {
+    blockers.push("uncertainty decomposition classifies the recommendation as high-risk");
+  }
+  blockers.push(...governedHoldoutPublicationBlockers(decision.learningProfile));
   return { allowed: blockers.length === 0, blockers };
 }
 
@@ -209,14 +232,63 @@ function classifyAnalysis({
   const confidencePasses = confidenceRank(edge.confidence) >= confidenceRank(thresholds.minimumConfidenceForValuePick);
   const pricePasses = edge.odds >= thresholds.minimumOdds && edge.odds <= thresholds.maximumOdds;
   const leadPasses = kickoffLeadMinutes === null || kickoffLeadMinutes >= thresholds.minimumKickoffLeadMinutes;
+  const bestPriceIntegrityRequired = edge.priceMethod === "best-price-per-selection-v1";
+  const edgeBookmakerId = edge.bookmaker?.id?.trim() ?? "";
+  const edgeBookmakerName = edge.bookmaker?.name?.trim() ?? "";
+  const snapshotBookmakerId = snapshot?.bookmakerId?.trim() ?? "";
+  const edgePriceMs = finiteMs(edge.priceObservedAt);
+  const sourcePasses = !bestPriceIntegrityRequired || (
+    Boolean(edgeBookmakerId && edgeBookmakerName) &&
+    Boolean(snapshotBookmakerId) &&
+    edgeBookmakerId === snapshotBookmakerId
+  );
+  const timestampPasses = !bestPriceIntegrityRequired || (
+    edgePriceMs !== null &&
+    capturedMs !== null &&
+    edgePriceMs === capturedMs &&
+    edgePriceMs <= now.getTime() + 5 * MINUTE_MS
+  );
+  const consensusDepthPasses = !bestPriceIntegrityRequired || (
+    Number.isInteger(edge.consensusBookmakerCount) &&
+    (edge.consensusBookmakerCount ?? 0) >= thresholds.minimumConsensusBookmakers
+  );
+  const consensusDisagreementPasses = !bestPriceIntegrityRequired || (
+    typeof edge.consensusMaxProbabilitySpread === "number" &&
+    Number.isFinite(edge.consensusMaxProbabilitySpread) &&
+    edge.consensusMaxProbabilitySpread >= 0 &&
+    edge.consensusMaxProbabilitySpread <= thresholds.maximumConsensusProbabilitySpread
+  );
+  const executionIntegrityPasses = sourcePasses && timestampPasses && consensusDepthPasses && consensusDisagreementPasses;
+  const economicConfidenceTracked = edge.economicConfidence !== undefined;
+  const economicConfidenceVerified = !economicConfidenceTracked || edge.economicConfidence?.status === "verified";
+  const economicEdgePasses = !economicConfidenceTracked || (
+    edge.economicConfidence?.edgeLow !== null &&
+    edge.economicConfidence?.edgeLow !== undefined &&
+    edge.economicConfidence.edgeLow >= thresholds.minimumValueEdge
+  );
+  const economicEvPasses = !economicConfidenceTracked || (
+    edge.economicConfidence?.expectedValueLow !== null &&
+    edge.economicConfidence?.expectedValueLow !== undefined &&
+    edge.economicConfidence.expectedValueLow >= thresholds.minimumExpectedValue
+  );
+  const economicConfidencePasses = economicConfidenceVerified && economicEdgePasses && economicEvPasses;
 
   if (!providerBacked) blockers.push("fixture is not provider-backed");
   if (fixtureSuspended) blockers.push("fixture is not open for pre-match publication");
   if (!snapshot) blockers.push("odds snapshot is missing");
   else if (stale) blockers.push("odds snapshot is stale");
+  if (!sourcePasses) blockers.push("best-price source does not match the canonical bookmaker snapshot");
+  if (!timestampPasses) blockers.push("best-price timestamp is missing, mismatched, or ahead of the decision clock");
+  if (!consensusDepthPasses) blockers.push(`best-price comparison needs at least ${thresholds.minimumConsensusBookmakers} independent bookmakers`);
+  if (!consensusDisagreementPasses) blockers.push(`cross-book probability disagreement exceeds ${Math.round(thresholds.maximumConsensusProbabilitySpread * 100)}%`);
+  if (!pricePasses) blockers.push("decimal odds are outside the publication range");
+  if (!economicConfidenceVerified) blockers.push("empirical 95% value floor is unavailable for this runtime");
+  else {
+    if (!economicEdgePasses) blockers.push(`empirical 95% lower-bound edge is below ${Math.round(thresholds.minimumValueEdge * 100)}%`);
+    if (!economicEvPasses) blockers.push(`empirical 95% lower-bound EV is below ${Math.round(thresholds.minimumExpectedValue * 100)}%`);
+  }
   if (dataQuality < thresholds.minimumDataQuality) blockers.push("data quality is below the sport threshold");
   if (!confidencePasses) blockers.push("confidence is below the value-pick threshold");
-  if (!pricePasses) blockers.push("decimal odds are outside the publication range");
   if (!leadPasses) blockers.push("kickoff is too close for a new published pick");
   if (!engineAllowed) blockers.push(...engineBlockers);
 
@@ -228,6 +300,8 @@ function classifyAnalysis({
     !fixtureSuspended &&
     Boolean(snapshot) &&
     !stale &&
+    executionIntegrityPasses &&
+    economicConfidencePasses &&
     dataQuality >= thresholds.minimumDataQuality &&
     confidencePasses &&
     pricePasses &&
@@ -245,6 +319,8 @@ function classifyAnalysis({
     !confidencePasses ||
     !pricePasses ||
     !leadPasses ||
+    !executionIntegrityPasses ||
+    !economicConfidencePasses ||
     !engineAllowed
   ) {
     analysisStatus = "watchlist";
@@ -321,7 +397,10 @@ export function oddsSnapshotsFromMatch(match: Match, capturedFallback = new Date
       market: market.id,
       selection: selection.id,
       decimalOdds: selection.decimalOdds,
-      capturedAt
+      capturedAt: selection.observedAt ?? capturedAt,
+      bookmakerId: selection.bookmaker?.id ?? market.bookmaker?.id ?? null,
+      bookmakerName: selection.bookmaker?.name ?? market.bookmaker?.name ?? null,
+      priceMethod: market.priceMethod ?? (market.bookmaker ? "selected-coherent-quote" : undefined)
     }))
   );
 }
@@ -405,7 +484,8 @@ export function buildCanonicalDecision(
       providerBacked,
       contextSignalsSeen: contextSignals.length,
       blockers,
-      publicInvariantPassed
+      publicInvariantPassed,
+      ...(modelOutput.marketPriorAdjustment ? { marketPriorAdjustment: modelOutput.marketPriorAdjustment } : {})
     }
   });
 }

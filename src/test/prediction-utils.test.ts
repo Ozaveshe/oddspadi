@@ -121,7 +121,7 @@ import {
 import { buildDecisionActivationAudit } from "@/lib/sports/prediction/decisionActivationAudit";
 import { buildDecisionActivationRunbook, isSafeActivationCommand } from "@/lib/sports/prediction/decisionActivationRunbook";
 import { buildDecisionDataAcquisitionContract } from "@/lib/sports/prediction/decisionDataAcquisitionContract";
-import { buildDecisionEngineReport } from "@/lib/sports/prediction/decisionEngine";
+import { buildDecisionEngineReport, DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine";
 import { buildDecisionEngineActivationRoadmap } from "@/lib/sports/prediction/decisionEngineActivationRoadmap";
 import { buildDecisionEngineCapacityState } from "@/lib/sports/prediction/decisionEngineCapacityState";
 import { buildDecisionEngineNextActionController } from "@/lib/sports/prediction/decisionEngineNextActionController";
@@ -4688,7 +4688,7 @@ describe("prediction utilities", () => {
     expect(opener?.match.providerContextSignals?.map((signal) => signal.label)).toEqual(
       expect.arrayContaining(["Official EPL fixture release", "Preseason horizon risk", "Promoted club baseline"])
     );
-    expect(opener?.prediction.diagnostics.modelVersion).toBe("football-poisson-v3");
+    expect(opener?.prediction.diagnostics.modelVersion).toBe("football-poisson-v5");
     expect(opener?.prediction.diagnostics.expectedGoals.home).toBeGreaterThan(opener?.prediction.diagnostics.expectedGoals.away ?? 0);
     expect(opener?.prediction.contextAdjustment.missingSignals).toEqual(expect.arrayContaining(["Confirmed lineups", "Injury and suspension news", "Weather check"]));
     expect(opener?.prediction.contextAdjustment.riskFlags.join(" ")).toContain("Preseason horizon risk");
@@ -4836,6 +4836,73 @@ describe("prediction utilities", () => {
     expect(
       (winner?.probabilities.home ?? 0) + (winner?.probabilities.draw ?? 0) + (winner?.probabilities.away ?? 0)
     ).toBeCloseTo(1, 4);
+  });
+
+  it("uses median consensus as the belief prior while keeping the executable quote separate", () => {
+    const executableMarket = {
+      id: "draw_no_bet" as const,
+      name: "Draw no bet",
+      selections: [
+        { id: "home", label: "Home", decimalOdds: 1.91 },
+        { id: "away", label: "Away", decimalOdds: 1.91 }
+      ]
+    };
+    const single = applyMarketPriorAdjustmentToMarkets(
+      [{ marketId: "draw_no_bet", probabilities: { home: 0.5, away: 0.5 } }],
+      [executableMarket],
+      0.5
+    );
+    const consensus = applyMarketPriorAdjustmentToMarkets(
+      [{ marketId: "draw_no_bet", probabilities: { home: 0.5, away: 0.5 } }],
+      [{
+        ...executableMarket,
+        consensus: {
+          method: "median-no-vig-v1" as const,
+          bookmakerCount: 4,
+          probabilities: { home: 0.65, away: 0.35 },
+          averageMargin: 0.04,
+          maxProbabilitySpread: 0.015
+        }
+      }],
+      0.5
+    );
+
+    expect(single.markets[0]?.probabilities.home).toBeCloseTo(0.5, 6);
+    expect(consensus.markets[0]?.probabilities.home).toBeGreaterThan(0.5);
+    expect(consensus.adjustment.markets[0]).toMatchObject({
+      priorMethod: "median-no-vig-v1",
+      bookmakerCount: 4,
+      maxProbabilitySpread: 0.015
+    });
+  });
+
+  it("discounts shallow and disputed bookmaker consensus before model shrinkage", () => {
+    const run = (bookmakerCount: number, maxProbabilitySpread: number) => applyMarketPriorAdjustmentToMarkets(
+      [{ marketId: "draw_no_bet", probabilities: { home: 0.7, away: 0.3 } }],
+      [{
+        id: "draw_no_bet",
+        name: "Draw no bet",
+        selections: [
+          { id: "home", label: "Home", decimalOdds: 2 },
+          { id: "away", label: "Away", decimalOdds: 2 }
+        ],
+        consensus: {
+          method: "median-no-vig-v1",
+          bookmakerCount,
+          probabilities: { home: 0.45, away: 0.55 },
+          averageMargin: 0.035,
+          maxProbabilitySpread
+        }
+      }],
+      0.4,
+      { minimumWeight: 0.9, reason: "thin evidence" }
+    );
+
+    const tight = run(5, 0.01);
+    const disputed = run(2, 0.12);
+    expect(tight.adjustment.averageWeight).toBeGreaterThan(disputed.adjustment.averageWeight);
+    expect(tight.markets[0]?.probabilities.home).toBeLessThan(disputed.markets[0]?.probabilities.home ?? 0);
+    expect(disputed.adjustment.averageWeight).toBeLessThan(0.3);
   });
 
   it("ranks viable picks by positive expected value before edge", () => {
@@ -5331,7 +5398,7 @@ describe("prediction utilities", () => {
       status: "active",
       source: "supabase:op_fixtures:real-only",
       active: true,
-      modelKey: "football-poisson-v3",
+      modelKey: "football-poisson-v5",
       engineVersion: "decision-engine-v1",
       sampleSize: 1200,
       realFinishedFixtures: 1200,
@@ -5464,7 +5531,7 @@ describe("prediction utilities", () => {
     const [match] = await mockSportsDataProvider.getFixtures("2026-06-24", "football");
     const output = modelFootballMatch(match);
 
-    expect(output.diagnostics.modelVersion).toBe("football-poisson-v3");
+    expect(output.diagnostics.modelVersion).toBe("football-poisson-v5");
     expect(output.diagnostics.expectedGoals.home).toBeGreaterThan(0);
     expect(output.diagnostics.topCorrectScores.length).toBe(5);
     expect(output.diagnostics.homeDrawAwayTotal).toBeCloseTo(1, 4);
@@ -5616,7 +5683,7 @@ describe("prediction utilities", () => {
     const winner = prediction.markets.find((market) => market.marketId === "match_winner");
 
     expect(match.sport).toBe("basketball");
-    expect(prediction.diagnostics.modelVersion).toBe("basketball-efficiency-v3");
+    expect(prediction.diagnostics.modelVersion).toBe("basketball-efficiency-v5");
     expect(prediction.diagnostics.scoreUnit).toBe("points");
     expect(winner?.probabilities.home ?? 0).toBeGreaterThan(0);
     expect((winner?.probabilities.home ?? 0) + (winner?.probabilities.away ?? 0)).toBeCloseTo(1, 4);
@@ -5747,7 +5814,7 @@ describe("prediction utilities", () => {
     const winner = prediction.markets.find((market) => market.marketId === "match_winner");
 
     expect(match.sport).toBe("tennis");
-    expect(prediction.diagnostics.modelVersion).toBe("tennis-surface-elo-v3");
+    expect(prediction.diagnostics.modelVersion).toBe("tennis-surface-elo-v5");
     expect(prediction.diagnostics.scoreUnit).toBe("sets");
     expect(winner?.probabilities.home ?? 0).toBeGreaterThan(0);
     expect((winner?.probabilities.home ?? 0) + (winner?.probabilities.away ?? 0)).toBeCloseTo(1, 4);
@@ -5895,7 +5962,7 @@ describe("prediction utilities", () => {
     const [match] = await mockSportsDataProvider.getFixtures("2026-06-24", "football");
     const prediction = buildPrediction(match);
 
-    expect(prediction.decision.engineVersion).toBe("decision-engine-v1");
+    expect(prediction.decision.engineVersion).toBe(DECISION_ENGINE_VERSION);
     expect(Number.isFinite(prediction.decision.decisionScore)).toBe(true);
     expect(prediction.decision.publicReasoningSteps.length).toBeGreaterThanOrEqual(4);
     expect(prediction.decision.publicReasoningSteps.some((step) => step.includes("Dixon-Coles low-score correction"))).toBe(true);
@@ -10387,7 +10454,7 @@ describe("prediction utilities", () => {
     expect(dossier.status).toBe("blocked");
     expect(dossier.dossierHash).toMatch(/^fnv1a-[a-f0-9]{8}$/);
     expect(dossier.target.matchId).toBeTruthy();
-    expect(dossier.modelContext.modelVersion).toBe("football-poisson-v3");
+    expect(dossier.modelContext.modelVersion).toBe("football-poisson-v5");
     expect(dossier.marketContext.totalSelections).toBeGreaterThan(0);
     expect(dossier.dataContext.missingEnv).toEqual(expect.arrayContaining(["API_FOOTBALL_KEY", "THE_ODDS_API_KEY"]));
     expect(dossier.trainingContext.governanceStatus).toBe("blocked");
@@ -13721,6 +13788,21 @@ describe("prediction utilities", () => {
             ...snapshot.latestBacktest,
             modelKey: runtimeModelKey("football"),
             config: {
+              thresholdSelection: {
+                version: "nested-chronological-economics-v2",
+                status: "selected",
+                baseline: { minEdge: 0.04, minModelProbability: 0.4 },
+                applied: { minEdge: 0.041, minModelProbability: 0.4 },
+                tuningSampleSize: 672,
+                validationSampleSize: 168,
+                minimumTuningPicks: 30,
+                minimumValidationPicks: 20,
+                selectedCandidate: { minEdge: 0.041, minModelProbability: 0.4 },
+                validation: { sampleSize: 168, pickCount: 24, yield: 0.03, closingLineValue: 0.01 },
+                validationLowerYieldBound: 0.005,
+                candidates: [],
+                reason: "Test receipt."
+              },
               learnedWeightsProvenance: snapshot.latestBacktest.config?.learnedWeightsProvenance,
               modelIdentity: runtimeModelIdentityReceipt("football", {
                 featureContractStatus: "passed",
@@ -13906,8 +13988,8 @@ describe("prediction utilities", () => {
       status: "active",
       source: "supabase:op_fixtures:real-only",
       active: true,
-      modelKey: "football-poisson-v3",
-      engineVersion: "decision-engine-v1",
+      modelKey: "football-poisson-v5",
+      engineVersion: DECISION_ENGINE_VERSION,
       sampleSize: 1200,
       realFinishedFixtures: 1200,
       minimumRecommendedFixtures: 1000,
@@ -13961,8 +14043,8 @@ describe("prediction utilities", () => {
       status: "active",
       source: "supabase:op_fixtures:real-only",
       active: true,
-      modelKey: "basketball-efficiency-v3",
-      engineVersion: "decision-engine-v1",
+      modelKey: "basketball-efficiency-v5",
+      engineVersion: DECISION_ENGINE_VERSION,
       sampleSize: 1400,
       realFinishedFixtures: 1400,
       minimumRecommendedFixtures: 1000,
@@ -13980,7 +14062,7 @@ describe("prediction utilities", () => {
     };
     const basketballPrediction = buildPrediction(basketball, { learningProfile });
     const tennisPrediction = buildPrediction(tennis, {
-      learningProfile: { ...learningProfile, modelKey: "tennis-surface-elo-v3" }
+      learningProfile: { ...learningProfile, modelKey: "tennis-surface-elo-v5" }
     });
 
     expect(basketballPrediction.decision.learningProfile?.active).toBe(true);
@@ -15829,7 +15911,7 @@ describe("prediction utilities", () => {
     expect(match.oddsMarkets.map((market) => market.id)).toEqual(["match_winner", "spread", "total_points"]);
 
     const prediction = buildPrediction(match);
-    expect(prediction.diagnostics.modelVersion).toBe("basketball-efficiency-v3");
+    expect(prediction.diagnostics.modelVersion).toBe("basketball-efficiency-v5");
     expect(prediction.contextAdjustment.signals.some((signal) => signal.source === "supabase-basketball-historical-strength")).toBe(true);
     expect(prediction.diagnostics.signalScores.find((signal) => signal.label === "Basketball context source")?.note).toContain("stored pre-match rest evidence");
     expect(prediction.valueEdges.length).toBeGreaterThan(0);
@@ -15984,7 +16066,7 @@ describe("prediction utilities", () => {
     expect(match.oddsMarkets.map((market) => market.id)).toEqual(["match_winner", "total_games"]);
 
     const prediction = buildPrediction(match);
-    expect(prediction.diagnostics.modelVersion).toBe("tennis-surface-elo-v3");
+    expect(prediction.diagnostics.modelVersion).toBe("tennis-surface-elo-v5");
     expect(prediction.contextAdjustment.signals.some((signal) => signal.source === "api-tennis-events")).toBe(true);
     expect(prediction.diagnostics.signalScores.find((signal) => signal.label === "Player Elo edge")?.note).toContain("stored pre-match Elo");
     expect(prediction.valueEdges.length).toBeGreaterThan(0);
@@ -16089,7 +16171,7 @@ describe("prediction utilities", () => {
       rank: 2
     });
     expect(match.oddsMarkets.map((market) => market.id)).toEqual(["match_winner", "total_games"]);
-    expect(buildPrediction(match).diagnostics.modelVersion).toBe("tennis-surface-elo-v3");
+    expect(buildPrediction(match).diagnostics.modelVersion).toBe("tennis-surface-elo-v5");
   });
 
   it("summarizes stored decision memory runs", () => {
@@ -20554,7 +20636,7 @@ describe("prediction utilities", () => {
     expect(modelCards.mode).toBe("decision-model-cards");
     expect(modelCards.cards).toHaveLength(1);
     expect(modelCards.cards[0].sport).toBe("football");
-    expect(modelCards.cards[0].modelKey).toBe("football-poisson-v3");
+    expect(modelCards.cards[0].modelKey).toBe("football-poisson-v5");
     expect(modelCards.cards[0].formulas.map((formula) => formula.id)).toEqual(["expected-goals", "poisson-score-matrix", "odds-edge"]);
     expect(modelCards.cards[0].formulas.find((formula) => formula.id === "expected-goals")?.inputs).toEqual(expect.arrayContaining(["provider xG where available"]));
     expect(modelCards.cards[0].parameters.map((parameter) => parameter.key)).toContain("xg_blend_weight");
@@ -28644,7 +28726,7 @@ describe("prediction utilities", () => {
     const payload = buildDecisionRunPayload({ match, prediction });
 
     expect(payload.fixture_external_id).toBe(match.id);
-    expect(payload.engine_version).toBe("decision-engine-v1");
+    expect(payload.engine_version).toBe(DECISION_ENGINE_VERSION);
     expect(payload.verdict).toBe(prediction.decision.verdict);
     expect(payload.factors).toEqual(prediction.decision.factors);
     expect(payload.health).toBe(prediction.decision.health);

@@ -11,6 +11,7 @@ import { LocalTime } from "@/components/odds/LocalTime";
 import { ProbabilityDistribution } from "@/components/odds/ProbabilityDistribution";
 import { CalibrationReliabilityBand } from "@/components/odds/CalibrationReliabilityBand";
 import { DecisionEvidenceProfile } from "@/components/odds/DecisionEvidenceProfile";
+import { DecisionPriceSignal } from "@/components/odds/DecisionPriceSignal";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { AddToSlipButton } from "@/components/odds/AddToSlipButton";
@@ -23,6 +24,8 @@ import { serializeJsonLd } from "@/lib/security/jsonLd";
 import Link from "next/link";
 import { leagueSlugFromProviderId } from "@/lib/sports/leagueStandings";
 import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
+import { MatchCommunityDesk } from "@/components/community/MatchCommunityDesk";
+import { marketPriorReceiptFor } from "@/lib/sports/prediction/marketPriorPresentation";
 
 export const revalidate = 180;
 
@@ -107,6 +110,16 @@ export default async function MatchDetailPage({ params }: PageProps) {
   const leagueTableSlug = leagueSlugFromProviderId(match.league.id);
   const homeStanding = match.leagueTable?.rows.find((row) => row.teamId === match.homeTeam.id || row.teamName.toLowerCase() === match.homeTeam.name.toLowerCase());
   const awayStanding = match.leagueTable?.rows.find((row) => row.teamId === match.awayTeam.id || row.teamName.toLowerCase() === match.awayTeam.name.toLowerCase());
+  const communitySport = match.sport === "football" || match.sport === "basketball" || match.sport === "tennis" ? match.sport : null;
+  const communityMarkets = match.oddsMarkets
+    .filter((market) => market.selections.some((selection) => Number.isFinite(selection.decimalOdds) && selection.decimalOdds > 1))
+    .map((market) => ({
+      id: market.id,
+      name: market.name,
+      selections: market.selections
+        .filter((selection) => Number.isFinite(selection.decimalOdds) && selection.decimalOdds > 1)
+        .map((selection) => ({ id: selection.id, label: selection.label, decimalOdds: selection.decimalOdds }))
+    }));
 
   const matchUrl = `${siteUrl}/predictions/${encodeURIComponent(matchId)}`;
   const jsonLd = [
@@ -182,12 +195,17 @@ export default async function MatchDetailPage({ params }: PageProps) {
           {displayedDecision ? (
             <>
               <p className="match-decision-selection"><span>{displayedDecision.marketId.replaceAll("_", " ")}</span><strong>{displayedDecision.label}</strong></p>
-              <div className="match-decision-primary">
-                <div><span>Current odds</span><strong>{displayedDecision.odds.toFixed(2)}</strong></div>
-                <div><span>Model chance</span><strong>{formatPercent(displayedDecision.modelProbability)}</strong></div>
-                <div><span>Fair market chance</span><strong>{formatPercent(displayedDecision.noVigImpliedProbability)}</strong></div>
-                <div className={displayedDecision.edge > 0 ? "positive" : "negative"}><span>Model edge</span><strong>{formatSignedPercent(displayedDecision.edge)}</strong></div>
-              </div>
+              <DecisionPriceSignal
+                modelProbability={displayedDecision.modelProbability}
+                marketProbability={displayedDecision.noVigImpliedProbability}
+                currentOdds={displayedDecision.odds}
+                edge={displayedDecision.edge}
+                expectedValue={displayedDecision.expectedValue}
+                marketPriorReceipt={marketPriorReceiptFor(prediction.marketPriorAdjustment, displayedDecision.marketId)}
+                executionPriceReceipt={displayedDecision}
+                publicationGateReceipt={displayedDecision}
+                economicConfidenceReceipt={displayedDecision.economicConfidence}
+              />
               <div className="match-decision-context">
                 <div><span>Confidence</span><ConfidenceBadge level={canonical.confidence} /></div>
                 <div><span>Risk</span><RiskBadge level={canonical.risk} /></div>
@@ -202,6 +220,22 @@ export default async function MatchDetailPage({ params }: PageProps) {
           <Link className="button" href={`/community?match=${encodeURIComponent(match.id)}&prompt=${encodeURIComponent(`My read on ${match.homeTeam.name} vs ${match.awayTeam.name}: `)}`}>Discuss match</Link>
         </div>
       </section>
+
+      {communitySport ? (
+        <MatchCommunityDesk
+          fixtureId={match.id}
+          sport={communitySport}
+          homeTeam={match.homeTeam.name}
+          awayTeam={match.awayTeam.name}
+          kickoffAt={match.kickoffTime}
+          markets={communityMarkets}
+          modelProbabilities={winner ? {
+            home: winner.probabilities.home,
+            ...(match.sport === "football" ? { draw: winner.probabilities.draw ?? 0 } : {}),
+            away: winner.probabilities.away
+          } : undefined}
+        />
+      ) : null}
 
       <div className="match-detail-actions">
         <FollowTeamButton teamName={match.homeTeam.name} sport={match.sport} />

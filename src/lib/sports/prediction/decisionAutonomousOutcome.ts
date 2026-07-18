@@ -7,6 +7,13 @@ function strongestEvaluationEdge(prediction: Prediction): ValueEdge | null {
     prediction.canonicalDecision.bestWatchlistCandidate;
 }
 
+function oddsProviderSportKey(match: Match): string | null {
+  if (!match.dataSource?.fixtureProvider?.startsWith("the-odds-api")) return null;
+  return match.league.id.startsWith("the-odds-api:")
+    ? match.league.id.slice("the-odds-api:".length)
+    : null;
+}
+
 export function buildAutonomousPendingOutcome({
   match,
   prediction,
@@ -54,6 +61,7 @@ export function buildAutonomousPendingOutcome({
       country: match.league.country,
       fixtureProvider: match.dataSource?.fixtureProvider ?? null,
       fixtureProviderId: match.dataSource?.fixtureProviderId ?? null,
+      providerSportKey: oddsProviderSportKey(match),
       oddsProvider: match.dataSource?.oddsProvider ?? null,
       oddsProviderEventId: match.dataSource?.oddsProviderEventId ?? null,
       deterministicAction: prediction.decision.action,

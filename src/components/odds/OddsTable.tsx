@@ -10,6 +10,7 @@ export function OddsTable({ match, prediction }: { match: Match; prediction: Pre
     id: `${market.id}-${selection.id}`,
     market,
     selection,
+    bookmaker: selection.bookmaker ?? market.bookmaker,
     edge: edgesBySelection.get(`${market.id}:${selection.id}`)
   })));
 
@@ -32,12 +33,12 @@ export function OddsTable({ match, prediction }: { match: Match; prediction: Pre
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ id, market, selection, edge }) => (
+            {rows.map(({ id, market, selection, bookmaker, edge }) => (
               <tr key={id}>
                 <td>{market.name}</td>
                 <td>{selection.label}</td>
                 <td>{formatOdds(selection.decimalOdds)}</td>
-                <td>{market.bookmaker ? bookmakerDisplayName(market.bookmaker.id, market.bookmaker.name) : "Market price"}</td>
+                <td>{bookmaker ? bookmakerDisplayName(bookmaker.id, bookmaker.name) : "Source unavailable"}</td>
                 <td>{edge ? formatPercent(edge.modelProbability) : "N/A"}</td>
                 <td>{edge ? formatPercent(edge.rawImpliedProbability) : "N/A"}</td>
                 <td>{edge ? formatPercent(edge.noVigImpliedProbability) : "N/A"}</td>
@@ -51,7 +52,7 @@ export function OddsTable({ match, prediction }: { match: Match; prediction: Pre
       </div>
 
       <div className="market-mobile-list" aria-label="Market analysis cards">
-        {rows.map(({ id, market, selection, edge }) => (
+        {rows.map(({ id, market, selection, bookmaker, edge }) => (
           <article className="market-mobile-card" key={id}>
             <header>
               <div><span>{market.name}</span><strong>{selection.label}</strong></div>
@@ -66,7 +67,7 @@ export function OddsTable({ match, prediction }: { match: Match; prediction: Pre
             <details>
               <summary>Price details</summary>
               <dl>
-                <div><dt>Bookmaker</dt><dd>{market.bookmaker ? bookmakerDisplayName(market.bookmaker.id, market.bookmaker.name) : "Market price"}</dd></div>
+                <div><dt>Bookmaker</dt><dd>{bookmaker ? bookmakerDisplayName(bookmaker.id, bookmaker.name) : "Source unavailable"}</dd></div>
                 <div><dt>Raw implied</dt><dd>{edge ? formatPercent(edge.rawImpliedProbability) : "N/A"}</dd></div>
                 <div><dt>Bookmaker margin</dt><dd>{edge ? formatSignedPercent(edge.bookmakerMargin) : "N/A"}</dd></div>
               </dl>
@@ -75,7 +76,7 @@ export function OddsTable({ match, prediction }: { match: Match; prediction: Pre
         ))}
       </div>
 
-      {[...new Map(oddsMarkets.filter((market) => market.bookmaker).map((market) => [market.bookmaker!.id, market.bookmaker!])).values()].map((bookmaker) => (
+      {[...new Map(rows.flatMap((row) => row.bookmaker ? [[row.bookmaker.id, row.bookmaker] as const] : [])).values()].map((bookmaker) => (
         <AffiliateBookmakerLink key={bookmaker.id} bookmaker={bookmaker} country={match.league.country} matchId={match.id} sport={match.sport} league={match.league.name} placement="odds_table" />
       ))}
     </>

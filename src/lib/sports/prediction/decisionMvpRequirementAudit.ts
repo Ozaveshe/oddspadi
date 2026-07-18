@@ -395,7 +395,7 @@ function buildPredictionModelChecks({
       status: "pass",
       label: "Basketball model",
       requirement: "Use team rating, pace, offensive/defensive efficiency, rest days, home/away, injuries, spread, and moneyline logic.",
-      evidence: "basketball-efficiency-v3 consumes stored Elo, pace, offensive/defensive efficiency, rolling form, and rest where available; current availability remains guarded missing evidence.",
+      evidence: "basketball-efficiency-v5 consumes stored Elo, pace, offensive/defensive efficiency, rolling form, rest, and the reliability-weighted bookmaker-consensus probability pipeline where available; current availability remains guarded missing evidence.",
       proofUrl: "/api/sports/predictions?sport=basketball",
       nextAction: "Replace deterministic rest/availability proxies with provider-backed injury, minutes, travel, and rotation feeds.",
       source: "basketballModel.ts"
@@ -406,7 +406,7 @@ function buildPredictionModelChecks({
       status: "pass",
       label: "Tennis model",
       requirement: "Use player Elo, surface rating, recent form, head-to-head, fatigue, round, and injury/news signals.",
-      evidence: "tennis-surface-elo-v3 consumes stored overall/surface Elo, form, rank, and rest; unsupported H2H and travel effects remain zero until verified.",
+      evidence: "tennis-surface-elo-v5 consumes stored overall/surface Elo, form, rank, rest, and the reliability-weighted bookmaker-consensus probability pipeline; unsupported H2H and travel effects remain zero until verified.",
       proofUrl: "/api/sports/predictions?sport=tennis",
       nextAction: "Replace H2H/travel/load proxies with real match-history, surface, retirement, injury, and tournament feeds.",
       source: "tennisModel.ts"

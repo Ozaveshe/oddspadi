@@ -14,11 +14,6 @@ import { footballModelRatingFromElo } from "@/lib/sports/prediction/historicalEl
 import { decisionModelIdentity, runtimeModelIdentityReceipt, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 import { footballLeagueStrength } from "@/lib/sports/footballLeagues";
 import {
-  applyContextAdjustmentToMarkets,
-  buildMatchContextAdjustment,
-  coreModelContextCategories
-} from "@/lib/sports/prediction/contextAdjustment";
-import {
   applyProbabilityTemperaturePolicy,
   buildProbabilityCalibrationComparison,
   learnProbabilityTemperaturePolicy,
@@ -36,6 +31,10 @@ import type {
   ProbabilityTemperatureScalingPolicy,
   SegmentValueGuardPolicy
 } from "@/lib/sports/types";
+import {
+  applyRuntimeProbabilityPipeline,
+  RUNTIME_PROBABILITY_PIPELINE_VERSION
+} from "@/lib/sports/prediction/runtimeProbabilityPipeline";
 import {
   buildFootballLearnedWeightsProvenance,
   evaluateFootballPrediction,
@@ -69,6 +68,11 @@ import {
   type EconomicSelectionComparison,
   type EconomicSelectionPolicy
 } from "@/lib/sports/training/economicSelectionPolicy";
+import {
+  selectNestedRuntimeThreshold,
+  type RuntimeThresholdMetrics,
+  type RuntimeThresholdSelection
+} from "@/lib/sports/training/runtimeThresholdSelection";
 
 export type FootballRuntimeReplayConfig = {
   trainRatio?: number;
@@ -85,6 +89,7 @@ export type FootballRuntimeReplayRejection = {
 export type FootballRuntimeFeatureContract = {
   status: "passed" | "failed";
   version: string;
+  probabilityPipelineVersion: typeof RUNTIME_PROBABILITY_PIPELINE_VERSION;
   chronologyVersion: "football-provider-chronology-v3";
   sourceFixtures: number;
   duplicateFixtureGroups: number;
@@ -107,12 +112,13 @@ export type FootballRuntimeFeatureContract = {
     playerFormHoldoutEligibleFixtures: number;
     playerFormHoldoutReadyFixtures: number;
     completeOddsFixtures: number;
+    marketPriorFixtures: number;
   };
   rejectionReasons: Record<string, number>;
 };
 
 export type FootballRuntimeReplayResult = Omit<FootballBacktestResult, "config" | "learnedWeights"> & {
-  config: Required<FootballRuntimeReplayConfig>;
+  config: Required<FootballRuntimeReplayConfig> & { thresholdSelection: RuntimeThresholdSelection };
   learnedWeights: FootballDecisionLearnedWeights;
   selectionPolicy: EconomicSelectionPolicy;
   economicSelectionComparison: EconomicSelectionComparison;
@@ -176,6 +182,19 @@ function finite(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function thresholdMetrics(results: FootballBacktestFixtureResult[]): RuntimeThresholdMetrics {
+  const picks = results.map((result) => result.pick).filter((pick): pick is NonNullable<FootballBacktestFixtureResult["pick"]> => Boolean(pick));
+  const unitReturns = picks.map((pick) => pick.unitReturn);
+  const average = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  return {
+    sampleSize: results.length,
+    pickCount: picks.length,
+    yield: average(unitReturns),
+    closingLineValue: average(picks.map((pick) => pick.closingLineValue).filter((value): value is number => value !== null)),
+    unitReturns
+  };
+}
+
 function stableHash(value: unknown): string {
   const text = JSON.stringify(value);
   let hash = 2166136261;
@@ -206,6 +225,9 @@ function recentResults(features: HistoricalFootballFeatureInput | undefined): Ar
   return value;
 }
 
+function completeWinnerOdds(fixture: HistoricalFootballFixtureInput): boolean {
+  return Boolean(resolveHistoricalFootballOdds(fixture.odds ?? [], { kickoffAt: fixture.kickoffAt }).decisionSnapshot);
+}
 function supportsHistoricalPlayerStats(fixture: HistoricalFootballFixtureInput): boolean {
   return cleanText(fixture.metadata?.provider).toLowerCase().replaceAll("-", "_") === "api_football";
 }
@@ -576,19 +598,20 @@ export function runFootballRuntimeReplay(
     phase: "training" | "holdout"
   ): ModeledRuntimeFixture | null => {
     const historicalClock = new Date(fixture.source.kickoffAt);
-    const modeled = modelFootballMatch(fixture.match, { now: historicalClock });
-    const contextAdjustment = buildMatchContextAdjustment(fixture.match, {
-      probabilityHandledCategories: coreModelContextCategories(fixture.match),
+    const baseModel = modelFootballMatch(fixture.match, { now: historicalClock });
+    const pipeline = applyRuntimeProbabilityPipeline({
+      match: fixture.match,
+      baseModel,
+      engineVersion: DECISION_ENGINE_VERSION,
       now: historicalClock
     });
-    const runtimeMarkets = applyContextAdjustmentToMarkets(modeled.markets, contextAdjustment);
-    const market = runtimeMarkets.find((item) => item.marketId === "match_winner");
+    const market = pipeline.learnedCalibratedMarkets.find((item) => item.marketId === "match_winner");
     const probabilities = market?.probabilities as Record<FootballOutcome, number> | undefined;
     if (!probabilities || !finite(probabilities.home) || !finite(probabilities.draw) || !finite(probabilities.away)) {
       rejections.push({ fixtureExternalId: fixture.source.externalId, reasons: [`${phase} runtime match-winner output invalid`] });
       return null;
     }
-    return { prepared: fixture, probabilities, expectedGoals: modeled.diagnostics.expectedGoals };
+    return { prepared: fixture, probabilities, expectedGoals: baseModel.diagnostics.expectedGoals };
   };
   const evaluateModeledFixtures = (
     fixtures: readonly ModeledRuntimeFixture[],
@@ -689,9 +712,38 @@ export function runFootballRuntimeReplay(
     holdoutWindowStart: holdout[0]?.source.kickoffAt ?? null,
     segmentDimension: predictionSegmentDimension("football")
   });
+  const thresholdValidationSize = modeledTraining.length >= 125
+    ? Math.max(25, Math.floor(modeledTraining.length * 0.2))
+    : 0;
+  const thresholdTuningRows = thresholdValidationSize
+    ? modeledTraining.slice(0, -thresholdValidationSize)
+    : modeledTraining;
+  const thresholdValidationRows = thresholdValidationSize
+    ? modeledTraining.slice(-thresholdValidationSize)
+    : [];
+  const evaluateThresholdRows = (
+    rows: readonly ModeledRuntimeFixture[],
+    threshold: Pick<Required<FootballRuntimeReplayConfig>, "minEdge" | "minModelProbability">
+  ) => evaluateModeledFixtures(
+    rows,
+    { ...evaluationConfig, ...threshold },
+    probabilityCalibrationPolicy,
+    true,
+    marketPriorScalingPolicy
+  ).results;
+  const thresholdSelection = selectNestedRuntimeThreshold({
+    baseline: { minEdge: config.minEdge, minModelProbability: config.minModelProbability },
+    tuningSampleSize: thresholdTuningRows.length,
+    validationSampleSize: thresholdValidationRows.length,
+    edgeCandidates: [0.05, 0.06, 0.075, 0.09, 0.12].filter((value) => value >= config.minEdge),
+    probabilityCandidates: [0.35, 0.4, 0.45, 0.5, 0.55].filter((value) => value >= config.minModelProbability),
+    evaluateTuning: (threshold) => thresholdMetrics(evaluateThresholdRows(thresholdTuningRows, threshold)),
+    evaluateValidation: (threshold) => thresholdMetrics(evaluateThresholdRows(thresholdValidationRows, threshold))
+  });
+  const governedEvaluationConfig = { ...evaluationConfig, ...thresholdSelection.applied };
   const trainingPosterior = evaluateModeledFixtures(
     modeledTraining,
-    evaluationConfig,
+    governedEvaluationConfig,
     probabilityCalibrationPolicy,
     true,
     marketPriorScalingPolicy,
@@ -721,10 +773,10 @@ export function runFootballRuntimeReplay(
   });
   const learnedWeights: FootballDecisionLearnedWeights = {
     ...learnedWeightsCandidate,
-    minimumEdge: Math.max(evaluationConfig.minEdge, learnedWeightsCandidate.minimumEdge)
+    minimumEdge: Math.max(governedEvaluationConfig.minEdge, learnedWeightsCandidate.minimumEdge)
   };
   const holdoutEvaluationConfig = {
-    ...evaluationConfig,
+    ...governedEvaluationConfig,
     minEdge: learnedWeights.minimumEdge
   };
   const policyTrainingResults = applyMinimumEdgeToResults(selectionTrainingResults, holdoutEvaluationConfig.minEdge);
@@ -800,6 +852,7 @@ export function runFootballRuntimeReplay(
         ? "passed"
         : "failed",
     version: FEATURE_CONTRACT_VERSION,
+    probabilityPipelineVersion: RUNTIME_PROBABILITY_PIPELINE_VERSION,
     chronologyVersion: CHRONOLOGY_VERSION,
     sourceFixtures: fixtures.length,
     duplicateFixtureGroups: consolidation.duplicateGroups,
@@ -824,7 +877,11 @@ export function runFootballRuntimeReplay(
       playerFormTrainingReadyFixtures: trainingPlayerCoverage.ready,
       playerFormHoldoutEligibleFixtures: holdoutPlayerCoverage.eligible,
       playerFormHoldoutReadyFixtures: holdoutPlayerCoverage.ready,
-      completeOddsFixtures: prepared.filter((fixture) => fixture.match.oddsMarkets.some((market) => market.id === "match_winner")).length
+      completeOddsFixtures: prepared.filter((fixture) => completeWinnerOdds(fixture.source)).length,
+      marketPriorFixtures: [
+        ...trainingPosterior.marketPriorAdjustments,
+        ...holdoutPosterior.marketPriorAdjustments
+      ].filter((adjustment) => adjustment.applied).length
     },
     rejectionReasons: rejectionCounts(rejections)
   };
@@ -832,7 +889,8 @@ export function runFootballRuntimeReplay(
   const windowEnd = prepared.at(-1)?.source.kickoffAt ?? null;
   const executionHash = stableHash({
     modelKey: RUNTIME_MODEL_KEY,
-    entrypoint: "modelFootballMatch+buildMatchContextAdjustment+temperatureScaling+marketPrior+empiricalValueGuard+segmentValueGuard",
+    entrypoint: decisionModelIdentity("football").runtimeEntrypoint,
+    probabilityPipeline: RUNTIME_PROBABILITY_PIPELINE_VERSION,
     contract,
     fixtureIds: selectedResults.map((result) => result.fixtureExternalId),
     probabilityVectors: selectedResults.map((result) => result.probabilities),
@@ -852,7 +910,8 @@ export function runFootballRuntimeReplay(
     segmentValueGuardPolicy,
     segmentValueGuardComparison,
     marketPriorEvidence,
-    learnedWeightsProvenance: weightProvenance
+    learnedWeightsProvenance: weightProvenance,
+    thresholdSelection
   });
 
   return {
@@ -894,9 +953,16 @@ export function runFootballRuntimeReplay(
     segmentValueGuardComparison,
     marketPriorEvidence,
     learnedWeightsProvenance: weightProvenance,
-    config,
+    config: {
+      ...config,
+      minEdge: holdoutEvaluationConfig.minEdge,
+      minModelProbability: holdoutEvaluationConfig.minModelProbability,
+      thresholdSelection
+    },
     notes: [
       ...runtimeNotes(contract, summary, weightProvenance),
+      `Final probabilities used ${RUNTIME_PROBABILITY_PIPELINE_VERSION} for the shared context and calibration stages before governed market-prior, empirical-value, and segment guards.`,
+      `Nested threshold policy ${thresholdSelection.status}: ${thresholdSelection.reason}`,
       `Holdout selection used the ${usedTrainingValidation ? "prospective training-validation" : "training-window fallback"} minimum edge ${holdoutEvaluationConfig.minEdge.toFixed(4)}; holdout outcomes could not tune it.`,
       probabilityCalibrationPolicy.status === "active"
         ? `Training fit/validation evidence activated temperature ${probabilityCalibrationPolicy.temperature.toFixed(3)}; it was frozen before holdout and changed holdout log loss by ${probabilityCalibrationComparison.logLossDelta ?? "n/a"}.`

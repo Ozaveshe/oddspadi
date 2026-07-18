@@ -143,15 +143,38 @@ The tennis MVP outputs match winner, set handicap, total games, expected sets, p
 
 ## 4. Implied Probability And Edge
 
-Decimal odds convert to raw implied probability. The engine removes bookmaker margin within each market by normalizing all raw implied probabilities:
+Decimal odds convert to raw implied probability. With one complete bookmaker quote, the engine removes margin by normalizing all raw implied probabilities. With multiple complete, line-compatible quotes, it takes each bookmaker's no-vig probabilities first and uses the per-selection median as the market consensus:
 
 ```txt
 rawImpliedProbability = 1 / decimalOdds
 bookmakerMargin = sum(rawImpliedProbabilitiesForMarket) - 1
 noVigImpliedProbability = rawImpliedProbability / sum(rawImpliedProbabilitiesForMarket)
+consensusNoVigProbability = median(noVigProbabilityByBookmakerForSelection)
 valueEdge = modelProbability - noVigImpliedProbability
 expectedValue = modelProbability * decimalOdds - 1
 ```
+
+The belief and execution paths are deliberately separate:
+
+```txt
+valueEdge = modelProbability - consensusNoVigProbability
+bestExecutableOdds = max(lineCompatibleDecimalOddsForSelection)
+expectedValue = modelProbability * bestExecutableOdds - 1
+```
+
+The engine never creates a consensus from mixed point lines. Every selected executable price retains its bookmaker and provider-reported update time, and the canonical decision hash changes if that provenance changes.
+
+The new best-price path also has a fail-closed publication gate. Positive edge and EV remain analysis-only unless the selected bookmaker matches the canonical odds snapshot, the exact selection timestamp matches the decision receipt, at least three independent bookmakers support the no-vig comparison, and the widest cross-book probability gap is no more than 10 percentage points. These controls do not prove profitability; they stop thin, disputed, or untraceable prices from being presented as public value picks.
+
+Point-estimate economics and empirically conservative economics are also kept separate. A live learning profile may temporarily use a larger historical backtest curve for guardrails, but that fallback cannot certify a publication-time value floor. The Wilson receipt requires the probability buckets themselves to come from an approved, model-matched, exact-runtime settled-outcome promotion, and the matching bucket must contain at least 30 graded win/loss predictions. Pushes and voids never enlarge the statistical denominator. The engine then applies the lower bound to the selection:
+
+```txt
+empiricalProbabilityLow = wilson95Low(observedRate, calibrationBucketSample)
+empiricalEdgeLow = empiricalProbabilityLow - consensusNoVigProbability
+empiricalExpectedValueLow = empiricalProbabilityLow * bestExecutableOdds - 1
+```
+
+Selection ranking uses the lower-bound EV when this receipt is verified and rejects candidates whose verified lower-bound edge or EV is non-positive. Canonical publication is stricter: both lower-bound edge and lower-bound EV must clear the same sport-specific thresholds as the point estimate. Without that promoted exact-runtime bucket, the raw EV remains visible for study but its empirical value floor is explicitly unavailable and public value publication stays closed. The immutable public-pick metadata retains the exact bookmaker quote and timestamp, independent-book consensus, promotion/candidate identity, bucket sample, and lower-bound probability, edge, and EV used at publication time.
 
 Before value-edge ranking, the live prediction pipeline applies a bounded market-prior blend when a model market matches priced bookmaker selections:
 
@@ -250,6 +273,8 @@ The decision engine audits every available market and selection:
 - confidence and risk
 
 A selection is `value` only when edge and EV are both positive and confidence is not low. A selection is `watch` when one signal is positive but the full guardrail does not clear. Everything else is `avoid`.
+
+The consumer-facing price card renders that canonical verdict and the empirical value floor beside raw EV. A large mathematical EV therefore appears with `Publishable`, `Watchlist`, `Refresh`, or `Blocked`, the first concrete blocker, and either a verified 95% lower-bound case or an explicit `Unverified` state; the number cannot visually stand alone as a recommendation.
 
 The audit returns top candidates, market-level summaries, high-margin warnings, avoid reasons, and counts for positive-edge, positive-EV, and actionable selections. This is the product's odds-intelligence layer: it explains why the agent favors one market, why alternatives are safer or weaker, and why a bet should be avoided.
 

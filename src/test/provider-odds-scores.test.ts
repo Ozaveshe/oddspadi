@@ -58,4 +58,48 @@ describe("The Odds API completed score bridge", () => {
     });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
+
+  it("uses a ticket's exact tournament key even after active-key discovery loses it", async () => {
+    const fetchImpl = vi.fn(async (input: string | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/v4/sports/") {
+        return Response.json([{ key: "tennis_atp_us_open", active: true, has_outrights: false }]);
+      }
+      if (url.pathname.endsWith("/odds/")) return Response.json([]);
+      if (url.pathname === "/v4/sports/tennis_atp_us_open/scores/") return Response.json([]);
+      expect(url.pathname).toBe("/v4/sports/tennis_atp_wimbledon/scores/");
+      return Response.json([{
+        id: "wimbledon-final",
+        sport_key: "tennis_atp_wimbledon",
+        sport_title: "ATP Wimbledon",
+        commence_time: "2026-07-12T09:00:00Z",
+        completed: true,
+        home_team: "Jannik Sinner",
+        away_team: "Alexander Zverev",
+        scores: [
+          { name: "Jannik Sinner", score: "3" },
+          { name: "Alexander Zverev", score: "1" }
+        ]
+      }]);
+    });
+    const provider = new ProviderBackedSportsDataProvider({
+      env: { THE_ODDS_API_KEY: "odds-key" },
+      fetchImpl,
+      historicalTennisStrengthLoader: async () => new Map()
+    });
+
+    const fixtures = await provider.getSettlementFixtures(
+      "2026-07-12",
+      "tennis",
+      ["tennis_atp_wimbledon"]
+    );
+
+    expect(fixtures).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "the-odds-api:wimbledon-final",
+        status: "finished",
+        score: { home: 3, away: 1 }
+      })
+    ]));
+  });
 });

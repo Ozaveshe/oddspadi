@@ -83,14 +83,16 @@ describe("football exact runtime replay", () => {
     const result = runFootballRuntimeReplay(history(), { trainRatio: 0.5, minPriorMatches: 3 });
 
     expect(result.status).toBe("completed");
-    expect(result.modelKey).toBe("football-poisson-v3");
-    expect(result.featureContract.version).toBe("football-runtime-features-v3");
+    expect(result.modelKey).toBe("football-poisson-v5");
+    expect(result.featureContract.version).toBe("football-runtime-features-v5");
+    expect(result.featureContract.probabilityPipelineVersion).toBe("decision-probability-pipeline-v2");
     expect(result.featureContract.chronologyVersion).toBe("football-provider-chronology-v3");
     expect(result.featureContract.status).toBe("passed");
     expect(result.featureContract.entrypointInvocations).toBe(result.testSize);
     expect(result.featureContract.evaluatedFixtures).toBe(result.testSize);
     expect(result.featureContract.trainingEntrypointInvocations).toBe(result.trainSize);
     expect(result.featureContract.trainingEvaluatedFixtures).toBe(result.trainSize);
+    expect(result.featureContract.optionalCoverage.marketPriorFixtures).toBe(result.sampleSize);
     expect(result.learnedWeightsProvenance).toMatchObject({
       source: "training-window",
       sampleSize: result.trainSize,
@@ -149,6 +151,12 @@ describe("football exact runtime replay", () => {
       expect.stringContaining("Holdout selection used the training-window fallback minimum edge")
     ]));
     expect(result.learnedWeights).not.toHaveProperty("homeAdvantageElo");
+    expect(result.config.thresholdSelection).toMatchObject({
+      version: "nested-chronological-economics-v2",
+      status: "insufficient-evidence",
+      applied: { minEdge: result.config.minEdge, minModelProbability: result.config.minModelProbability }
+    });
+    expect(result.learnedWeights.minimumEdge).toBe(result.config.thresholdSelection.applied.minEdge);
     expect(historicalModelCompatibility({
       sport: "football",
       evidenceModelKey: result.modelKey,
@@ -193,6 +201,25 @@ describe("football exact runtime replay", () => {
 
     expect(finalProbability(replay)).toEqual(finalProbability(baseline));
     expect(replay.marketPriorEvidence).toEqual(baseline.marketPriorEvidence);
+  });
+
+  it("uses decision-time odds for market shrinkage and never closing prices", () => {
+    const lowClosing = history();
+    const highClosing = history();
+    const closingQuotes = (home: number, draw: number, away: number) => [
+      { market: "match_winner" as const, selection: "home" as const, decimalOdds: home, bookmaker: "test", observedAt: "2025-01-10T14:00:00.000Z", isClosing: true },
+      { market: "match_winner" as const, selection: "draw" as const, decimalOdds: draw, bookmaker: "test", observedAt: "2025-01-10T14:00:00.000Z", isClosing: true },
+      { market: "match_winner" as const, selection: "away" as const, decimalOdds: away, bookmaker: "test", observedAt: "2025-01-10T14:00:00.000Z", isClosing: true }
+    ];
+    lowClosing[9] = { ...lowClosing[9]!, odds: [...(lowClosing[9]!.odds ?? []), ...closingQuotes(1.2, 7, 12)] };
+    highClosing[9] = { ...highClosing[9]!, odds: [...(highClosing[9]!.odds ?? []), ...closingQuotes(8, 5, 1.3)] };
+
+    const low = runFootballRuntimeReplay(lowClosing, { trainRatio: 0.5, minPriorMatches: 3 });
+    const high = runFootballRuntimeReplay(highClosing, { trainRatio: 0.5, minPriorMatches: 3 });
+    const last = (result: ReturnType<typeof runFootballRuntimeReplay>) =>
+      result.results.find((row) => row.fixtureExternalId === "fixture:10")!;
+
+    expect(last(low).probabilities).toEqual(last(high).probabilities);
   });
 
   it("fails closed for neutral venues the runtime Match contract cannot represent", () => {

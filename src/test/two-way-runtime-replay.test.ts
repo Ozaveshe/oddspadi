@@ -77,10 +77,11 @@ describe("basketball and tennis exact runtime replay", () => {
     const result = runBasketballRuntimeReplay(basketballHistory(), { trainRatio: 0.5, minPriorMatches: 3 });
 
     expect(result.status).toBe("completed");
-    expect(result.modelKey).toBe("basketball-efficiency-v3");
+    expect(result.modelKey).toBe("basketball-efficiency-v5");
     expect(result.featureContract).toMatchObject({
       status: "passed",
-      version: "basketball-runtime-features-v3",
+      version: "basketball-runtime-features-v5",
+      probabilityPipelineVersion: "decision-probability-pipeline-v2",
       chronologyVersion: "basketball-outcome-chronology-v1",
       evaluatedFixtures: result.testSize,
       entrypointInvocations: result.testSize
@@ -133,6 +134,12 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(result.notes).toEqual(expect.arrayContaining([
       expect.stringContaining("set the holdout minimum edge")
     ]));
+    expect(result.featureContract.optionalCoverage.marketPriorFixtures).toBe(result.sampleSize);
+    expect(result.config.thresholdSelection).toMatchObject({
+      version: "nested-chronological-economics-v2",
+      status: "insufficient-evidence"
+    });
+    expect(result.learnedWeights.minimumEdge).toBeGreaterThanOrEqual(result.config.thresholdSelection.applied.minEdge);
     expect(historicalModelCompatibility({
       sport: "basketball",
       evidenceModelKey: result.modelKey,
@@ -225,6 +232,24 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(mismatchedReplay.results.find((row) => row.fixtureExternalId === "basketball:12")?.pick).toBeNull();
   });
 
+  it("does not leak basketball closing odds into final replay probabilities", () => {
+    const shortHome = basketballHistory();
+    const shortAway = basketballHistory();
+    shortHome[11] = {
+      ...shortHome[11]!,
+      odds: [...shortHome[11]!.odds, { market: "moneyline", selection: "home", decimalOdds: 1.15, observedAt: "2025-01-12T19:00:00.000Z", isClosing: true }, { market: "moneyline", selection: "away", decimalOdds: 7, observedAt: "2025-01-12T19:00:00.000Z", isClosing: true }]
+    };
+    shortAway[11] = {
+      ...shortAway[11]!,
+      odds: [...shortAway[11]!.odds, { market: "moneyline", selection: "home", decimalOdds: 7, observedAt: "2025-01-12T19:00:00.000Z", isClosing: true }, { market: "moneyline", selection: "away", decimalOdds: 1.15, observedAt: "2025-01-12T19:00:00.000Z", isClosing: true }]
+    };
+    const home = runBasketballRuntimeReplay(shortHome, { trainRatio: 0.5, minPriorMatches: 3 });
+    const away = runBasketballRuntimeReplay(shortAway, { trainRatio: 0.5, minPriorMatches: 3 });
+    const last = (result: ReturnType<typeof runBasketballRuntimeReplay>) => result.results.find((row) => row.fixtureExternalId === "basketball:12")!;
+
+    expect(last(home).probabilities).toEqual(last(away).probabilities);
+  });
+
   it("fails closed for neutral basketball rows", () => {
     const fixtures = basketballHistory();
     fixtures[11] = { ...fixtures[11]!, neutralVenue: true };
@@ -242,10 +267,11 @@ describe("basketball and tennis exact runtime replay", () => {
     const last = (result: ReturnType<typeof runTennisRuntimeReplay>) => result.results.find((row) => row.fixtureExternalId === "tennis:12")!;
 
     expect(home.status).toBe("completed");
-    expect(home.modelKey).toBe("tennis-surface-elo-v3");
+    expect(home.modelKey).toBe("tennis-surface-elo-v5");
     expect(home.featureContract).toMatchObject({
       status: "passed",
-      version: "tennis-runtime-features-v3",
+      version: "tennis-runtime-features-v5",
+      probabilityPipelineVersion: "decision-probability-pipeline-v2",
       chronologyVersion: "tennis-outcome-surface-chronology-v1",
       evaluatedFixtures: home.testSize,
       entrypointInvocations: home.testSize

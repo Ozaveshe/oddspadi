@@ -19,6 +19,8 @@ import {
   type HistoricalTennisStrengthRating
 } from "@/lib/sports/prediction/historicalTennisStrength";
 import type { HeadToHeadSummary, Match, MatchContextSignal, MatchStatus, OddsMarket, Sport, SportsDataProvider, TeamForm } from "@/lib/sports/types";
+import { buildNoVigBookmakerConsensus } from "@/lib/sports/oddsConsensus";
+import { buildBestExecutableQuote } from "@/lib/sports/executableOdds";
 import { currentFootballSeason, leagueBySlug, type LeagueTable } from "@/lib/sports/leagueStandings";
 import { configuredPredictionLeagueIds, footballLeaguePriority, footballLeagueStrength, predictionOddsSportKeys } from "@/lib/sports/footballLeagues";
 import {
@@ -224,12 +226,14 @@ type OddsApiOutcome = {
 
 type OddsApiMarket = {
   key?: string;
+  last_update?: string;
   outcomes?: OddsApiOutcome[];
 };
 
 type OddsApiBookmaker = {
   key?: string;
   title?: string;
+  last_update?: string;
   markets?: OddsApiMarket[];
 };
 
@@ -882,6 +886,7 @@ type CoherentOddsQuote = {
   point?: number;
   selections: OddsMarket["selections"];
   bookmaker?: OddsMarket["bookmaker"];
+  observedAt?: string | null;
 };
 
 export type SportsProviderIssue = {
@@ -902,6 +907,10 @@ function oddsBookmaker(bookmaker: OddsApiBookmaker): OddsMarket["bookmaker"] | u
   const id = cleanText(bookmaker.key);
   const name = cleanText(bookmaker.title);
   return id && name ? { id, name } : undefined;
+}
+
+function oddsQuoteObservedAt(event: OddsApiEvent, bookmaker: OddsApiBookmaker, market: OddsApiMarket): string | null {
+  return cleanText(market.last_update) || cleanText(bookmaker.last_update) || cleanText(event.last_update) || null;
 }
 
 function quoteMargin(quote: CoherentOddsQuote): number {
@@ -931,7 +940,14 @@ function consensusPointQuote(quotes: CoherentOddsQuote[]): CoherentOddsQuote | n
     if (b.length !== a.length) return b.length - a.length;
     return quoteQuality(a[0]) - quoteQuality(b[0]);
   })[0];
-  return leadingGroup ? bestCoherentQuote(leadingGroup) : null;
+  return leadingGroup ? buildBestExecutableQuote(leadingGroup) ?? bestCoherentQuote(leadingGroup) : null;
+}
+
+function quoteConsensus(quotes: CoherentOddsQuote[], selected: CoherentOddsQuote) {
+  const comparableQuotes = typeof selected.point === "number"
+    ? quotes.filter((quote) => typeof quote.point === "number" && Math.abs(quote.point - selected.point!) < 0.001)
+    : quotes;
+  return buildNoVigBookmakerConsensus(comparableQuotes);
 }
 
 function doubleChanceSelection(outcomeName: string | undefined, homeName: string, awayName: string): "home_or_draw" | "home_or_away" | "draw_or_away" | null {
@@ -950,8 +966,7 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
   const homeName = cleanText(event.home_team);
   const awayName = cleanText(event.away_team);
   const bookmakers = event.bookmakers ?? [];
-  const h2hQuote = bestCoherentQuote(
-    bookmakers.flatMap((bookmaker) =>
+  const h2hQuotes = bookmakers.flatMap((bookmaker) =>
       (bookmaker.markets ?? []).filter((market) => market.key === "h2h").flatMap((market) => {
         const prices = (market.outcomes ?? []).reduce<Partial<Record<"home" | "draw" | "away", number>>>((acc, outcome) => {
           const selection = outcomeSelection(outcome.name, homeName, awayName);
@@ -963,6 +978,7 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
         return [
           {
             bookmaker: oddsBookmaker(bookmaker),
+            observedAt: oddsQuoteObservedAt(event, bookmaker, market),
             selections: [
               { id: "home", label: homeName, decimalOdds: prices.home },
               ...(sport === "football" ? [{ id: "draw", label: "Draw", decimalOdds: prices.draw as number }] : []),
@@ -971,8 +987,8 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
           }
         ];
       })
-    )
-  );
+    );
+  const h2hQuote = buildBestExecutableQuote(h2hQuotes) ?? bestCoherentQuote(h2hQuotes);
 
   const markets: OddsMarket[] = [];
   if (h2hQuote) {
@@ -980,12 +996,13 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
       id: "match_winner",
       name: sport === "basketball" ? "Moneyline" : "Match winner",
       selections: h2hQuote.selections,
-      bookmaker: h2hQuote.bookmaker
+      bookmaker: h2hQuote.bookmaker,
+      priceMethod: "best-price-per-selection-v1",
+      consensus: quoteConsensus(h2hQuotes, h2hQuote)
     });
   }
 
-  const spreadQuote = consensusPointQuote(
-    bookmakers.flatMap((bookmaker) =>
+  const spreadQuotes = bookmakers.flatMap((bookmaker) =>
       (bookmaker.markets ?? []).filter((market) => market.key === "spreads").flatMap((market) => {
         const outcomes = market.outcomes ?? [];
         return outcomes.flatMap((homeOutcome) => {
@@ -1004,6 +1021,7 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
             {
               point: homeOutcome.point,
               bookmaker: oddsBookmaker(bookmaker),
+              observedAt: oddsQuoteObservedAt(event, bookmaker, market),
               selections: [
                 {
                   id: "home_cover",
@@ -1020,14 +1038,16 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
           ];
         });
       })
-    )
-  );
+    );
+  const spreadQuote = consensusPointQuote(spreadQuotes);
   if (sport === "basketball" && spreadQuote) {
     markets.push({
       id: "spread",
       name: "Spread",
       selections: spreadQuote.selections,
-      bookmaker: spreadQuote.bookmaker
+      bookmaker: spreadQuote.bookmaker,
+      priceMethod: "best-price-per-selection-v1",
+      consensus: quoteConsensus(spreadQuotes, spreadQuote)
     });
   }
 
@@ -1050,6 +1070,7 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
           {
             point: overOutcome.point,
             bookmaker: oddsBookmaker(bookmaker),
+            observedAt: oddsQuoteObservedAt(event, bookmaker, market),
             selections: [
               {
                 id: sport === "football" ? (overOutcome.point === 1.5 ? "over_15" : "over_25") : "over",
@@ -1069,21 +1090,24 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
   );
   const totalQuote = sport === "football" ? null : consensusPointQuote(totalQuotes);
   if (sport === "football") {
-    const total15 = bestCoherentQuote(totalQuotes.filter((quote) => quote.point === 1.5));
-    const total25 = bestCoherentQuote(totalQuotes.filter((quote) => quote.point === 2.5));
-    if (total15) markets.push({ id: "over_under_15", name: "Goals over/under 1.5", selections: total15.selections, bookmaker: total15.bookmaker });
-    if (total25) markets.push({ id: "over_under_25", name: "Goals over/under 2.5", selections: total25.selections, bookmaker: total25.bookmaker });
+    const total15Quotes = totalQuotes.filter((quote) => quote.point === 1.5);
+    const total25Quotes = totalQuotes.filter((quote) => quote.point === 2.5);
+    const total15 = buildBestExecutableQuote(total15Quotes) ?? bestCoherentQuote(total15Quotes);
+    const total25 = buildBestExecutableQuote(total25Quotes) ?? bestCoherentQuote(total25Quotes);
+    if (total15) markets.push({ id: "over_under_15", name: "Goals over/under 1.5", selections: total15.selections, bookmaker: total15.bookmaker, priceMethod: "best-price-per-selection-v1", consensus: quoteConsensus(total15Quotes, total15) });
+    if (total25) markets.push({ id: "over_under_25", name: "Goals over/under 2.5", selections: total25.selections, bookmaker: total25.bookmaker, priceMethod: "best-price-per-selection-v1", consensus: quoteConsensus(total25Quotes, total25) });
   } else if (totalQuote) {
     markets.push({
       id: sport === "tennis" ? "total_games" : sport === "basketball" ? "total_points" : "over_under_25",
       name: sport === "tennis" ? "Total games" : sport === "basketball" ? "Total points" : "Goals over/under",
       selections: totalQuote.selections,
-      bookmaker: totalQuote.bookmaker
+      bookmaker: totalQuote.bookmaker,
+      priceMethod: "best-price-per-selection-v1",
+      consensus: quoteConsensus(totalQuotes, totalQuote)
     });
   }
 
-  const bttsQuote = bestCoherentQuote(
-    bookmakers.flatMap((bookmaker) =>
+  const bttsQuotes = bookmakers.flatMap((bookmaker) =>
       (bookmaker.markets ?? []).filter((market) => market.key === "btts").flatMap((market) => {
         const prices = (market.outcomes ?? []).reduce<Partial<Record<"yes" | "no", number>>>((acc, outcome) => {
           const selection = cleanText(outcome.name).toLowerCase();
@@ -1096,6 +1120,7 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
         return [
           {
             bookmaker: oddsBookmaker(bookmaker),
+            observedAt: oddsQuoteObservedAt(event, bookmaker, market),
             selections: [
               { id: "yes", label: "Yes", decimalOdds: prices.yes },
               { id: "no", label: "No", decimalOdds: prices.no }
@@ -1103,19 +1128,20 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
           }
         ];
       })
-    )
-  );
+    );
+  const bttsQuote = buildBestExecutableQuote(bttsQuotes) ?? bestCoherentQuote(bttsQuotes);
   if (sport === "football" && bttsQuote) {
     markets.push({
       id: "both_teams_to_score",
       name: "Both teams to score",
       selections: bttsQuote.selections,
-      bookmaker: bttsQuote.bookmaker
+      bookmaker: bttsQuote.bookmaker,
+      priceMethod: "best-price-per-selection-v1",
+      consensus: quoteConsensus(bttsQuotes, bttsQuote)
     });
   }
 
-  const doubleChanceQuote = bestCoherentQuote(
-    bookmakers.flatMap((bookmaker) =>
+  const doubleChanceQuotes = bookmakers.flatMap((bookmaker) =>
       (bookmaker.markets ?? []).filter((market) => market.key === "double_chance").flatMap((market) => {
         const prices = (market.outcomes ?? []).reduce<Partial<Record<"home_or_draw" | "home_or_away" | "draw_or_away", number>>>((acc, outcome) => {
           const selection = doubleChanceSelection(outcome.name, homeName, awayName);
@@ -1125,6 +1151,7 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
         if (!prices.home_or_draw || !prices.home_or_away || !prices.draw_or_away) return [];
         return [{
           bookmaker: oddsBookmaker(bookmaker),
+          observedAt: oddsQuoteObservedAt(event, bookmaker, market),
           selections: [
             { id: "home_or_draw", label: `${homeName} or draw`, decimalOdds: prices.home_or_draw },
             { id: "home_or_away", label: `${homeName} or ${awayName}`, decimalOdds: prices.home_or_away },
@@ -1132,14 +1159,13 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
           ]
         }];
       })
-    )
-  );
+    );
+  const doubleChanceQuote = buildBestExecutableQuote(doubleChanceQuotes) ?? bestCoherentQuote(doubleChanceQuotes);
   if (sport === "football" && doubleChanceQuote) {
-    markets.push({ id: "double_chance", name: "Double chance", selections: doubleChanceQuote.selections, bookmaker: doubleChanceQuote.bookmaker });
+    markets.push({ id: "double_chance", name: "Double chance", selections: doubleChanceQuote.selections, bookmaker: doubleChanceQuote.bookmaker, priceMethod: "best-price-per-selection-v1", consensus: quoteConsensus(doubleChanceQuotes, doubleChanceQuote) });
   }
 
-  const drawNoBetQuote = bestCoherentQuote(
-    bookmakers.flatMap((bookmaker) =>
+  const drawNoBetQuotes = bookmakers.flatMap((bookmaker) =>
       (bookmaker.markets ?? []).filter((market) => market.key === "draw_no_bet").flatMap((market) => {
         const prices = (market.outcomes ?? []).reduce<Partial<Record<"home" | "away", number>>>((acc, outcome) => {
           const selection = outcomeSelection(outcome.name, homeName, awayName);
@@ -1151,16 +1177,17 @@ function oddsMarketsForEvent(event: OddsApiEvent, sport: Extract<Sport, "footbal
         if (!prices.home || !prices.away) return [];
         return [{
           bookmaker: oddsBookmaker(bookmaker),
+          observedAt: oddsQuoteObservedAt(event, bookmaker, market),
           selections: [
             { id: "home", label: homeName, decimalOdds: prices.home },
             { id: "away", label: awayName, decimalOdds: prices.away }
           ]
         }];
       })
-    )
-  );
+    );
+  const drawNoBetQuote = buildBestExecutableQuote(drawNoBetQuotes) ?? bestCoherentQuote(drawNoBetQuotes);
   if (sport === "football" && drawNoBetQuote) {
-    markets.push({ id: "draw_no_bet", name: "Draw no bet", selections: drawNoBetQuote.selections, bookmaker: drawNoBetQuote.bookmaker });
+    markets.push({ id: "draw_no_bet", name: "Draw no bet", selections: drawNoBetQuote.selections, bookmaker: drawNoBetQuote.bookmaker, priceMethod: "best-price-per-selection-v1", consensus: quoteConsensus(drawNoBetQuotes, drawNoBetQuote) });
   }
 
   return markets;
@@ -2216,6 +2243,36 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     });
     setBoundedCache(this.fixtureCache, cacheKey, { expiresAt, matches });
     return matches;
+  }
+
+  /**
+   * Settlement must not rediscover a tournament or league key from today's
+   * catalogue. A completed competition can disappear from that catalogue
+   * while its score is still inside The Odds API's three-day result window.
+   */
+  async getSettlementFixtures(
+    date: string,
+    sport: Extract<Sport, "football" | "basketball" | "tennis">,
+    providerSportKeys: string[]
+  ): Promise<Match[]> {
+    const primary = await this.getFixtures(date, sport);
+    const apiKey = firstEnv(this.env, ["THE_ODDS_API_KEY", "ODDS_API_KEY"]);
+    const exactKeys = Array.from(new Set(providerSportKeys.map((key) => key.trim()).filter(Boolean))).slice(0, 8);
+    if (!apiKey || sport === "football" || !exactKeys.length) return primary;
+
+    const scoreRows = (
+      await mapWithConcurrency(exactKeys, Math.min(4, providerRequestConcurrency(this.env)), (sportKey) =>
+        this.fetchOddsScoreEvents({ apiKey, date, sportKey })
+      )
+    ).flat();
+    if (!scoreRows.length) return primary;
+
+    const exact = sport === "basketball"
+      ? oddsBackedBasketballFixturesFromEvents(date, scoreRows, await this.getHistoricalBasketballStrengths())
+      : oddsBackedTennisFixturesFromEvents(date, scoreRows, await this.getHistoricalTennisStrengths());
+    const merged = new Map(primary.map((match) => [match.id, match]));
+    for (const match of exact) merged.set(match.id, match);
+    return [...merged.values()];
   }
 
   private async fetchFixtures(date: string, sport: Sport, storedEnrichment: boolean): Promise<Match[]> {

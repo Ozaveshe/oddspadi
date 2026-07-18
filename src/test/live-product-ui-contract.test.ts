@@ -128,11 +128,15 @@ describe("live OddsPadi product UI contract", () => {
     expect(detail).toContain("const canonical = prediction.canonicalDecision");
     expect(detail.indexOf("match-decision-hero")).toBeGreaterThan(-1);
     expect(detail.indexOf("match-decision-hero")).toBeLessThan(detail.indexOf("Advanced engine audit"));
-    expect(detail).toContain("match-decision-primary");
+    expect(detail).toContain("DecisionPriceSignal");
     expect(detail).toContain("ProbabilityDistribution");
     expect(detail).toContain("CalibrationReliabilityBand");
     expect(detail).toContain("DecisionEvidenceProfile");
-    expect(detail).toContain("Fair market chance");
+    expect(source("src/components/odds/DecisionPriceSignal.tsx")).toContain("Model versus consensus and executable price");
+    expect(source("src/components/odds/DecisionPriceSignal.tsx")).toContain("decision-execution-price");
+    expect(source("src/components/odds/DecisionPriceSignal.tsx")).toContain("decision-publication-gate");
+    expect(source("src/components/odds/DecisionPriceSignal.tsx")).toContain("decision-economic-confidence");
+    expect(source("src/components/odds/DecisionPriceSignal.tsx")).toContain("decision-market-confidence");
     expect(detail).not.toContain("The short version");
     expect(detail).toContain("Audit-only detail cannot override the canonical public decision above");
   });

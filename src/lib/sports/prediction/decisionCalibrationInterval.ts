@@ -81,6 +81,18 @@ export function buildDecisionCalibrationInterval({
       source: learningProfile?.source ?? null
     });
   }
+  if (!learningProfile.calibrationPromotion || learningProfile.calibrationBucketSource !== "promoted-cohort") {
+    return unavailable({
+      detail: "Empirical interval unavailable: live guardrails are active, but their probability curve is still the historical backtest fallback. A sufficiently large approved settled-outcome cohort is required for a publication-time economic floor.",
+      source: learningProfile.source
+    });
+  }
+  if (learningProfile.modelCompatibility !== "exact-runtime-parity") {
+    return unavailable({
+      detail: "Empirical interval unavailable: the promoted calibration cohort is not attached to an exact-runtime model identity receipt.",
+      source: learningProfile.source
+    });
+  }
 
   const buckets = (learningProfile.calibrationBuckets ?? []).filter(validBucket).sort((left, right) => left.minProbability - right.minProbability);
   const bucket = buckets.find((item) => containsProbability(item, probability));
@@ -101,15 +113,16 @@ export function buildDecisionCalibrationInterval({
   }
 
   const interval = wilsonInterval(bucket.observedRate, sampleSize);
+  const promotionSource = `calibration-promotion:${learningProfile.calibrationPromotion.id}/candidate:${learningProfile.calibrationPromotion.candidateId}`;
   return {
     low: interval.low,
     high: interval.high,
     method: "wilson-calibration-bucket",
     confidenceLevel: CONFIDENCE_LEVEL,
     sampleSize,
-    source: learningProfile.source,
-    detail: `Wilson 95% interval for the observed outcome rate in the promoted ${(bucket.minProbability * 100).toFixed(0)}-${(
+    source: promotionSource,
+    detail: `Wilson 95% interval for the observed outcome rate in the approved exact-runtime ${(bucket.minProbability * 100).toFixed(0)}-${(
       bucket.maxProbability * 100
-    ).toFixed(0)}% calibration bucket (${sampleSize} settled predictions).`
+    ).toFixed(0)}% calibration bucket (${sampleSize} settled win/loss predictions; promotion ${learningProfile.calibrationPromotion.id}, candidate ${learningProfile.calibrationPromotion.candidateId}).`
   };
 }

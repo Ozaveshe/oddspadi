@@ -2,10 +2,8 @@ import { providerBackedSportsDataProvider } from "@/lib/sports/providers/provide
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
 import type { BestPickResult, DecisionCaseMemoryBank, DecisionLearningProfile, Match, Prediction, Sport } from "@/lib/sports/types";
 import {
-  applyMarketPriorAdjustmentToDiagnostics,
-  applyMarketPriorAdjustmentToMarkets,
   buildValueEdges,
-  selectBestPick,
+  selectBestPick
 } from "./prediction/odds";
 import { footballMarketPriorEvidencePolicy } from "./prediction/marketPriorPolicy";
 import { predictionSegmentKey } from "./prediction/predictionSegment";
@@ -15,14 +13,10 @@ import { modelTennisMatch } from "./prediction/tennisModel";
 import { explainPrediction } from "./prediction/explainer";
 import { confidenceRank } from "./prediction/format";
 import { buildPredictionAgentReport } from "./prediction/agent";
-import { applyContextAdjustmentToDiagnostics, applyContextAdjustmentToMarkets, buildMatchContextAdjustment, coreModelContextCategories } from "./prediction/contextAdjustment";
 import { buildDecisionEngineReport, DECISION_ENGINE_VERSION } from "./prediction/decisionEngine";
 import { getDecisionLearningProfile } from "./prediction/decisionLearningProfile";
 import { getDecisionCaseMemoryBank } from "./prediction/decisionMemory";
-import {
-  applyLearnedProbabilityCalibration,
-  applyLearnedProbabilityCalibrationToDiagnostics
-} from "./prediction/learnedProbabilityCalibration";
+import { applyRuntimeProbabilityPipeline } from "./prediction/runtimeProbabilityPipeline";
 import { buildDecisionSupervisorQueue } from "./prediction/decisionSupervisor";
 import { buildFootballDataHistoricalLearningDossier } from "@/lib/sports/training/footballDataHistoricalLearningDossier";
 import { buildPublicHistoricalTrainingEvidence, type PublicHistoricalTrainingEvidence } from "@/lib/sports/training/publicHistoricalTrainingEvidence";
@@ -178,31 +172,14 @@ export function buildPrediction(
     baseModel.diagnostics.modelVersion,
     DECISION_ENGINE_VERSION
   );
-  const contextAdjustment = buildMatchContextAdjustment(match, {
-    probabilityHandledCategories: coreModelContextCategories(match)
-  });
-  const contextMarkets = applyContextAdjustmentToMarkets(baseModel.markets, contextAdjustment);
-  const contextDiagnostics = applyContextAdjustmentToDiagnostics(baseModel.diagnostics, contextAdjustment);
-  const learnedCalibration = applyLearnedProbabilityCalibration({
-    markets: contextMarkets,
-    profile: runtimeLearningProfile,
-    modelKey: baseModel.diagnostics.modelVersion,
+  const runtimePipeline = applyRuntimeProbabilityPipeline({
+    match,
+    baseModel,
+    learningProfile: runtimeLearningProfile,
     engineVersion: DECISION_ENGINE_VERSION
   });
-  const learnedCalibrationDiagnostics = applyLearnedProbabilityCalibrationToDiagnostics({
-    diagnostics: contextDiagnostics,
-    adjustment: learnedCalibration.adjustment
-  });
-  const marketPriorEvidencePolicy = footballMarketPriorEvidencePolicy(match);
-  const marketPrior = applyMarketPriorAdjustmentToMarkets(
-    learnedCalibration.markets,
-    match.oddsMarkets,
-    learnedCalibrationDiagnostics.dataQualityScore,
-    marketPriorEvidencePolicy,
-    runtimeLearningProfile?.marketPriorScalingPolicy ?? undefined
-  );
-  const markets = marketPrior.markets;
-  const diagnostics = applyMarketPriorAdjustmentToDiagnostics(learnedCalibrationDiagnostics, marketPrior.adjustment);
+  const markets = runtimePipeline.markets;
+  const diagnostics = runtimePipeline.diagnostics;
   const segmentKey = predictionSegmentKey(match);
   const valueEdges = buildValueEdges(markets, match.oddsMarkets, diagnostics.dataQualityScore, runtimeLearningProfile, segmentKey);
   const candidatePick = selectBestPick(valueEdges, { learningProfile: runtimeLearningProfile, caseMemoryBank, segmentKey });
@@ -213,21 +190,21 @@ export function buildPrediction(
   };
   const probabilityStages: DecisionProbabilityRuntimeStages = {
     rawModelProbability: selectedStageProbability(baseModel.markets),
-    contextAdjustedProbability: selectedStageProbability(contextMarkets),
-    learnedCalibratedProbability: selectedStageProbability(learnedCalibration.markets),
+    contextAdjustedProbability: selectedStageProbability(runtimePipeline.contextMarkets),
+    learnedCalibratedProbability: selectedStageProbability(runtimePipeline.learnedCalibratedMarkets),
     finalModelProbability: selectedStageProbability(markets)
   };
   const decision = buildDecisionEngineReport({
     match,
     markets,
     diagnostics,
-    probabilityCalibration: learnedCalibration.adjustment,
+    probabilityCalibration: runtimePipeline.calibrationAdjustment,
     bestPick: candidatePick,
     valueEdges,
     learningProfile: runtimeLearningProfile,
     caseMemoryBank,
-    contextAdjustment,
-    marketPriorAdjustment: marketPrior.adjustment,
+    contextAdjustment: runtimePipeline.contextAdjustment,
+    marketPriorAdjustment: runtimePipeline.marketPriorAdjustment,
     probabilityStages,
     publicHistoricalTrainingEvidence
   });
@@ -236,9 +213,9 @@ export function buildPrediction(
     prediction: {
       markets,
       diagnostics,
-      calibrationAdjustment: learnedCalibration.adjustment,
-      contextAdjustment,
-      marketPriorAdjustment: marketPrior.adjustment,
+      calibrationAdjustment: runtimePipeline.calibrationAdjustment,
+      contextAdjustment: runtimePipeline.contextAdjustment,
+      marketPriorAdjustment: runtimePipeline.marketPriorAdjustment,
       valueEdges,
       decision
     }
@@ -254,7 +231,8 @@ export function buildPrediction(
       generatedAt,
       evidenceHash,
       modelVersion: diagnostics.modelVersion,
-      engineVersion: decision.engineVersion
+      engineVersion: decision.engineVersion,
+      marketPriorAdjustment: runtimePipeline.marketPriorAdjustment
     },
     match.providerContextSignals ?? [],
     { now: new Date(generatedAt), allowMockFixtures: process.env.NODE_ENV !== "production" }
@@ -271,9 +249,9 @@ export function buildPrediction(
     evidenceHash,
     markets,
     diagnostics,
-    calibrationAdjustment: learnedCalibration.adjustment,
-    contextAdjustment,
-    marketPriorAdjustment: marketPrior.adjustment,
+    calibrationAdjustment: runtimePipeline.calibrationAdjustment,
+    contextAdjustment: runtimePipeline.contextAdjustment,
+    marketPriorAdjustment: runtimePipeline.marketPriorAdjustment,
     valueEdges,
     canonicalDecision,
     bestPick,

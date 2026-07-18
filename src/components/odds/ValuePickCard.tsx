@@ -12,6 +12,8 @@ export function ValuePickCard({ match, prediction }: { match: MatchSummary; pred
   const bestPick = prediction.canonicalDecision.bestPublishedPick;
   if (prediction.canonicalDecision.publicStatus !== "value_pick" || !bestPick) return null;
   const pricedMarket = match.oddsMarkets.find((market) => market.id === bestPick.marketId);
+  const pricedSelection = pricedMarket?.selections.find((selection) => selection.id === bestPick.selectionId);
+  const priceBookmaker = bestPick.bookmaker ?? pricedSelection?.bookmaker ?? pricedMarket?.bookmaker;
 
   return (
     <article className="value-card">
@@ -45,7 +47,7 @@ export function ValuePickCard({ match, prediction }: { match: MatchSummary; pred
         <div className="metric">
           <span className="metric-label">Odds</span>
           <span className="metric-value">{formatOdds(bestPick.odds)}</span>
-          {pricedMarket?.bookmaker ? <span className="small muted">{bookmakerDisplayName(pricedMarket.bookmaker.id, pricedMarket.bookmaker.name)}</span> : null}
+          {priceBookmaker ? <span className="small muted">Best at {bookmakerDisplayName(priceBookmaker.id, priceBookmaker.name)}</span> : null}
         </div>
         <div className="metric">
           <span className="metric-label">Model / no-vig</span>
@@ -71,7 +73,7 @@ export function ValuePickCard({ match, prediction }: { match: MatchSummary; pred
         <RiskBadge level={bestPick.risk} />
       </div>
       <div className="card-actions"><AddToSlipButton match={match} prediction={prediction} /><Link className="button" href="/predictions/bet-slip">Check slip</Link></div>
-      {pricedMarket?.bookmaker ? <AffiliateBookmakerLink bookmaker={pricedMarket.bookmaker} country={match.league.country} matchId={match.id} sport={match.sport} league={match.league.name} placement="value_pick_card" /> : null}
+      {priceBookmaker ? <AffiliateBookmakerLink bookmaker={priceBookmaker} country={match.league.country} matchId={match.id} sport={match.sport} league={match.league.name} placement="value_pick_card" /> : null}
       <ShareBar
         compact
         pageContext="value_pick"

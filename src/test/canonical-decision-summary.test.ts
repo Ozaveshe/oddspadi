@@ -100,6 +100,103 @@ describe("canonical DecisionSummary", () => {
     expect(decision.bestPublishedPick?.expectedValue).toBeCloseTo(0.15);
   });
 
+  it("retains the market-prior receipt in the hashed canonical summary", async () => {
+    const match = await fixture();
+    const built = buildPrediction(match);
+
+    expect(built.canonicalDecision.auditSummary.marketPriorAdjustment).toEqual(built.marketPriorAdjustment);
+    expect(built.canonicalDecision.auditSummary.summaryHash).toMatch(/^decision-summary-v1:fnv1a-/);
+  });
+
+  it("retains executable-price provenance in the hashed market analysis", async () => {
+    const match = await fixture();
+    const bookA = summary(match, bttsEdge({
+      bookmaker: { id: "book-a", name: "Book A" },
+      priceObservedAt: "2026-07-13T12:00:00.000Z",
+      priceMethod: "best-price-per-selection-v1"
+    }));
+    const bookB = summary(match, bttsEdge({
+      bookmaker: { id: "book-b", name: "Book B" },
+      priceObservedAt: "2026-07-13T12:00:00.000Z",
+      priceMethod: "best-price-per-selection-v1"
+    }));
+
+    expect(bookA.allMarketAnalyses[0]).toMatchObject({
+      bookmaker: { id: "book-a", name: "Book A" },
+      priceObservedAt: "2026-07-13T12:00:00.000Z",
+      priceMethod: "best-price-per-selection-v1"
+    });
+    expect(bookA.auditSummary.summaryHash).not.toBe(bookB.auditSummary.summaryHash);
+  });
+
+  it("publishes a best-price edge only with matching source, exact time, sufficient depth, and bounded disagreement", async () => {
+    const pricedAt = "2026-07-13T12:00:00.000Z";
+    const match = await fixture({
+      oddsMarkets: [{
+        id: "both_teams_to_score",
+        name: "Both teams to score",
+        priceMethod: "best-price-per-selection-v1",
+        selections: [
+          { id: "yes", label: "BTTS Yes", decimalOdds: 1.9, bookmaker: { id: "book-a", name: "Book A" }, observedAt: pricedAt },
+          { id: "no", label: "BTTS No", decimalOdds: 2.05, bookmaker: { id: "book-b", name: "Book B" }, observedAt: pricedAt }
+        ]
+      }]
+    }, pricedAt);
+    const decision = summary(match, bttsEdge({
+      bookmaker: { id: "book-a", name: "Book A" },
+      priceObservedAt: pricedAt,
+      priceMethod: "best-price-per-selection-v1",
+      consensusBookmakerCount: 5,
+      consensusMaxProbabilitySpread: 0.04
+    }));
+
+    expect(decision.publicStatus).toBe("value_pick");
+    expect(decision.bestPublishedPick?.publicationEligible).toBe(true);
+  });
+
+  it.each([
+    {
+      label: "missing selection timestamp",
+      overrides: { priceObservedAt: null },
+      blocker: "best-price timestamp is missing, mismatched, or ahead of the decision clock"
+    },
+    {
+      label: "thin consensus",
+      overrides: { consensusBookmakerCount: 2 },
+      blocker: "best-price comparison needs at least 3 independent bookmakers"
+    },
+    {
+      label: "disputed consensus",
+      overrides: { consensusMaxProbabilitySpread: 0.14 },
+      blocker: "cross-book probability disagreement exceeds 10%"
+    }
+  ])("keeps a positive best-price edge on the watchlist for $label", async ({ overrides, blocker }) => {
+    const pricedAt = "2026-07-13T12:00:00.000Z";
+    const match = await fixture({
+      oddsMarkets: [{
+        id: "both_teams_to_score",
+        name: "Both teams to score",
+        priceMethod: "best-price-per-selection-v1",
+        selections: [
+          { id: "yes", label: "BTTS Yes", decimalOdds: 1.9, bookmaker: { id: "book-a", name: "Book A" }, observedAt: pricedAt },
+          { id: "no", label: "BTTS No", decimalOdds: 2.05, bookmaker: { id: "book-b", name: "Book B" }, observedAt: pricedAt }
+        ]
+      }]
+    }, pricedAt);
+    const decision = summary(match, bttsEdge({
+      bookmaker: { id: "book-a", name: "Book A" },
+      priceObservedAt: pricedAt,
+      priceMethod: "best-price-per-selection-v1",
+      consensusBookmakerCount: 5,
+      consensusMaxProbabilitySpread: 0.04,
+      ...overrides
+    }));
+
+    expect(decision.publicStatus).toBe("watchlist");
+    expect(decision.bestPublishedPick).toBeNull();
+    expect(decision.bestWatchlistCandidate?.blockers).toContain(blocker);
+  });
+
   it("downgrades the same candidate when odds are stale", async () => {
     const decision = summary(await fixture({}, "2026-07-13T10:00:00.000Z"));
     expect(["watchlist", "stale"]).toContain(decision.publicStatus);
@@ -111,6 +208,133 @@ describe("canonical DecisionSummary", () => {
     const decision = summary(await fixture({ dataQualityScore: 0.5 }));
     expect(decision.publicStatus).toBe("watchlist");
     expect(decision.bestWatchlistCandidate?.blockers).toContain("data quality is below the sport threshold");
+  });
+
+  it("keeps point-estimate value on the watchlist when an empirical 95% value floor is tracked but unavailable", async () => {
+    const decision = summary(await fixture(), bttsEdge({
+      economicConfidence: {
+        status: "unavailable",
+        method: "unavailable",
+        confidenceLevel: null,
+        sampleSize: null,
+        source: null,
+        probabilityLow: null,
+        probabilityHigh: null,
+        edgeLow: null,
+        expectedValueLow: null,
+        detail: "No active exact-runtime calibration profile."
+      }
+    }));
+
+    expect(decision.publicStatus).toBe("watchlist");
+    expect(decision.bestPublishedPick).toBeNull();
+    expect(decision.bestWatchlistCandidate?.blockers).toContain("empirical 95% value floor is unavailable for this runtime");
+  });
+
+  it("requires the empirical lower-bound edge and EV to clear the same publication thresholds", async () => {
+    const decision = summary(await fixture(), bttsEdge({
+      economicConfidence: {
+        status: "verified",
+        method: "wilson-calibration-bucket",
+        confidenceLevel: 0.95,
+        sampleSize: 500,
+        source: "exact-runtime-holdout",
+        probabilityLow: 0.56,
+        probabilityHigh: 0.68,
+        edgeLow: 0.01,
+        expectedValueLow: 0.02,
+        detail: "Verified but economically thin."
+      }
+    }));
+
+    expect(decision.publicStatus).toBe("watchlist");
+    expect(decision.bestWatchlistCandidate?.blockers).toEqual(expect.arrayContaining([
+      "empirical 95% lower-bound edge is below 4%",
+      "empirical 95% lower-bound EV is below 3%"
+    ]));
+  });
+
+  it("does not publish a positive edge that fails the engine robustness audit", async () => {
+    const decision = summary(
+      await fixture(),
+      bttsEdge(),
+      {
+        action: "consider",
+        calibration: { action: "trust" },
+        actionability: { status: "actionable" },
+        abstentionRules: [],
+        dataCoverage: { signals: [] },
+        robustness: { status: "fragile" },
+        uncertainty: { status: "controlled" }
+      } as unknown as Prediction["decision"]
+    );
+    expect(decision.publicStatus).toBe("watchlist");
+    expect(decision.bestPublishedPick).toBeNull();
+    expect(decision.bestWatchlistCandidate?.blockers).toContain("robustness stress tests classify the recommendation as fragile");
+  });
+
+  it("does not publish while uncertainty decomposition remains high-risk", async () => {
+    const decision = summary(
+      await fixture(),
+      bttsEdge(),
+      {
+        action: "consider",
+        calibration: { action: "trust" },
+        actionability: { status: "actionable" },
+        abstentionRules: [],
+        dataCoverage: { signals: [] },
+        robustness: { status: "sensitive" },
+        uncertainty: { status: "high-risk" }
+      } as unknown as Prediction["decision"]
+    );
+    expect(decision.publicStatus).toBe("watchlist");
+    expect(decision.bestWatchlistCandidate?.blockers).toContain("uncertainty decomposition classifies the recommendation as high-risk");
+  });
+
+  it("does not publish when a sufficiently powered exact-runtime holdout loses money", async () => {
+    const decision = summary(
+      await fixture(),
+      bttsEdge(),
+      {
+        action: "consider",
+        calibration: { action: "trust" },
+        actionability: { status: "actionable" },
+        abstentionRules: [],
+        dataCoverage: { signals: [] },
+        robustness: { status: "stable" },
+        uncertainty: { status: "controlled" },
+        learningProfile: {
+          status: "shadow-only",
+          source: "provider-history",
+          active: false,
+          modelCompatibility: "exact-runtime-parity",
+          sampleSize: 1_200,
+          testSize: 360,
+          realFinishedFixtures: 1_200,
+          minimumRecommendedFixtures: 1_000,
+          minimumEdge: null,
+          valueEdgeWeight: null,
+          dataQualityWeight: null,
+          marketAdjustmentWeight: null,
+          homeAdvantageElo: null,
+          brierScore: 0.2,
+          yield: -0.03,
+          closingLineValue: -0.01,
+          generatedAt: NOW.toISOString(),
+          reason: "Exact-runtime holdout failed betting-economics gates.",
+          notes: []
+        }
+      } as unknown as Prediction["decision"]
+    );
+
+    expect(decision.publicStatus).toBe("watchlist");
+    expect(decision.bestPublishedPick).toBeNull();
+    expect(decision.bestWatchlistCandidate?.blockers).toEqual(
+      expect.arrayContaining([
+        "exact-runtime holdout yield is not positive",
+        "exact-runtime closing-line value is not positive"
+      ])
+    );
   });
 
   it("returns no_clear_value when no market has positive edge", async () => {

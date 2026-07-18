@@ -1,4 +1,5 @@
 import type { Sport } from "@/lib/sports/types";
+import { RUNTIME_PROBABILITY_PIPELINE_VERSION } from "./runtimeProbabilityPipeline";
 
 export type DecisionModelSport = Extract<Sport, "football" | "basketball" | "tennis">;
 export type HistoricalModelCompatibility = "exact-runtime-parity" | "benchmark-only" | "unverified-runtime-key" | "incompatible";
@@ -9,6 +10,7 @@ export type DecisionModelIdentity = Readonly<{
   benchmarkBacktestModelKey: string;
   featureContractVersion: string;
   runtimeEntrypoint: string;
+  probabilityPipelineVersion: typeof RUNTIME_PROBABILITY_PIPELINE_VERSION;
 }>;
 
 export type RuntimeModelIdentityProof = Readonly<{
@@ -21,24 +23,27 @@ export type RuntimeModelIdentityProof = Readonly<{
 const IDENTITIES: Readonly<Record<DecisionModelSport, DecisionModelIdentity>> = {
   football: {
     sport: "football",
-    runtimeModelKey: "football-poisson-v3",
+    runtimeModelKey: "football-poisson-v5",
     benchmarkBacktestModelKey: "football-poisson-elo-v1",
-    featureContractVersion: "football-runtime-features-v3",
-    runtimeEntrypoint: "modelFootballMatch"
+    featureContractVersion: "football-runtime-features-v5",
+    runtimeEntrypoint: "modelFootballMatch+decisionProbabilityPipeline",
+    probabilityPipelineVersion: RUNTIME_PROBABILITY_PIPELINE_VERSION
   },
   basketball: {
     sport: "basketball",
-    runtimeModelKey: "basketball-efficiency-v3",
+    runtimeModelKey: "basketball-efficiency-v5",
     benchmarkBacktestModelKey: "basketball-efficiency-moneyline-v1",
-    featureContractVersion: "basketball-runtime-features-v3",
-    runtimeEntrypoint: "modelBasketballMatch"
+    featureContractVersion: "basketball-runtime-features-v5",
+    runtimeEntrypoint: "modelBasketballMatch+decisionProbabilityPipeline",
+    probabilityPipelineVersion: RUNTIME_PROBABILITY_PIPELINE_VERSION
   },
   tennis: {
     sport: "tennis",
-    runtimeModelKey: "tennis-surface-elo-v3",
+    runtimeModelKey: "tennis-surface-elo-v5",
     benchmarkBacktestModelKey: "tennis-surface-elo-match-winner-v1",
-    featureContractVersion: "tennis-runtime-features-v3",
-    runtimeEntrypoint: "modelTennisMatch"
+    featureContractVersion: "tennis-runtime-features-v5",
+    runtimeEntrypoint: "modelTennisMatch+decisionProbabilityPipeline",
+    probabilityPipelineVersion: RUNTIME_PROBABILITY_PIPELINE_VERSION
   }
 };
 
@@ -84,6 +89,7 @@ export function historicalModelCompatibility({
     receipt.runtimeModelKey === identity.runtimeModelKey &&
     receipt.featureContractVersion === identity.featureContractVersion &&
     receipt.runtimeEntrypoint === identity.runtimeEntrypoint &&
+    receipt.probabilityPipelineVersion === identity.probabilityPipelineVersion &&
     receipt.execution === "runtime-model" &&
     receipt.featureContractStatus === "passed" &&
     typeof receipt.evaluatedFixtures === "number" &&
@@ -104,6 +110,7 @@ export function runtimeModelIdentityReceipt(
     runtimeModelKey: identity.runtimeModelKey,
     featureContractVersion: identity.featureContractVersion,
     runtimeEntrypoint: identity.runtimeEntrypoint,
+    probabilityPipelineVersion: identity.probabilityPipelineVersion,
     execution: "runtime-model",
     featureContractStatus: proof.featureContractStatus,
     evaluatedFixtures: proof.evaluatedFixtures,
@@ -119,6 +126,7 @@ export function benchmarkModelIdentityReceipt(sport: DecisionModelSport): Record
     evidenceModelKey: identity.benchmarkBacktestModelKey,
     targetRuntimeModelKey: identity.runtimeModelKey,
     targetFeatureContractVersion: identity.featureContractVersion,
+    targetProbabilityPipelineVersion: identity.probabilityPipelineVersion,
     execution: "benchmark-model",
     compatibility: "benchmark-only"
   };

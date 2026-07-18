@@ -17,6 +17,14 @@ function profile({
     active,
     modelKey: "football-poisson-v2",
     engineVersion: "decision-engine-v1",
+    modelCompatibility: "exact-runtime-parity",
+    calibrationPromotion: {
+      id: "promotion-1",
+      candidateId: "candidate-1",
+      approvedAt: "2026-07-10T00:00:00.000Z",
+      expiresAt: null
+    },
+    calibrationBucketSource: "promoted-cohort",
     sampleSize,
     realFinishedFixtures: sampleSize,
     minimumRecommendedFixtures: 30,
@@ -51,11 +59,31 @@ describe("decision calibration interval", () => {
       method: "wilson-calibration-bucket",
       confidenceLevel: 0.95,
       sampleSize: 100,
-      source: "validated-holdout"
+      source: "calibration-promotion:promotion-1/candidate:candidate-1"
     });
     expect(interval.low).toBeCloseTo(0.502, 3);
     expect(interval.high).toBeCloseTo(0.691, 3);
-    expect(interval.detail).toContain("100 settled predictions");
+    expect(interval.detail).toContain("100 settled win/loss predictions");
+  });
+
+  it("rejects the historical backtest fallback even when live guardrails are active", () => {
+    const learningProfile = profile();
+    learningProfile.calibrationBucketSource = "backtest";
+
+    const interval = buildDecisionCalibrationInterval({ probability: 0.58, learningProfile });
+
+    expect(interval).toMatchObject({ method: "unavailable", low: null, high: null });
+    expect(interval.detail).toContain("historical backtest fallback");
+  });
+
+  it("requires an exact-runtime identity receipt for the promoted cohort", () => {
+    const learningProfile = profile();
+    learningProfile.modelCompatibility = "unverified-runtime-key";
+
+    const interval = buildDecisionCalibrationInterval({ probability: 0.58, learningProfile });
+
+    expect(interval).toMatchObject({ method: "unavailable", low: null, high: null });
+    expect(interval.detail).toContain("exact-runtime model identity receipt");
   });
 
   it("returns an explicit unavailable state instead of fabricating a band without active calibration", () => {

@@ -3,12 +3,14 @@ import Link from "next/link";
 import { LiveCoverageFallback } from "@/components/live/MatchdayFallback";
 import type { LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import { LocalTime } from "@/components/odds/LocalTime";
-import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
+import { formatOdds } from "@/lib/sports/prediction/format";
 import type { SlateFixture, SlatePublicStatus, SportsSlate } from "@/lib/sports/intelligence/types";
 import type { DailyTipsProduct, WeeklyTipsDay, WeeklyTipsProduct, YesterdayResultsProduct } from "@/lib/sports/tips/product";
-import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
+import { buildPredictionPresentation, displayedSlateDecision, noPickExplanation } from "@/lib/sports/prediction/presentation";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
+import { DecisionPriceSignal } from "@/components/odds/DecisionPriceSignal";
+import { marketPriorReceiptFor } from "@/lib/sports/prediction/marketPriorPresentation";
 
 const STATUS_LABELS: Record<SlatePublicStatus, string> = {
   value_pick: "Value Pick",
@@ -32,29 +34,10 @@ function badgeClass(status: SlatePublicStatus): string {
   return "no-value";
 }
 
-function freshness(row: SlateFixture, asOf: string): { label: string; className: string } {
-  const pick = row.decisionSummary.bestPublishedPick ?? row.decisionSummary.bestLean ?? row.decisionSummary.bestWatchlistCandidate;
-  const expiresAt = pick?.expiresAt ?? row.decisionSummary.expiresAt;
-  if (row.publicStatus === "stale" || (expiresAt && Date.parse(expiresAt) <= Date.parse(asOf))) return { label: "Stale — refresh required", className: "no-value" };
-  if (!expiresAt) return { label: "No active price", className: "scheduled" };
-  return { label: "Fresh", className: "positive" };
-}
-
 function strongestModelLean(row: SlateFixture): string {
   const candidate = row.decisionSummary.bestLean
     ?? row.decisionSummary.allMarketAnalyses.slice().sort((left, right) => right.modelProbability - left.modelProbability)[0];
   return candidate?.label ?? "No preferred market";
-}
-
-export function noPickExplanation(row: SlateFixture): string {
-  if (row.publicStatus === "stale") return "Market stale — the supporting price expired and must be refreshed.";
-  if (row.publicStatus === "preliminary") return "Odds or match context are not ready for a complete engine decision.";
-  const analysis = row.decisionSummary.allMarketAnalyses.slice().sort((left, right) => right.edge - left.edge)[0];
-  if (analysis?.blockers[0]) return analysis.blockers[0];
-  if (analysis && analysis.odds < row.decisionSummary.auditSummary.thresholds.minimumOdds) return "Odds too short for the configured risk guardrail.";
-  if (analysis && analysis.edge > 0 && analysis.edge < row.decisionSummary.auditSummary.thresholds.minimumValueEdge) return "Positive edge is below the publication threshold.";
-  if (analysis && analysis.edge <= 0) return "The current price does not offer a positive model edge.";
-  return row.decisionSummary.noPickReason ?? "Data is incomplete, so the engine did not publish a selection.";
 }
 
 export function ProviderRunStrip({ slate }: { slate: SportsSlate }) {
@@ -85,9 +68,8 @@ export function ProviderRunStrip({ slate }: { slate: SportsSlate }) {
 
 export function SlateFixtureCard({ row, compact = false, asOf }: { row: SlateFixture; compact?: boolean; asOf?: string }) {
   const { fixture, decisionSummary } = row;
-  const displayedDecision = decisionSummary.bestPublishedPick ?? decisionSummary.bestLean ?? decisionSummary.bestWatchlistCandidate;
-  const currentAsOf = asOf ?? decisionSummary.generatedAt;
-  const fresh = freshness(row, currentAsOf);
+  const presentation = buildPredictionPresentation(row, asOf ?? decisionSummary.generatedAt);
+  const displayedDecision = displayedSlateDecision(row);
   return (
     <article className={`intelligence-card status-${row.publicStatus}${compact ? " compact" : ""}`}>
       <div className="intelligence-card-topline">
@@ -95,7 +77,7 @@ export function SlateFixtureCard({ row, compact = false, asOf }: { row: SlateFix
         <span className={`badge ${badgeClass(row.publicStatus)}`}>{STATUS_LABELS[row.publicStatus]}</span>
       </div>
       <div className="intelligence-matchline">
-        <Link href={`/predictions/${encodeURIComponent(fixture.fixtureId)}`}>
+        <Link href={presentation.analysisHref}>
           <span className="intelligence-team"><TeamCrest name={fixture.homeTeam.name} logo={fixture.homeTeam.logo} size={30} /><span className="intelligence-team-copy"><strong>{fixture.homeTeam.name}</strong><small><CountryFlag country={fixture.homeTeam.country} size={12} />{fixture.homeTeam.country ?? "Country pending"}</small></span></span>
           <span className="intelligence-versus">vs</span>
           <span className="intelligence-team intelligence-team--away"><TeamCrest name={fixture.awayTeam.name} logo={fixture.awayTeam.logo} size={30} /><span className="intelligence-team-copy"><strong>{fixture.awayTeam.name}</strong><small><CountryFlag country={fixture.awayTeam.country} size={12} />{fixture.awayTeam.country ?? "Country pending"}</small></span></span>
@@ -104,36 +86,49 @@ export function SlateFixtureCard({ row, compact = false, asOf }: { row: SlateFix
       </div>
       {displayedDecision ? (
         <>
-          <div className="intelligence-decision">
-            <div><span>Market</span><strong>{displayedDecision.marketId.replaceAll("_", " ")}</strong></div>
-            <div><span>Selection</span><strong>{displayedDecision.label}</strong></div>
-            <div><span>Odds</span><strong>{formatOdds(displayedDecision.odds)}</strong></div>
-            <div><span>Model chance</span><strong>{formatPercent(displayedDecision.modelProbability)}</strong></div>
-            <div><span>Bookmaker fair chance</span><strong>{formatPercent(displayedDecision.noVigImpliedProbability)}</strong></div>
-            <div><span>Edge</span><strong>{formatSignedPercent(displayedDecision.edge)}</strong></div>
-            <div><span>Confidence</span><strong>{displayedDecision.confidence}</strong></div>
-            <div><span>Risk</span><strong>{decisionSummary.risk}</strong></div>
+          <div className="intelligence-pick">
+            <div><span>{presentation.marketLabel}</span><strong>{displayedDecision.label}</strong></div>
+            <div><span>Current odds</span><strong>{formatOdds(displayedDecision.odds)}</strong></div>
           </div>
+          <DecisionPriceSignal
+            modelProbability={displayedDecision.modelProbability}
+            marketProbability={displayedDecision.noVigImpliedProbability}
+            currentOdds={displayedDecision.odds}
+            edge={displayedDecision.edge}
+            expectedValue={displayedDecision.expectedValue}
+            marketPriorReceipt={marketPriorReceiptFor(decisionSummary.auditSummary.marketPriorAdjustment, displayedDecision.marketId)}
+            executionPriceReceipt={displayedDecision}
+            publicationGateReceipt={displayedDecision}
+            economicConfidenceReceipt={displayedDecision.economicConfidence}
+            compact={compact}
+          />
+          <div className="decision-quality-line"><span>Evidence <strong>{decisionSummary.evidenceQuality}</strong></span><span>Risk <strong>{decisionSummary.risk}</strong></span></div>
+          {!compact ? <p className="intelligence-verdict">{presentation.verdict}</p> : null}
           <div className="decision-freshness">
-            <span className={`badge ${fresh.className}`}>{fresh.label}</span>
+            <span className={`badge ${presentation.freshness === "fresh" ? "positive" : presentation.freshness === "stale" ? "no-value" : "scheduled"}`}>{presentation.freshnessLabel}</span>
+            <span>Model {presentation.modelVersion ?? "version recorded"}</span>
             <span>Generated <time dateTime={decisionSummary.generatedAt}>{new Date(decisionSummary.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></span>
-            <span>Expires {decisionSummary.expiresAt ? <time dateTime={decisionSummary.expiresAt}>{new Date(decisionSummary.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time> : "when fresh odds arrive"}</span>
           </div>
         </>
       ) : <p className="muted small">{noPickExplanation(row)}</p>}
-      {!compact ? <p className="intelligence-reason"><strong>Why this matters</strong><span>{row.publicStatus === "watchlist" || row.publicStatus === "stale" ? publicWatchlistReason(decisionSummary) : displayedDecision ? displayedDecision.blockers[0] ?? (row.publicStatus === "value_pick" ? "This selection clears every publication guardrail." : "This is the strongest model preference at the current price.") : noPickExplanation(row)}</span></p> : null}
-      <Link className="text-link intelligence-analysis-link" href={`/predictions/${encodeURIComponent(fixture.fixtureId)}`}>Full analysis →</Link>
+      {!compact ? <div className="intelligence-why"><p><strong>Why it qualifies</strong><span>{presentation.primaryReason}</span></p><p><strong>Main risk</strong><span>{presentation.primaryRisk}</span></p></div> : null}
+      <div className="intelligence-card-actions">
+        <Link className="text-link intelligence-analysis-link" href={presentation.analysisHref}>View analysis →</Link>
+        <Link className="text-link intelligence-community-link" href={presentation.communityHref}>Community pulse</Link>
+      </div>
+      <p className="community-boundary-note">Community opinions never change the OddsPadi model decision.</p>
     </article>
   );
 }
 
 function NoPickFixtureCard({ row, asOf }: { row: SlateFixture; asOf: string }) {
+  const presentation = buildPredictionPresentation(row, asOf);
   return (
     <article className="no-pick-card">
       <div><span className={`badge ${badgeClass(row.publicStatus)}`}>{STATUS_LABELS[row.publicStatus]}</span><small><LocalTime iso={row.fixture.kickoffAt} /> · {row.fixture.league}</small></div>
       <h3><Link href={`/predictions/${encodeURIComponent(row.fixture.fixtureId)}`}>{row.fixture.homeTeam.name} vs {row.fixture.awayTeam.name}</Link></h3>
       <dl><div><dt>Model lean</dt><dd>{strongestModelLean(row)}</dd></div><div><dt>Why no pick</dt><dd>{noPickExplanation(row)}</dd></div></dl>
-      <span className={`badge ${freshness(row, asOf).className}`}>{freshness(row, asOf).label}</span>
+      <span className={`badge ${presentation.freshness === "fresh" ? "positive" : presentation.freshness === "stale" ? "no-value" : "scheduled"}`}>{presentation.freshnessLabel}</span>
     </article>
   );
 }
@@ -249,10 +244,10 @@ export function DailyTipsSections({ product, fallbackBoard = null }: { product: 
   const { published, abstentions, waitingForEvidence } = partitionDailyTipsSections(product);
   return (
     <>
-      {!published.length ? <section className="daily-no-publish" id="daily-published"><span className="badge scheduled">0 published</span><div><h2>No public decision was forced for {product.day}</h2><p>The engine reviewed {product.sections.allAnalysed.length} fixture{product.sections.allAnalysed.length === 1 ? "" : "s"}, but none cleared every value, confidence and risk gate. Watchlist readings remain analysis, not tips.</p></div></section> : null}
       {product.sections.valuePicks.length ? <SlateSection id="daily-published" title="Top Value Picks" eyebrow="Positive edge, fully cleared" rows={product.sections.valuePicks} empty="No value pick clears every gate" asOf={product.generatedAt} /> : null}
       {product.sections.leans.length ? <SlateSection id={product.sections.valuePicks.length ? "daily-leans" : "daily-published"} title="Safer Leans" eyebrow="Model preference, not a value claim" rows={product.sections.leans} empty="No safer lean is ready" asOf={product.generatedAt} /> : null}
       <SlateSection id="daily-watchlist" title="Watchlist" eyebrow="Possible value, still blocked" rows={product.sections.watchlist} empty="Nothing is waiting on a price or evidence refresh" asOf={product.generatedAt} />
+      {!published.length ? <section className="daily-no-publish" id="daily-published"><span className="badge scheduled">0 published</span><div><h2>No public pick was forced for {product.day}</h2><p>The engine reviewed {product.sections.allAnalysed.length} fixture{product.sections.allAnalysed.length === 1 ? "" : "s"}, but none cleared every value, confidence and risk gate. Watchlist readings remain analysis, not tips.</p></div></section> : null}
       <section className="section intelligence-section" id="daily-abstentions">
         <div className="section-title"><div><span className="section-kicker">Reviewed and withheld</span><h2>Analysed Abstentions</h2></div><span className="badge scheduled">{abstentions.length}</span></div>
         {abstentions.length ? <div className="no-pick-grid">{abstentions.map((row) => <NoPickFixtureCard key={row.fixture.fixtureId} row={row} asOf={product.generatedAt} />)}</div> : <div className="empty-state compact"><h3>No additional analysed abstentions</h3><p className="muted">Every completed review currently appears in a published or watchlist section.</p></div>}

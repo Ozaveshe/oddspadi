@@ -35,6 +35,26 @@ describe("autonomous shadow outcomes", () => {
     expect(outcome?.metadata).toMatchObject({ paperOnly: true, evidenceHash: "fnv1a-12345678" });
   });
 
+  it("carries the exact Odds API competition key into the settlement ticket", async () => {
+    const [base] = await mockSportsDataProvider.getFixtures("2026-07-12", "tennis");
+    const match = {
+      ...base,
+      league: { ...base.league, id: "the-odds-api:tennis_atp_wimbledon" },
+      dataSource: { ...base.dataSource, kind: "provider" as const, fixtureProvider: "the-odds-api-events" }
+    };
+    const prediction = buildPrediction(match);
+
+    const outcome = buildAutonomousPendingOutcome({
+      match,
+      prediction,
+      decisionRunId: "run-key",
+      evidenceHash: "evidence-key",
+      finalDecision: prediction.decision
+    });
+
+    expect(outcome?.metadata).toMatchObject({ providerSportKey: "tennis_atp_wimbledon" });
+  });
+
   it("settles a pending outcome only from a provider final score and then runs calibration", async () => {
     const { match, prediction } = await fixture();
     const pending = buildAutonomousPendingOutcome({
