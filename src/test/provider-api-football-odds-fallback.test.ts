@@ -106,6 +106,15 @@ describe("API-Football exact-ID odds fallback", () => {
       if (url.hostname === "api.the-odds-api.com" && url.pathname === "/v4/sports/") {
         return json([{ key: "soccer_epl", active: true, has_outrights: false }]);
       }
+      if (url.hostname === "api.the-odds-api.com" && url.pathname === "/v4/sports/soccer_epl/events/") {
+        return json([{
+          id: "the-odds-event-9101",
+          sport_key: "soccer_epl",
+          commence_time: "2026-08-23T14:00:00Z",
+          home_team: "Primary Home",
+          away_team: "Primary Away"
+        }]);
+      }
       if (url.hostname === "api.the-odds-api.com" && url.pathname.endsWith("/odds/")) {
         return json([{
           id: "the-odds-event-9101",
@@ -159,6 +168,15 @@ describe("API-Football exact-ID odds fallback", () => {
       if (url.hostname === "v3.football.api-sports.io") return json({ response: [] });
       if (url.hostname === "api.the-odds-api.com" && url.pathname === "/v4/sports/") {
         return json([{ key: "soccer_epl", active: true, has_outrights: false }]);
+      }
+      if (url.hostname === "api.the-odds-api.com" && url.pathname === "/v4/sports/soccer_epl/events/") {
+        return json([{
+          id: "stale-the-odds-event",
+          sport_key: "soccer_epl",
+          commence_time: "2026-08-23T20:00:00Z",
+          home_team: "Registered Home",
+          away_team: "Registered Away"
+        }]);
       }
       if (url.hostname === "api.the-odds-api.com" && url.pathname.endsWith("/odds/")) {
         return json([{

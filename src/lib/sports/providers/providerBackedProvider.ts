@@ -27,7 +27,7 @@ import type { HeadToHeadSummary, Match, MatchContextSignal, MatchStatus, OddsMar
 import { buildNoVigBookmakerConsensus } from "@/lib/sports/oddsConsensus";
 import { buildBestExecutableQuote } from "@/lib/sports/executableOdds";
 import { currentFootballSeason, leagueBySlug, type LeagueTable } from "@/lib/sports/leagueStandings";
-import { configuredPredictionLeagueIds, footballLeaguePriority, footballLeagueStrength, predictionOddsSportKeys } from "@/lib/sports/footballLeagues";
+import { configuredPredictionLeagueIds, footballLeaguePriority, footballLeagueStrength } from "@/lib/sports/footballLeagues";
 import {
   loadPlayerFormSignalResultForFixtures,
   type PlayerFormFixture,
@@ -292,6 +292,11 @@ type OddsEventIdentityCacheEntry = {
 type OddsSportsCacheEntry = {
   expiresAt: number;
   sports: Promise<OddsApiSport[]>;
+};
+
+type OddsEventCatalogCacheEntry = {
+  expiresAt: number;
+  events: Promise<OddsApiEvent[] | null>;
 };
 
 type ApiFootballOddsCacheEntry = {
@@ -1724,6 +1729,12 @@ function oddsCacheTtlMs(env: EnvMap): number {
   return Math.round(clampRange(configured, 10_000, 60 * 60 * 1000));
 }
 
+function oddsEventCatalogCacheTtlMs(env: EnvMap): number {
+  const configured = Number(env.ODDS_API_EVENT_CATALOG_TTL_MS);
+  if (!Number.isFinite(configured) || configured <= 0) return 10 * 60 * 1000;
+  return Math.round(clampRange(configured, 30_000, 30 * 60 * 1000));
+}
+
 function apiFootballOddsCacheTtlMs(env: EnvMap): number {
   const configured = Number(env.API_FOOTBALL_ODDS_CACHE_TTL_MS);
   if (!Number.isFinite(configured) || configured <= 0) return 30 * 60 * 1000;
@@ -2029,7 +2040,7 @@ function explicitOddsSportKeys(
         .map((key) => key.trim())
         .filter((key) => Boolean(key) && (sport !== "tennis" || !INVALID_GENERIC_TENNIS_SPORT_KEYS.has(key.toLowerCase())))
     )
-  ).slice(0, 8);
+  );
 }
 
 function fallbackOddsSportKeys(
@@ -2058,9 +2069,24 @@ function defaultOddsRegionsForSport(sport: Extract<Sport, "football" | "basketba
 }
 
 const FOOTBALL_EVENT_MARKETS = new Set(["btts", "alternate_totals", "double_chance", "draw_no_bet"]);
+const CORE_ODDS_MARKETS = new Set(["h2h", "spreads", "totals"]);
+
+function configuredCoreOddsMarkets(env: EnvMap): string {
+  const configured = env.ODDS_API_CORE_MARKETS?.trim();
+  if (!configured) return "h2h";
+  const markets = Array.from(
+    new Set(
+      configured
+        .split(",")
+        .map((market) => market.trim().toLowerCase())
+        .filter((market) => CORE_ODDS_MARKETS.has(market))
+    )
+  );
+  return markets.length ? markets.join(",") : "h2h";
+}
 
 function configuredFootballEventMarkets(env: EnvMap): string {
-  return (env.ODDS_API_FOOTBALL_EVENT_MARKETS?.trim() || "btts,alternate_totals,double_chance,draw_no_bet")
+  return (env.ODDS_API_FOOTBALL_EVENT_MARKETS?.trim() || "")
     .split(",")
     .map((market) => market.trim().toLowerCase())
     .filter((market) => FOOTBALL_EVENT_MARKETS.has(market))
@@ -2186,6 +2212,7 @@ const unavailableSportsDataProvider: SportsDataProvider = {
 export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private readonly oddsEventsCache = new Map<string, OddsEventCacheEntry>();
   private readonly oddsRawFeedCache = new Map<string, OddsEventCacheEntry>();
+  private readonly oddsEventCatalogCache = new Map<string, OddsEventCatalogCacheEntry>();
   private readonly oddsEventIdentityCache = new Map<string, OddsEventIdentityCacheEntry>();
   private oddsSportsCache: OddsSportsCacheEntry | null = null;
   private readonly apiFootballOddsCache = new Map<string, ApiFootballOddsCacheEntry>();
@@ -2297,45 +2324,121 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   }
 
   /**
-   * Football competitions are seasonal, so a configured key list is a statement
-   * of preference rather than of availability: through the European summer every
-   * top-five key is dormant and spending the request budget on them returns no
-   * prices at all. Rank configured keys first, back-fill from the prediction
-   * registry so in-season competitions can be priced, then keep only what the
-   * provider currently reports as active.
+   * The free event catalogue is the quota boundary for paid odds reads. Active
+   * competitions are only candidates: a seasonal key can be active while
+   * having no match on the requested UTC date. Probe every candidate before
+   * applying the eight-key paid-feed cap, otherwise catalogue order can spend
+   * the remaining quota on empty leagues while hiding a later relevant key.
    */
-  private async activeFootballOddsSportKeys(configured: string[]): Promise<string[]> {
-    const candidates = Array.from(new Set([...configured, ...predictionOddsSportKeys()]));
-    const fallback = (configured.length ? configured : candidates).slice(0, 8);
+  private async oddsSportKeyCandidates(
+    sport: Extract<Sport, "football" | "basketball" | "tennis">
+  ): Promise<{
+    configured: string[];
+    fallback: string[];
+    candidates: string[];
+    activeCatalogueRead: boolean;
+  }> {
+    const configured = explicitOddsSportKeys(this.env, sport);
     const active = await this.activeOddsSportKeys();
-    if (!active) return fallback;
-    const live = candidates.filter((key) => active.has(key));
-    return live.length ? live.slice(0, 8) : fallback;
+    const fallback = fallbackOddsSportKeys(this.env, sport);
+    const discovered = active
+      ? Array.from(active).filter((key) => key.startsWith(oddsSportKeyPrefix(sport)))
+      : fallback;
+    return {
+      configured,
+      fallback,
+      candidates: Array.from(new Set([...configured, ...discovered])),
+      activeCatalogueRead: active !== null
+    };
   }
 
-  /**
-   * Resolve odds keys per sport. Football is season-aware (see above), while
-   * basketball and tennis discover the competitions that are actually active.
-   * The NBA key disappears between seasons, so treating it as a permanent
-   * default would hide WNBA and Summer League markets during the offseason.
-   */
   private async getOddsSportKeys(
-    sport: Extract<Sport, "football" | "basketball" | "tennis">
+    sport: Extract<Sport, "football" | "basketball" | "tennis">,
+    date: string
   ): Promise<string[]> {
-    const configured = explicitOddsSportKeys(this.env, sport);
-    if (sport === "football") return this.activeFootballOddsSportKeys(configured);
-    const prefix = oddsSportKeyPrefix(sport);
-    const active = await this.activeOddsSportKeys();
-    if (!active) return (configured.length ? configured : fallbackOddsSportKeys(this.env, sport)).slice(0, 8);
+    const { configured, fallback, candidates, activeCatalogueRead } = await this.oddsSportKeyCandidates(sport);
+    const configuredRank = new Map(configured.map((key, index) => [key, index]));
+    if (!candidates.length) return [];
 
-    // Basketball and tennis keys are seasonal. Keep configured, currently
-    // active keys first, then back-fill the remaining active catalogue keys so
-    // an NBA/Wimbledon preference cannot hide WNBA, Summer League, or the next
-    // tournament after the preferred competition goes dormant.
-    const preferred = configured.filter((key) => active.has(key));
-    const discovered = Array.from(active).filter((key) => key.startsWith(prefix));
-    const live = Array.from(new Set([...preferred, ...discovered])).slice(0, 8);
-    return live.length ? live : (configured.length ? configured : fallbackOddsSportKeys(this.env, sport)).slice(0, 8);
+    const catalogues = await mapWithConcurrency(
+      candidates.map((sportKey, index) => ({ sportKey, index })),
+      Math.min(4, providerRequestConcurrency(this.env)),
+      async ({ sportKey, index }) => {
+        const events = await this.fetchOddsEventCatalog({ date, sportKey });
+        return {
+          sportKey,
+          index,
+          eventCount: events?.length ?? 0,
+          read: events !== null
+        };
+      }
+    );
+    const relevant = catalogues.filter((row) => row.read && row.eventCount > 0);
+    if (!relevant.length) {
+      // A provider-wide catalogue outage should not erase an explicit operator
+      // key (or the single conservative default). A successful empty catalogue
+      // is authoritative and never triggers a paid request.
+      if (activeCatalogueRead || catalogues.some((row) => row.read)) return [];
+      return (configured.length ? configured : fallback).slice(0, 8);
+    }
+
+    return relevant
+      .sort((left, right) => {
+        const leftConfigured = configuredRank.get(left.sportKey);
+        const rightConfigured = configuredRank.get(right.sportKey);
+        if (leftConfigured !== undefined || rightConfigured !== undefined) {
+          if (leftConfigured === undefined) return 1;
+          if (rightConfigured === undefined) return -1;
+          return leftConfigured - rightConfigured;
+        }
+        return right.eventCount - left.eventCount || left.index - right.index;
+      })
+      .slice(0, 8)
+      .map((row) => row.sportKey);
+  }
+
+  private async fetchOddsEventCatalog({ date, sportKey }: { date: string; sportKey: string }): Promise<OddsApiEvent[] | null> {
+    const apiKey = firstEnv(this.env, ["THE_ODDS_API_KEY", "ODDS_API_KEY"]);
+    if (!apiKey) return null;
+    const dateStart = Date.parse(`${date}T00:00:00Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(dateStart) || new Date(dateStart).toISOString().slice(0, 10) !== date) {
+      return [];
+    }
+
+    const cacheKey = `${sportKey}:${date}`;
+    const cached = this.oddsEventCatalogCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.events;
+
+    const endpoint = new URL(`https://api.the-odds-api.com/v4/sports/${encodeURIComponent(sportKey)}/events/`);
+    endpoint.searchParams.set("apiKey", apiKey);
+    endpoint.searchParams.set("dateFormat", "iso");
+    endpoint.searchParams.set("commenceTimeFrom", `${date}T00:00:00Z`);
+    endpoint.searchParams.set("commenceTimeTo", `${new Date(dateStart + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}T00:00:00Z`);
+    const events = this.limitedFetch(endpoint)
+      .then((payload) => {
+        if (!Array.isArray(payload)) return null;
+        // Catalogue rows carry fixture identity, not bookmaker evidence. Do not
+        // remember them in the priced-event cache or synthesize a quote time.
+        return payload
+          .filter((event): event is OddsApiEvent => Boolean(event) && typeof event === "object")
+          .map((event) => ({ ...event, sport_key: cleanText(event.sport_key) || sportKey }))
+          .filter(
+            (event) =>
+              cleanText(event.commence_time).startsWith(date) &&
+              Boolean(cleanText(event.home_team)) &&
+              Boolean(cleanText(event.away_team))
+          );
+      })
+      .catch(() => null);
+    setBoundedCache(this.oddsEventCatalogCache, cacheKey, {
+      expiresAt: Date.now() + oddsEventCatalogCacheTtlMs(this.env),
+      events
+    });
+    void events.then((rows) => {
+      if (rows !== null) return;
+      if (this.oddsEventCatalogCache.get(cacheKey)?.events === events) this.oddsEventCatalogCache.delete(cacheKey);
+    });
+    return events;
   }
 
   private async getApiFootballOdds(date: string, apiKey: string): Promise<ApiFootballOddsFetchResult | null> {
@@ -3132,9 +3235,10 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     );
     endpoint.searchParams.set("apiKey", apiKey);
     endpoint.searchParams.set("regions", this.env.ODDS_API_REGIONS?.trim() || defaultOddsRegionsForSport(sport));
+    const coreMarkets = configuredCoreOddsMarkets(this.env);
     endpoint.searchParams.set(
       "markets",
-      sport === "football" ? ["h2h", "totals", configuredFootballEventMarkets(this.env)].filter(Boolean).join(",") : "h2h,spreads,totals"
+      sport === "football" ? [coreMarkets, configuredFootballEventMarkets(this.env)].filter(Boolean).join(",") : coreMarkets
     );
     endpoint.searchParams.set("oddsFormat", "decimal");
     endpoint.searchParams.set("dateFormat", "iso");
@@ -3149,20 +3253,29 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private async getCurrentOddsEvents(date: string, sport: Extract<Sport, "football" | "basketball" | "tennis">): Promise<OddsApiEvent[]> {
     const apiKey = firstEnv(this.env, ["THE_ODDS_API_KEY", "ODDS_API_KEY"]);
     if (!apiKey) return [];
-    const sportKeys = await this.getOddsSportKeys(sport);
+    const paidSportKeys = await this.getOddsSportKeys(sport, date);
+    // Daily discovery never spends score credits on arbitrary active keys.
+    // Current relevant keys can still contribute live scores; completed-ticket
+    // settlement uses getSettlementFixtures with its exact persisted keys.
+    const scoreSportKeys = sport === "football" ? [] : paidSportKeys;
+    const sportKeys = Array.from(new Set([...paidSportKeys, ...scoreSportKeys]));
     if (!sportKeys.length) return [];
+    const paidKeySet = new Set(paidSportKeys);
+    const scoreKeySet = new Set(scoreSportKeys);
     const regions = this.env.ODDS_API_REGIONS?.trim() || defaultOddsRegionsForSport(sport);
-    const markets = sport === "football" ? "h2h,totals" : "h2h,spreads,totals";
+    const markets = configuredCoreOddsMarkets(this.env);
     const footballEventMarkets = configuredFootballEventMarkets(this.env);
     const historicalEnabled = enabledEnvFlag(this.env.ODDS_API_ALLOW_HISTORICAL_RUNTIME);
-    const cacheKey = [sport, sportKeys.join(","), date, regions, markets, footballEventMarkets, historicalEnabled ? "historical" : "current"].join(":");
+    const cacheKey = [sport, `paid=${paidSportKeys.join(",")}`, `scores=${scoreSportKeys.join(",")}`, date, regions, markets, footballEventMarkets, historicalEnabled ? "historical" : "current"].join(":");
     const cached = this.oddsEventsCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.events;
 
     const events = mapWithConcurrency(sportKeys, Math.min(4, providerRequestConcurrency(this.env)), async (sportKey) => {
       const [oddsRows, scoreRows] = await Promise.all([
-        this.fetchOddsEvents({ apiKey, date, sportKey, regions, markets, historicalEnabled }),
-        sport === "football" ? Promise.resolve([]) : this.fetchOddsScoreEvents({ apiKey, date, sportKey })
+        paidKeySet.has(sportKey)
+          ? this.fetchOddsEvents({ apiKey, date, sportKey, regions, markets, historicalEnabled })
+          : Promise.resolve([]),
+        scoreKeySet.has(sportKey) ? this.fetchOddsScoreEvents({ apiKey, date, sportKey }) : Promise.resolve([])
       ]);
       const rows = mergeOddsAndScoreEvents(oddsRows, scoreRows);
       return sport === "football" && footballEventMarkets

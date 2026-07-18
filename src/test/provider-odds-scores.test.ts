@@ -14,12 +14,13 @@ describe("The Odds API completed score bridge", () => {
   it.each([
     ["basketball", "basketball_nba_summer_league", "Miami Heat", "Milwaukee Bucks", 91, 84],
     ["tennis", "tennis_atp_wimbledon", "Jannik Sinner", "Novak Djokovic", 3, 1]
-  ] as const)("returns a finished %s fixture after live odds disappear", async (sport, sportKey, home, away, homeScore, awayScore) => {
+  ] as const)("settles a finished %s fixture by its exact persisted key after live odds disappear", async (sport, sportKey, home, away, homeScore, awayScore) => {
     const fetchImpl = vi.fn(async (input: string | URL) => {
       const url = new URL(String(input));
       if (url.pathname === "/v4/sports/") {
         return Response.json([{ key: sportKey, active: true, has_outrights: false }]);
       }
+      if (url.pathname === `/v4/sports/${sportKey}/events/`) return Response.json([]);
       if (url.pathname.endsWith("/odds/")) return Response.json([]);
       expect(url.pathname).toBe(`/v4/sports/${sportKey}/scores/`);
       expect(url.searchParams.get("daysFrom")).toBe("3");
@@ -41,6 +42,7 @@ describe("The Odds API completed score bridge", () => {
     });
     const provider = new ProviderBackedSportsDataProvider({
       env: {
+        NODE_ENV: "production",
         THE_ODDS_API_KEY: "odds-key",
         ODDS_API_BASKETBALL_SPORT_KEYS: "basketball_nba_summer_league",
         ODDS_API_TENNIS_SPORT_KEYS: "tennis_atp_wimbledon"
@@ -50,7 +52,7 @@ describe("The Odds API completed score bridge", () => {
       historicalTennisStrengthLoader: async () => new Map()
     });
 
-    const fixtures = await provider.getFixtures("2026-07-10", sport);
+    const fixtures = await provider.getSettlementFixtures("2026-07-10", sport, [sportKey]);
     expect(fixtures).toHaveLength(1);
     expect(fixtures[0]).toMatchObject({
       id: "the-odds-api:score-event-1",
@@ -68,6 +70,7 @@ describe("The Odds API completed score bridge", () => {
       if (url.pathname === "/v4/sports/") {
         return Response.json([{ key: "tennis_atp_us_open", active: true, has_outrights: false }]);
       }
+      if (url.pathname === "/v4/sports/tennis_atp_us_open/events/") return Response.json([]);
       if (url.pathname.endsWith("/odds/")) return Response.json([]);
       if (url.pathname === "/v4/sports/tennis_atp_us_open/scores/") return Response.json([]);
       expect(url.pathname).toBe("/v4/sports/tennis_atp_wimbledon/scores/");
@@ -86,7 +89,7 @@ describe("The Odds API completed score bridge", () => {
       }]);
     });
     const provider = new ProviderBackedSportsDataProvider({
-      env: { THE_ODDS_API_KEY: "odds-key" },
+      env: { NODE_ENV: "production", THE_ODDS_API_KEY: "odds-key" },
       fetchImpl,
       historicalTennisStrengthLoader: async () => new Map()
     });

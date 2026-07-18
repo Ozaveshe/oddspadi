@@ -15644,7 +15644,11 @@ describe("prediction utilities", () => {
       return new Response("not found", { status: 404 });
     };
     const provider = new ProviderBackedSportsDataProvider({
-      env: { THE_ODDS_API_KEY: "odds-key" },
+      env: {
+        THE_ODDS_API_KEY: "odds-key",
+        ODDS_API_CORE_MARKETS: "h2h,totals",
+        ODDS_API_FOOTBALL_EVENT_MARKETS: "btts,alternate_totals,double_chance,draw_no_bet"
+      },
       fetchImpl,
       historicalFootballEloLoader: async () => buildHistoricalFootballElo([])
     });

@@ -5,7 +5,7 @@ const basketballEvent = {
   id: "summer-501",
   sport_key: "basketball_nba_summer_league",
   sport_title: "NBA Summer League",
-  commence_time: "2026-07-10T19:30:00Z",
+  commence_time: "2026-07-14T19:30:00Z",
   home_team: "Boston Celtics Summer League",
   away_team: "Miami Heat Summer League",
   bookmakers: [
@@ -53,7 +53,8 @@ describe("provider odds quota guard", () => {
     const provider = new ProviderBackedSportsDataProvider({
       env: {
         THE_ODDS_API_KEY: "odds-key",
-        ODDS_API_BASKETBALL_SPORT_KEY: "basketball_nba_summer_league"
+        ODDS_API_BASKETBALL_SPORT_KEY: "basketball_nba_summer_league",
+        ODDS_API_CORE_MARKETS: "h2h,spreads,totals"
       },
       fetchImpl: async (input) => {
         const url = input.toString();
@@ -63,9 +64,14 @@ describe("provider odds quota guard", () => {
             { key: "basketball_nba_summer_league", active: true, has_outrights: false }
           ]);
         }
+        const isEventsRequest = url.includes("/v4/sports/basketball_nba_summer_league/events/");
         const isOddsRequest = url.includes("/v4/sports/basketball_nba_summer_league/odds/");
         const isScoresRequest = url.includes("/v4/sports/basketball_nba_summer_league/scores/");
-        expect(isOddsRequest || isScoresRequest).toBe(true);
+        expect(isEventsRequest || isOddsRequest || isScoresRequest).toBe(true);
+        if (isEventsRequest) {
+          expect(new URL(url).searchParams.get("commenceTimeFrom")).toBe("2026-07-14T00:00:00Z");
+          return Response.json([basketballEvent]);
+        }
         if (isOddsRequest) {
           expect(url).toContain("markets=h2h%2Cspreads%2Ctotals");
           expect(new URL(url).searchParams.get("regions")).toBe("us");
@@ -77,12 +83,13 @@ describe("provider odds quota guard", () => {
       }
     });
 
-    const [match] = await provider.getFixtures("2026-07-10", "basketball");
+    const [match] = await provider.getFixtures("2026-07-14", "basketball");
 
     expect(calls).toHaveLength(3);
     expect(calls.filter((url) => new URL(url).pathname === "/v4/sports/")).toHaveLength(1);
+    expect(calls.filter((url) => url.includes("/events/"))).toHaveLength(1);
     expect(calls.filter((url) => url.includes("/odds/"))).toHaveLength(1);
-    expect(calls.filter((url) => url.includes("/scores/"))).toHaveLength(1);
+    expect(calls.filter((url) => url.includes("/scores/"))).toHaveLength(0);
     expect(match.id).toBe("the-odds-api:summer-501");
     expect(match.sport).toBe("basketball");
     expect(match.league.name).toBe("NBA Summer League");
@@ -92,7 +99,7 @@ describe("provider odds quota guard", () => {
     expect(match.oddsMarkets.map((market) => market.id)).toEqual(["match_winner", "spread", "total_points"]);
   });
 
-  it("caches current snapshots and does not fall into historical billing by default", async () => {
+  it("caches a successful empty date catalogue without paid odds or arbitrary score reads", async () => {
     const calls: string[] = [];
     const provider = new ProviderBackedSportsDataProvider({
       env: {
@@ -114,10 +121,11 @@ describe("provider odds quota guard", () => {
 
     expect(first[0]?.dataSource?.kind).toBe("mock");
     expect(second[0]?.dataSource?.kind).toBe("mock");
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(2);
     expect(calls.filter((url) => new URL(url).pathname === "/v4/sports/")).toHaveLength(1);
-    expect(calls.filter((url) => url.includes("/v4/sports/basketball_nba/odds/"))).toHaveLength(1);
-    expect(calls.filter((url) => url.includes("/v4/sports/basketball_nba/scores/"))).toHaveLength(1);
+    expect(calls.filter((url) => url.includes("/v4/sports/basketball_nba/events/"))).toHaveLength(1);
+    expect(calls.filter((url) => url.includes("/v4/sports/basketball_nba/odds/"))).toHaveLength(0);
+    expect(calls.filter((url) => url.includes("/v4/sports/basketball_nba/scores/"))).toHaveLength(0);
     expect(calls.some((url) => url.includes("/v4/historical/"))).toBe(false);
   });
 
@@ -144,6 +152,10 @@ describe("provider odds quota guard", () => {
             { key: "basketball_nba_summer_league", active: true, has_outrights: false }
           ]);
         }
+        if (pathname === "/v4/sports/basketball_nba_summer_league/events/") {
+          const targetDate = new URL(url).searchParams.get("commenceTimeFrom")?.slice(0, 10);
+          return Response.json(events.filter((event) => event.commence_time.startsWith(targetDate ?? "")));
+        }
         if (pathname === "/v4/sports/basketball_nba_summer_league/odds/") return Response.json(events);
         return new Response("unexpected provider request", { status: 500 });
       }
@@ -154,6 +166,7 @@ describe("provider odds quota guard", () => {
 
     expect(fixtures.map((rows) => rows.map((row) => row.kickoffTime.slice(0, 10)))).toEqual(dates.map((date) => [date]));
     expect(calls.filter((url) => new URL(url).pathname === "/v4/sports/")).toHaveLength(1);
+    expect(calls.filter((url) => new URL(url).pathname.endsWith("/events/"))).toHaveLength(3);
     expect(calls.filter((url) => new URL(url).pathname.endsWith("/odds/"))).toHaveLength(1);
     expect(calls.some((url) => new URL(url).pathname.endsWith("/scores/"))).toBe(false);
   });
