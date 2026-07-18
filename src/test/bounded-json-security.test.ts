@@ -34,6 +34,9 @@ describe("bounded JSON request parsing", () => {
       "src/app/api/community/posts/route.ts",
       "src/app/api/community/likes/route.ts",
       "src/app/api/community/comments/route.ts",
+      "src/app/api/community/polls/route.ts",
+      "src/app/api/community/tips/route.ts",
+      "src/app/api/community/tips/revisions/route.ts",
       "src/app/api/community/threads/route.ts",
       "src/app/api/community/replies/route.ts"
     ]) {

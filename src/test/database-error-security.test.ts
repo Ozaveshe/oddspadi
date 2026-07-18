@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { databaseUnavailable } from "@/lib/security/databaseError";
+import { databaseUnavailable, isMissingDatabaseRelation } from "@/lib/security/databaseError";
 
 async function routeFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -39,5 +39,12 @@ describe("database error disclosure security", () => {
       const source = await readFile(file, "utf8");
       expect(source, file).not.toMatch(/error:\s*error\.message|note:\s*error\.message/);
     }
+  });
+
+  it("recognizes only known missing-schema failures for staged feature degradation", () => {
+    expect(isMissingDatabaseRelation({ code: "42P01" })).toBe(true);
+    expect(isMissingDatabaseRelation({ code: "PGRST205" })).toBe(true);
+    expect(isMissingDatabaseRelation({ code: "42501", message: "permission denied" })).toBe(false);
+    expect(isMissingDatabaseRelation({ code: "PGRST999", message: "connection failed" })).toBe(false);
   });
 });
