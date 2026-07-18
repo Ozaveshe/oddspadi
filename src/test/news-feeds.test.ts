@@ -9,16 +9,16 @@ describe("Matchday Desk syndication feeds", () => {
     expect(jsonFeedDynamic).toBe("force-dynamic");
   });
 
-  it("keeps the current matchday revision source-dated and honest about the July 17 storage gap", () => {
+  it("keeps the current matchday revision source-dated and honest about the July 18 storage gap", () => {
     const story = newsStories.find((item) => item.slug === "basketball-summer-league-matchday-watchlist");
     expect(newsStories[0]?.slug).toBe("basketball-summer-league-matchday-watchlist");
-    expect(story?.revision).toBe(7);
-    expect(story?.updatedAt).toBe("2026-07-17");
-    expect(story?.sourceAsOf).toBe("2026-07-17T06:35:02.214994Z");
-    expect(story?.sources?.every((source) => source.checkedAt === "2026-07-17")).toBe(true);
-    expect(story?.body.join(" ")).toContain("six Las Vegas Summer League consolation games");
-    expect(story?.body.join(" ")).toContain("no Summer League fixture whose Las Vegas local date was July 17");
-    expect(story?.body.join(" ")).toContain("published zero value picks");
+    expect(story?.revision).toBe(8);
+    expect(story?.updatedAt).toBe("2026-07-18");
+    expect(story?.sourceAsOf).toBe("2026-07-18T06:40:12.107148Z");
+    expect(story?.sources?.every((source) => source.checkedAt === "2026-07-18")).toBe(true);
+    expect(story?.body.join(" ")).toContain("Houston faces Memphis at 6:30 p.m. ET");
+    expect(story?.body.join(" ")).toContain("no NBA Summer League fixture whose Las Vegas local date was July 18");
+    expect(story?.body.join(" ")).toContain("no prediction outcome or canonical public pick");
   });
 
   it("keeps curated desk stories available when the public database is not configured", async () => {

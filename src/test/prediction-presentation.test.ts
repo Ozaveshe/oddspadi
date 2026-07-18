@@ -111,6 +111,12 @@ describe("fixture-first prediction presentation", () => {
     expect(buildPredictionPresentation(row("lean"), "2026-07-17T11:01:00.000Z").freshness).toBe("stale");
   });
 
+  it("does not invite a retrospective pick after a fixture has settled", () => {
+    const result = buildPredictionPresentation(row("settled"), NOW);
+    expect(result.verdict).toContain("finished without a pre-match market-backed review");
+    expect(result.verdict).toContain("will not create a retrospective pick");
+  });
+
   it("routes community discussion separately from the model analysis", () => {
     const result = buildPredictionPresentation(row("value_pick"), NOW);
     expect(result.analysisHref).toBe("/predictions/fixture-1");

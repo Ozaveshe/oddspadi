@@ -33,25 +33,26 @@ export const newsStories: NewsStory[] = [
   },
   {
     slug: "basketball-summer-league-matchday-watchlist",
-    title: "NBA Summer League July 17 desk: six official games, none stored yet",
-    excerpt: "The NBA lists six Las Vegas consolation games from 6:30 to 11 p.m. ET; none were in OddsPadi's checked July 17 store, so this desk makes no pick.",
+    title: "NBA Summer League July 18 semifinal desk",
+    excerpt: "Rockets-Grizzlies tip at 6:30 p.m. ET and Warriors-Lakers at 8:30; OddsPadi found no Las Vegas July 18 rows, outcomes or public picks at its check.",
     category: "Matchday briefing",
     sport: "Basketball",
     publishedAt: "2026-07-12",
-    updatedAt: "2026-07-17",
-    sourceAsOf: "2026-07-17T06:35:02.214994Z",
-    revision: 7,
+    updatedAt: "2026-07-18",
+    sourceAsOf: "2026-07-18T06:40:12.107148Z",
+    revision: 8,
     readMinutes: 4,
     body: [
-      "The NBA's live schedule lists six Las Vegas Summer League consolation games for Friday, July 17: Sacramento–Charlotte at 6:30 p.m. ET, Chicago–Cleveland at 7 p.m., Dallas–New York at 8:30 p.m., Detroit–Miami at 9 p.m., Portland–Utah at 10:30 p.m. and Minnesota–LA Clippers at 11 p.m.",
-      "The published format sends the top four records from the first four games to the July 18 semifinals. The other 26 teams play a fifth consolation game from July 17–19, with the championship on July 19. Friday's six games are part of that consolation slate; they begin at 22:30 UTC and the final three fall after midnight UTC on July 18.",
-      "An exact OddsPadi database check completed on July 17 at 06:35:02 UTC found no Summer League fixture whose Las Vegas local date was July 17. The latest completed daily-engine receipt at 06:27 UTC published zero value picks, and no prediction-outcome row was attached to the UTC-day fixtures. This desk therefore makes no model pick and does not reuse July 16's stored rows as evidence for Friday's games."
+      "The NBA's semifinal field is set for Saturday, July 18. Houston faces Memphis at 6:30 p.m. ET (22:30 UTC), followed by Golden State against the Los Angeles Lakers at 8:30 p.m. ET (00:30 UTC Sunday); both games are at Thomas & Mack Center on Prime Video. The Lakers finished pool play as the only unbeaten team, while the Rockets, Grizzlies and Warriors completed the four-team field.",
+      "The published format advances the top four records after each team's first four games into a single-elimination semifinal round, with the winners meeting in the July 19 championship. The official July 18 schedule contains seven slots: five consolation games around the two-game semifinal doubleheader.",
+      "An exact, read-only OddsPadi database check completed on July 18 at 06:40:12 UTC found 91 fixtures in the UTC day but no NBA Summer League fixture whose Las Vegas local date was July 18. The 90 current fixture summaries were 88 needs-data records and two expired watchlists; no prediction outcome or canonical public pick was attached to the checked window. This desk therefore makes no model pick and does not relabel the previous night's consolation rows as Saturday evidence."
     ],
     sources: [
-      { label: "Official NBA live Summer League schedule", url: "https://www.nba.com/2026-summer-league-vegas-schedule", checkedAt: "2026-07-17" },
-      { label: "Official NBA Summer League schedule PDF", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-17" },
-      { label: "Official 2026 Summer League format and tiebreakers", url: "https://www.nba.com/news/2026-summer-league-format", checkedAt: "2026-07-17" },
-      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-17" }
+      { label: "NBA Summer League semifinal field and matchups", url: "https://www.nba.com/news/starting-5-july-17-2026", checkedAt: "2026-07-18" },
+      { label: "Official NBA Day 8 recap", url: "https://www.nba.com/news/live-updates-2026-nba-summer-league-day-8", checkedAt: "2026-07-18" },
+      { label: "Official NBA Summer League schedule PDF", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-18" },
+      { label: "Official 2026 Summer League format and tiebreakers", url: "https://www.nba.com/news/2026-summer-league-format", checkedAt: "2026-07-18" },
+      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-18" }
     ]
   },
   {
