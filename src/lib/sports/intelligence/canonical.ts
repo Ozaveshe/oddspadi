@@ -19,6 +19,7 @@ import type {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_FUTURE_LIVE_CLOCK_SKEW_MS = 15 * 60 * 1000;
 export const DEFAULT_STORED_FIXTURE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+export const STORED_LIVE_STATUS_MAX_AGE_MS = 20 * 60 * 1000;
 
 function finiteDate(value: string | undefined, fallback: Date): Date {
   const parsed = value ? new Date(value) : fallback;
@@ -91,10 +92,11 @@ export function reconcileStoredFixtureStatus(
 ): Match["status"] {
   const normalized = normalizeFutureLiveMatchStatus({ status: fixture.status, kickoffTime: fixture.kickoffAt }, now);
   if (normalized !== "live") return normalized;
-  const kickoff = Date.parse(fixture.kickoffAt);
-  const hasScore = fixture.homeScore !== null && fixture.awayScore !== null;
-  const longPast = Number.isFinite(kickoff) && kickoff < now.getTime() - maxAgeMs;
-  if (!hasScore && (longPast || !isStoredFixtureFresh(fixture.lastSyncedAt, now, maxAgeMs))) return "suspended";
+  // A retained partial score proves only the last observed state; it does not
+  // prove that the fixture is still live. Keep the volatile live label on a
+  // much tighter freshness boundary than the six-hour slate inclusion window.
+  const liveStatusMaxAgeMs = Math.min(maxAgeMs, STORED_LIVE_STATUS_MAX_AGE_MS);
+  if (!isStoredFixtureFresh(fixture.lastSyncedAt, now, liveStatusMaxAgeMs)) return "suspended";
   return normalized;
 }
 
