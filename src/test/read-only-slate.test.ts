@@ -25,6 +25,7 @@ vi.mock("@/lib/sports/intelligence/repository", () => ({
   persistFixturesAndOdds: vi.fn(),
   persistMarketDecisions: vi.fn(),
   persistDecisionSummaries: vi.fn(),
+  readFreshStoredOdds: vi.fn(),
   readStoredSlate,
   startProviderRun: vi.fn()
 }));

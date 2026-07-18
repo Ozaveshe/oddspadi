@@ -13,6 +13,7 @@ import type {
   CanonicalFixture,
   CanonicalOddsSnapshot,
   FixtureOddsHistory,
+  FreshStoredOddsRead,
   ProviderRunClaim,
   ProviderRunLog,
   ProviderRunStatus,
@@ -639,6 +640,112 @@ export async function readFixtureOddsHistory(
       rowsRead: 0,
       truncated: false,
       reason: `Stored odds history read failed: ${error instanceof Error ? error.message : "unknown error"}`
+    };
+  }
+}
+
+const FRESH_STORED_ODDS_LIMIT = 10_000;
+
+/**
+ * Read only still-valid, provider-backed pre-match prices for the exact
+ * fixtures in the current provider receipt. This lets a partial refresh keep
+ * the newest genuine quote per selection without extending its original
+ * expiry or inventing provenance.
+ */
+export async function readFreshStoredOdds({
+  fixtureExternalIds,
+  now,
+  client = getSupabaseServerClient()
+}: {
+  fixtureExternalIds: string[];
+  now: Date;
+  client?: SupabaseClient | null;
+}): Promise<FreshStoredOddsRead> {
+  const ids = [...new Set(fixtureExternalIds.map((value) => value.trim()).filter(Boolean))];
+  if (!client) {
+    return {
+      status: "unavailable",
+      oddsByFixture: new Map(),
+      rowsRead: 0,
+      reason: "Fresh stored odds are unavailable because server-side Supabase reads are not configured."
+    };
+  }
+  if (!ids.length) {
+    return { status: "no-data", oddsByFixture: new Map(), rowsRead: 0, reason: null };
+  }
+
+  try {
+    const allRows: Array<Record<string, unknown>> = [];
+    for (const idChunk of chunks(ids, 200)) {
+      const { data, error } = await client
+        .from("op_odds_snapshots")
+        .select("id,fixture_external_id,provider,bookmaker,market,selection,decimal_odds,observed_at,captured_at,source,is_live,expires_at,metadata")
+        .in("fixture_external_id", idChunk)
+        .eq("is_live", false)
+        .gt("expires_at", now.toISOString())
+        .order("captured_at", { ascending: false })
+        .limit(FRESH_STORED_ODDS_LIMIT);
+      if (error) {
+        return {
+          status: "failed",
+          oddsByFixture: new Map(),
+          rowsRead: 0,
+          reason: `Fresh stored odds read failed: ${error.message}`
+        };
+      }
+      allRows.push(...((data ?? []) as Array<Record<string, unknown>>));
+    }
+
+    const requested = new Set(ids);
+    const latest = new Map<string, CanonicalOddsSnapshot>();
+    const nowMs = now.getTime();
+    for (const row of allRows) {
+      const metadata = record(row.metadata);
+      const fixtureId = text(row.fixture_external_id);
+      const provider = text(row.provider)?.toLowerCase() ?? "";
+      const snapshot = canonicalOddsSnapshotFromRow(row);
+      const capturedAtMs = Date.parse(snapshot.capturedAt);
+      const expiresAtMs = Date.parse(snapshot.expiresAt);
+      if (
+        !fixtureId ||
+        !requested.has(fixtureId) ||
+        provider.includes("mock") ||
+        metadata.sourceKind === "demo" ||
+        metadata.sourceKind === "mock" ||
+        !snapshot.market.trim() ||
+        !snapshot.selection.trim() ||
+        !snapshot.bookmaker.trim() ||
+        !snapshot.bookmakerId?.trim() ||
+        !Number.isFinite(snapshot.decimalOdds) ||
+        snapshot.decimalOdds <= 1 ||
+        !Number.isFinite(capturedAtMs) ||
+        capturedAtMs > nowMs ||
+        !Number.isFinite(expiresAtMs) ||
+        expiresAtMs <= nowMs
+      ) continue;
+      const key = `${fixtureId}:${snapshot.market}:${snapshot.selection}`;
+      const existing = latest.get(key);
+      if (!existing || Date.parse(snapshot.capturedAt) > Date.parse(existing.capturedAt)) latest.set(key, snapshot);
+    }
+
+    const oddsByFixture = new Map<string, CanonicalOddsSnapshot[]>();
+    for (const snapshot of latest.values()) {
+      oddsByFixture.set(snapshot.fixtureId, [...(oddsByFixture.get(snapshot.fixtureId) ?? []), snapshot]);
+    }
+    return oddsByFixture.size
+      ? { status: "ready", oddsByFixture, rowsRead: latest.size, reason: null }
+      : {
+          status: "no-data",
+          oddsByFixture,
+          rowsRead: 0,
+          reason: "No still-valid bookmaker snapshots are stored for the current provider fixtures."
+        };
+  } catch (error) {
+    return {
+      status: "failed",
+      oddsByFixture: new Map(),
+      rowsRead: 0,
+      reason: `Fresh stored odds read failed: ${error instanceof Error ? error.message : "unknown error"}`
     };
   }
 }

@@ -19,6 +19,7 @@ import {
   persistFixturesAndOdds,
   persistMarketDecisions,
   persistDecisionSummaries,
+  readFreshStoredOdds,
   readStoredSlate,
   startProviderRun
 } from "./repository";
@@ -60,6 +61,32 @@ const defaultDependencies: IntelligencePipelineDependencies = {
   getFixtures: (date, sport) => sportsProvider.getFixtures(date, sport),
   getPredictions: (date, sport) => getPredictions(productionPredictionFilters(date, sport))
 };
+
+export function freshestOddsPerSelection(
+  current: Map<string, CanonicalOddsSnapshot[]>,
+  stored: Map<string, CanonicalOddsSnapshot[]>
+): { oddsByFixture: Map<string, CanonicalOddsSnapshot[]>; reusedStoredSnapshots: number; reusedStoredFixtures: number } {
+  const result = new Map<string, CanonicalOddsSnapshot[]>();
+  let reusedStoredSnapshots = 0;
+  let reusedStoredFixtures = 0;
+  for (const fixtureId of new Set([...current.keys(), ...stored.keys()])) {
+    const latest = new Map<string, { snapshot: CanonicalOddsSnapshot; stored: boolean }>();
+    for (const [snapshots, isStored] of [[current.get(fixtureId) ?? [], false], [stored.get(fixtureId) ?? [], true]] as const) {
+      for (const snapshot of snapshots) {
+        const key = `${snapshot.market}:${snapshot.selection}`;
+        const existing = latest.get(key);
+        if (!existing || Date.parse(snapshot.capturedAt) > Date.parse(existing.snapshot.capturedAt)) {
+          latest.set(key, { snapshot, stored: isStored });
+        }
+      }
+    }
+    const selected = [...latest.values()];
+    if (selected.some((row) => row.stored)) reusedStoredFixtures += 1;
+    reusedStoredSnapshots += selected.filter((row) => row.stored).length;
+    result.set(fixtureId, selected.map((row) => row.snapshot));
+  }
+  return { oddsByFixture: result, reusedStoredSnapshots, reusedStoredFixtures };
+}
 
 function configuredSports(env: Record<string, string | undefined>): Sport[] {
   const supported = new Set<Sport>(["football", "basketball", "tennis"]);
@@ -303,6 +330,7 @@ async function executePipeline({
     );
   }
   let fixtureIds = new Map<string, string>();
+  let storedOddsDiagnostics = { status: "not-read", rowsRead: 0, reusedStoredSnapshots: 0, reusedStoredFixtures: 0, reason: null as string | null };
   if (shouldPersist) {
     try {
       const persisted = await persistFixturesAndOdds({ matches: collected.matches, fixtures, oddsByFixture });
@@ -311,6 +339,17 @@ async function executePipeline({
     } catch (error) {
       errors.push(`Storage: ${error instanceof Error ? error.message : "fixture and odds persistence failed"}`);
     }
+    const storedOdds = await readFreshStoredOdds({ fixtureExternalIds: fixtures.map((fixture) => fixture.fixtureId), now });
+    const merged = freshestOddsPerSelection(oddsByFixture, storedOdds.oddsByFixture);
+    oddsByFixture = merged.oddsByFixture;
+    storedOddsDiagnostics = {
+      status: storedOdds.status,
+      rowsRead: storedOdds.rowsRead,
+      reusedStoredSnapshots: merged.reusedStoredSnapshots,
+      reusedStoredFixtures: merged.reusedStoredFixtures,
+      reason: storedOdds.reason
+    };
+    if (storedOdds.status === "failed" && storedOdds.reason) errors.push(`Storage: ${storedOdds.reason}`);
   }
 
   const decisionsByFixture = new Map<string, CanonicalDecision[]>();
@@ -373,7 +412,7 @@ async function executePipeline({
     predictionsGenerated,
     valuePicksPublished,
     errors
-  }, undefined, { sportCoverage: collected.sportCoverage, dateCoverage });
+  }, undefined, { sportCoverage: collected.sportCoverage, dateCoverage, storedOdds: storedOddsDiagnostics });
   run = { ...run, providerName: providers.join(", ") || "configured-sports-providers" };
   const slate = buildSportsSlate({
     scope,

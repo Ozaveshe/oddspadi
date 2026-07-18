@@ -47,6 +47,13 @@ export type FixtureOddsHistory = {
   reason: string | null;
 };
 
+export type FreshStoredOddsRead = {
+  status: "ready" | "no-data" | "unavailable" | "failed";
+  oddsByFixture: Map<string, CanonicalOddsSnapshot[]>;
+  rowsRead: number;
+  reason: string | null;
+};
+
 export type DecisionStatus =
   | "published_value_pick"
   | "published_lean"
