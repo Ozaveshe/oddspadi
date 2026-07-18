@@ -91,7 +91,7 @@ describe("community prediction contracts", () => {
   });
 
   it("keeps voter identity private and model performance separate in SQL", async () => {
-    const source = await readFile("supabase/migrations/20260717133006_add_community_prediction_contracts.sql", "utf8");
+    const source = await readFile("supabase/migrations/20260718065856_add_community_prediction_contracts.sql", "utf8");
     expect(source).toContain("alter table public.op_match_poll_votes enable row level security");
     expect(source).toContain("using ((select auth.uid()) = user_id)");
     expect(source).not.toContain("grant select on table public.op_match_poll_votes to anon");
@@ -107,7 +107,7 @@ describe("community prediction contracts", () => {
   });
 
   it("provisions polls from canonical fixtures and prevents client-authored fixture identity", async () => {
-    const source = await readFile("supabase/migrations/20260717133006_add_community_prediction_contracts.sql", "utf8");
+    const source = await readFile("supabase/migrations/20260718065856_add_community_prediction_contracts.sql", "utf8");
     expect(source).toContain("create trigger op_fixtures_sync_match_poll");
     expect(source).toContain("after insert or update of sport, external_id, home_team_name, away_team_name, kickoff_at, status");
     expect(source).toContain("insert into public.op_match_polls");

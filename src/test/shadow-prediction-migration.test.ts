@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
-const migration = "supabase/migrations/20260718041857_shadow_prediction_plane.sql";
+const migration = "supabase/migrations/20260718065907_shadow_prediction_plane.sql";
 
 describe("private shadow prediction migration", () => {
   it("keeps challenger evidence server-only and append-only", async () => {

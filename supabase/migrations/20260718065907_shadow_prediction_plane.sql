@@ -1,5 +1,6 @@
 -- Private, pre-kickoff challenger predictions paired to exact champion outcomes.
 -- Apply only to OddsPadi project wncwtzqipnoqwmqlznqn.
+-- Remote migration receipt: 20260718065907.
 
 create table if not exists public.op_shadow_predictions (
   id uuid primary key default gen_random_uuid(),

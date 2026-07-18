@@ -1,5 +1,6 @@
 -- Community opinion is a separate truth lane from the OddsPadi model and the
 -- canonical public-picks ledger. Poll totals are public; voter identity is not.
+-- Remote migration receipt: 20260718065856 on OddsPadi wncwtzqipnoqwmqlznqn.
 
 create table public.op_match_polls (
   id uuid primary key default gen_random_uuid(),
