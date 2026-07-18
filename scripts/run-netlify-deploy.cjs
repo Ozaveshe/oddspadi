@@ -25,21 +25,13 @@ if (production) netlifyArgs.push("--prod");
 const deployEnv = { ...process.env, NETLIFY_SITE_ID: siteId };
 delete deployEnv.SITE_ID;
 
-const windowsCommand = ["npx", ...netlifyArgs]
-  .map((argument) => `"${argument.replaceAll('"', '""')}"`)
-  .join(" ");
-const result = process.platform === "win32"
-  ? spawnSync(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", windowsCommand], {
-      cwd: workspaceRoot,
-      env: deployEnv,
-      stdio: "inherit",
-      windowsHide: true
-    })
-  : spawnSync("npx", netlifyArgs, {
-      cwd: workspaceRoot,
-      env: deployEnv,
-      stdio: "inherit"
-    });
+const result = spawnSync(process.platform === "win32" ? "npx.cmd" : "npx", netlifyArgs, {
+  cwd: workspaceRoot,
+  env: deployEnv,
+  stdio: "inherit",
+  shell: process.platform === "win32",
+  windowsHide: true
+});
 
 if (result.error) {
   console.error(`Netlify deploy could not start: ${result.error.message}`);
