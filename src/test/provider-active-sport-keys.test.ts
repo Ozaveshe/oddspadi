@@ -14,7 +14,9 @@ describe("The Odds API active sport discovery", () => {
     const provider = new ProviderBackedSportsDataProvider({
       env: {
         NODE_ENV: "production",
-        THE_ODDS_API_KEY: "odds-key"
+        THE_ODDS_API_KEY: "odds-key",
+        // A configured NBA preference must not suppress active offseason keys.
+        ODDS_API_BASKETBALL_SPORT_KEY: "basketball_nba"
       },
       now: () => new Date("2026-07-18T08:00:00.000Z"),
       fetchImpl: async (input) => {
@@ -70,8 +72,9 @@ describe("The Odds API active sport discovery", () => {
       env: {
         NODE_ENV: "production",
         THE_ODDS_API_KEY: "odds-key",
-        // A legacy production value must not override active-key discovery.
-        ODDS_API_TENNIS_SPORT_KEY: "tennis_atp"
+        // A dormant preference and a legacy generic value must not override
+        // the currently active tournament catalogue.
+        ODDS_API_TENNIS_SPORT_KEYS: "tennis_atp_wimbledon,tennis_atp"
       },
       now: () => new Date("2026-07-14T08:00:00.000Z"),
       fetchImpl: async (input) => {

@@ -19,6 +19,10 @@ import type {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_FUTURE_LIVE_CLOCK_SKEW_MS = 15 * 60 * 1000;
 export const DEFAULT_STORED_FIXTURE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+// Fixture identity changes much less frequently than prices or live state. A
+// full daily import must survive one delayed cycle without making the entire
+// public slate disappear, while odds and live labels keep their tighter gates.
+export const DEFAULT_STORED_FIXTURE_IDENTITY_MAX_AGE_MS = 26 * 60 * 60 * 1000;
 export const STORED_LIVE_STATUS_MAX_AGE_MS = 20 * 60 * 1000;
 
 function finiteDate(value: string | undefined, fallback: Date): Date {
@@ -130,27 +134,31 @@ export function normalizeOddsSnapshots(
   freshnessMinutes = decisionThresholdsForSport(match.sport).maximumOddsAgeMinutes
 ): CanonicalOddsSnapshot[] {
   if (!isProviderBackedMatch(match)) return [];
-  const captured = finiteDate(match.dataSource?.oddsCapturedAt ?? match.dataSource?.fetchedAt, now);
-  const expiresAt = new Date(captured.getTime() + Math.max(1, freshnessMinutes) * 60_000).toISOString();
+  const capturedFallback = match.dataSource?.oddsCapturedAt ?? match.dataSource?.fetchedAt;
   const provider = match.dataSource?.oddsProvider ?? match.dataSource?.fixtureProvider ?? "unknown";
 
   return match.oddsMarkets.flatMap((market) =>
     market.selections
       .filter((selection) => Number.isFinite(selection.decimalOdds) && selection.decimalOdds > 1)
-      .map((selection) => ({
-        oddsSnapshotId: null,
-        fixtureId: match.id,
-        market: market.id,
-        selection: selection.id,
-        label: selection.label,
-        decimalOdds: selection.decimalOdds,
-        bookmaker: market.bookmaker?.name ?? provider,
-        provider,
-        capturedAt: captured.toISOString(),
-        source: provider,
-        isLive: match.status === "live",
-        expiresAt
-      }))
+      .map((selection) => {
+        const captured = finiteDate(selection.observedAt ?? capturedFallback, now);
+        return {
+          oddsSnapshotId: null,
+          fixtureId: match.id,
+          market: market.id,
+          selection: selection.id,
+          label: selection.label,
+          decimalOdds: selection.decimalOdds,
+          bookmaker: selection.bookmaker?.name ?? market.bookmaker?.name ?? provider,
+          bookmakerId: selection.bookmaker?.id ?? market.bookmaker?.id ?? null,
+          priceMethod: market.priceMethod ?? (selection.bookmaker || market.bookmaker ? "selected-coherent-quote" : undefined),
+          provider,
+          capturedAt: captured.toISOString(),
+          source: provider,
+          isLive: match.status === "live",
+          expiresAt: new Date(captured.getTime() + Math.max(1, freshnessMinutes) * 60_000).toISOString()
+        };
+      })
   );
 }
 

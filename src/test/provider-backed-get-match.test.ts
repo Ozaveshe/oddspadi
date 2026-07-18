@@ -44,6 +44,29 @@ const tennisEvent = {
   surface: "Hard"
 };
 
+const oddsTennisEvent = {
+  id: "odds-event-701",
+  sport_key: "tennis_atp_wimbledon",
+  sport_title: "ATP Tennis",
+  commence_time: "2026-07-10T13:00:00Z",
+  home_team: "Carlos Alcaraz",
+  away_team: "Daniil Medvedev",
+  bookmakers: [
+    {
+      title: "Test Book",
+      markets: [
+        {
+          key: "h2h",
+          outcomes: [
+            { name: "Carlos Alcaraz", price: 1.68 },
+            { name: "Daniil Medvedev", price: 2.22 }
+          ]
+        }
+      ]
+    }
+  ]
+};
+
 describe("provider-backed match detail retrieval", () => {
   it("loads and caches api-basketball game IDs without using the fallback", async () => {
     const calls: string[] = [];
@@ -103,71 +126,80 @@ describe("provider-backed match detail retrieval", () => {
     expect(fallback.getMatch).not.toHaveBeenCalled();
   });
 
-  it("finds and caches opaque the-odds-api event IDs across configured sport keys", async () => {
+  it("uses one exact sport-key event lookup and caches the successful result", async () => {
     const calls: string[] = [];
     const fallback = fallbackThatMustNotHandleProviderIds();
     const provider = new ProviderBackedSportsDataProvider({
       env: {
         THE_ODDS_API_KEY: "odds-key",
-        ODDS_API_FOOTBALL_SPORT_KEY: "soccer_epl",
-        ODDS_API_BASKETBALL_SPORT_KEY: "basketball_nba",
-        ODDS_API_TENNIS_SPORT_KEY: "tennis_atp_wimbledon"
       },
       fallback,
       historicalTennisStrengthLoader: async () => new Map(),
       fetchImpl: async (input) => {
         const url = input.toString();
         calls.push(url);
-        if (!url.includes("/sports/tennis_atp_wimbledon/events/odds-event-701/odds")) {
-          return new Response("not found", { status: 404 });
-        }
-        return new Response(
-          JSON.stringify({
-            id: "odds-event-701",
-            sport_key: "tennis_atp_wimbledon",
-            sport_title: "ATP Tennis",
-            commence_time: "2026-07-10T13:00:00Z",
-            home_team: "Carlos Alcaraz",
-            away_team: "Daniil Medvedev",
-            bookmakers: [
-              {
-                title: "Test Book",
-                markets: [
-                  {
-                    key: "h2h",
-                    outcomes: [
-                      { name: "Carlos Alcaraz", price: 1.68 },
-                      { name: "Daniil Medvedev", price: 2.22 }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        );
+        return Response.json(oddsTennisEvent);
       }
     });
 
-    const first = await provider.getMatch("the-odds-api:odds-event-701");
-    const second = await provider.getMatch("the-odds-api:odds-event-701");
+    const qualifiedId = "the-odds-api:tennis_atp_wimbledon:odds-event-701";
+    const first = await provider.getMatch(qualifiedId);
+    const second = await provider.getMatch(qualifiedId);
 
     expect(first?.id).toBe("the-odds-api:odds-event-701");
     expect(first?.sport).toBe("tennis");
     expect(first?.dataSource?.fixtureProvider).toBe("the-odds-api-events");
     expect(first?.oddsMarkets[0]?.id).toBe("match_winner");
     expect(second).toBe(first);
-    // Football resolution reads the free `/v4/sports/` catalogue once (cached for
-    // ten minutes, and it does not draw request quota) so that odds are only
-    // requested for competitions currently in season. It fails open on the 404
-    // here, falling back to the configured keys.
-    expect(calls).toHaveLength(4);
     expect(calls.map((url) => new URL(url).pathname)).toEqual([
-      "/v4/sports/",
-      "/v4/sports/soccer_epl/events/odds-event-701/odds",
-      "/v4/sports/basketball_nba/events/odds-event-701/odds",
       "/v4/sports/tennis_atp_wimbledon/events/odds-event-701/odds"
     ]);
+    expect(new URL(calls[0]).searchParams.get("regions")).toBe("uk");
+    expect(fallback.getMatch).not.toHaveBeenCalled();
+  });
+
+  it("negative-caches one exact event miss instead of repeating a paid probe", async () => {
+    const calls: string[] = [];
+    const fetchImpl = vi.fn(async (input: string | URL) => {
+      calls.push(String(input));
+      return new Response("not found", { status: 404 });
+    });
+    const fallback = fallbackThatMustNotHandleProviderIds();
+    const provider = new ProviderBackedSportsDataProvider({
+      env: { THE_ODDS_API_KEY: "odds-key" },
+      fallback,
+      fetchImpl
+    });
+    const qualifiedId = "the-odds-api:basketball_wnba:missing-event";
+
+    await expect(provider.getMatch(qualifiedId)).resolves.toBeNull();
+    await expect(provider.getMatch(qualifiedId)).resolves.toBeNull();
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(new URL(calls[0]).pathname).toBe(
+      "/v4/sports/basketball_wnba/events/missing-event/odds"
+    );
+    expect(fallback.getMatch).not.toHaveBeenCalled();
+  });
+
+  it("fails closed for an opaque unknown event ID without any paid cross-sport probes", async () => {
+    const fetchImpl = vi.fn(async () => Response.json([]));
+    const fallback = fallbackThatMustNotHandleProviderIds();
+    const provider = new ProviderBackedSportsDataProvider({
+      env: {
+        THE_ODDS_API_KEY: "odds-key",
+        ODDS_API_FOOTBALL_SPORT_KEY: "soccer_epl",
+        ODDS_API_BASKETBALL_SPORT_KEY: "basketball_wnba",
+        ODDS_API_TENNIS_SPORT_KEY: "tennis_atp_wimbledon"
+      },
+      fallback,
+      fetchImpl
+    });
+
+    await expect(provider.getMatch("the-odds-api:opaque-unknown")).resolves.toBeNull();
+    await expect(provider.getMatch("the-odds-api:opaque-unknown")).resolves.toBeNull();
+
+    expect(fetchImpl).not.toHaveBeenCalled();
     expect(fallback.getMatch).not.toHaveBeenCalled();
   });
 

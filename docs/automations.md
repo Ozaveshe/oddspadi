@@ -11,7 +11,7 @@ project `wncwtzqipnoqwmqlznqn`.
 | --- | --- | --- |
 | `decision-cycle-sweep` | `5,35 * * * *` | Football decision/prediction capture |
 | `multi-sport-decision-cycle-sweep` | `20 */2 * * *` | Runs the built basketball/tennis odds-refresh and daily-engine routes; fails when either sport is degraded |
-| `sports-intelligence-sweep` | `25,55 * * * *` | Refreshes odds and rebuilds Today inside the 45-minute basketball freshness boundary; fixture import and the seven-day slate remain receipt-guarded to one full cycle per day |
+| `sports-intelligence-sweep` | `25,55 * * * *` | Refreshes bookmaker odds and rebuilds canonical decisions for today, tomorrow, and day+2 inside the 45-minute basketball freshness boundary; fixture import and the seven-day slate remain receipt-guarded to one full cycle per day |
 | `sports-identity-enrichment-sweep` | `10 3 * * *` | Resolves the complete stored 400-day fixture horizon, including API-Football provider aliases, team crests, league artwork/flags, national-team countries, and domestic odds-only countries; then records a serialized receipt |
 | `football-settlement-sweep` | `*/30 * * * *` | Grades finished football picks |
 | `football-corpus-refresh-sweep` | `40 3 * * *` | Runs two independent EPL corpus lanes: refreshes the previous two complete UTC days with events/lineups/player statistics, then rotates through one bounded seven-day window of the most recently completed season to bootstrap historical player performances |
@@ -26,6 +26,12 @@ All sweeps need `ODDSPADI_SITE_URL` + `ODDSPADI_ADMIN_TOKEN` in Netlify env or
 they 503; the workers additionally need `SUPABASE_URL` + `SUPABASE_SECRET_KEY`
 (or `SUPABASE_SERVICE_ROLE_KEY`). The editorial worker also reads
 `OPENAI_API_KEY` and optional `OPENAI_EDITORIAL_MODEL` (default `gpt-5-mini`).
+
+The sports-intelligence worker records provider fixtures, fresh bookmaker-priced
+fixtures, and canonical analysed fixtures separately for each of its three UTC
+dates. `ODDSPADI_MIN_ANALYSED_FIXTURES_PER_DAY` defaults to `100`; missing the
+target is an explicit failed readiness stage, never a reason to create mock
+fixtures or relax the public positive-EV publication gate.
 
 The football corpus worker uses `ODDSPADI_FOOTBALL_CORPUS_LEAGUE_ID` (default
 EPL `39`), `ODDSPADI_FOOTBALL_CORPUS_FIXTURE_LIMIT` (default `12`), and

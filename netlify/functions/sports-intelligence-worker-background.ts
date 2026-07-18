@@ -28,15 +28,48 @@ type PipelineOperations = {
 const defaultOperations: PipelineOperations = {
   importFixtures: () => importFixtures(),
   refreshOdds: () => refreshOdds(),
-  runDailyEngine: () => runDailyEngine(),
+  runDailyEngine: () => runDailyEngine({ horizonDays: 3 }),
   generateWeeklyPredictions: () => generateWeeklyPredictions()
 };
 
-async function runStage(path: string, operation: PipelineOperation): Promise<{ path: string; ok: boolean; status: number; body: unknown }> {
+export function dailyCoverageGaps(
+  result: PipelineRunResult,
+  minimumAnalysedFixturesPerDate = 100,
+  expectedDates = 3
+): string[] {
+  const coverage = result.dateCoverage ?? [];
+  const gaps: string[] = [];
+  if (coverage.length < expectedDates) {
+    gaps.push(`Daily engine returned coverage for ${coverage.length}/${expectedDates} required UTC dates.`);
+  }
+  for (const day of coverage.slice(0, expectedDates)) {
+    if (day.providerBackedFixtures < minimumAnalysedFixturesPerDate) {
+      gaps.push(`${day.date}: ${day.providerBackedFixtures}/${minimumAnalysedFixturesPerDate} provider-backed fixtures.`);
+    }
+    if (day.bookmakerPricedFixtures < minimumAnalysedFixturesPerDate) {
+      gaps.push(`${day.date}: ${day.bookmakerPricedFixtures}/${minimumAnalysedFixturesPerDate} fixtures have fresh bookmaker prices.`);
+    }
+    if (day.analysedFixtures < minimumAnalysedFixturesPerDate) {
+      gaps.push(`${day.date}: ${day.analysedFixtures}/${minimumAnalysedFixturesPerDate} bookmaker-backed analyses.`);
+    }
+  }
+  return gaps;
+}
+
+async function runStage(
+  path: string,
+  operation: PipelineOperation,
+  minimumAnalysedFixturesPerDate?: number
+): Promise<{ path: string; ok: boolean; status: number; body: unknown }> {
   try {
     const result = await operation();
-    const ok = !["failed", "unavailable"].includes(result.run.status);
-    return { path, ok, status: ok ? result.run.status === "partial" ? 207 : 200 : 503, body: { success: ok, data: result } };
+    const coverageGaps = minimumAnalysedFixturesPerDate
+      ? dailyCoverageGaps(result, minimumAnalysedFixturesPerDate)
+      : [];
+    const terminalStatus = result.run.status === "completed" || result.run.status === "partial";
+    const ok = terminalStatus && !result.skippedOverlap && coverageGaps.length === 0;
+    const status = ok ? result.run.status === "partial" ? 207 : 200 : result.skippedOverlap ? 409 : 503;
+    return { path, ok, status, body: { success: ok, coverageGaps, data: result } };
   } catch (error) {
     return { path, ok: false, status: 500, body: { error: error instanceof Error ? error.message : "Pipeline stage failed." } };
   }
@@ -57,14 +90,18 @@ export function shouldRunFullCycle({ requested, now, fullRunHour, latestWeeklyRu
   return !(sameUtcDay && ["running", "completed", "partial", "empty"].includes(status ?? ""));
 }
 
-export async function runSportsIntelligenceCycle(fullCycle: boolean, operations: PipelineOperations = defaultOperations) {
+export async function runSportsIntelligenceCycle(
+  fullCycle: boolean,
+  operations: PipelineOperations = defaultOperations,
+  minimumAnalysedFixturesPerDate = 100
+) {
   const stages = [];
   if (fullCycle) stages.push(await runStage("import-fixtures", operations.importFixtures));
   stages.push(await runStage("refresh-odds", operations.refreshOdds));
   // Rebuild today's canonical decisions after every odds refresh. Import and
   // seven-day generation stay on the bounded daily full cycle, but a new price
   // must not wait until tomorrow before it reaches the public decision board.
-  stages.push(await runStage("run-daily-engine", operations.runDailyEngine));
+  stages.push(await runStage("run-daily-engine", operations.runDailyEngine, minimumAnalysedFixturesPerDate));
   if (fullCycle) {
     stages.push(await runStage("generate-weekly-predictions", operations.generateWeeklyPredictions));
   }
@@ -83,9 +120,13 @@ export default async function sportsIntelligenceWorker(request: Request, _contex
     ? configuredFullRunHour
     : 2;
   const now = new Date();
+  const configuredMinimum = Number(Netlify.env.get("ODDSPADI_MIN_ANALYSED_FIXTURES_PER_DAY") ?? "100");
+  const minimumAnalysedFixturesPerDate = Number.isInteger(configuredMinimum)
+    ? Math.max(1, Math.min(1000, configuredMinimum))
+    : 100;
   const latestWeeklyRun = requestedFullCycle ? null : await readLatestProviderRun(["generate-weekly-predictions"]);
   const fullCycle = shouldRunFullCycle({ requested: requestedFullCycle, now, fullRunHour, latestWeeklyRun });
-  const stages = await runSportsIntelligenceCycle(fullCycle);
+  const stages = await runSportsIntelligenceCycle(fullCycle, defaultOperations, minimumAnalysedFixturesPerDate);
   const success = stages.every((stage) => stage.ok);
   console.info(JSON.stringify({ event: "oddspadi-sports-intelligence-cycle", success, fullCycle, stages: stages.map(({ path, ok, status }) => ({ path, ok, status })) }));
   return Response.json({ success, mode: "sports-intelligence-cycle", fullCycle, stages }, { status: success ? 200 : 502 });

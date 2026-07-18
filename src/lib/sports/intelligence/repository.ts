@@ -2,7 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DecisionSummary, Match } from "@/lib/sports/types";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { refreshCanonicalDecision } from "@/lib/sports/prediction/canonicalDecision";
-import { buildSportsSlate, isStoredFixtureFresh, reconcileStoredFixtureStatus } from "./canonical";
+import {
+  buildSportsSlate,
+  DEFAULT_STORED_FIXTURE_IDENTITY_MAX_AGE_MS,
+  isStoredFixtureFresh,
+  reconcileStoredFixtureStatus
+} from "./canonical";
 import type {
   CanonicalDecision,
   CanonicalFixture,
@@ -36,6 +41,36 @@ function number(value: unknown): number | null {
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function oddsPriceMethod(value: unknown): CanonicalOddsSnapshot["priceMethod"] {
+  return value === "best-price-per-selection-v1" || value === "selected-coherent-quote" ? value : undefined;
+}
+
+function canonicalOddsSnapshotFromRow(row: Record<string, unknown>): CanonicalOddsSnapshot {
+  const metadata = record(row.metadata);
+  const provider = text(row.provider) ?? "unknown";
+  const capturedAt = text(row.observed_at) ?? text(row.captured_at) ?? new Date(0).toISOString();
+  const priceMethod = oddsPriceMethod(metadata.priceMethod);
+  return {
+    oddsSnapshotId: text(row.id),
+    fixtureId: text(row.fixture_external_id) ?? "unknown",
+    market: text(row.market) ?? "unknown",
+    selection: text(row.selection) ?? "unknown",
+    label: text(metadata.label) ?? text(row.selection) ?? "Selection",
+    decimalOdds: number(row.decimal_odds) ?? 0,
+    bookmaker: text(row.bookmaker) ?? provider,
+    // Legacy rows may have the provider's exact key but never infer an ID
+    // from a display name. An absent ID must keep best-price publication
+    // blocked rather than manufacturing provenance.
+    bookmakerId: text(metadata.bookmakerId) ?? text(metadata.bookmakerKey),
+    ...(priceMethod ? { priceMethod } : {}),
+    provider,
+    capturedAt,
+    source: text(row.source) ?? provider,
+    isLive: row.is_live === true,
+    expiresAt: text(row.expires_at) ?? capturedAt
+  };
 }
 
 export function identityArtworkMetadata(identity?: { logo?: string | null; flag?: string | null }): Record<string, string> {
@@ -364,7 +399,11 @@ export async function persistFixturesAndOdds({
         source: snapshot.source,
         is_live: snapshot.isLive,
         expires_at: snapshot.expiresAt,
-        metadata: { label: snapshot.label }
+        metadata: {
+          label: snapshot.label,
+          ...(text(snapshot.bookmakerId) ? { bookmakerId: text(snapshot.bookmakerId) } : {}),
+          ...(snapshot.priceMethod ? { priceMethod: snapshot.priceMethod } : {})
+        }
       };
     });
     const { data, error } = await client.from("op_odds_snapshots").insert(rows).select("id,market,selection,captured_at");
@@ -540,7 +579,7 @@ export async function readFixtureOddsHistory(
   try {
     const { data, error } = await client
       .from("op_odds_snapshots")
-      .select("id,fixture_external_id,provider,bookmaker,market,selection,decimal_odds,captured_at,source,is_live,expires_at,metadata")
+      .select("id,fixture_external_id,provider,bookmaker,market,selection,decimal_odds,observed_at,captured_at,source,is_live,expires_at,metadata")
       .eq("fixture_external_id", fixtureExternalId)
       .eq("is_live", false)
       .order("captured_at", { ascending: false })
@@ -558,7 +597,7 @@ export async function readFixtureOddsHistory(
     const rows = ((data ?? []) as Array<Record<string, unknown>>).filter((row) => {
       const metadata = record(row.metadata);
       const provider = text(row.provider)?.toLowerCase() ?? "";
-      const capturedAt = text(row.captured_at);
+      const capturedAt = text(row.observed_at) ?? text(row.captured_at);
       const decimalOdds = number(row.decimal_odds);
       return (
         !provider.includes("mock") &&
@@ -575,25 +614,7 @@ export async function readFixtureOddsHistory(
     const truncated = rows.length > FIXTURE_ODDS_HISTORY_LIMIT;
     const snapshots = rows
       .slice(0, FIXTURE_ODDS_HISTORY_LIMIT)
-      .map((row): CanonicalOddsSnapshot => {
-        const metadata = record(row.metadata);
-        const provider = text(row.provider) ?? "unknown";
-        const capturedAt = text(row.captured_at) as string;
-        return {
-          oddsSnapshotId: text(row.id),
-          fixtureId: text(row.fixture_external_id) as string,
-          market: text(row.market) as string,
-          selection: text(row.selection) as string,
-          label: text(metadata.label) ?? text(row.selection) as string,
-          decimalOdds: number(row.decimal_odds) as number,
-          bookmaker: text(row.bookmaker) ?? provider,
-          provider,
-          capturedAt,
-          source: text(row.source) ?? provider,
-          isLive: false,
-          expiresAt: text(row.expires_at) ?? capturedAt
-        };
-      })
+      .map(canonicalOddsSnapshotFromRow)
       .sort((left, right) => Date.parse(left.capturedAt) - Date.parse(right.capturedAt));
 
     return snapshots.length
@@ -671,7 +692,9 @@ export async function readStoredSlate({
   });
   const eligibleRows = includeSuspended ? providerRows : providerRows.filter((row) => row.status !== "suspended");
   const staleRows = eligibleRows.filter((row) => !isStoredFixtureFresh(text(row.last_synced_at), now, maxFixtureAgeMs));
-  const fixtureRows = eligibleRows.filter((row) => isStoredFixtureFresh(text(row.last_synced_at), now, maxFixtureAgeMs));
+  const identityMaxAgeMs = Math.max(maxFixtureAgeMs, DEFAULT_STORED_FIXTURE_IDENTITY_MAX_AGE_MS);
+  const expiredIdentityRows = eligibleRows.filter((row) => !isStoredFixtureFresh(text(row.last_synced_at), now, identityMaxAgeMs));
+  const fixtureRows = eligibleRows.filter((row) => isStoredFixtureFresh(text(row.last_synced_at), now, identityMaxAgeMs));
   const databaseFixtureIds = fixtureRows.map((row) => String(row.id));
   const teamExternalIds = [...new Set(fixtureRows.flatMap((row) => [text(row.home_team_external_id), text(row.away_team_external_id)]).filter((value): value is string => Boolean(value)))];
   const leagueExternalIds = [...new Set(fixtureRows.map((row) => text(row.league_external_id)).filter((value): value is string => Boolean(value)))];
@@ -684,7 +707,7 @@ export async function readStoredSlate({
     lastRun
   ] = await Promise.all([
     databaseFixtureIds.length
-      ? client.from("op_odds_snapshots").select("id,fixture_id,fixture_external_id,provider,bookmaker,market,selection,decimal_odds,captured_at,source,is_live,expires_at,metadata").in("fixture_id", databaseFixtureIds).order("captured_at", { ascending: false }).limit(10000)
+      ? client.from("op_odds_snapshots").select("id,fixture_id,fixture_external_id,provider,bookmaker,market,selection,decimal_odds,observed_at,captured_at,source,is_live,expires_at,metadata").in("fixture_id", databaseFixtureIds).order("captured_at", { ascending: false }).limit(10000)
       : Promise.resolve({ data: [], error: null }),
     databaseFixtureIds.length
       ? client.from("op_market_decisions").select("id,fixture_id,fixture_external_id,market,selection,odds_snapshot_id,model_version,engine_version,model_probability,implied_probability,no_vig_probability,value_edge,expected_value,confidence,risk,data_quality,evidence_quality,decision_status,public_status,reason,generated_at,expires_at,superseded_by,settlement_status,is_preliminary,provider").in("fixture_id", databaseFixtureIds).is("superseded_by", null).limit(10000)
@@ -708,23 +731,9 @@ export async function readStoredSlate({
 
   const latestOdds = new Map<string, CanonicalOddsSnapshot>();
   for (const row of (odds ?? []) as Array<Record<string, unknown>>) {
-    const metadata = record(row.metadata);
     const key = `${row.fixture_external_id}:${row.market}:${row.selection}`;
     if (latestOdds.has(key)) continue;
-    latestOdds.set(key, {
-      oddsSnapshotId: text(row.id),
-      fixtureId: String(row.fixture_external_id),
-      market: String(row.market),
-      selection: String(row.selection),
-      label: text(metadata.label) ?? String(row.selection),
-      decimalOdds: number(row.decimal_odds) ?? 0,
-      bookmaker: text(row.bookmaker) ?? text(row.provider) ?? "unknown",
-      provider: text(row.provider) ?? "unknown",
-      capturedAt: text(row.captured_at) ?? new Date().toISOString(),
-      source: text(row.source) ?? text(row.provider) ?? "unknown",
-      isLive: row.is_live === true,
-      expiresAt: text(row.expires_at) ?? new Date(0).toISOString()
-    });
+    latestOdds.set(key, canonicalOddsSnapshotFromRow(row));
   }
   const oddsByFixture = new Map<string, CanonicalOddsSnapshot[]>();
   for (const snapshot of latestOdds.values()) oddsByFixture.set(snapshot.fixtureId, [...(oddsByFixture.get(snapshot.fixtureId) ?? []), snapshot]);
@@ -784,10 +793,14 @@ export async function readStoredSlate({
       dataQuality: number(row.data_quality) ?? 0
     };
   });
-  const staleReason = staleRows.length
-    ? `${staleRows.length} stored fixture${staleRows.length === 1 ? " was" : "s were"} excluded because provider sync was older than ${Math.round(maxFixtureAgeMs / 60_000)} minutes.`
+  const retainedStaleRows = staleRows.length - expiredIdentityRows.length;
+  const staleReason = retainedStaleRows > 0
+    ? `${retainedStaleRows} stored fixture${retainedStaleRows === 1 ? " is" : "s are"} retained from the last provider receipt while its sync age exceeds ${Math.round(maxFixtureAgeMs / 60_000)} minutes; prices and live labels still require fresh evidence.`
     : null;
-  const providerStatus = staleRows.length
+  const expiredReason = expiredIdentityRows.length
+    ? `${expiredIdentityRows.length} stored fixture identit${expiredIdentityRows.length === 1 ? "y was" : "ies were"} excluded because provider sync exceeded ${Math.round(identityMaxAgeMs / 60_000)} minutes.`
+    : null;
+  const providerStatus = staleRows.length || expiredIdentityRows.length
     ? fixtures.length ? "partial" : "failed"
     : lastRun?.status ?? (fixtures.length ? "completed" : "empty");
   return buildSportsSlate({
@@ -798,7 +811,7 @@ export async function readStoredSlate({
     decisionSummariesByFixture,
     range: { from: from.slice(0, 10), to: new Date(new Date(toExclusive).getTime() - 1).toISOString().slice(0, 10) },
     providerStatus,
-    providerErrors: [...(lastRun?.errors ?? []), ...(staleReason ? [staleReason] : [])],
+    providerErrors: [...(lastRun?.errors ?? []), ...(staleReason ? [staleReason] : []), ...(expiredReason ? [expiredReason] : [])],
     lastRun
   });
 }

@@ -41,7 +41,9 @@ describe("fixture odds history", () => {
       {
         id: "odds-2", fixture_external_id: "api-football:9001", provider: "the-odds-api", bookmaker: "Book A",
         market: "match_winner", selection: "home", decimal_odds: 1.84, captured_at: "2026-07-14T10:00:00.000Z",
-        source: "the-odds-api", is_live: false, expires_at: "2026-07-14T11:00:00.000Z", metadata: { label: "Home" }
+        observed_at: "2026-07-14T10:02:00.000Z", source: "the-odds-api", is_live: false,
+        expires_at: "2026-07-14T11:00:00.000Z",
+        metadata: { label: "Home", bookmakerId: "book-a", priceMethod: "best-price-per-selection-v1" }
       },
       {
         id: "odds-1", fixture_external_id: "api-football:9001", provider: "the-odds-api", bookmaker: "Book A",
@@ -60,6 +62,13 @@ describe("fixture odds history", () => {
     expect(result.status).toBe("ready");
     expect(result.rowsRead).toBe(2);
     expect(result.snapshots.map((row) => row.decimalOdds)).toEqual([2.05, 1.84]);
+    expect(result.snapshots[0]).toMatchObject({ bookmakerId: null, capturedAt: "2026-07-14T08:00:00.000Z" });
+    expect(result.snapshots[0]?.priceMethod).toBeUndefined();
+    expect(result.snapshots[1]).toMatchObject({
+      bookmakerId: "book-a",
+      priceMethod: "best-price-per-selection-v1",
+      capturedAt: "2026-07-14T10:02:00.000Z"
+    });
     expect(query.eq).toHaveBeenCalledWith("fixture_external_id", "api-football:9001");
     expect(query.eq).toHaveBeenCalledWith("is_live", false);
   });

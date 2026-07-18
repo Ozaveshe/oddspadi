@@ -1,4 +1,4 @@
-import type { ConfidenceLevel, DecisionSummary, EvidenceQuality, RiskLevel, Sport } from "@/lib/sports/types";
+import type { ConfidenceLevel, DecisionSummary, EvidenceQuality, OddsMarket, RiskLevel, Sport } from "@/lib/sports/types";
 
 export type CanonicalFixtureStatus = "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "suspended";
 
@@ -30,6 +30,8 @@ export type CanonicalOddsSnapshot = {
   label: string;
   decimalOdds: number;
   bookmaker: string;
+  bookmakerId?: string | null;
+  priceMethod?: OddsMarket["priceMethod"];
   provider: string;
   capturedAt: string;
   source: string;
@@ -167,6 +169,12 @@ export type PipelineRunResult = {
   run: ProviderRunLog;
   slate: SportsSlate;
   rejectedMockFixtures: number;
+  dateCoverage: Array<{
+    date: string;
+    providerBackedFixtures: number;
+    bookmakerPricedFixtures: number;
+    analysedFixtures: number;
+  }>;
   sportCoverage?: Array<{
     sport: Sport;
     requestedDates: number;

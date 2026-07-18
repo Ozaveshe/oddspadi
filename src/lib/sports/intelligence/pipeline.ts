@@ -89,6 +89,47 @@ function dedupeMatches(matches: Match[]): Match[] {
   return [...new Map(matches.map((match) => [match.id, match])).values()].sort((left, right) => left.kickoffTime.localeCompare(right.kickoffTime));
 }
 
+function buildDateCoverage({
+  dates,
+  fixtures,
+  oddsByFixture,
+  decisionSummariesByFixture,
+  now
+}: {
+  dates: string[];
+  fixtures: CanonicalFixture[];
+  oddsByFixture: Map<string, CanonicalOddsSnapshot[]>;
+  decisionSummariesByFixture: Map<string, DecisionSummary>;
+  now: Date;
+}): PipelineRunResult["dateCoverage"] {
+  const nowMs = now.getTime();
+  return dates.map((date) => {
+    const dateFixtures = fixtures.filter((fixture) => fixture.kickoffAt.slice(0, 10) === date);
+    const pricedFixtureIds = new Set(
+      dateFixtures.flatMap((fixture) => {
+        const hasFreshBookmakerPrice = (oddsByFixture.get(fixture.fixtureId) ?? []).some((snapshot) =>
+          snapshot.bookmaker.trim().length > 0 &&
+          Boolean(snapshot.bookmakerId?.trim()) &&
+          Number.isFinite(snapshot.decimalOdds) &&
+          snapshot.decimalOdds > 1 &&
+          Date.parse(snapshot.expiresAt) > nowMs
+        );
+        return hasFreshBookmakerPrice ? [fixture.fixtureId] : [];
+      })
+    );
+    const analysedFixtures = dateFixtures.filter((fixture) =>
+      pricedFixtureIds.has(fixture.fixtureId) &&
+      (decisionSummariesByFixture.get(fixture.fixtureId)?.allMarketAnalyses.length ?? 0) > 0
+    ).length;
+    return {
+      date,
+      providerBackedFixtures: dateFixtures.length,
+      bookmakerPricedFixtures: pricedFixtureIds.size,
+      analysedFixtures
+    };
+  });
+}
+
 /** Preserve degraded provider states instead of collapsing them into success. */
 export function classifyProviderRunStatus({
   fixtures,
@@ -244,6 +285,7 @@ async function executePipeline({
       run,
       slate,
       rejectedMockFixtures: 0,
+      dateCoverage: dates.map((date) => ({ date, providerBackedFixtures: 0, bookmakerPricedFixtures: 0, analysedFixtures: 0 })),
       sportCoverage: sports.map((sport) => ({ sport, requestedDates: dates.length, providerBackedFixtures: 0, rejectedMockFixtures: 0 })),
       persisted: false,
       skippedOverlap: true
@@ -320,16 +362,18 @@ async function executePipeline({
   const status = classifyProviderRunStatus({ fixtures, errors, env });
   const providers = Array.from(new Set(fixtures.map((fixture) => fixture.provider))).sort();
   const valuePicksPublished = [...decisionSummariesByFixture.values()].filter((summary) => summary.publicStatus === "value_pick").length;
+  const dateCoverage = buildDateCoverage({ dates, fixtures, oddsByFixture, decisionSummariesByFixture, now });
+  const predictionsGenerated = dateCoverage.reduce((sum, coverage) => sum + coverage.analysedFixtures, 0);
   const finishedAt = new Date().toISOString();
   run = await finishProviderRun(run, {
     finishedAt,
     status,
     fixturesFound: fixtures.length,
     oddsFound: [...oddsByFixture.values()].reduce((sum, rows) => sum + rows.length, 0),
-    predictionsGenerated: decisionsByFixture.size,
+    predictionsGenerated,
     valuePicksPublished,
     errors
-  }, undefined, { sportCoverage: collected.sportCoverage });
+  }, undefined, { sportCoverage: collected.sportCoverage, dateCoverage });
   run = { ...run, providerName: providers.join(", ") || "configured-sports-providers" };
   const slate = buildSportsSlate({
     scope,
@@ -347,6 +391,7 @@ async function executePipeline({
     run,
     slate,
     rejectedMockFixtures: collected.rejectedMockFixtures,
+    dateCoverage,
     sportCoverage: collected.sportCoverage,
     persisted: shouldPersist && (fixtures.length === 0 || fixtureIds.size === fixtures.length) && !errors.some((error) => error.startsWith("Storage:")),
     skippedOverlap: false
@@ -388,6 +433,7 @@ export async function importFixtures({
 export async function runDailyEngine({
   now = new Date(),
   dayOffset = 0,
+  horizonDays = 1,
   sports,
   persist = true,
   env = process.env,
@@ -395,14 +441,16 @@ export async function runDailyEngine({
 }: {
   now?: Date;
   dayOffset?: number;
+  horizonDays?: number;
   sports?: Sport[];
   persist?: boolean;
   env?: Record<string, string | undefined>;
   dependencies?: IntelligencePipelineDependencies;
 } = {}): Promise<PipelineRunResult> {
+  const boundedHorizonDays = Math.floor(Math.max(1, Math.min(7, horizonDays)));
   return executePipeline({
     jobType: "run-daily-engine",
-    dates: utcDateWindow(now, 1, dayOffset),
+    dates: utcDateWindow(now, boundedHorizonDays, dayOffset),
     scope: "daily",
     sports: sports ?? configuredSports(env),
     generateDecisions: true,
@@ -416,20 +464,23 @@ export async function runDailyEngine({
 
 export async function refreshOdds({
   now = new Date(),
+  horizonDays = 3,
   sports,
   persist = true,
   env = process.env,
   dependencies = defaultDependencies
 }: {
   now?: Date;
+  horizonDays?: number;
   sports?: Sport[];
   persist?: boolean;
   env?: Record<string, string | undefined>;
   dependencies?: IntelligencePipelineDependencies;
 } = {}): Promise<PipelineRunResult> {
+  const boundedHorizonDays = Math.floor(Math.max(1, Math.min(7, horizonDays)));
   return executePipeline({
     jobType: "refresh-odds",
-    dates: utcDateWindow(now, 2),
+    dates: utcDateWindow(now, boundedHorizonDays),
     scope: "daily",
     sports: sports ?? configuredSports(env),
     generateDecisions: false,

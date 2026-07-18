@@ -16086,6 +16086,15 @@ describe("prediction utilities", () => {
     const fetchImpl = async (input: string | URL) => {
       const url = input.toString();
       calls.push(url);
+      if (url.includes("api.the-odds-api.com/v4/sports/?")) {
+        return new Response(
+          JSON.stringify([
+            { key: "tennis_atp_wimbledon", group: "Tennis", title: "ATP Wimbledon", active: true, has_outrights: false },
+            { key: "tennis_wta_wimbledon", group: "Tennis", title: "WTA Wimbledon", active: true, has_outrights: false }
+          ]),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
       if (url.includes("tennis_wta_wimbledon")) {
         return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
       }
@@ -16167,7 +16176,9 @@ describe("prediction utilities", () => {
 
     const [match] = await provider.getFixtures("2026-06-24", "tennis");
 
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
+    expect(calls.filter((url) => url.includes("/v4/sports/?"))).toHaveLength(1);
+    expect(calls.filter((url) => url.includes("/odds/"))).toHaveLength(2);
     expect(match.id).toBe("the-odds-api:odds-tennis-only-1");
     expect(match.dataSource?.kind).toBe("provider");
     expect(match.dataSource?.fixtureProvider).toBe("the-odds-api-events");

@@ -17,6 +17,9 @@ describe("The Odds API completed score bridge", () => {
   ] as const)("returns a finished %s fixture after live odds disappear", async (sport, sportKey, home, away, homeScore, awayScore) => {
     const fetchImpl = vi.fn(async (input: string | URL) => {
       const url = new URL(String(input));
+      if (url.pathname === "/v4/sports/") {
+        return Response.json([{ key: sportKey, active: true, has_outrights: false }]);
+      }
       if (url.pathname.endsWith("/odds/")) return Response.json([]);
       expect(url.pathname).toBe(`/v4/sports/${sportKey}/scores/`);
       expect(url.searchParams.get("daysFrom")).toBe("3");
@@ -56,7 +59,7 @@ describe("The Odds API completed score bridge", () => {
       score: { home: homeScore, away: awayScore },
       dataSource: { kind: "provider", fixtureProvider: "the-odds-api-scores", fixtureProviderId: "score-event-1" }
     });
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
   it("uses a ticket's exact tournament key even after active-key discovery loses it", async () => {

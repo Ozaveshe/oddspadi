@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { GET, POST } from "@/app/api/sports/decision/training/multi-sport-live-settlement-label-receipt/route";
 import { runMultiSportSettlementSweep } from "../../netlify/functions/multi-sport-settlement-sweep";
 import { runMultiSportSettlementWorker } from "../../netlify/functions/multi-sport-settlement-worker-background";
 
@@ -49,5 +50,22 @@ describe("multi-sport settlement scheduler", () => {
     });
     expect(response.status).toBe(401);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("keeps invalid sports out of previews and requires admin authorization for settlement writes", async () => {
+    const getResponse = await GET(
+      new Request(
+        "http://127.0.0.1:3025/api/sports/decision/training/multi-sport-live-settlement-label-receipt?sport=football"
+      )
+    );
+    expect(getResponse.status).toBe(400);
+
+    const postResponse = await POST(
+      new Request(
+        "http://127.0.0.1:3025/api/sports/decision/training/multi-sport-live-settlement-label-receipt?sport=basketball",
+        { method: "POST" }
+      )
+    );
+    expect(postResponse.status).toBe(401);
   });
 });

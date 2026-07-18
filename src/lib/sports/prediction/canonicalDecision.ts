@@ -237,6 +237,7 @@ function classifyAnalysis({
   const edgeBookmakerName = edge.bookmaker?.name?.trim() ?? "";
   const snapshotBookmakerId = snapshot?.bookmakerId?.trim() ?? "";
   const edgePriceMs = finiteMs(edge.priceObservedAt);
+  const priceMethodPasses = !bestPriceIntegrityRequired || snapshot?.priceMethod === edge.priceMethod;
   const sourcePasses = !bestPriceIntegrityRequired || (
     Boolean(edgeBookmakerId && edgeBookmakerName) &&
     Boolean(snapshotBookmakerId) &&
@@ -258,7 +259,7 @@ function classifyAnalysis({
     edge.consensusMaxProbabilitySpread >= 0 &&
     edge.consensusMaxProbabilitySpread <= thresholds.maximumConsensusProbabilitySpread
   );
-  const executionIntegrityPasses = sourcePasses && timestampPasses && consensusDepthPasses && consensusDisagreementPasses;
+  const executionIntegrityPasses = priceMethodPasses && sourcePasses && timestampPasses && consensusDepthPasses && consensusDisagreementPasses;
   const economicConfidenceTracked = edge.economicConfidence !== undefined;
   const economicConfidenceVerified = !economicConfidenceTracked || edge.economicConfidence?.status === "verified";
   const economicEdgePasses = !economicConfidenceTracked || (
@@ -277,6 +278,7 @@ function classifyAnalysis({
   if (fixtureSuspended) blockers.push("fixture is not open for pre-match publication");
   if (!snapshot) blockers.push("odds snapshot is missing");
   else if (stale) blockers.push("odds snapshot is stale");
+  if (!priceMethodPasses) blockers.push("best-price method is missing or mismatched on the canonical odds snapshot");
   if (!sourcePasses) blockers.push("best-price source does not match the canonical bookmaker snapshot");
   if (!timestampPasses) blockers.push("best-price timestamp is missing, mismatched, or ahead of the decision clock");
   if (!consensusDepthPasses) blockers.push(`best-price comparison needs at least ${thresholds.minimumConsensusBookmakers} independent bookmakers`);

@@ -279,6 +279,11 @@ type OddsEventCacheEntry = {
   events: Promise<OddsApiEvent[]>;
 };
 
+type OddsEventIdentityCacheEntry = {
+  expiresAt: number;
+  event: OddsApiEvent | null;
+};
+
 type OddsSportsCacheEntry = {
   expiresAt: number;
   sports: Promise<OddsApiSport[]>;
@@ -1987,8 +1992,11 @@ function oddsSportKeyPrefix(sport: Extract<Sport, "football" | "basketball" | "t
 }
 
 function defaultOddsRegionsForSport(sport: Extract<Sport, "football" | "basketball" | "tennis">): string {
-  if (sport === "basketball") return "us,uk,eu";
-  return "uk,eu";
+  // The Odds API charges once per market per region. One home-market region is
+  // the safe economic default; operators can explicitly widen bookmaker depth
+  // with ODDS_API_REGIONS when the paid quota supports it.
+  if (sport === "basketball") return "us";
+  return "uk";
 }
 
 const FOOTBALL_EVENT_MARKETS = new Set(["btts", "alternate_totals", "double_chance", "draw_no_bet"]);
@@ -2006,6 +2014,25 @@ function sportForOddsEvent(event: OddsApiEvent): Extract<Sport, "football" | "ba
   if (sportKey.startsWith("basketball_")) return "basketball";
   if (sportKey.startsWith("tennis_")) return "tennis";
   return "football";
+}
+
+function sportForOddsSportKey(sportKey: string): Extract<Sport, "football" | "basketball" | "tennis"> | null {
+  const normalized = sportKey.trim().toLowerCase();
+  if (normalized.startsWith("soccer_")) return "football";
+  if (normalized.startsWith("basketball_")) return "basketball";
+  if (normalized.startsWith("tennis_")) return "tennis";
+  return null;
+}
+
+function oddsMatchIdentity(matchId: string): { eventId: string; sportKey: string | null } | null {
+  if (!matchId.startsWith("the-odds-api:")) return null;
+  const identity = matchId.slice("the-odds-api:".length).trim();
+  if (!identity) return null;
+  const separator = identity.indexOf(":");
+  if (separator <= 0) return { eventId: identity, sportKey: null };
+  const sportKey = identity.slice(0, separator).trim();
+  const eventId = identity.slice(separator + 1).trim();
+  return eventId && sportForOddsSportKey(sportKey) ? { eventId, sportKey } : { eventId: identity, sportKey: null };
 }
 
 function clampRange(value: number, min: number, max: number): number {
@@ -2100,6 +2127,8 @@ const unavailableSportsDataProvider: SportsDataProvider = {
 
 export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private readonly oddsEventsCache = new Map<string, OddsEventCacheEntry>();
+  private readonly oddsRawFeedCache = new Map<string, OddsEventCacheEntry>();
+  private readonly oddsEventIdentityCache = new Map<string, OddsEventIdentityCacheEntry>();
   private oddsSportsCache: OddsSportsCacheEntry | null = null;
   private readonly fixtureCache = new Map<string, FixtureCacheEntry>();
   private readonly matchCache = new Map<string, MatchCacheEntry>();
@@ -2212,26 +2241,18 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   ): Promise<string[]> {
     const configured = explicitOddsSportKeys(this.env, sport);
     if (sport === "football") return this.activeFootballOddsSportKeys(configured);
-    if (configured.length) return configured;
-    if (sport === "basketball") {
-      const active = await this.activeOddsSportKeys();
-      const discovered = active
-        ? Array.from(active)
-            .filter((key) => key.startsWith(oddsSportKeyPrefix(sport)))
-            .slice(0, 8)
-        : [];
-      return discovered.length ? discovered : fallbackOddsSportKeys(this.env, sport);
-    }
-    if (sport !== "tennis") return fallbackOddsSportKeys(this.env, sport);
-
     const prefix = oddsSportKeyPrefix(sport);
     const active = await this.activeOddsSportKeys();
-    const discovered = active
-      ? Array.from(active)
-          .filter((key) => key.startsWith(prefix))
-          .slice(0, 8)
-      : [];
-    return discovered.length ? discovered : fallbackOddsSportKeys(this.env, sport);
+    if (!active) return (configured.length ? configured : fallbackOddsSportKeys(this.env, sport)).slice(0, 8);
+
+    // Basketball and tennis keys are seasonal. Keep configured, currently
+    // active keys first, then back-fill the remaining active catalogue keys so
+    // an NBA/Wimbledon preference cannot hide WNBA, Summer League, or the next
+    // tournament after the preferred competition goes dormant.
+    const preferred = configured.filter((key) => active.has(key));
+    const discovered = Array.from(active).filter((key) => key.startsWith(prefix));
+    const live = Array.from(new Set([...preferred, ...discovered])).slice(0, 8);
+    return live.length ? live : (configured.length ? configured : fallbackOddsSportKeys(this.env, sport)).slice(0, 8);
   }
 
   async getFixtures(date: string, sport: Sport, readOptions: ProviderFixtureReadOptions = {}): Promise<Match[]> {
@@ -2763,9 +2784,9 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     }
 
     if (matchId.startsWith("the-odds-api:")) {
-      const eventId = matchId.replace("the-odds-api:", "");
-      if (!firstEnv(this.env, ["THE_ODDS_API_KEY", "ODDS_API_KEY"]) || !eventId) return null;
-      const event = await this.getOddsEventById(eventId);
+      const identity = oddsMatchIdentity(matchId);
+      if (!identity) return null;
+      const event = await this.getOddsEventById(identity.eventId, identity.sportKey);
       if (!event) return null;
       const date = cleanText(event.commence_time).slice(0, 10) || new Date().toISOString().slice(0, 10);
       const sport = sportForOddsEvent(event);
@@ -2775,8 +2796,13 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
           : sport === "tennis"
             ? oddsBackedTennisFixturesFromEvents(date, [event], await this.getHistoricalTennisStrengths())
             : oddsBackedFootballFixturesFromEvents(date, [event], await this.getHistoricalFootballRatings());
-      const match = matches.find((candidate) => candidate.id === matchId) ?? null;
-      if (match) setBoundedCache(this.matchCache, matchId, { expiresAt: Date.now() + oddsCacheTtlMs(this.env), match });
+      const canonicalMatchId = `the-odds-api:${identity.eventId}`;
+      const match = matches.find((candidate) => candidate.id === canonicalMatchId) ?? null;
+      if (match) {
+        const entry = { expiresAt: Date.now() + oddsCacheTtlMs(this.env), match };
+        setBoundedCache(this.matchCache, canonicalMatchId, entry);
+        if (matchId !== canonicalMatchId) setBoundedCache(this.matchCache, matchId, entry);
+      }
       return match;
     }
 
@@ -2888,39 +2914,58 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     return oddsMarketsByEvent(events, sport);
   }
 
-  private async getOddsEventById(eventId: string): Promise<OddsApiEvent | null> {
-    const apiKey = firstEnv(this.env, ["THE_ODDS_API_KEY", "ODDS_API_KEY"]);
-    if (!apiKey) return null;
-    const sports: Array<Extract<Sport, "football" | "basketball" | "tennis">> = ["football", "basketball", "tennis"];
-    const candidates = (
-      await Promise.all(
-        sports.map(async (sport) => (await this.getOddsSportKeys(sport)).map((sportKey) => ({ sport, sportKey })))
-      )
-    ).flat();
-    const cacheKey = `event:${eventId}:${candidates.map(({ sportKey }) => sportKey).join(",")}`;
-    const cached = this.oddsEventsCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) return (await cached.events)[0] ?? null;
+  private rememberOddsEvent(event: OddsApiEvent, fallbackSportKey = ""): OddsApiEvent {
+    const eventId = cleanText(event.id);
+    const sportKey = cleanText(event.sport_key) || cleanText(fallbackSportKey);
+    const normalized = sportKey && !cleanText(event.sport_key) ? { ...event, sport_key: sportKey } : event;
+    if (!eventId || !sportKey) return normalized;
+    const entry = { expiresAt: Date.now() + oddsCacheTtlMs(this.env), event: normalized };
+    setBoundedCache(this.oddsEventIdentityCache, `exact:${sportKey}:${eventId}`, entry);
+    setBoundedCache(this.oddsEventIdentityCache, `opaque:${eventId}`, entry);
+    return normalized;
+  }
 
-    const events = (async () => {
-      for (const { sport, sportKey } of candidates) {
-        const endpoint = new URL(
-          `https://api.the-odds-api.com/v4/sports/${encodeURIComponent(sportKey)}/events/${encodeURIComponent(eventId)}/odds`
-        );
-        endpoint.searchParams.set("apiKey", apiKey);
-        endpoint.searchParams.set("regions", this.env.ODDS_API_REGIONS?.trim() || defaultOddsRegionsForSport(sport));
-        endpoint.searchParams.set(
-          "markets",
-          sport === "football" ? ["h2h", "totals", configuredFootballEventMarkets(this.env)].filter(Boolean).join(",") : "h2h,spreads,totals"
-        );
-        endpoint.searchParams.set("oddsFormat", "decimal");
-        endpoint.searchParams.set("dateFormat", "iso");
-        const event = (await this.limitedFetch(endpoint)) as OddsApiEvent | null;
-        if (cleanText(event?.id) === eventId) return [{ ...event, sport_key: cleanText(event?.sport_key) || sportKey }];
-      }
-      return [];
-    })();
-    setBoundedCache(this.oddsEventsCache, cacheKey, { expiresAt: Date.now() + oddsCacheTtlMs(this.env), events });
-    return (await events)[0] ?? null;
+  /**
+   * Event-detail odds are billed by region and market. Only request one when
+   * the caller carries the exact provider sport_key. Legacy opaque IDs may be
+   * resolved from an already-read feed, but never by probing football,
+   * basketball, and tennis keys until one happens to match.
+   */
+  private async getOddsEventById(eventId: string, sportKey: string | null = null): Promise<OddsApiEvent | null> {
+    const cacheKey = sportKey ? `exact:${sportKey}:${eventId}` : `opaque:${eventId}`;
+    const cached = this.oddsEventIdentityCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.event;
+
+    const expiresAt = Date.now() + oddsCacheTtlMs(this.env);
+    if (!sportKey) {
+      setBoundedCache(this.oddsEventIdentityCache, cacheKey, { expiresAt, event: null });
+      return null;
+    }
+
+    const sport = sportForOddsSportKey(sportKey);
+    const apiKey = firstEnv(this.env, ["THE_ODDS_API_KEY", "ODDS_API_KEY"]);
+    if (!sport || !apiKey) {
+      setBoundedCache(this.oddsEventIdentityCache, cacheKey, { expiresAt, event: null });
+      return null;
+    }
+
+    const endpoint = new URL(
+      `https://api.the-odds-api.com/v4/sports/${encodeURIComponent(sportKey)}/events/${encodeURIComponent(eventId)}/odds`
+    );
+    endpoint.searchParams.set("apiKey", apiKey);
+    endpoint.searchParams.set("regions", this.env.ODDS_API_REGIONS?.trim() || defaultOddsRegionsForSport(sport));
+    endpoint.searchParams.set(
+      "markets",
+      sport === "football" ? ["h2h", "totals", configuredFootballEventMarkets(this.env)].filter(Boolean).join(",") : "h2h,spreads,totals"
+    );
+    endpoint.searchParams.set("oddsFormat", "decimal");
+    endpoint.searchParams.set("dateFormat", "iso");
+    const response = (await this.limitedFetch(endpoint)) as OddsApiEvent | null;
+    const event = response && cleanText(response.id) === eventId
+      ? this.rememberOddsEvent({ ...response, sport_key: cleanText(response.sport_key) || sportKey }, sportKey)
+      : null;
+    if (!event) setBoundedCache(this.oddsEventIdentityCache, cacheKey, { expiresAt, event: null });
+    return event;
   }
 
   private async getCurrentOddsEvents(date: string, sport: Extract<Sport, "football" | "basketball" | "tennis">): Promise<OddsApiEvent[]> {
@@ -2993,16 +3038,34 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     markets: string;
     historicalEnabled: boolean;
   }): Promise<OddsApiEvent[]> {
-    const endpoint = new URL(`https://api.the-odds-api.com/v4/sports/${encodeURIComponent(sportKey)}/odds/`);
-    endpoint.searchParams.set("apiKey", apiKey);
-    endpoint.searchParams.set("regions", regions);
-    endpoint.searchParams.set("markets", markets);
-    endpoint.searchParams.set("oddsFormat", "decimal");
-    endpoint.searchParams.set("dateFormat", "iso");
-    const events = (await this.limitedFetch(endpoint)) as OddsApiEvent[] | null;
-    const sameDateEvents = Array.isArray(events)
-      ? events.filter((event) => cleanText(event.commence_time).startsWith(date) && cleanText(event.home_team) && cleanText(event.away_team))
-      : [];
+    const rawCacheKey = [sportKey, regions, markets].join(":");
+    const cached = this.oddsRawFeedCache.get(rawCacheKey);
+    let currentEvents: Promise<OddsApiEvent[]>;
+    if (cached && cached.expiresAt > Date.now()) {
+      currentEvents = cached.events;
+    } else {
+      const endpoint = new URL(`https://api.the-odds-api.com/v4/sports/${encodeURIComponent(sportKey)}/odds/`);
+      endpoint.searchParams.set("apiKey", apiKey);
+      endpoint.searchParams.set("regions", regions);
+      endpoint.searchParams.set("markets", markets);
+      endpoint.searchParams.set("oddsFormat", "decimal");
+      endpoint.searchParams.set("dateFormat", "iso");
+      currentEvents = this.limitedFetch(endpoint).then((payload) =>
+        Array.isArray(payload)
+          ? payload
+              .filter((event): event is OddsApiEvent => Boolean(event) && typeof event === "object")
+              .map((event) => this.rememberOddsEvent(event, sportKey))
+          : []
+      );
+      currentEvents.catch(() => {
+        if (this.oddsRawFeedCache.get(rawCacheKey)?.events === currentEvents) this.oddsRawFeedCache.delete(rawCacheKey);
+      });
+      setBoundedCache(this.oddsRawFeedCache, rawCacheKey, { expiresAt: Date.now() + oddsCacheTtlMs(this.env), events: currentEvents });
+    }
+
+    const sameDateEvents = (await currentEvents).filter(
+      (event) => cleanText(event.commence_time).startsWith(date) && cleanText(event.home_team) && cleanText(event.away_team)
+    );
     if (sameDateEvents.length) return sameDateEvents;
     if (!historicalEnabled) return [];
 

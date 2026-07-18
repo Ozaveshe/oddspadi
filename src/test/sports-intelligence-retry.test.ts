@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { runSportsIntelligenceCycle, shouldRunFullCycle } from "../../netlify/functions/sports-intelligence-worker-background";
+import { dailyCoverageGaps, runSportsIntelligenceCycle, shouldRunFullCycle } from "../../netlify/functions/sports-intelligence-worker-background";
 import { config as sweepConfig } from "../../netlify/functions/sports-intelligence-sweep";
 
 describe("sports intelligence full-cycle retry", () => {
   const now = new Date("2026-07-16T06:25:00.000Z");
+  const healthyDateCoverage = ["2026-07-16", "2026-07-17", "2026-07-18"].map((date) => ({
+    date,
+    providerBackedFixtures: 100,
+    bookmakerPricedFixtures: 100,
+    analysedFixtures: 100
+  }));
 
   it("refreshes odds inside the narrowest public freshness boundary", () => {
     expect(sweepConfig.schedule).toBe("25,55 * * * *");
@@ -27,7 +33,7 @@ describe("sports intelligence full-cycle retry", () => {
     const calls: string[] = [];
     const result = (jobType: string) => async () => {
       calls.push(jobType);
-      return { run: { jobType, status: "completed" } } as never;
+      return { run: { jobType, status: "completed" }, dateCoverage: healthyDateCoverage, skippedOverlap: false } as never;
     };
     const stages = await runSportsIntelligenceCycle(true, {
       importFixtures: result("import-fixtures"),
@@ -44,7 +50,7 @@ describe("sports intelligence full-cycle retry", () => {
     const calls: string[] = [];
     const result = (jobType: string) => async () => {
       calls.push(jobType);
-      return { run: { jobType, status: "completed" } } as never;
+      return { run: { jobType, status: "completed" }, dateCoverage: healthyDateCoverage, skippedOverlap: false } as never;
     };
 
     await runSportsIntelligenceCycle(false, {
@@ -55,5 +61,17 @@ describe("sports intelligence full-cycle retry", () => {
     });
 
     expect(calls).toEqual(["refresh-odds", "run-daily-engine"]);
+  });
+
+  it("fails the rolling production gate below 100 priced analyses on any required date", () => {
+    const result = {
+      dateCoverage: healthyDateCoverage.map((coverage, index) => index === 1 ? { ...coverage, bookmakerPricedFixtures: 99, analysedFixtures: 99 } : coverage)
+    } as never;
+
+    expect(dailyCoverageGaps(result)).toEqual([
+      "2026-07-17: 99/100 fixtures have fresh bookmaker prices.",
+      "2026-07-17: 99/100 bookmaker-backed analyses."
+    ]);
+    expect(dailyCoverageGaps({ dateCoverage: healthyDateCoverage } as never)).toEqual([]);
   });
 });

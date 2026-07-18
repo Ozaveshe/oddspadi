@@ -7,6 +7,7 @@ import { buildCanonicalDecision, oddsSnapshotsFromMatch } from "@/lib/sports/pre
 import {
   buildCanonicalDecisions,
   buildSportsSlate,
+  DEFAULT_STORED_FIXTURE_IDENTITY_MAX_AGE_MS,
   isStoredFixtureFresh,
   normalizeCanonicalFixture,
   normalizeOddsSnapshots,
@@ -32,6 +33,16 @@ async function providerMatch({
     id,
     kickoffTime,
     dataQualityScore: 0.9,
+    oddsMarkets: base.oddsMarkets.map((market) => ({
+      ...market,
+      bookmaker: { id: "provider-book", name: "Provider Book" },
+      priceMethod: "selected-coherent-quote",
+      selections: market.selections.map((selection) => ({
+        ...selection,
+        bookmaker: { id: "provider-book", name: "Provider Book" },
+        observedAt: oddsCapturedAt
+      }))
+    })),
     dataSource: {
       kind: "provider",
       fixtureProvider: "api-football",
@@ -195,6 +206,8 @@ describe("production daily sports intelligence", () => {
     expect(isStoredFixtureFresh("2026-07-16T05:59:59.000Z", now)).toBe(false);
     expect(isStoredFixtureFresh("2026-07-16T13:00:00.000Z", now)).toBe(false);
     expect(isStoredFixtureFresh(null, now)).toBe(false);
+    expect(isStoredFixtureFresh("2026-07-15T11:00:01.000Z", now, DEFAULT_STORED_FIXTURE_IDENTITY_MAX_AGE_MS)).toBe(true);
+    expect(isStoredFixtureFresh("2026-07-15T09:59:59.000Z", now, DEFAULT_STORED_FIXTURE_IDENTITY_MAX_AGE_MS)).toBe(false);
   });
 
   it("suspends a stale stored live label even when a partial score was retained", () => {
@@ -270,6 +283,62 @@ describe("production daily sports intelligence", () => {
     expect(result.slate.summary.fixturesFound).toBe(1);
     expect(result.slate.summary.predictionsGenerated).toBe(0);
     expect(getPredictions).not.toHaveBeenCalled();
+    expect(result.dateCoverage.map((coverage) => coverage.date)).toEqual(["2026-07-13", "2026-07-14", "2026-07-15"]);
+  });
+
+  it("builds bookmaker-backed analyses for today, tomorrow, and day two in one canonical run", async () => {
+    const requestedDates: string[] = [];
+    const result = await runDailyEngine({
+      now: new Date("2026-07-13T12:05:00.000Z"),
+      horizonDays: 3,
+      sports: ["football"],
+      persist: false,
+      env: { NODE_ENV: "test", API_FOOTBALL_KEY: "configured" },
+      dependencies: {
+        getFixtures: async () => [],
+        getPredictions: async (date) => {
+          requestedDates.push(date);
+          const match = await providerMatch({
+            id: `api-football:${date}`,
+            kickoffTime: `${date}T18:00:00.000Z`,
+            oddsCapturedAt: "2026-07-13T12:00:00.000Z"
+          });
+          return [{ match, prediction: predictionFor(match) }];
+        }
+      }
+    });
+
+    expect(requestedDates).toEqual(["2026-07-13", "2026-07-14", "2026-07-15"]);
+    expect(result.dateCoverage).toEqual([
+      { date: "2026-07-13", providerBackedFixtures: 1, bookmakerPricedFixtures: 1, analysedFixtures: 1 },
+      { date: "2026-07-14", providerBackedFixtures: 1, bookmakerPricedFixtures: 1, analysedFixtures: 1 },
+      { date: "2026-07-15", providerBackedFixtures: 1, bookmakerPricedFixtures: 1, analysedFixtures: 1 }
+    ]);
+  });
+
+  it("does not count a generic provider label as bookmaker-backed coverage", async () => {
+    const pricedMatch = await providerMatch();
+    const match = {
+      ...pricedMatch,
+      oddsMarkets: pricedMatch.oddsMarkets.map(({ bookmaker: _marketBookmaker, ...market }) => ({
+        ...market,
+        selections: market.selections.map(({ bookmaker: _selectionBookmaker, ...selection }) => selection)
+      }))
+    };
+    const result = await runDailyEngine({
+      now: new Date("2026-07-13T12:05:00.000Z"),
+      sports: ["football"],
+      persist: false,
+      env: { NODE_ENV: "test", API_FOOTBALL_KEY: "configured" },
+      dependencies: {
+        getFixtures: async () => [],
+        getPredictions: async () => [{ match, prediction: predictionFor(match) }]
+      }
+    });
+
+    expect(result.dateCoverage).toEqual([
+      { date: "2026-07-13", providerBackedFixtures: 1, bookmakerPricedFixtures: 0, analysedFixtures: 0 }
+    ]);
   });
 
   it("reports sport coverage loss when a configured provider silently falls back to mocks", async () => {
@@ -288,11 +357,11 @@ describe("production daily sports intelligence", () => {
 
     expect(result.run.status).toBe("partial");
     expect(result.run.errors).toContain(
-      "tennis: no provider-backed fixtures returned across 2 requested day(s); rejected 1 fallback mock fixture(s)."
+      "tennis: no provider-backed fixtures returned across 3 requested day(s); rejected 1 fallback mock fixture(s)."
     );
     expect(result.sportCoverage).toEqual([
-      { sport: "football", requestedDates: 2, providerBackedFixtures: 1, rejectedMockFixtures: 0 },
-      { sport: "tennis", requestedDates: 2, providerBackedFixtures: 0, rejectedMockFixtures: 1 }
+      { sport: "football", requestedDates: 3, providerBackedFixtures: 1, rejectedMockFixtures: 0 },
+      { sport: "tennis", requestedDates: 3, providerBackedFixtures: 0, rejectedMockFixtures: 1 }
     ]);
   });
 
