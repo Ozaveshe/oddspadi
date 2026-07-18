@@ -5,7 +5,7 @@ import type { ActiveCalibrationPromotion } from "@/lib/sports/prediction/decisio
 import { applyLearnedProbabilityCalibration } from "@/lib/sports/prediction/learnedProbabilityCalibration";
 import { classifyPredictionOutcomeTransition, isPredictionOutcomeIdempotencyConflict } from "@/lib/sports/prediction/decisionOutcomes";
 import type { TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
-import type { DecisionLearningProfile, PredictionMarket } from "@/lib/sports/types";
+import type { CalibrationDriftReceipt, DecisionLearningProfile, PredictionMarket } from "@/lib/sports/types";
 import { runtimeModelIdentityReceipt, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 
 const FOOTBALL_RUNTIME_MODEL_KEY = runtimeModelKey("football");
@@ -280,6 +280,8 @@ function promotion(modelKey = FOOTBALL_RUNTIME_MODEL_KEY, engineVersion = "decis
     candidate: {
       id: "candidate-1",
       source: "settled-outcomes",
+      windowStart: "2026-07-01T12:00:00.000Z",
+      windowEnd: "2026-08-21T12:00:00.000Z",
       sampleSize: 40,
       settledSize: 40,
       outcomeHash: "fnv1a-test",
@@ -301,6 +303,60 @@ function promotion(modelKey = FOOTBALL_RUNTIME_MODEL_KEY, engineVersion = "decis
       ],
       metrics: { promotionReadiness: { status: "ready-shadow-review" } }
     }
+  };
+}
+
+function passingDriftReceipt(overrides: Partial<CalibrationDriftReceipt> = {}): CalibrationDriftReceipt {
+  const metrics = {
+    sampleSize: 40,
+    windowStart: "2026-08-22T12:00:00.000Z",
+    windowEnd: "2026-08-30T12:00:00.000Z",
+    brierScore: 0.2,
+    logLoss: 0.61,
+    expectedCalibrationError: 0.04,
+    brierSkillScore: 0.1,
+    roiYield: 0.03
+  };
+  return {
+    version: "live-calibration-drift-v1",
+    status: "pass",
+    eligibleForLive: true,
+    sport: "football",
+    modelKey: FOOTBALL_RUNTIME_MODEL_KEY,
+    engineVersion: "decision-engine-v1",
+    promotionId: "promotion-1",
+    candidateId: "candidate-1",
+    promotionApprovedAt: "2026-08-21T12:00:00.000Z",
+    monitoringWindowStart: "2026-08-21T12:00:00.000Z",
+    asOf: "2026-08-30T13:00:00.000Z",
+    minimumSettledSize: 30,
+    monitoringWindowSize: 100,
+    maximumPromotionAgeDays: 45,
+    maximumOutcomeAgeDays: 7,
+    baseline: metrics,
+    current: metrics,
+    earlier: { ...metrics, sampleSize: 20, windowEnd: "2026-08-26T12:00:00.000Z" },
+    recent: { ...metrics, sampleSize: 20, windowStart: "2026-08-27T12:00:00.000Z" },
+    deltas: {
+      brierScore: 0,
+      logLoss: 0,
+      expectedCalibrationError: 0,
+      recentBrierFromBaseline: 0,
+      recentBrierFromEarlier: 0,
+      probabilityPopulationStabilityIndex: 0.02
+    },
+    thresholds: {
+      maximumBrierDelta: 0.05,
+      maximumLogLossDelta: 0.12,
+      maximumCalibrationError: 0.1,
+      maximumRecentBrierDelta: 0.07,
+      maximumRecentVsEarlierBrierDelta: 0.06,
+      maximumProbabilityPopulationStabilityIndex: 0.25
+    },
+    latestOutcomeAt: "2026-08-30T12:00:00.000Z",
+    blockers: [],
+    notes: [],
+    ...overrides
   };
 }
 
@@ -350,6 +406,57 @@ describe("calibration promotion safety", () => {
     expect(active.calibrationPromotion).toMatchObject({ id: "promotion-1", candidateId: "candidate-1" });
     expect(mismatched.active).toBe(false);
     expect(mismatched.reason).toContain("model-bound calibration promotion");
+  });
+
+  it("requires an exact passing out-of-sample drift receipt for production activation", () => {
+    const snapshot = readySnapshot();
+    const activePromotion = promotion();
+    const missing = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion,
+      requireDurablePromotion: true,
+      requireCalibrationDrift: true
+    });
+    const passing = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion,
+      requireDurablePromotion: true,
+      calibrationDriftReceipt: passingDriftReceipt(),
+      requireCalibrationDrift: true
+    });
+    const driftedReceipt = passingDriftReceipt({
+      status: "drifted",
+      eligibleForLive: false,
+      blockers: ["Recent Brier deterioration exceeds the governed threshold."]
+    });
+    const drifted = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion,
+      requireDurablePromotion: true,
+      calibrationDriftReceipt: driftedReceipt,
+      requireCalibrationDrift: true
+    });
+    const wrongPromotion = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion,
+      requireDurablePromotion: true,
+      calibrationDriftReceipt: passingDriftReceipt({ promotionId: "promotion-other" }),
+      requireCalibrationDrift: true
+    });
+    const wrongMonitoringBoundary = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion,
+      requireDurablePromotion: true,
+      calibrationDriftReceipt: passingDriftReceipt({ monitoringWindowStart: "2026-08-20T12:00:00.000Z" }),
+      requireCalibrationDrift: true
+    });
+
+    expect(missing.active).toBe(false);
+    expect(missing.reason).toContain("lacks an exact current drift receipt");
+    expect(passing.active).toBe(true);
+    expect(passing.calibrationDriftStatus).toBe("pass");
+    expect(passing.calibrationDriftReceipt).toMatchObject({ current: { sampleSize: 40 } });
+    expect(drifted.active).toBe(false);
+    expect(drifted.reason).toContain("current calibration drift receipt is drifted");
+    expect(wrongPromotion.active).toBe(false);
+    expect(wrongPromotion.calibrationDriftReceipt).toBeNull();
+    expect(wrongMonitoringBoundary.active).toBe(false);
+    expect(wrongMonitoringBoundary.calibrationDriftReceipt).toBeNull();
   });
 
   it("keeps benchmark and receipt-free runtime-key backtests out of live learning", () => {

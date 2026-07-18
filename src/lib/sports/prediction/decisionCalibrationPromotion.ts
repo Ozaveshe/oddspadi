@@ -23,6 +23,8 @@ export type ActiveCalibrationPromotion = {
   candidate: {
     id: string;
     source: string;
+    windowStart?: string | null;
+    windowEnd?: string | null;
     sampleSize: number;
     settledSize: number;
     outcomeHash: string;
@@ -49,6 +51,8 @@ type CandidateRow = {
   model_key: string;
   engine_version: string;
   source: string;
+  window_start: string | null;
+  window_end: string | null;
   sample_size: number;
   settled_size: number;
   outcome_hash: string;
@@ -170,6 +174,8 @@ function activePromotionFromRows(promotion: PromotionRow, candidate: CandidateRo
     candidate: {
       id: candidate.id,
       source: candidate.source,
+      windowStart: candidate.window_start,
+      windowEnd: candidate.window_end,
       sampleSize: candidate.sample_size,
       settledSize: candidate.settled_size,
       outcomeHash: candidate.outcome_hash,
@@ -303,7 +309,7 @@ export async function readActiveCalibrationPromotion(sport: Sport, now = new Dat
     if (Number.isFinite(expiry) && expiry <= now.getTime()) continue;
     const candidateResult = await client
       .from("op_calibration_candidates")
-      .select("id,sport,model_key,engine_version,source,sample_size,settled_size,outcome_hash,metrics,calibration_buckets")
+      .select("id,sport,model_key,engine_version,source,window_start,window_end,sample_size,settled_size,outcome_hash,metrics,calibration_buckets")
       .eq("id", rawPromotion.candidate_id)
       .maybeSingle();
     if (candidateResult.error) {
@@ -337,7 +343,7 @@ export async function approveCalibrationCandidate({
   if (!client) return { status: "failed", configured: true, table: "op_calibration_promotions", reason: "Supabase client could not be created." };
   const candidateResult = await client
     .from("op_calibration_candidates")
-    .select("id,sport,model_key,engine_version,source,sample_size,settled_size,outcome_hash,metrics,calibration_buckets")
+    .select("id,sport,model_key,engine_version,source,window_start,window_end,sample_size,settled_size,outcome_hash,metrics,calibration_buckets")
     .eq("id", candidateId)
     .maybeSingle();
   if (candidateResult.error) {

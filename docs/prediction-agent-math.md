@@ -212,6 +212,12 @@ eligiblePick = globallyEligible AND segmentEligible
 
 Unknown live segments, mismatched or unknown tennis surfaces, unseen segments, sparse buckets, and recent local reversals all abstain. Replay first compares point-estimate picks with globally guarded picks, then compares those globally guarded picks with exact-segment guarded picks. Promotion requires the second comparison baseline to equal the first comparison selection exactly and recomputes every segment floor, count, chronology window, and yield receipt before activation. This is segment safety, not a claim of simultaneous statistical coverage across every segment inspected.
 
+### 4.3 Live calibration decay and distribution shift
+
+A frozen candidate is not allowed to remain live on approval evidence alone. Production learning requires a current `live-calibration-drift-v1` receipt bound to the exact promotion, candidate, sport, model key, and engine version. The prospective monitoring boundary is the candidate's frozen `window_end`, not the later operator-approval timestamp, so every monitored result is genuinely out of sample.
+
+The receipt uses the latest 100 immutable won/lost outcomes after that boundary and requires at least 30. It recomputes Brier score, log loss, expected calibration error, Brier skill, and ROI yield; splits the outcomes into at least 15 earlier and 15 recent rows at a strict settlement-time boundary; and measures probability-population shift with the population stability index. Identical settlement cohorts are never divided to manufacture stability. A receipt blocks activation when aggregate Brier deterioration exceeds `0.05`, log-loss deterioration exceeds `0.12`, current expected calibration error exceeds `0.10`, recent Brier deterioration from baseline exceeds `0.07`, recent-versus-earlier Brier deterioration exceeds `0.06`, or probability PSI exceeds `0.25`. It is also fail-closed when evidence is sparse, stale, malformed, identity-mismatched, or older than the governed promotion/outcome freshness limits. ROI remains operator context rather than an independent short-window activation gate.
+
 ## 5. Fair Odds
 
 The agent estimates model fair odds:

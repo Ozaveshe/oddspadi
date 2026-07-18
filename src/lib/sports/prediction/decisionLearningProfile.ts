@@ -1,8 +1,9 @@
-import type { DecisionLearningProfile, Sport } from "@/lib/sports/types";
+import type { CalibrationDriftReceipt, DecisionLearningProfile, Sport } from "@/lib/sports/types";
 import { getTrainingDataSnapshot, type StoredBacktestRun, type TrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
 import { readActiveCalibrationPromotion, type ActiveCalibrationPromotion } from "./decisionCalibrationPromotion";
 import { historicalModelCompatibility, isDecisionModelSport } from "./modelIdentity";
 import { inspectRuntimeBacktestEvidence, type RuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
+import { readCalibrationDriftReceipt } from "./calibrationDriftGuard";
 
 function numberFromWeight(weights: Record<string, unknown>, key: string): number | null {
   const value = weights[key];
@@ -938,10 +939,14 @@ export function buildDecisionLearningProfileFromSnapshot(
   snapshot: TrainingDataSnapshot,
   {
     activePromotion = null,
-    requireDurablePromotion = false
+    requireDurablePromotion = false,
+    calibrationDriftReceipt = null,
+    requireCalibrationDrift = false
   }: {
     activePromotion?: ActiveCalibrationPromotion | null;
     requireDurablePromotion?: boolean;
+    calibrationDriftReceipt?: CalibrationDriftReceipt | null;
+    requireCalibrationDrift?: boolean;
   } = {}
 ): DecisionLearningProfile {
   const backtest = snapshot.latestBacktest;
@@ -958,6 +963,22 @@ export function buildDecisionLearningProfileFromSnapshot(
   const demoOnly = Boolean(backtest?.dataSource?.includes("demo")) || snapshot.counts.realFinishedFixtures === 0;
   const promotionApproved = requireDurablePromotion ? promotionMatchesBacktest : promotionMatchesBacktest || hasExplicitLivePromotion(backtest);
   const metricBlockers = liveMetricBlockers(snapshot, backtest, runtimeEvidence);
+  const driftReceiptMatches = Boolean(
+    activePromotion && calibrationDriftReceipt &&
+    calibrationDriftReceipt.promotionId === activePromotion.id &&
+    calibrationDriftReceipt.candidateId === activePromotion.candidateId &&
+    calibrationDriftReceipt.promotionApprovedAt === activePromotion.approvedAt &&
+    calibrationDriftReceipt.monitoringWindowStart === (activePromotion.candidate.windowEnd ?? activePromotion.approvedAt) &&
+    calibrationDriftReceipt.sport === activePromotion.sport &&
+    calibrationDriftReceipt.modelKey === activePromotion.modelKey &&
+    calibrationDriftReceipt.engineVersion === activePromotion.engineVersion
+  );
+  if (requireCalibrationDrift && promotionMatchesBacktest) {
+    if (!driftReceiptMatches) metricBlockers.push("active calibration promotion lacks an exact current drift receipt");
+    else if (!calibrationDriftReceipt!.eligibleForLive || calibrationDriftReceipt!.status !== "pass") {
+      metricBlockers.push(`current calibration drift receipt is ${calibrationDriftReceipt!.status}: ${calibrationDriftReceipt!.blockers[0] ?? "live eligibility failed"}`);
+    }
+  }
   const selectionPolicy = economicSelectionPolicy(backtest);
   const temperaturePolicy = probabilityTemperaturePolicy(backtest);
   const scalingPolicy = marketPriorScalingPolicy(backtest, temperaturePolicy);
@@ -991,6 +1012,8 @@ export function buildDecisionLearningProfileFromSnapshot(
     calibrationPromotion: promotionMatchesBacktest && activePromotion
       ? { id: activePromotion.id, candidateId: activePromotion.candidateId, approvedAt: activePromotion.approvedAt, expiresAt: activePromotion.expiresAt }
       : null,
+    calibrationDriftStatus: driftReceiptMatches ? calibrationDriftReceipt!.status : null,
+    calibrationDriftReceipt: driftReceiptMatches ? calibrationDriftReceipt : null,
     sampleSize: backtest?.sampleSize ?? 0,
     testSize: backtest?.testSize ?? 0,
     realFinishedFixtures: snapshot.counts.realFinishedFixtures,
@@ -1030,6 +1053,9 @@ export function buildDecisionLearningProfileFromSnapshot(
       ...(shadowReady && !active ? ["Learned weights are available to the read-only shadow comparator but are disabled in live pick selection."] : []),
       ...(promotionMatchesBacktest && promotedBucketSample < snapshot.readiness.minimumRecommendedFixtures
         ? ["The approved live calibration cohort is retained as evidence; the larger historical curve remains active until the live cohort reaches the configured bucket sample floor."]
+        : []),
+      ...(driftReceiptMatches
+        ? [`Out-of-sample calibration drift status is ${calibrationDriftReceipt!.status} across ${calibrationDriftReceipt!.current.sampleSize} exact settled outcome(s).`]
         : [])
     ]
   };
@@ -1037,8 +1063,12 @@ export function buildDecisionLearningProfileFromSnapshot(
 
 export async function getDecisionLearningProfile(sport: Sport = "football"): Promise<DecisionLearningProfile> {
   const [snapshot, promotionResult] = await Promise.all([getTrainingDataSnapshot(sport), readActiveCalibrationPromotion(sport)]);
+  const activePromotion = promotionResult.status === "found" ? promotionResult.promotion : null;
+  const calibrationDriftReceipt = activePromotion ? await readCalibrationDriftReceipt(activePromotion) : null;
   return buildDecisionLearningProfileFromSnapshot(snapshot, {
-    activePromotion: promotionResult.status === "found" ? promotionResult.promotion : null,
-    requireDurablePromotion: true
+    activePromotion,
+    requireDurablePromotion: true,
+    calibrationDriftReceipt,
+    requireCalibrationDrift: true
   });
 }

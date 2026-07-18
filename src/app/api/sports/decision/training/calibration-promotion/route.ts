@@ -6,6 +6,7 @@ import {
 } from "@/lib/sports/prediction/decisionCalibrationPromotion";
 import type { Sport } from "@/lib/sports/types";
 import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { readCalibrationDriftReceipt } from "@/lib/sports/prediction/calibrationDriftGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,10 @@ function boundedText(value: unknown, maximum: number): string | null {
 export const GET = withApiHandler(async (request: Request) => {
   const sport = parseSport(new URL(request.url).searchParams.get("sport"));
   if (!sport) return apiError("Invalid sport.");
-  return apiSuccess(await readActiveCalibrationPromotion(sport));
+  const result = await readActiveCalibrationPromotion(sport);
+  if (result.status !== "found") return apiSuccess(result);
+  const driftReceipt = await readCalibrationDriftReceipt(result.promotion);
+  return apiSuccess({ ...result, driftReceipt });
 });
 
 export const POST = withApiHandler(async (request: Request) => {

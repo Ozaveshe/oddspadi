@@ -684,6 +684,7 @@ export function buildDecisionRunPayload({
       canonicalDecision: prediction.canonicalDecision,
       bestPick: prediction.bestPick,
       candidatePick: prediction.canonicalDecision.bestPublishedPick,
+      learningProfile: decision.learningProfile ?? null,
       caseMemory: decision.caseMemory,
       beliefState: decision.beliefState,
       deliberation: decision.deliberation,

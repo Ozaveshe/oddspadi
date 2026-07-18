@@ -1573,6 +1573,60 @@ export interface DecisionCalibration {
   detail: string;
 }
 
+export type CalibrationDriftStatus = "pass" | "warming" | "stale" | "drifted" | "failed";
+
+export interface CalibrationDriftMetricSummary {
+  sampleSize: number;
+  windowStart: string | null;
+  windowEnd: string | null;
+  brierScore: number | null;
+  logLoss: number | null;
+  expectedCalibrationError: number | null;
+  brierSkillScore: number | null;
+  roiYield: number | null;
+}
+
+export interface CalibrationDriftReceipt {
+  version: "live-calibration-drift-v1";
+  status: CalibrationDriftStatus;
+  eligibleForLive: boolean;
+  sport: Sport;
+  modelKey: string;
+  engineVersion: string;
+  promotionId: string;
+  candidateId: string;
+  promotionApprovedAt: string;
+  monitoringWindowStart: string;
+  asOf: string;
+  minimumSettledSize: 30;
+  monitoringWindowSize: 100;
+  maximumPromotionAgeDays: 45;
+  maximumOutcomeAgeDays: 7;
+  baseline: CalibrationDriftMetricSummary;
+  current: CalibrationDriftMetricSummary;
+  earlier: CalibrationDriftMetricSummary;
+  recent: CalibrationDriftMetricSummary;
+  deltas: {
+    brierScore: number | null;
+    logLoss: number | null;
+    expectedCalibrationError: number | null;
+    recentBrierFromBaseline: number | null;
+    recentBrierFromEarlier: number | null;
+    probabilityPopulationStabilityIndex: number | null;
+  };
+  thresholds: {
+    maximumBrierDelta: 0.05;
+    maximumLogLossDelta: 0.12;
+    maximumCalibrationError: 0.1;
+    maximumRecentBrierDelta: 0.07;
+    maximumRecentVsEarlierBrierDelta: 0.06;
+    maximumProbabilityPopulationStabilityIndex: 0.25;
+  };
+  latestOutcomeAt: string | null;
+  blockers: string[];
+  notes: string[];
+}
+
 export interface DecisionLearningProfile {
   status: DecisionLearningProfileStatus;
   source: string | null;
@@ -1586,6 +1640,8 @@ export interface DecisionLearningProfile {
     approvedAt: string;
     expiresAt: string | null;
   } | null;
+  calibrationDriftStatus?: CalibrationDriftStatus | null;
+  calibrationDriftReceipt?: CalibrationDriftReceipt | null;
   sampleSize: number;
   testSize?: number;
   realFinishedFixtures: number;
