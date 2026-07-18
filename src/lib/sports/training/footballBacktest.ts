@@ -4,7 +4,13 @@ import { buildProbabilityCalibration, type ProbabilityCalibrationBucket } from "
 import { benchmarkBacktestModelKey } from "@/lib/sports/prediction/modelIdentity";
 import { confidenceFromEdgeAndProbability } from "@/lib/sports/prediction/confidence";
 import { evaluateEmpiricalValueGuard } from "@/lib/sports/prediction/empiricalValueGuard";
-import type { EmpiricalValueGuardDecision, EmpiricalValueGuardPolicy } from "@/lib/sports/types";
+import { evaluateSegmentValueGuard } from "@/lib/sports/prediction/segmentValueGuard";
+import type {
+  EmpiricalValueGuardDecision,
+  EmpiricalValueGuardPolicy,
+  SegmentValueGuardDecision,
+  SegmentValueGuardPolicy
+} from "@/lib/sports/types";
 import {
   resolveHistoricalFootballOdds,
   type HistoricalFootballOddsAudit,
@@ -73,6 +79,7 @@ export type FootballBacktestPick = {
   unitReturn: number;
   closingLineValue: number | null;
   empiricalValueGuard?: EmpiricalValueGuardDecision;
+  segmentValueGuard?: SegmentValueGuardDecision;
 };
 
 export type FootballBacktestFixtureResult = {
@@ -356,7 +363,9 @@ function selectBacktestPick(
   odds: Record<FootballOutcome, SelectionOdds>,
   actual: FootballOutcome,
   config: Required<FootballBacktestConfig>,
-  empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy
+  empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy,
+  segmentValueGuardPolicy?: SegmentValueGuardPolicy,
+  segmentKey: string | null = null
 ): FootballBacktestPick | null {
   const dataQuality = clamp(safeNumber(fixture.dataQuality, 0.72), 0, 1);
   const candidates = (["home", "draw", "away"] as const)
@@ -371,6 +380,13 @@ function selectBacktestPick(
         odds: quote.odds,
         policy: empiricalValueGuardPolicy
       });
+      const segmentValueGuard = evaluateSegmentValueGuard({
+        segmentKey,
+        modelProbability,
+        impliedProbability: quote.impliedProbability,
+        odds: quote.odds,
+        policy: segmentValueGuardPolicy
+      });
 
       return {
         selection,
@@ -383,13 +399,15 @@ function selectBacktestPick(
         observedAt: quote.observedAt,
         closingObservedAt: quote.closingObservedAt,
         confidence,
-        empiricalValueGuard
+        empiricalValueGuard,
+        segmentValueGuard
       };
     })
     .filter((pick) =>
       pick.edge >= config.minEdge &&
       pick.modelProbability >= config.minModelProbability &&
       pick.empiricalValueGuard.status !== "blocked"
+      && pick.segmentValueGuard.status !== "blocked"
     )
     .sort((a, b) => b.edge - a.edge);
 
@@ -490,13 +508,17 @@ export function evaluateFootballPrediction({
   probabilities,
   expectedGoals,
   config,
-  empiricalValueGuardPolicy
+  empiricalValueGuardPolicy,
+  segmentValueGuardPolicy,
+  segmentKey
 }: {
   fixture: HistoricalFootballFixture;
   probabilities: Record<FootballOutcome, number>;
   expectedGoals: FootballBacktestFixtureResult["expectedGoals"];
   config: Required<FootballBacktestConfig>;
   empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy;
+  segmentValueGuardPolicy?: SegmentValueGuardPolicy;
+  segmentKey?: string | null;
 }): FootballBacktestFixtureResult {
   const actual = actualOutcome(fixture.homeScore, fixture.awayScore);
   const odds = winnerOdds(fixture);
@@ -508,7 +530,9 @@ export function evaluateFootballPrediction({
     expectedGoals,
     brierScore: brierScore(probabilities, actual),
     logLoss: logLoss(probabilities, actual),
-    pick: odds.selections ? selectBacktestPick(fixture, probabilities, odds.selections, actual, config, empiricalValueGuardPolicy) : null,
+    pick: odds.selections
+      ? selectBacktestPick(fixture, probabilities, odds.selections, actual, config, empiricalValueGuardPolicy, segmentValueGuardPolicy, segmentKey ?? null)
+      : null,
     oddsEvidence: odds.audit
   };
 }

@@ -200,6 +200,18 @@ eligiblePick = conservativeEdge > 0 AND conservativeExpectedValue > 0
 
 The policy is learned only from a strictly earlier final-posterior training-validation window and is frozen before the outer holdout. Identical kickoff cohorts are never split between regimes. Missing, thin, malformed, unsplittable, or chronology-invalid regimes fail closed. Replay stores both the unguarded point-estimate pick metrics and the guarded metrics; promotion recomputes every aggregate and regime floor, validates window/sample conservation, and checks the exact pick-count delta plus ROI/yield arithmetic before the policy can reach the live engine.
 
+### 4.2 Exact-segment reliability
+
+The pooled temporal floor is necessary but can hide local failure. The engine therefore learns a second policy from the same frozen final-posterior cohort and the same strict earlier/recent boundary. Football and basketball use the provider competition identity; tennis uses the normalized court surface (`hard`, `clay`, `grass`, or `indoor`). Each segment repeats the canonical 0.10 probability buckets and Wilson-floor calculation, with a segment-specific minimum of 20 observations per regime and 40 total.
+
+```txt
+globallyEligible = globalConservativeEdge > 0 AND globalConservativeExpectedValue > 0
+segmentEligible = exactSegmentConservativeEdge > 0 AND exactSegmentConservativeExpectedValue > 0
+eligiblePick = globallyEligible AND segmentEligible
+```
+
+Unknown live segments, mismatched or unknown tennis surfaces, unseen segments, sparse buckets, and recent local reversals all abstain. Replay first compares point-estimate picks with globally guarded picks, then compares those globally guarded picks with exact-segment guarded picks. Promotion requires the second comparison baseline to equal the first comparison selection exactly and recomputes every segment floor, count, chronology window, and yield receipt before activation. This is segment safety, not a claim of simultaneous statistical coverage across every segment inspected.
+
 ## 5. Fair Odds
 
 The agent estimates model fair odds:

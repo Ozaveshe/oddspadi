@@ -6,7 +6,7 @@ import type {
 } from "@/lib/sports/types";
 import { strictChronologicalSplitIndex } from "./probabilityTemperatureScaling";
 
-type ProbabilityObservation = {
+export type ProbabilityObservation = {
   kickoffAt: string;
   probabilities: Record<string, number>;
   actualOutcome: string;
@@ -17,9 +17,9 @@ type ProbabilityEntry = {
   occurred: boolean;
 };
 
-const CONFIDENCE_LEVEL = 0.95 as const;
+export const EMPIRICAL_VALUE_CONFIDENCE_LEVEL = 0.95 as const;
 // Two 97.5% one-sided bounds retain at least 95% joint coverage by Bonferroni.
-const REGIME_CONFIDENCE_LEVEL = 0.975 as const;
+export const EMPIRICAL_VALUE_REGIME_CONFIDENCE_LEVEL = 0.975 as const;
 const AGGREGATE_Z = 1.6448536269514722;
 const REGIME_Z = 1.959963984540054;
 const DEFAULT_MINIMUM_REGIME_SAMPLE = 30;
@@ -35,7 +35,7 @@ function round(value: number | null, digits = 6): number | null {
   return Math.round(value * factor) / factor;
 }
 
-function validObservation(row: ProbabilityObservation): boolean {
+export function validProbabilityObservation(row: ProbabilityObservation): boolean {
   const probabilities = Object.values(row.probabilities);
   const total = probabilities.reduce((sum, value) => sum + value, 0);
   return Number.isFinite(Date.parse(row.kickoffAt)) &&
@@ -86,7 +86,7 @@ function evidence(values: readonly ProbabilityEntry[], z: number): EmpiricalValu
   };
 }
 
-function buildBuckets({
+export function buildEmpiricalValueBuckets({
   earlierRows,
   recentRows,
   minimumBucketSample,
@@ -143,7 +143,7 @@ export function learnEmpiricalValueGuardPolicy({
   holdoutWindowStart: string | null;
   minimumRegimeSample?: number;
 }): EmpiricalValueGuardPolicy {
-  const rows = trainingRows.filter(validObservation).sort((left, right) => Date.parse(left.kickoffAt) - Date.parse(right.kickoffAt));
+  const rows = trainingRows.filter(validProbabilityObservation).sort((left, right) => Date.parse(left.kickoffAt) - Date.parse(right.kickoffAt));
   const resolvedRegimeMinimum = Math.max(10, Math.floor(minimumRegimeSample));
   const resolvedBucketMinimum = resolvedRegimeMinimum * 2;
   const splitIndex = strictChronologicalSplitIndex(rows, Math.floor(rows.length / 2));
@@ -163,7 +163,7 @@ export function learnEmpiricalValueGuardPolicy({
     Date.parse(recentWindowStart) <= Date.parse(windowEnd) &&
     Date.parse(windowEnd) < Date.parse(holdoutWindowStart)
   );
-  const buckets = buildBuckets({
+  const buckets = buildEmpiricalValueBuckets({
     earlierRows,
     recentRows,
     minimumBucketSample: resolvedBucketMinimum,
@@ -176,8 +176,8 @@ export function learnEmpiricalValueGuardPolicy({
     version: "empirical-value-guard-v2",
     source: "chronological-final-posterior-regime-windows",
     status: chronologyValid && hasEligibleBucket ? "active" : "abstain",
-    confidenceLevel: CONFIDENCE_LEVEL,
-    regimeConfidenceLevel: REGIME_CONFIDENCE_LEVEL,
+    confidenceLevel: EMPIRICAL_VALUE_CONFIDENCE_LEVEL,
+    regimeConfidenceLevel: EMPIRICAL_VALUE_REGIME_CONFIDENCE_LEVEL,
     minimumBucketSample: resolvedBucketMinimum,
     minimumRegimeSample: resolvedRegimeMinimum,
     sampleSize: selectionCount(rows),

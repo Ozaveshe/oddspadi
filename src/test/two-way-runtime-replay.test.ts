@@ -117,6 +117,12 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(result.empiricalValueGuardComparison.picksRemoved).toBe(
       result.empiricalValueGuardComparison.baseline.pickCount - result.empiricalValueGuardComparison.selected.pickCount
     );
+    expect(result.segmentValueGuardPolicy).toMatchObject({
+      source: "chronological-final-posterior-segment-regime-windows",
+      segmentDimension: "competition",
+      status: "abstain"
+    });
+    expect(result.segmentValueGuardComparison.baseline.pickCount).toBe(result.empiricalValueGuardComparison.selected.pickCount);
     expect(result.marketPriorEvidence).toMatchObject({
       version: "runtime-market-prior-parity-v1",
       status: "applied",
@@ -147,6 +153,7 @@ describe("basketball and tennis exact runtime replay", () => {
     expect(home.probabilityCalibrationPolicy).toEqual(away.probabilityCalibrationPolicy);
     expect(home.marketPriorScalingPolicy).toEqual(away.marketPriorScalingPolicy);
     expect(home.empiricalValueGuardPolicy).toEqual(away.empiricalValueGuardPolicy);
+    expect(home.segmentValueGuardPolicy).toEqual(away.segmentValueGuardPolicy);
   });
 
   it("freezes an active empirical value policy before the outer holdout", () => {
@@ -168,6 +175,9 @@ describe("basketball and tennis exact runtime replay", () => {
       )
     )).toBe(true);
     expect(reversedHoldout.empiricalValueGuardPolicy).toEqual(baseline.empiricalValueGuardPolicy);
+    expect(baseline.segmentValueGuardPolicy).toMatchObject({ status: "active", segmentDimension: "competition" });
+    expect(reversedHoldout.segmentValueGuardPolicy).toEqual(baseline.segmentValueGuardPolicy);
+    expect(baseline.segmentValueGuardComparison.baseline.pickCount).toBe(baseline.empiricalValueGuardComparison.selected.pickCount);
     expect(Date.parse(baseline.empiricalValueGuardPolicy.windowEnd!)).toBeLessThan(Date.parse(baseline.testWindowStart!));
     expect(baseline.empiricalValueGuardComparison.picksRemoved).toBeGreaterThanOrEqual(0);
   });

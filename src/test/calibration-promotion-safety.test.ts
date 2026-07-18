@@ -106,6 +106,37 @@ function empiricalValueGuardPolicy() {
   };
 }
 
+function segmentValueGuardPolicy() {
+  const global = empiricalValueGuardPolicy();
+  return {
+    version: "segment-value-guard-v1",
+    source: "chronological-final-posterior-segment-regime-windows",
+    status: "active",
+    segmentDimension: "competition",
+    confidenceLevel: 0.95,
+    regimeConfidenceLevel: 0.975,
+    minimumBucketSample: 40,
+    minimumRegimeSample: 20,
+    sampleSize: global.sampleSize,
+    unresolvedSampleSize: 0,
+    unresolvedEarlierSampleSize: 0,
+    unresolvedRecentSampleSize: 0,
+    windowStart: global.windowStart,
+    windowEnd: global.windowEnd,
+    holdoutWindowStart: global.holdoutWindowStart,
+    earlierWindow: global.earlierWindow,
+    recentWindow: global.recentWindow,
+    segments: [{
+      segmentKey: "competition:39",
+      sampleSize: global.sampleSize,
+      earlierSampleSize: global.earlierWindow.sampleSize,
+      recentSampleSize: global.recentWindow.sampleSize,
+      buckets: global.buckets
+    }],
+    reason: "eligible-segments"
+  };
+}
+
 function readySnapshot(): TrainingDataSnapshot {
   return {
     generatedAt: "2026-08-21T12:00:00.000Z",
@@ -204,6 +235,12 @@ function readySnapshot(): TrainingDataSnapshot {
           baseline: { pickCount: 72, roiUnits: 5.4, yield: 0.075 },
           selected: { pickCount: 48, roiUnits: 4.8, yield: 0.1 },
           picksRemoved: 24
+        },
+        segmentValueGuardPolicy: segmentValueGuardPolicy(),
+        segmentValueGuardComparison: {
+          baseline: { pickCount: 48, roiUnits: 4.8, yield: 0.1 },
+          selected: { pickCount: 36, roiUnits: 3.6, yield: 0.1 },
+          picksRemoved: 12
         },
         marketPriorEvidence: {
           version: "runtime-market-prior-parity-v1",
@@ -663,6 +700,74 @@ describe("calibration promotion safety", () => {
     expect(forgedComparisonProfile.active).toBe(false);
     expect(forgedComparisonProfile.empiricalValueGuardComparison).toBeNull();
     expect(forgedComparisonProfile.reason).toContain("lacks a valid empirical value guard holdout comparison");
+  });
+
+  it("requires recomputable segment floors and a chained global-to-segment holdout receipt", () => {
+    const valid = buildDecisionLearningProfileFromSnapshot(readySnapshot(), {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(valid.segmentValueGuardPolicy).toMatchObject({
+      status: "active",
+      segmentDimension: "competition",
+      sampleSize: 378,
+      unresolvedSampleSize: 0
+    });
+    expect(valid.segmentValueGuardComparison).toMatchObject({ picksRemoved: 12 });
+
+    const missing = readySnapshot();
+    const missingConfig = { ...missing.latestBacktest!.config };
+    delete missingConfig.segmentValueGuardPolicy;
+    missing.latestBacktest = { ...missing.latestBacktest!, config: missingConfig };
+    const missingProfile = buildDecisionLearningProfileFromSnapshot(missing, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(missingProfile.active).toBe(false);
+    expect(missingProfile.segmentValueGuardPolicy).toBeNull();
+
+    const forgedFloor = readySnapshot();
+    const original = forgedFloor.latestBacktest!.config?.segmentValueGuardPolicy as ReturnType<typeof segmentValueGuardPolicy>;
+    forgedFloor.latestBacktest = {
+      ...forgedFloor.latestBacktest!,
+      config: {
+        ...forgedFloor.latestBacktest!.config,
+        segmentValueGuardPolicy: {
+          ...original,
+          segments: original.segments.map((segment) => ({
+            ...segment,
+            buckets: segment.buckets.map((bucket, index) => index === 0
+              ? { ...bucket, recent: { ...bucket.recent, probabilityFloor: 0.2 } }
+              : bucket)
+          }))
+        }
+      }
+    };
+    const forgedFloorProfile = buildDecisionLearningProfileFromSnapshot(forgedFloor, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(forgedFloorProfile.active).toBe(false);
+    expect(forgedFloorProfile.segmentValueGuardPolicy).toBeNull();
+
+    const forgedChain = readySnapshot();
+    forgedChain.latestBacktest = {
+      ...forgedChain.latestBacktest!,
+      config: {
+        ...forgedChain.latestBacktest!.config,
+        segmentValueGuardComparison: {
+          baseline: { pickCount: 47, roiUnits: 4.8, yield: 0.102128 },
+          selected: { pickCount: 36, roiUnits: 3.6, yield: 0.1 },
+          picksRemoved: 11
+        }
+      }
+    };
+    const forgedChainProfile = buildDecisionLearningProfileFromSnapshot(forgedChain, {
+      activePromotion: promotion(),
+      requireDurablePromotion: true
+    });
+    expect(forgedChainProfile.active).toBe(false);
+    expect(forgedChainProfile.segmentValueGuardComparison).toBeNull();
   });
 
   it("accepts learned weights sourced from the complete prospective training-validation window", () => {

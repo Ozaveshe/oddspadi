@@ -525,6 +525,196 @@ function empiricalValueGuardComparison(
   return { baseline: resolvedBaseline, selected: resolvedSelected, picksRemoved };
 }
 
+function segmentValueGuardPolicy(
+  backtest: StoredBacktestRun | null,
+  globalPolicy: NonNullable<DecisionLearningProfile["empiricalValueGuardPolicy"]> | null
+): NonNullable<DecisionLearningProfile["segmentValueGuardPolicy"]> | null {
+  if (!backtest || !globalPolicy) return null;
+  const policy = record(backtest.config?.segmentValueGuardPolicy);
+  const status = policy.status === "active" || policy.status === "abstain" ? policy.status : null;
+  const segmentDimension = backtest.sport === "tennis" ? "surface" : "competition";
+  const minimumBucketSample = finiteNumber(policy.minimumBucketSample);
+  const minimumRegimeSample = finiteNumber(policy.minimumRegimeSample);
+  const sampleSize = finiteNumber(policy.sampleSize);
+  const unresolvedSampleSize = finiteNumber(policy.unresolvedSampleSize);
+  const unresolvedEarlierSampleSize = finiteNumber(policy.unresolvedEarlierSampleSize);
+  const unresolvedRecentSampleSize = finiteNumber(policy.unresolvedRecentSampleSize);
+  const prefix = `${segmentDimension}:`;
+  const contractValid =
+    policy.version === "segment-value-guard-v1" &&
+    policy.source === "chronological-final-posterior-segment-regime-windows" &&
+    status !== null && policy.segmentDimension === segmentDimension &&
+    policy.confidenceLevel === 0.95 && policy.regimeConfidenceLevel === 0.975 &&
+    minimumBucketSample !== null && Number.isInteger(minimumBucketSample) && minimumBucketSample >= 40 &&
+    minimumRegimeSample !== null && Number.isInteger(minimumRegimeSample) && minimumRegimeSample >= 20 &&
+    minimumBucketSample === minimumRegimeSample * 2 &&
+    sampleSize === globalPolicy.sampleSize &&
+    unresolvedSampleSize !== null && Number.isInteger(unresolvedSampleSize) && unresolvedSampleSize >= 0 && unresolvedSampleSize <= sampleSize! &&
+    unresolvedEarlierSampleSize !== null && Number.isInteger(unresolvedEarlierSampleSize) && unresolvedEarlierSampleSize >= 0 &&
+    unresolvedRecentSampleSize !== null && Number.isInteger(unresolvedRecentSampleSize) && unresolvedRecentSampleSize >= 0 &&
+    unresolvedSampleSize === unresolvedEarlierSampleSize + unresolvedRecentSampleSize &&
+    policy.windowStart === globalPolicy.windowStart && policy.windowEnd === globalPolicy.windowEnd &&
+    policy.holdoutWindowStart === globalPolicy.holdoutWindowStart;
+  if (!contractValid) return null;
+
+  const parseWindow = (value: unknown) => {
+    const row = record(value);
+    const windowStart = typeof row.windowStart === "string" ? row.windowStart : null;
+    const windowEnd = typeof row.windowEnd === "string" ? row.windowEnd : null;
+    const size = finiteNumber(row.sampleSize);
+    return windowStart && windowEnd && size !== null && Number.isInteger(size) && size > 0
+      ? { windowStart, windowEnd, sampleSize: size }
+      : null;
+  };
+  const earlierWindow = parseWindow(policy.earlierWindow);
+  const recentWindow = parseWindow(policy.recentWindow);
+  if (
+    !earlierWindow || !recentWindow ||
+    earlierWindow.windowStart !== globalPolicy.earlierWindow.windowStart ||
+    earlierWindow.windowEnd !== globalPolicy.earlierWindow.windowEnd ||
+    earlierWindow.sampleSize !== globalPolicy.earlierWindow.sampleSize ||
+    recentWindow.windowStart !== globalPolicy.recentWindow.windowStart ||
+    recentWindow.windowEnd !== globalPolicy.recentWindow.windowEnd ||
+    recentWindow.sampleSize !== globalPolicy.recentWindow.sampleSize ||
+    !Array.isArray(policy.segments)
+  ) return null;
+
+  const wilsonFloor = (observedRate: number, count: number, z: number) => {
+    const zSquared = z * z;
+    const denominator = 1 + zSquared / count;
+    const center = (observedRate + zSquared / (2 * count)) / denominator;
+    const margin = z * Math.sqrt((observedRate * (1 - observedRate)) / count + zSquared / (4 * count * count)) / denominator;
+    return Math.max(0, center - margin);
+  };
+  const successCountValid = (observedRate: number, count: number) =>
+    Math.abs(observedRate * count - Math.round(observedRate * count)) <= Math.max(0.0001, count * 0.00000051);
+  const parseEvidence = (value: unknown, minProbability: number, maxProbability: number) => {
+    const row = record(value);
+    const size = finiteNumber(row.sampleSize);
+    const averageProbability = row.averageProbability === null ? null : finiteNumber(row.averageProbability);
+    const observedRate = row.observedRate === null ? null : finiteNumber(row.observedRate);
+    const probabilityFloor = row.probabilityFloor === null ? null : finiteNumber(row.probabilityFloor);
+    if (size === null || !Number.isInteger(size) || size < 0) return null;
+    if (size === 0) return averageProbability === null && observedRate === null && probabilityFloor === null
+      ? { sampleSize: 0, averageProbability: null, observedRate: null, probabilityFloor: null }
+      : null;
+    const valid = averageProbability !== null && averageProbability >= minProbability && averageProbability <= maxProbability &&
+      observedRate !== null && observedRate >= 0 && observedRate <= 1 && successCountValid(observedRate, size) &&
+      probabilityFloor !== null && Math.abs(probabilityFloor - wilsonFloor(observedRate, size, 1.959963984540054)) <= 0.000002;
+    return valid ? { sampleSize: size, averageProbability, observedRate, probabilityFloor } : null;
+  };
+  const segments = policy.segments.flatMap((value) => {
+    const row = record(value);
+    const segmentKey = typeof row.segmentKey === "string" ? row.segmentKey : "";
+    const segmentSampleSize = finiteNumber(row.sampleSize);
+    const earlierSampleSize = finiteNumber(row.earlierSampleSize);
+    const recentSampleSize = finiteNumber(row.recentSampleSize);
+    const segmentIdentityValid = segmentDimension === "surface"
+      ? /^(surface):(hard|clay|grass|indoor)$/.test(segmentKey)
+      : /^(competition):[a-z0-9._-]+$/.test(segmentKey);
+    if (!segmentIdentityValid || !segmentKey.startsWith(prefix) || segmentKey.length <= prefix.length ||
+        segmentSampleSize === null || !Number.isInteger(segmentSampleSize) || segmentSampleSize <= 0 ||
+        earlierSampleSize === null || !Number.isInteger(earlierSampleSize) || earlierSampleSize < 0 ||
+        recentSampleSize === null || !Number.isInteger(recentSampleSize) || recentSampleSize < 0 ||
+        segmentSampleSize !== earlierSampleSize + recentSampleSize || !Array.isArray(row.buckets)) return [];
+    const buckets = row.buckets.flatMap((value) => {
+      const bucket = record(value);
+      const minProbability = finiteNumber(bucket.minProbability);
+      const maxProbability = finiteNumber(bucket.maxProbability);
+      const bucketSampleSize = finiteNumber(bucket.sampleSize);
+      const averageProbability = finiteNumber(bucket.averageProbability);
+      const observedRate = finiteNumber(bucket.observedRate);
+      const aggregateFloor = bucket.aggregateProbabilityFloor === null ? null : finiteNumber(bucket.aggregateProbabilityFloor);
+      const probabilityFloor = bucket.probabilityFloor === null ? null : finiteNumber(bucket.probabilityFloor);
+      if (minProbability === null || maxProbability === null || bucketSampleSize === null || averageProbability === null || observedRate === null || aggregateFloor === null) return [];
+      const earlier = parseEvidence(bucket.earlier, minProbability, maxProbability);
+      const recent = parseEvidence(bucket.recent, minProbability, maxProbability);
+      const expectedEligible = Boolean(bucketSampleSize >= minimumBucketSample! && earlier && recent &&
+        earlier.sampleSize >= minimumRegimeSample! && recent.sampleSize >= minimumRegimeSample!);
+      const expectedFloor = expectedEligible && earlier?.probabilityFloor !== null && recent?.probabilityFloor !== null
+        ? Math.min(aggregateFloor, earlier!.probabilityFloor!, recent!.probabilityFloor!)
+        : null;
+      const valid = minProbability >= 0 && maxProbability <= 1 && maxProbability > minProbability &&
+        Math.abs(maxProbability - minProbability - 0.1) <= 0.000001 &&
+        Math.abs(minProbability * 10 - Math.round(minProbability * 10)) <= 0.000001 &&
+        Number.isInteger(bucketSampleSize) && bucketSampleSize > 0 &&
+        averageProbability >= minProbability && averageProbability <= maxProbability &&
+        observedRate >= 0 && observedRate <= 1 && successCountValid(observedRate, bucketSampleSize) &&
+        Math.abs(aggregateFloor - wilsonFloor(observedRate, bucketSampleSize, 1.6448536269514722)) <= 0.000002 &&
+        earlier !== null && recent !== null && bucketSampleSize === earlier.sampleSize + recent.sampleSize &&
+        Math.abs(averageProbability - (((earlier.averageProbability ?? 0) * earlier.sampleSize + (recent.averageProbability ?? 0) * recent.sampleSize) / bucketSampleSize)) <= 0.000002 &&
+        Math.abs(observedRate - (((earlier.observedRate ?? 0) * earlier.sampleSize + (recent.observedRate ?? 0) * recent.sampleSize) / bucketSampleSize)) <= 0.000002 &&
+        bucket.eligible === expectedEligible &&
+        (expectedEligible ? probabilityFloor !== null && expectedFloor !== null && Math.abs(probabilityFloor - expectedFloor) <= 0.000002 : probabilityFloor === null);
+      return valid ? [{ minProbability, maxProbability, sampleSize: bucketSampleSize, averageProbability, observedRate,
+        aggregateProbabilityFloor: aggregateFloor, probabilityFloor, eligible: expectedEligible, earlier, recent }] : [];
+    }).sort((left, right) => left.minProbability - right.minProbability);
+    if (buckets.length !== row.buckets.length || !buckets.length ||
+        buckets.some((bucket, index) => index > 0 && bucket.minProbability < buckets[index - 1]!.maxProbability) ||
+        buckets.reduce((sum, bucket) => sum + bucket.sampleSize, 0) !== segmentSampleSize ||
+        buckets.reduce((sum, bucket) => sum + bucket.earlier.sampleSize, 0) !== earlierSampleSize ||
+        buckets.reduce((sum, bucket) => sum + bucket.recent.sampleSize, 0) !== recentSampleSize) return [];
+    return [{ segmentKey, sampleSize: segmentSampleSize, earlierSampleSize, recentSampleSize, buckets }];
+  }).sort((left, right) => left.segmentKey.localeCompare(right.segmentKey));
+  if (segments.length !== policy.segments.length || new Set(segments.map((segment) => segment.segmentKey)).size !== segments.length ||
+      segments.reduce((sum, segment) => sum + segment.sampleSize, 0) + unresolvedSampleSize! !== sampleSize ||
+      segments.reduce((sum, segment) => sum + segment.earlierSampleSize, 0) + unresolvedEarlierSampleSize! !== earlierWindow.sampleSize ||
+      segments.reduce((sum, segment) => sum + segment.recentSampleSize, 0) + unresolvedRecentSampleSize! !== recentWindow.sampleSize) return null;
+  const eligibleSegments = segments.filter((segment) => segment.buckets.some((bucket) => bucket.eligible));
+  const reason = policy.reason;
+  if ((status === "active" && (!eligibleSegments.length || reason !== "eligible-segments")) ||
+      (status === "abstain" && (eligibleSegments.length > 0 || reason !== "insufficient-segment-sample"))) return null;
+  return {
+    version: "segment-value-guard-v1",
+    source: "chronological-final-posterior-segment-regime-windows",
+    status,
+    segmentDimension,
+    confidenceLevel: 0.95,
+    regimeConfidenceLevel: 0.975,
+    minimumBucketSample: minimumBucketSample!,
+    minimumRegimeSample: minimumRegimeSample!,
+    sampleSize: sampleSize!,
+    unresolvedSampleSize: unresolvedSampleSize!,
+    unresolvedEarlierSampleSize: unresolvedEarlierSampleSize!,
+    unresolvedRecentSampleSize: unresolvedRecentSampleSize!,
+    windowStart: globalPolicy.windowStart,
+    windowEnd: globalPolicy.windowEnd,
+    holdoutWindowStart: globalPolicy.holdoutWindowStart,
+    earlierWindow,
+    recentWindow,
+    segments,
+    reason: reason as "eligible-segments" | "insufficient-segment-sample"
+  };
+}
+
+function segmentValueGuardComparison(
+  backtest: StoredBacktestRun | null,
+  policy: NonNullable<DecisionLearningProfile["segmentValueGuardPolicy"]> | null,
+  globalComparison: NonNullable<DecisionLearningProfile["empiricalValueGuardComparison"]> | null
+): NonNullable<DecisionLearningProfile["segmentValueGuardComparison"]> | null {
+  if (!backtest || !policy || !globalComparison) return null;
+  const comparison = record(backtest.config?.segmentValueGuardComparison);
+  const metrics = (value: unknown) => {
+    const row = record(value);
+    const pickCount = finiteNumber(row.pickCount);
+    const roiUnits = finiteNumber(row.roiUnits);
+    const yieldValue = row.yield === null ? null : finiteNumber(row.yield);
+    const expectedYield = pickCount && roiUnits !== null ? Math.round((roiUnits / pickCount) * 1_000_000) / 1_000_000 : null;
+    return pickCount !== null && Number.isInteger(pickCount) && pickCount >= 0 && pickCount <= backtest.testSize && roiUnits !== null &&
+      (pickCount === 0 ? roiUnits === 0 && row.yield === null : yieldValue !== null && Math.abs(yieldValue - expectedYield!) <= 0.000001)
+      ? { pickCount, roiUnits, yield: yieldValue }
+      : null;
+  };
+  const baseline = metrics(comparison.baseline);
+  const selected = metrics(comparison.selected);
+  const picksRemoved = finiteNumber(comparison.picksRemoved);
+  if (!baseline || !selected || picksRemoved === null || !Number.isInteger(picksRemoved) ||
+      baseline.pickCount !== globalComparison.selected.pickCount || baseline.roiUnits !== globalComparison.selected.roiUnits || baseline.yield !== globalComparison.selected.yield ||
+      selected.pickCount > baseline.pickCount || picksRemoved !== baseline.pickCount - selected.pickCount ||
+      (policy.status === "abstain" && selected.pickCount !== 0)) return null;
+  return { baseline, selected, picksRemoved };
+}
+
 type MarketPriorReplayReceipt = {
   valid: boolean;
   status: "applied" | "no-priced-market" | null;
@@ -679,6 +869,16 @@ function liveMetricBlockers(
     if (!empiricalValueGuardComparison(backtest, valueGuardPolicy)) {
       blockers.push("runtime replay lacks a valid empirical value guard holdout comparison");
     }
+    const globalGuardComparison = empiricalValueGuardComparison(backtest, valueGuardPolicy);
+    const segmentGuardPolicy = segmentValueGuardPolicy(backtest, valueGuardPolicy);
+    if (!segmentGuardPolicy) {
+      blockers.push("runtime replay lacks a valid training-only segment value guard policy");
+    } else if (segmentGuardPolicy.status === "abstain") {
+      blockers.push("training-only segment value guard policy abstains");
+    }
+    if (!segmentValueGuardComparison(backtest, segmentGuardPolicy, globalGuardComparison)) {
+      blockers.push("runtime replay lacks a valid segment value guard holdout comparison");
+    }
     if (!marketPriorReplayReceipt(backtest).valid) {
       blockers.push("runtime replay lacks a valid pre-match market-prior parity receipt");
     }
@@ -763,6 +963,8 @@ export function buildDecisionLearningProfileFromSnapshot(
   const scalingPolicy = marketPriorScalingPolicy(backtest, temperaturePolicy);
   const valueGuardPolicy = empiricalValueGuardPolicy(backtest, scalingPolicy);
   const valueGuardComparison = empiricalValueGuardComparison(backtest, valueGuardPolicy);
+  const segmentGuardPolicy = segmentValueGuardPolicy(backtest, valueGuardPolicy);
+  const segmentGuardComparison = segmentValueGuardComparison(backtest, segmentGuardPolicy, valueGuardComparison);
   const marketPriorReceipt = marketPriorReplayReceipt(backtest);
   const shadowReady = snapshot.status === "ready" && Boolean(backtest) && snapshot.readiness.readyForTraining && !demoOnly;
   const active = shadowReady && promotionApproved && metricBlockers.length === 0;
@@ -804,6 +1006,8 @@ export function buildDecisionLearningProfileFromSnapshot(
     marketPriorScalingPolicy: scalingPolicy,
     empiricalValueGuardPolicy: valueGuardPolicy,
     empiricalValueGuardComparison: valueGuardComparison,
+    segmentValueGuardPolicy: segmentGuardPolicy,
+    segmentValueGuardComparison: segmentGuardComparison,
     marketPriorReplayStatus: marketPriorReceipt.status,
     marketPriorReplayAdjustedFixtures: marketPriorReceipt.adjustedFixtures,
     marketPriorReplayCoverage: marketPriorReceipt.coverage,

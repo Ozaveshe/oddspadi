@@ -3,6 +3,8 @@ import { modelFootballMatch } from "@/lib/sports/prediction/footballModel";
 import { applyMarketPriorAdjustmentToMarkets } from "@/lib/sports/prediction/odds";
 import { footballMarketPriorEvidencePolicy } from "@/lib/sports/prediction/marketPriorPolicy";
 import { learnEmpiricalValueGuardPolicy } from "@/lib/sports/prediction/empiricalValueGuard";
+import { predictionSegmentDimension, predictionSegmentKey } from "@/lib/sports/prediction/predictionSegment";
+import { learnSegmentValueGuardPolicy } from "@/lib/sports/prediction/segmentValueGuard";
 import {
   learnMarketPriorScalingPolicy,
   marketPriorPolicyValidationRows,
@@ -31,7 +33,8 @@ import type {
   MarketPriorScalingPolicy,
   OddsMarket,
   ProbabilityCalibrationComparison,
-  ProbabilityTemperatureScalingPolicy
+  ProbabilityTemperatureScalingPolicy,
+  SegmentValueGuardPolicy
 } from "@/lib/sports/types";
 import {
   buildFootballLearnedWeightsProvenance,
@@ -118,6 +121,8 @@ export type FootballRuntimeReplayResult = Omit<FootballBacktestResult, "config" 
   marketPriorScalingPolicy: MarketPriorScalingPolicy;
   empiricalValueGuardPolicy: EmpiricalValueGuardPolicy;
   empiricalValueGuardComparison: EconomicSelectionComparison;
+  segmentValueGuardPolicy: SegmentValueGuardPolicy;
+  segmentValueGuardComparison: EconomicSelectionComparison;
   marketPriorEvidence: MarketPriorReplayEvidence;
   featureContract: FootballRuntimeFeatureContract;
   executionHash: string;
@@ -591,7 +596,8 @@ export function runFootballRuntimeReplay(
     calibrationPolicy?: ProbabilityTemperatureScalingPolicy,
     applyMarketPrior = false,
     marketPriorScalingPolicy?: MarketPriorScalingPolicy,
-    empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy
+    empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy,
+    segmentValueGuardPolicy?: SegmentValueGuardPolicy
   ): EvaluatedRuntimeFixtures => {
     const marketPriorAdjustments: MarketPriorAdjustment[] = [];
     const results = fixtures.map((modeled) => {
@@ -615,7 +621,9 @@ export function runFootballRuntimeReplay(
         probabilities,
         expectedGoals: modeled.expectedGoals,
         config: selectionConfig,
-        empiricalValueGuardPolicy
+        empiricalValueGuardPolicy,
+        segmentValueGuardPolicy,
+        segmentKey: predictionSegmentKey(modeled.prepared.match)
       });
     });
     return { results, marketPriorAdjustments };
@@ -669,13 +677,26 @@ export function runFootballRuntimeReplay(
     trainingRows: unguardedSelectionTrainingResults,
     holdoutWindowStart: holdout[0]?.source.kickoffAt ?? null
   });
+  const trainingSegmentKeys = new Map(modeledTraining.map((modeled) => [
+    modeled.prepared.source.externalId,
+    predictionSegmentKey(modeled.prepared.match)
+  ]));
+  const segmentValueGuardPolicy = learnSegmentValueGuardPolicy({
+    trainingRows: unguardedSelectionTrainingResults.map((row) => ({
+      ...row,
+      segmentKey: trainingSegmentKeys.get(row.fixtureExternalId) ?? null
+    })),
+    holdoutWindowStart: holdout[0]?.source.kickoffAt ?? null,
+    segmentDimension: predictionSegmentDimension("football")
+  });
   const trainingPosterior = evaluateModeledFixtures(
     modeledTraining,
     evaluationConfig,
     probabilityCalibrationPolicy,
     true,
     marketPriorScalingPolicy,
-    empiricalValueGuardPolicy
+    empiricalValueGuardPolicy,
+    segmentValueGuardPolicy
   );
   const trainingResults = trainingPosterior.results;
   const temperatureValidationResults = probabilityPolicyValidationRows(trainingResults, probabilityCalibrationPolicy);
@@ -729,7 +750,7 @@ export function runFootballRuntimeReplay(
     true,
     marketPriorScalingPolicy
   );
-  const holdoutPosterior = evaluateModeledFixtures(
+  const globalGuardedHoldoutPosterior = evaluateModeledFixtures(
     modeledHoldout,
     holdoutEvaluationConfig,
     probabilityCalibrationPolicy,
@@ -737,8 +758,18 @@ export function runFootballRuntimeReplay(
     marketPriorScalingPolicy,
     empiricalValueGuardPolicy
   );
+  const holdoutPosterior = evaluateModeledFixtures(
+    modeledHoldout,
+    holdoutEvaluationConfig,
+    probabilityCalibrationPolicy,
+    true,
+    marketPriorScalingPolicy,
+    empiricalValueGuardPolicy,
+    segmentValueGuardPolicy
+  );
   const results = holdoutPosterior.results;
-  const empiricalValueGuardComparison = buildEconomicSelectionComparison(unguardedHoldoutPosterior.results, results);
+  const empiricalValueGuardComparison = buildEconomicSelectionComparison(unguardedHoldoutPosterior.results, globalGuardedHoldoutPosterior.results);
+  const segmentValueGuardComparison = buildEconomicSelectionComparison(globalGuardedHoldoutPosterior.results, results);
   const probabilityCalibrationComparison = buildProbabilityCalibrationComparison({
     baselineRows: rawHoldoutResults,
     calibratedRows: calibratedHoldoutResults
@@ -801,7 +832,7 @@ export function runFootballRuntimeReplay(
   const windowEnd = prepared.at(-1)?.source.kickoffAt ?? null;
   const executionHash = stableHash({
     modelKey: RUNTIME_MODEL_KEY,
-    entrypoint: "modelFootballMatch+buildMatchContextAdjustment+temperatureScaling+marketPrior+empiricalValueGuard",
+    entrypoint: "modelFootballMatch+buildMatchContextAdjustment+temperatureScaling+marketPrior+empiricalValueGuard+segmentValueGuard",
     contract,
     fixtureIds: selectedResults.map((result) => result.fixtureExternalId),
     probabilityVectors: selectedResults.map((result) => result.probabilities),
@@ -818,6 +849,8 @@ export function runFootballRuntimeReplay(
     marketPriorScalingPolicy,
     empiricalValueGuardPolicy,
     empiricalValueGuardComparison,
+    segmentValueGuardPolicy,
+    segmentValueGuardComparison,
     marketPriorEvidence,
     learnedWeightsProvenance: weightProvenance
   });
@@ -857,6 +890,8 @@ export function runFootballRuntimeReplay(
     marketPriorScalingPolicy,
     empiricalValueGuardPolicy,
     empiricalValueGuardComparison,
+    segmentValueGuardPolicy,
+    segmentValueGuardComparison,
     marketPriorEvidence,
     learnedWeightsProvenance: weightProvenance,
     config,
@@ -872,6 +907,9 @@ export function runFootballRuntimeReplay(
       empiricalValueGuardPolicy.status === "active"
         ? `${empiricalValueGuardPolicy.buckets.filter((bucket) => bucket.eligible).length} regime-stable probability bucket(s) require edge and EV to survive both earlier and recent 97.5% floors at 95% joint confidence; ${empiricalValueGuardComparison.picksRemoved} holdout point-estimate pick(s) were removed.`
         : `The temporal empirical value guard abstained (${empiricalValueGuardPolicy.reason}); no point-estimate pick can bypass it.`,
+      segmentValueGuardPolicy.status === "active"
+        ? `${segmentValueGuardPolicy.segments.filter((segment) => segment.buckets.some((bucket) => bucket.eligible)).length} competition segment(s) have regime-stable probability evidence; ${segmentValueGuardComparison.picksRemoved} globally guarded holdout pick(s) were removed by exact-competition reliability.`
+        : `The competition segment guard abstained (${segmentValueGuardPolicy.reason}); no pooled sport-wide result can bypass it.`,
       marketPriorEvidence.status === "applied"
         ? `The live no-vig market prior adjusted ${marketPriorEvidence.adjustedFixtures}/${marketPriorEvidence.evaluatedFixtures} holdout fixture(s) at average weight ${marketPriorEvidence.averageWeight}; final-posterior log-loss delta ${marketPriorEvidence.probabilityComparison.logLossDelta ?? "n/a"}.`
         : "No coherent pre-match holdout market was available for live market-prior parity.",

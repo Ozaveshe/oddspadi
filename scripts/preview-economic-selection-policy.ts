@@ -58,6 +58,8 @@ async function main(): Promise<void> {
       marketPriorScalingPolicy: "marketPriorScalingPolicy" in result ? result.marketPriorScalingPolicy : null,
       empiricalValueGuardPolicy: "empiricalValueGuardPolicy" in result ? result.empiricalValueGuardPolicy : null,
       empiricalValueGuardComparison: "empiricalValueGuardComparison" in result ? result.empiricalValueGuardComparison : null,
+      segmentValueGuardPolicy: "segmentValueGuardPolicy" in result ? result.segmentValueGuardPolicy : null,
+      segmentValueGuardComparison: "segmentValueGuardComparison" in result ? result.segmentValueGuardComparison : null,
       marketPriorEvidence: "marketPriorEvidence" in result ? result.marketPriorEvidence : null
     }));
   }

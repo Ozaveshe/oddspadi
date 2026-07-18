@@ -13814,6 +13814,57 @@ describe("prediction utilities", () => {
                 selected: { pickCount: 48, roiUnits: 4.8, yield: 0.1 },
                 picksRemoved: 24
               },
+              segmentValueGuardPolicy: {
+                version: "segment-value-guard-v1",
+                source: "chronological-final-posterior-segment-regime-windows",
+                status: "active",
+                segmentDimension: "competition",
+                confidenceLevel: 0.95,
+                regimeConfidenceLevel: 0.975,
+                minimumBucketSample: 40,
+                minimumRegimeSample: 20,
+                sampleSize: 378,
+                unresolvedSampleSize: 0,
+                unresolvedEarlierSampleSize: 0,
+                unresolvedRecentSampleSize: 0,
+                windowStart: "2025-04-01T00:00:00.000Z",
+                windowEnd: "2025-06-30T00:00:00.000Z",
+                holdoutWindowStart: "2025-07-01T00:00:00.000Z",
+                earlierWindow: { windowStart: "2025-04-01T00:00:00.000Z", windowEnd: "2025-05-15T00:00:00.000Z", sampleSize: 189 },
+                recentWindow: { windowStart: "2025-05-16T00:00:00.000Z", windowEnd: "2025-06-30T00:00:00.000Z", sampleSize: 189 },
+                segments: [{
+                  segmentKey: "competition:39",
+                  sampleSize: 378,
+                  earlierSampleSize: 189,
+                  recentSampleSize: 189,
+                  buckets: [
+                    {
+                      minProbability: 0.2, maxProbability: 0.3, sampleSize: 126, averageProbability: 0.25, observedRate: 0.238095,
+                      aggregateProbabilityFloor: 0.181603, probabilityFloor: 0.149938, eligible: true,
+                      earlier: { sampleSize: 63, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.149938 },
+                      recent: { sampleSize: 63, averageProbability: 0.25, observedRate: 0.238095, probabilityFloor: 0.149938 }
+                    },
+                    {
+                      minProbability: 0.3, maxProbability: 0.4, sampleSize: 126, averageProbability: 0.35, observedRate: 0.333333,
+                      aggregateProbabilityFloor: 0.268399, probabilityFloor: 0.229496, eligible: true,
+                      earlier: { sampleSize: 63, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.229496 },
+                      recent: { sampleSize: 63, averageProbability: 0.35, observedRate: 0.333333, probabilityFloor: 0.229496 }
+                    },
+                    {
+                      minProbability: 0.4, maxProbability: 0.5, sampleSize: 126, averageProbability: 0.45, observedRate: 0.460317,
+                      aggregateProbabilityFloor: 0.388882, probabilityFloor: 0.343089, eligible: true,
+                      earlier: { sampleSize: 63, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.343089 },
+                      recent: { sampleSize: 63, averageProbability: 0.45, observedRate: 0.460317, probabilityFloor: 0.343089 }
+                    }
+                  ]
+                }],
+                reason: "eligible-segments"
+              },
+              segmentValueGuardComparison: {
+                baseline: { pickCount: 48, roiUnits: 4.8, yield: 0.1 },
+                selected: { pickCount: 36, roiUnits: 3.6, yield: 0.1 },
+                picksRemoved: 12
+              },
               marketPriorEvidence: {
                 version: "runtime-market-prior-parity-v1",
                 status: "applied",

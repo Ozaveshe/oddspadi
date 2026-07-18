@@ -1462,6 +1462,8 @@ function backtestInsertPayload(result: HistoricalBacktestResult, includeDemo: bo
             marketPriorScalingPolicy: result.marketPriorScalingPolicy,
             empiricalValueGuardPolicy: result.empiricalValueGuardPolicy,
             empiricalValueGuardComparison: result.empiricalValueGuardComparison,
+            segmentValueGuardPolicy: result.segmentValueGuardPolicy,
+            segmentValueGuardComparison: result.segmentValueGuardComparison,
             marketPriorEvidence: result.marketPriorEvidence
           }
         : {}),

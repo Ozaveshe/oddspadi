@@ -8,6 +8,7 @@ import {
   selectBestPick,
 } from "./prediction/odds";
 import { footballMarketPriorEvidencePolicy } from "./prediction/marketPriorPolicy";
+import { predictionSegmentKey } from "./prediction/predictionSegment";
 import { modelBasketballMatch } from "./prediction/basketballModel";
 import { modelFootballMatch } from "./prediction/footballModel";
 import { modelTennisMatch } from "./prediction/tennisModel";
@@ -202,8 +203,9 @@ export function buildPrediction(
   );
   const markets = marketPrior.markets;
   const diagnostics = applyMarketPriorAdjustmentToDiagnostics(learnedCalibrationDiagnostics, marketPrior.adjustment);
-  const valueEdges = buildValueEdges(markets, match.oddsMarkets, diagnostics.dataQualityScore, runtimeLearningProfile);
-  const candidatePick = selectBestPick(valueEdges, { learningProfile: runtimeLearningProfile, caseMemoryBank });
+  const segmentKey = predictionSegmentKey(match);
+  const valueEdges = buildValueEdges(markets, match.oddsMarkets, diagnostics.dataQualityScore, runtimeLearningProfile, segmentKey);
+  const candidatePick = selectBestPick(valueEdges, { learningProfile: runtimeLearningProfile, caseMemoryBank, segmentKey });
   const selectedStageProbability = (stageMarkets: typeof markets): number | null => {
     if (!candidatePick.hasValue) return null;
     const probability = stageMarkets.find((market) => market.marketId === candidatePick.marketId)?.probabilities[candidatePick.selectionId];

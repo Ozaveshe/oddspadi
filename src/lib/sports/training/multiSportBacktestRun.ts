@@ -91,6 +91,14 @@ export type MultiSportBacktestJob = {
     empiricalValueGuardBaselinePickCount: number | null;
     empiricalValueGuardSelectedPickCount: number | null;
     empiricalValueGuardPicksRemoved: number | null;
+    segmentValueGuardStatus: "active" | "abstain" | null;
+    segmentValueGuardDimension: "competition" | "surface" | null;
+    segmentValueGuardEligibleSegments: number | null;
+    segmentValueGuardUnresolvedSampleSize: number | null;
+    segmentValueGuardLargestRateDrift: number | null;
+    segmentValueGuardBaselinePickCount: number | null;
+    segmentValueGuardSelectedPickCount: number | null;
+    segmentValueGuardPicksRemoved: number | null;
     marketPriorStatus: "applied" | "no-priced-market" | null;
     marketPriorAdjustedFixtures: number | null;
     marketPriorCoverage: number | null;
@@ -193,6 +201,14 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
       empiricalValueGuardBaselinePickCount: null,
       empiricalValueGuardSelectedPickCount: null,
       empiricalValueGuardPicksRemoved: null,
+      segmentValueGuardStatus: null,
+      segmentValueGuardDimension: null,
+      segmentValueGuardEligibleSegments: null,
+      segmentValueGuardUnresolvedSampleSize: null,
+      segmentValueGuardLargestRateDrift: null,
+      segmentValueGuardBaselinePickCount: null,
+      segmentValueGuardSelectedPickCount: null,
+      segmentValueGuardPicksRemoved: null,
       marketPriorStatus: null,
       marketPriorAdjustedFixtures: null,
       marketPriorCoverage: null,
@@ -214,6 +230,15 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
   const eligibleValueGuardBuckets = runtimeResult?.empiricalValueGuardPolicy.buckets.filter((bucket) => bucket.eligible) ?? [];
   const largestValueGuardRateDrift = eligibleValueGuardBuckets.length
     ? Math.max(...eligibleValueGuardBuckets.map((bucket) => Math.abs(
+        (bucket.recent.observedRate ?? 0) - (bucket.earlier.observedRate ?? 0)
+      )))
+    : null;
+  const eligibleSegments = runtimeResult?.segmentValueGuardPolicy.segments.filter((segment) =>
+    segment.buckets.some((bucket) => bucket.eligible)
+  ) ?? [];
+  const eligibleSegmentBuckets = eligibleSegments.flatMap((segment) => segment.buckets.filter((bucket) => bucket.eligible));
+  const largestSegmentRateDrift = eligibleSegmentBuckets.length
+    ? Math.max(...eligibleSegmentBuckets.map((bucket) => Math.abs(
         (bucket.recent.observedRate ?? 0) - (bucket.earlier.observedRate ?? 0)
       )))
     : null;
@@ -254,6 +279,14 @@ function resultSummary(result: BacktestRunStoreResult | null): MultiSportBacktes
     empiricalValueGuardBaselinePickCount: runtimeResult?.empiricalValueGuardComparison.baseline.pickCount ?? null,
     empiricalValueGuardSelectedPickCount: runtimeResult?.empiricalValueGuardComparison.selected.pickCount ?? null,
     empiricalValueGuardPicksRemoved: runtimeResult?.empiricalValueGuardComparison.picksRemoved ?? null,
+    segmentValueGuardStatus: runtimeResult?.segmentValueGuardPolicy.status ?? null,
+    segmentValueGuardDimension: runtimeResult?.segmentValueGuardPolicy.segmentDimension ?? null,
+    segmentValueGuardEligibleSegments: runtimeResult ? eligibleSegments.length : null,
+    segmentValueGuardUnresolvedSampleSize: runtimeResult?.segmentValueGuardPolicy.unresolvedSampleSize ?? null,
+    segmentValueGuardLargestRateDrift: largestSegmentRateDrift,
+    segmentValueGuardBaselinePickCount: runtimeResult?.segmentValueGuardComparison.baseline.pickCount ?? null,
+    segmentValueGuardSelectedPickCount: runtimeResult?.segmentValueGuardComparison.selected.pickCount ?? null,
+    segmentValueGuardPicksRemoved: runtimeResult?.segmentValueGuardComparison.picksRemoved ?? null,
     marketPriorStatus: runtimeResult?.marketPriorEvidence.status ?? null,
     marketPriorAdjustedFixtures: runtimeResult?.marketPriorEvidence.adjustedFixtures ?? null,
     marketPriorCoverage: runtimeResult?.marketPriorEvidence.coverage ?? null,

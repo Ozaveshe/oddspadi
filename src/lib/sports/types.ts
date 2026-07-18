@@ -273,6 +273,7 @@ export interface ValueEdge {
   confidence: ConfidenceLevel;
   risk: RiskLevel;
   empiricalValueGuard?: EmpiricalValueGuardDecision;
+  segmentValueGuard?: SegmentValueGuardDecision;
   uncertaintyAdjustedScore?: number;
   scoreComponents?: {
     expectedValue: number;
@@ -514,6 +515,53 @@ export interface EmpiricalValueGuardDecision {
   conservativeEdge: number | null;
   conservativeExpectedValue: number | null;
   bucketSampleSize: number | null;
+  confidenceLevel: number | null;
+  reason: string;
+}
+
+export type PredictionSegmentDimension = "competition" | "surface";
+
+export interface SegmentValueGuardSegment {
+  segmentKey: string;
+  sampleSize: number;
+  earlierSampleSize: number;
+  recentSampleSize: number;
+  buckets: EmpiricalValueGuardBucket[];
+}
+
+export interface SegmentValueGuardPolicy {
+  version: "segment-value-guard-v1";
+  source: "chronological-final-posterior-segment-regime-windows";
+  status: "active" | "abstain";
+  segmentDimension: PredictionSegmentDimension;
+  confidenceLevel: 0.95;
+  regimeConfidenceLevel: 0.975;
+  minimumBucketSample: number;
+  minimumRegimeSample: number;
+  sampleSize: number;
+  unresolvedSampleSize: number;
+  unresolvedEarlierSampleSize: number;
+  unresolvedRecentSampleSize: number;
+  windowStart: string | null;
+  windowEnd: string | null;
+  holdoutWindowStart: string | null;
+  earlierWindow: EmpiricalValueGuardWindow;
+  recentWindow: EmpiricalValueGuardWindow;
+  segments: SegmentValueGuardSegment[];
+  reason: "eligible-segments" | "insufficient-segment-sample" | "invalid-chronology";
+}
+
+export interface SegmentValueGuardDecision {
+  status: "passed" | "blocked" | "not-applied";
+  segmentKey: string | null;
+  probabilityFloor: number | null;
+  earlierProbabilityFloor: number | null;
+  recentProbabilityFloor: number | null;
+  regimeObservedRateDrift: number | null;
+  conservativeEdge: number | null;
+  conservativeExpectedValue: number | null;
+  bucketSampleSize: number | null;
+  segmentSampleSize: number | null;
   confidenceLevel: number | null;
   reason: string;
 }
@@ -1553,6 +1601,12 @@ export interface DecisionLearningProfile {
   marketPriorScalingPolicy?: MarketPriorScalingPolicy | null;
   empiricalValueGuardPolicy?: EmpiricalValueGuardPolicy | null;
   empiricalValueGuardComparison?: {
+    baseline: { pickCount: number; roiUnits: number; yield: number | null };
+    selected: { pickCount: number; roiUnits: number; yield: number | null };
+    picksRemoved: number;
+  } | null;
+  segmentValueGuardPolicy?: SegmentValueGuardPolicy | null;
+  segmentValueGuardComparison?: {
     baseline: { pickCount: number; roiUnits: number; yield: number | null };
     selected: { pickCount: number; roiUnits: number; yield: number | null };
     picksRemoved: number;

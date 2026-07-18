@@ -130,6 +130,12 @@ describe("football exact runtime replay", () => {
     expect(result.empiricalValueGuardComparison.picksRemoved).toBe(
       result.empiricalValueGuardComparison.baseline.pickCount - result.empiricalValueGuardComparison.selected.pickCount
     );
+    expect(result.segmentValueGuardPolicy).toMatchObject({
+      source: "chronological-final-posterior-segment-regime-windows",
+      segmentDimension: "competition",
+      status: "abstain"
+    });
+    expect(result.segmentValueGuardComparison.baseline.pickCount).toBe(result.empiricalValueGuardComparison.selected.pickCount);
     expect(result.marketPriorEvidence).toMatchObject({
       version: "runtime-market-prior-parity-v1",
       status: "applied",
@@ -165,6 +171,7 @@ describe("football exact runtime replay", () => {
     expect(homeWin.probabilityCalibrationPolicy).toEqual(awayWin.probabilityCalibrationPolicy);
     expect(homeWin.marketPriorScalingPolicy).toEqual(awayWin.marketPriorScalingPolicy);
     expect(homeWin.empiricalValueGuardPolicy).toEqual(awayWin.empiricalValueGuardPolicy);
+    expect(homeWin.segmentValueGuardPolicy).toEqual(awayWin.segmentValueGuardPolicy);
   });
 
   it("keeps explicit closing prices out of the final posterior while retaining them for evaluation", () => {
