@@ -1010,7 +1010,13 @@ export function buildDecisionLearningProfileFromSnapshot(
     engineVersion: backtest?.engineVersion ?? activePromotion?.engineVersion ?? null,
     modelCompatibility: runtimeEvidence.compatibility,
     calibrationPromotion: promotionMatchesBacktest && activePromotion
-      ? { id: activePromotion.id, candidateId: activePromotion.candidateId, approvedAt: activePromotion.approvedAt, expiresAt: activePromotion.expiresAt }
+      ? {
+          id: activePromotion.id,
+          candidateId: activePromotion.candidateId,
+          approvedAt: activePromotion.approvedAt,
+          expiresAt: activePromotion.expiresAt,
+          comparisonReceiptId: activePromotion.comparisonReceiptId ?? null
+        }
       : null,
     calibrationDriftStatus: driftReceiptMatches ? calibrationDriftReceipt!.status : null,
     calibrationDriftReceipt: driftReceiptMatches ? calibrationDriftReceipt : null,

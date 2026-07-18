@@ -4,6 +4,10 @@ import { finishProviderRun, startProviderRun } from "../../src/lib/sports/intell
 import type { ProviderRunClaim, ProviderRunLog, ProviderRunStatus } from "../../src/lib/sports/intelligence/types";
 import { runAndStoreCalibration, type CalibrationRunResult } from "../../src/lib/sports/prediction/decisionCalibration";
 import {
+  runAndStoreChampionChallengerComparison,
+  type ChampionChallengerStoreResult
+} from "../../src/lib/sports/prediction/championChallengerRepository";
+import {
   getTrainingDataSnapshot,
   runAndStoreFootballRuntimeReplay,
   runAndStoreHistoricalBacktest,
@@ -18,6 +22,7 @@ type LearningSport = Extract<Sport, "football" | "basketball" | "tennis">;
 type CalibrationOperation = (sport: LearningSport) => Promise<CalibrationRunResult>;
 type RuntimeReplayOperation = (sport: LearningSport) => Promise<BacktestRunStoreResult>;
 type RuntimeReplayDueOperation = (sport: LearningSport, now: Date) => Promise<boolean>;
+type ChampionChallengerOperation = (input: { sport: LearningSport; challengerCandidateId: string; now: Date }) => Promise<ChampionChallengerStoreResult>;
 type ClaimLearningRun = (startedAt: string) => Promise<ProviderRunClaim>;
 type FinishLearningRun = (run: ProviderRunLog, status: ProviderRunStatus, errors: string[], finishedAt: string) => Promise<ProviderRunLog>;
 
@@ -49,6 +54,7 @@ export async function runModelLearningCycle({
       ? runAndStoreFootballRuntimeReplay({ minSample: 100, limit: 50_000 })
       : runAndStoreHistoricalBacktest({ sport, minSample: 30, limit: 50_000 }),
   runtimeReplayDue = runtimeReplayNeedsBootstrap,
+  runChampionChallenger = runAndStoreChampionChallengerComparison,
   now = new Date()
 }: {
   scheduleToken: string | null;
@@ -57,6 +63,7 @@ export async function runModelLearningCycle({
   runCalibration?: CalibrationOperation;
   runRuntimeReplay?: RuntimeReplayOperation;
   runtimeReplayDue?: RuntimeReplayDueOperation;
+  runChampionChallenger?: ChampionChallengerOperation;
   now?: Date;
 }) {
   if (!adminToken || !scheduleToken || !tokenMatches(adminToken, scheduleToken)) {
@@ -69,20 +76,31 @@ export async function runModelLearningCycle({
     result: CalibrationRunResult;
     runtimeReplay: BacktestRunStoreResult | null;
     runtimeReplayTrigger: "weekly" | "bootstrap" | "not-due";
+    comparisons: ChampionChallengerStoreResult[];
   }> = [];
   for (const sport of sports) {
     const bootstrapRuntimeReplay = weeklyRuntimeReplay ? false : await runtimeReplayDue(sport, now);
     const runtimeReplayTrigger = weeklyRuntimeReplay ? "weekly" : bootstrapRuntimeReplay ? "bootstrap" : "not-due";
     const runtimeReplay = runtimeReplayTrigger === "not-due" ? null : await runRuntimeReplay(sport);
-    results.push({ sport, runtimeReplay, runtimeReplayTrigger, result: await runCalibration(sport) });
+    const result = await runCalibration(sport);
+    const newCandidateIds = (result.candidates ?? [])
+      .filter((candidate) => candidate.status === "stored" && candidate.id)
+      .map((candidate) => candidate.id!);
+    const comparisons: ChampionChallengerStoreResult[] = [];
+    for (const challengerCandidateId of newCandidateIds) {
+      comparisons.push(await runChampionChallenger({ sport, challengerCandidateId, now }));
+    }
+    results.push({ sport, runtimeReplay, runtimeReplayTrigger, result, comparisons });
   }
   const successfulCandidateStatuses = new Set(["stored", "reused", "skipped"]);
-  const success = results.every(({ result, runtimeReplay }) =>
+  const successfulComparisonStatuses = new Set(["stored", "reused", "not-applicable"]);
+  const success = results.every(({ result, runtimeReplay, comparisons }) =>
     result.status === "stored" &&
     (result.candidates ?? []).every((candidate) => successfulCandidateStatuses.has(candidate.status)) &&
+    comparisons.every((comparison) => successfulComparisonStatuses.has(comparison.status)) &&
     (!runtimeReplay || runtimeReplay.status === "stored")
   );
-  const resultSummary = results.map(({ sport, result, runtimeReplay, runtimeReplayTrigger }) => ({
+  const resultSummary = results.map(({ sport, result, runtimeReplay, runtimeReplayTrigger, comparisons }) => ({
     sport,
     calibration: {
       status: result.status,
@@ -99,7 +117,15 @@ export async function runModelLearningCycle({
       brierScore: runtimeReplay?.result?.brierScore ?? null,
       logLoss: runtimeReplay?.result?.logLoss ?? null,
       reason: runtimeReplay && runtimeReplay.status !== "stored" ? runtimeReplay.reason : null
-    }
+    },
+    championChallenger: comparisons.map((comparison) => ({
+      status: comparison.status,
+      receiptId: comparison.id ?? null,
+      verdict: comparison.receipt?.status ?? null,
+      eligibleForPromotion: comparison.receipt?.eligibleForPromotion ?? false,
+      pairedSize: comparison.receipt?.sample.paired ?? 0,
+      reason: comparison.reason ?? null
+    }))
   }));
   console.info(JSON.stringify({
     event: "oddspadi-model-learning-cycle",
@@ -114,10 +140,12 @@ export async function runModelLearningCycle({
     controls: {
       calibrationRunsStored: results.every(({ result }) => result.status === "stored"),
       candidateGeneration: true,
+      championChallengerEvaluation: true,
+      comparisonReceiptsStored: results.every(({ comparisons }) => comparisons.every((comparison) => successfulComparisonStatuses.has(comparison.status))),
       weeklyRuntimeParityBacktests: weeklyRuntimeReplay,
       bootstrapRuntimeParityBacktests: results.some((result) => result.runtimeReplayTrigger === "bootstrap"),
       automaticLivePromotion: false,
-      promotionRequirement: "A model-bound candidate must pass sample, Brier, log-loss, calibration, CLV, and operator approval gates."
+      promotionRequirement: "A distinct model challenger must prove fresh paired Brier/log-loss superiority against the active sport champion before operator approval."
     },
     results: resultSummary
   }, { status: success ? 200 : 502 });
@@ -174,6 +202,7 @@ export async function runSerializedModelLearningCycle({
         sport?: string;
         calibration?: { status?: string; reason?: string | null; candidates?: Array<{ status?: string; reason?: string | null }> };
         runtimeReplay?: { status?: string; reason?: string | null };
+        championChallenger?: Array<{ status?: string; reason?: string | null }>;
       }>;
       [key: string]: unknown;
     };
@@ -184,12 +213,16 @@ export async function runSerializedModelLearningCycle({
       const candidateErrors = (result.calibration?.candidates ?? [])
         .filter((candidate) => candidate.status && !["stored", "reused", "skipped"].includes(candidate.status))
         .map((candidate) => `${sport} calibration candidate: ${candidate.reason ?? candidate.status}`);
+      const comparisonErrors = (result.championChallenger ?? [])
+        .filter((comparison) => comparison.status && !["stored", "reused", "not-applicable"].includes(comparison.status))
+        .map((comparison) => `${sport} champion-challenger: ${comparison.reason ?? comparison.status}`);
       return [
         calibration && calibration !== "stored" ? `${sport} calibration: ${result.calibration?.reason ?? calibration}` : "",
         runtimeReplay && runtimeReplay !== "stored" && runtimeReplay !== "not-due"
           ? `${sport} runtime replay: ${result.runtimeReplay?.reason ?? runtimeReplay}`
           : "",
-        ...candidateErrors
+        ...candidateErrors,
+        ...comparisonErrors
       ].filter(Boolean);
     });
     const anyStored = (payload.results ?? []).some((result) =>

@@ -108,7 +108,7 @@ const FAMILIES: FamilyDefinition[] = [
     id: "decision-memory",
     label: "Decision memory",
     purpose: "Decision runs, model versions, outcomes, calibration runs, AI audit episodes, briefings, and shadow replay.",
-    tables: ["op_model_versions", "op_decision_runs", "op_prediction_outcomes", "op_calibration_runs", "op_ai_thought_episodes", "op_decision_briefings", "op_shadow_memory_replay"],
+    tables: ["op_model_versions", "op_decision_runs", "op_prediction_outcomes", "op_calibration_runs", "op_calibration_candidates", "op_calibration_promotions", "op_model_comparison_receipts", "op_ai_thought_episodes", "op_decision_briefings", "op_shadow_memory_replay"],
     feeds: []
   }
 ];

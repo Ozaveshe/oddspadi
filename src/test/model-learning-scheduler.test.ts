@@ -119,6 +119,67 @@ describe("governed model learning schedule", () => {
     expect(body.results.every((row) => row.runtimeReplay.status === "stored")).toBe(true);
   });
 
+  it("stores paired champion-challenger evidence for every newly created candidate without auto-promoting", async () => {
+    const runChampionChallenger = vi.fn(async ({ sport, challengerCandidateId }: { sport: string; challengerCandidateId: string }) => ({
+      status: "stored" as const,
+      configured: true,
+      table: "op_model_comparison_receipts" as const,
+      id: `${sport}-comparison`,
+      receipt: { status: "challenger-promotable", eligibleForPromotion: true, sample: { paired: 80 } }
+    }) as never);
+    const response = await runModelLearningCycle({
+      scheduleToken: "same",
+      adminToken: "same",
+      sports: ["football"],
+      runCalibration: vi.fn(async () => ({
+        status: "stored" as const,
+        configured: true,
+        id: "calibration-1",
+        candidates: [{ status: "stored" as const, configured: true, table: "op_calibration_candidates" as const, id: "challenger-1" }]
+      })),
+      runChampionChallenger,
+      runtimeReplayDue: vi.fn(async () => false),
+      now: new Date("2026-07-17T04:45:00.000Z")
+    });
+    const body = await response.json() as {
+      success: boolean;
+      controls: { championChallengerEvaluation: boolean; automaticLivePromotion: boolean };
+      results: Array<{ championChallenger: Array<{ receiptId: string; verdict: string; pairedSize: number }> }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.controls).toMatchObject({ championChallengerEvaluation: true, automaticLivePromotion: false });
+    expect(runChampionChallenger).toHaveBeenCalledWith({ sport: "football", challengerCandidateId: "challenger-1", now: expect.any(Date) });
+    expect(body.results[0]?.championChallenger).toEqual([{ status: "stored", receiptId: "football-comparison", verdict: "challenger-promotable", eligibleForPromotion: true, pairedSize: 80, reason: null }]);
+  });
+
+  it("treats a first-sport bootstrap candidate as comparison-not-applicable rather than a failed learning cycle", async () => {
+    const response = await runModelLearningCycle({
+      scheduleToken: "same",
+      adminToken: "same",
+      sports: ["tennis"],
+      runCalibration: vi.fn(async () => ({
+        status: "stored" as const,
+        configured: true,
+        id: "calibration-1",
+        candidates: [{ status: "stored" as const, configured: true, table: "op_calibration_candidates" as const, id: "candidate-1" }]
+      })),
+      runChampionChallenger: vi.fn(async () => ({
+        status: "not-applicable" as const,
+        configured: true,
+        table: "op_model_comparison_receipts" as const,
+        reason: "No active tennis champion exists; the first promotion is a bootstrap decision."
+      })),
+      runtimeReplayDue: vi.fn(async () => false)
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      results: [{ championChallenger: [{ status: "not-applicable" }] }]
+    });
+  });
+
   it("fails closed when calibration was stored but its promotion candidate was not", async () => {
     const response = await runModelLearningCycle({
       scheduleToken: "same",

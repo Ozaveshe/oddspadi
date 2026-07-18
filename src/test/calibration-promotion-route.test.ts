@@ -68,7 +68,7 @@ describe("calibration promotion route", () => {
     const response = await POST(
       new Request("http://localhost/api/sports/decision/training/calibration-promotion", {
         method: "POST",
-        body: JSON.stringify({ action: "approve", candidateId: "candidate-1", approvedBy: "risk-operator", rationale: "Validated prospective cohort." })
+        body: JSON.stringify({ action: "approve", candidateId: "candidate-1", comparisonReceiptId: "comparison-1", approvedBy: "risk-operator", rationale: "Validated prospective cohort." })
       })
     );
 
@@ -77,7 +77,8 @@ describe("calibration promotion route", () => {
       candidateId: "candidate-1",
       approvedBy: "risk-operator",
       rationale: "Validated prospective cohort.",
-      expiresAt: null
+      expiresAt: null,
+      comparisonReceiptId: "comparison-1"
     });
   });
 });

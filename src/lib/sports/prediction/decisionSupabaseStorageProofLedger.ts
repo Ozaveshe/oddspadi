@@ -142,8 +142,8 @@ const DOMAINS: Array<Omit<DecisionSupabaseStorageProofLedgerDomain, "localDeclar
     id: "decision-memory",
     label: "Decision memory",
     purpose: "Store model versions, decision runs, AI thought episodes, briefings, outcomes, calibration, and memory replay.",
-    tables: ["op_model_versions", "op_decision_runs", "op_ai_thought_episodes", "op_decision_briefings", "op_prediction_outcomes", "op_calibration_runs", "op_shadow_memory_replay"],
-    expectedTables: 7
+    tables: ["op_model_versions", "op_decision_runs", "op_ai_thought_episodes", "op_decision_briefings", "op_prediction_outcomes", "op_calibration_runs", "op_calibration_candidates", "op_calibration_promotions", "op_model_comparison_receipts", "op_shadow_memory_replay"],
+    expectedTables: 10
   },
   {
     id: "training-backtest",
