@@ -4,6 +4,7 @@ import { getHistorySummary, isPublicAccuracyEligible, type PublicPredictionHisto
 import { summarizeResultsBackfill } from "@/lib/sports/results/backfill";
 import {
   buildPublicPickKey,
+  buildPublicPickPublicationMetadata,
   dedupePublicPickDrafts,
   isCanonicalPublicPickEligible,
   type PublicPickDraft
@@ -73,6 +74,48 @@ describe("public results credibility", () => {
     const newer = draft({ publishedAt: "2026-07-14T10:00:00.000Z", odds: 1.95 });
     expect(buildPublicPickKey(older)).toBe(buildPublicPickKey(newer));
     expect(dedupePublicPickDrafts([older, newer])).toEqual([newer]);
+  });
+
+  it("stores an auditable publication-time quote, consensus, and economic floor receipt", () => {
+    const metadata = buildPublicPickPublicationMetadata(draft({
+      publicationEvidence: {
+        executionQuote: {
+          bookmakerId: "book-1",
+          bookmakerName: "Example Book",
+          observedAt: "2026-07-14T08:59:00.000Z",
+          method: "best-executable-price",
+          decimalOdds: 1.9
+        },
+        marketConsensus: {
+          independentBookmakers: 4,
+          maxProbabilitySpread: 0.045,
+          noVigProbability: 0.51
+        },
+        economicConfidence: {
+          status: "verified",
+          method: "wilson-calibration-bucket",
+          confidenceLevel: 0.95,
+          sampleSize: 80,
+          source: "calibration-promotion:promotion-1/candidate:candidate-1",
+          probabilityLow: 0.55,
+          probabilityHigh: 0.72,
+          edgeLow: 0.04,
+          expectedValueLow: 0.045,
+          detail: "Approved exact-runtime cohort."
+        }
+      }
+    }));
+
+    expect(metadata).toMatchObject({
+      evidenceSchemaVersion: "public-pick-economics-v1",
+      executionQuote: { bookmakerName: "Example Book", decimalOdds: 1.9 },
+      marketConsensus: { independentBookmakers: 4, noVigProbability: 0.51 },
+      economicConfidence: {
+        status: "verified",
+        sampleSize: 80,
+        expectedValueLow: 0.045
+      }
+    });
   });
 
   it("excludes internal model runs from public accuracy", () => {

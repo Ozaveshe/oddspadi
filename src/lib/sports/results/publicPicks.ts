@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DecisionSummary, Match } from "@/lib/sports/types";
+import type { DecisionSummary, Match, ValueEdgeEconomicConfidence } from "@/lib/sports/types";
 import type { CanonicalDecision } from "@/lib/sports/intelligence/types";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -71,6 +71,23 @@ export type PublicPickDraft = Omit<PublicPick, "publicPickId" | "settledAt" | "c
   predictionRunId: string;
   publicDecisionId: string;
   publishedDate: string;
+  publicationEvidence?: PublicPickPublicationEvidence;
+};
+
+export type PublicPickPublicationEvidence = {
+  executionQuote: {
+    bookmakerId: string | null;
+    bookmakerName: string | null;
+    observedAt: string | null;
+    method: string | null;
+    decimalOdds: number;
+  };
+  marketConsensus: {
+    independentBookmakers: number | null;
+    maxProbabilitySpread: number | null;
+    noVigProbability: number;
+  };
+  economicConfidence: ValueEdgeEconomicConfidence;
 };
 
 function finite(value: number | null | undefined): value is number {
@@ -115,6 +132,15 @@ export function isCanonicalPublicPickEligible(decision: CanonicalDecision | unde
   );
 }
 
+export function buildPublicPickPublicationMetadata(draft: Pick<PublicPickDraft, "publicationEvidence">): Record<string, unknown> {
+  return {
+    publicationPolicy: "canonical-decision-summary",
+    publicInvariantPassed: true,
+    evidenceSchemaVersion: "public-pick-economics-v1",
+    ...(draft.publicationEvidence ?? {})
+  };
+}
+
 function databaseRow(draft: PublicPickDraft) {
   return {
     fixture_id: draft.fixtureId,
@@ -151,7 +177,7 @@ function databaseRow(draft: PublicPickDraft) {
     provider: draft.provider,
     provider_fixture_id: draft.providerFixtureId,
     revision: draft.revision,
-    metadata: { publicationPolicy: "canonical-decision-summary", publicInvariantPassed: true },
+    metadata: buildPublicPickPublicationMetadata(draft),
     updated_at: draft.publishedAt
   };
 }
@@ -247,7 +273,33 @@ export async function persistCanonicalPublicPicks({
       settlementReason: new Date(match.kickoffTime).getTime() > Date.now() ? "Waiting for kickoff." : "Waiting for provider final score.",
       provider: match.dataSource.fixtureProvider ?? "unknown",
       providerFixtureId: match.dataSource.fixtureProviderId ?? match.id,
-      revision: Number(existing?.revision ?? 0) + 1
+      revision: Number(existing?.revision ?? 0) + 1,
+      publicationEvidence: {
+        executionQuote: {
+          bookmakerId: published.bookmaker?.id ?? null,
+          bookmakerName: published.bookmaker?.name ?? null,
+          observedAt: published.priceObservedAt ?? null,
+          method: published.priceMethod ?? null,
+          decimalOdds: published.odds
+        },
+        marketConsensus: {
+          independentBookmakers: published.consensusBookmakerCount ?? null,
+          maxProbabilitySpread: published.consensusMaxProbabilitySpread ?? null,
+          noVigProbability: published.noVigImpliedProbability
+        },
+        economicConfidence: published.economicConfidence ?? {
+          status: "unavailable",
+          method: "unavailable",
+          confidenceLevel: null,
+          sampleSize: null,
+          source: null,
+          probabilityLow: null,
+          probabilityHigh: null,
+          edgeLow: null,
+          expectedValueLow: null,
+          detail: "No publication-time empirical economic receipt was attached to the canonical value edge."
+        }
+      }
     });
   }
 
