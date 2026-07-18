@@ -15423,12 +15423,16 @@ describe("prediction utilities", () => {
               commence_time: "2026-06-24T15:00:00Z",
               home_team: "Arsenal",
               away_team: "Aston Villa",
+              last_update: "2026-06-24T15:20:00Z",
               bookmakers: [
                 {
+                  key: "test-book",
                   title: "Book",
+                  last_update: "2026-06-24T15:20:00Z",
                   markets: [
                     {
                       key: "h2h",
+                      last_update: "2026-06-24T15:20:00Z",
                       outcomes: [
                         { name: "Arsenal", price: 1.91 },
                         { name: "Draw", price: 3.6 },
@@ -15506,6 +15510,7 @@ describe("prediction utilities", () => {
     ]);
     const provider = new ProviderBackedSportsDataProvider({
       env: { API_FOOTBALL_KEY: "football-key", THE_ODDS_API_KEY: "odds-key", WEATHER_API_KEY: "weather-key", NEWS_API_KEY: "news-key" },
+      now: () => new Date("2026-06-24T15:30:00Z"),
       fetchImpl,
       historicalFootballEloLoader: async () => historicalRatings
     });
@@ -15732,12 +15737,16 @@ describe("prediction utilities", () => {
                 commence_time: "2026-08-21T19:00:00Z",
                 home_team: "Arsenal",
                 away_team: "Coventry City",
+                last_update: "2026-08-21T12:00:00Z",
                 bookmakers: [
                   {
+                    key: "test-book",
                     title: "Book",
+                    last_update: "2026-08-21T12:00:00Z",
                     markets: [
                       {
                         key: "h2h",
+                        last_update: "2026-08-21T12:00:00Z",
                         outcomes: [
                           { name: "Arsenal", price: 1.42 },
                           { name: "Draw", price: 5.1 },
@@ -15757,6 +15766,7 @@ describe("prediction utilities", () => {
     };
     const provider = new ProviderBackedSportsDataProvider({
       env: { API_FOOTBALL_KEY: "football-key", THE_ODDS_API_KEY: "odds-key", ODDS_API_ALLOW_HISTORICAL_RUNTIME: "true" },
+      now: () => new Date("2026-08-21T12:30:00Z"),
       fetchImpl
     });
     const [match] = await provider.getFixtures("2026-08-21", "football");
@@ -15974,10 +15984,11 @@ describe("prediction utilities", () => {
         );
       }
       expect(url).toContain("api.api-tennis.com/tennis/");
-      expect(url).toContain("method=get_events");
-      expect(url).toContain("date_start=2026-06-24");
-      expect(url).toContain("date_stop=2026-06-24");
-      expect(url).toContain("APIkey=tennis-key");
+      const params = new URL(url).searchParams;
+      expect(params.get("method")).toBe("get_fixtures");
+      expect(params.get("date_start")).toBe("2026-06-24");
+      expect(params.get("date_stop")).toBe("2026-06-24");
+      expect(params.get("APIkey")).toBe("tennis-key");
       return new Response(
         JSON.stringify({
           result: [
@@ -20361,7 +20372,10 @@ describe("prediction utilities", () => {
     expect(result.ingestion?.sport).toBe("tennis");
     expect(result.ingestion?.counts.fixtures).toBe(1);
     expect(result.ingestion?.counts.featureRows).toBe(2);
-    expect(calls[0]).toContain("date_start=2025-06-03");
+    const params = new URL(calls[0]).searchParams;
+    expect(params.get("method")).toBe("get_fixtures");
+    expect(params.get("date_start")).toBe("2025-06-03");
+    expect(params.get("date_stop")).toBe("2025-06-03");
   });
 
   it("plans capped API-Football season backfills for the long-term corpus", () => {
@@ -26928,6 +26942,7 @@ describe("prediction utilities", () => {
 
   it("uses provider-backed live runtime rows when API-Football and odds evidence are available", async () => {
     const calls: string[] = [];
+    const oddsUpdatedAt = new Date().toISOString();
     const fetchImpl = async (input: string | URL): Promise<Response> => {
       const url = String(input);
       calls.push(url);
@@ -26978,12 +26993,16 @@ describe("prediction utilities", () => {
               commence_time: "2026-08-21T19:00:00Z",
               home_team: "Arsenal",
               away_team: "Coventry City",
+              last_update: oddsUpdatedAt,
               bookmakers: [
                 {
+                  key: "test-book",
                   title: "Test Book",
+                  last_update: oddsUpdatedAt,
                   markets: [
                     {
                       key: "h2h",
+                      last_update: oddsUpdatedAt,
                       outcomes: [
                         { name: "Arsenal", price: 1.72 },
                         { name: "Draw", price: 3.9 },
@@ -27136,6 +27155,7 @@ describe("prediction utilities", () => {
   });
 
   it("marks provider-backed live activation as monitor-ready while publish and training stay locked", async () => {
+    const oddsUpdatedAt = new Date().toISOString();
     const fetchImpl = async (input: string | URL): Promise<Response> => {
       const url = String(input);
       if (url.includes("football.api-sports.io/fixtures?")) {
@@ -27171,12 +27191,16 @@ describe("prediction utilities", () => {
               commence_time: "2026-08-21T19:00:00Z",
               home_team: "Arsenal",
               away_team: "Coventry City",
+              last_update: oddsUpdatedAt,
               bookmakers: [
                 {
+                  key: "test-book",
                   title: "Test Book",
+                  last_update: oddsUpdatedAt,
                   markets: [
                     {
                       key: "h2h",
+                      last_update: oddsUpdatedAt,
                       outcomes: [
                         { name: "Arsenal", price: 2.4 },
                         { name: "Draw", price: 3.9 },
@@ -27338,6 +27362,7 @@ describe("prediction utilities", () => {
   });
 
   it("runs a bounded live activation OpenAI review with evidence filters and side effects locked", async () => {
+    const oddsUpdatedAt = new Date().toISOString();
     const fetchImpl = async (input: string | URL): Promise<Response> => {
       const url = String(input);
       if (url.includes("football.api-sports.io/fixtures?")) {
@@ -27373,12 +27398,16 @@ describe("prediction utilities", () => {
               commence_time: "2026-08-21T19:00:00Z",
               home_team: "Arsenal",
               away_team: "Coventry City",
+              last_update: oddsUpdatedAt,
               bookmakers: [
                 {
+                  key: "test-book",
                   title: "Test Book",
+                  last_update: oddsUpdatedAt,
                   markets: [
                     {
                       key: "h2h",
+                      last_update: oddsUpdatedAt,
                       outcomes: [
                         { name: "Arsenal", price: 2.4 },
                         { name: "Draw", price: 3.9 },
@@ -27600,6 +27629,7 @@ describe("prediction utilities", () => {
   });
 
   it("summarizes provider-ready live decision cycles after bounded AI critique", async () => {
+    const oddsUpdatedAt = new Date().toISOString();
     const fetchImpl = async (input: string | URL): Promise<Response> => {
       const url = String(input);
       if (url.includes("football.api-sports.io/fixtures?")) {
@@ -27635,12 +27665,16 @@ describe("prediction utilities", () => {
               commence_time: "2026-08-21T19:00:00Z",
               home_team: "Arsenal",
               away_team: "Coventry City",
+              last_update: oddsUpdatedAt,
               bookmakers: [
                 {
+                  key: "test-book",
                   title: "Test Book",
+                  last_update: oddsUpdatedAt,
                   markets: [
                     {
                       key: "h2h",
+                      last_update: oddsUpdatedAt,
                       outcomes: [
                         { name: "Arsenal", price: 2.4 },
                         { name: "Draw", price: 3.9 },
@@ -27841,6 +27875,7 @@ describe("prediction utilities", () => {
   });
 
   it("keeps monitor freshness blocked until provider-backed storage readback is proven", async () => {
+    const oddsUpdatedAt = new Date().toISOString();
     const fetchImpl = async (input: string | URL): Promise<Response> => {
       const url = String(input);
       if (url.includes("football.api-sports.io/fixtures?")) {
@@ -27876,12 +27911,16 @@ describe("prediction utilities", () => {
               commence_time: "2026-08-21T19:00:00Z",
               home_team: "Arsenal",
               away_team: "Coventry City",
+              last_update: oddsUpdatedAt,
               bookmakers: [
                 {
+                  key: "test-book",
                   title: "Test Book",
+                  last_update: oddsUpdatedAt,
                   markets: [
                     {
                       key: "h2h",
+                      last_update: oddsUpdatedAt,
                       outcomes: [
                         { name: "Arsenal", price: 2.4 },
                         { name: "Draw", price: 3.9 },

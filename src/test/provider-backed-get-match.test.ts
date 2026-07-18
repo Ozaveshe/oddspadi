@@ -121,8 +121,14 @@ describe("provider-backed match detail retrieval", () => {
     expect(first?.dataSource?.fixtureProvider).toBe("api-tennis");
     expect(second).toBe(first);
     expect(calls).toHaveLength(2);
-    expect(calls[0]).toContain("event_key=701");
-    expect(calls[1]).toContain("date_start=2026-07-10");
+    const detailParams = new URL(calls[0]).searchParams;
+    expect(detailParams.get("method")).toBe("get_fixtures");
+    expect(detailParams.get("match_key")).toBe("701");
+    expect(detailParams.has("event_key")).toBe(false);
+    const fixtureParams = new URL(calls[1]).searchParams;
+    expect(fixtureParams.get("method")).toBe("get_fixtures");
+    expect(fixtureParams.get("date_start")).toBe("2026-07-10");
+    expect(fixtureParams.get("date_stop")).toBe("2026-07-10");
     expect(fallback.getMatch).not.toHaveBeenCalled();
   });
 

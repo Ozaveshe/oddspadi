@@ -2028,7 +2028,7 @@ async function syncApiTennisEvents({
 }): Promise<ProviderSyncResult> {
   const apiKey = firstEnv(env, ["API_TENNIS_KEY", "SPORTS_API_KEY"]);
   const endpoint = new URL("https://api.api-tennis.com/tennis/");
-  endpoint.searchParams.set("method", "get_events");
+  endpoint.searchParams.set("method", "get_fixtures");
   appendSearchParam(endpoint, "date_start", request.from || request.date);
   appendSearchParam(endpoint, "date_stop", request.to || request.date || request.from);
   appendSearchParam(endpoint, "tournament_key", request.league);

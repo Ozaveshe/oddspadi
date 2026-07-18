@@ -2809,7 +2809,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     }
 
     const endpoint = new URL("https://api.api-tennis.com/tennis/");
-    endpoint.searchParams.set("method", "get_events");
+    endpoint.searchParams.set("method", "get_fixtures");
     endpoint.searchParams.set("date_start", date);
     endpoint.searchParams.set("date_stop", date);
     endpoint.searchParams.set("APIkey", apiKey);
@@ -2950,8 +2950,8 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       const eventId = matchId.replace("api-tennis:", "");
       if (!apiKey || !eventId) return null;
       const endpoint = new URL("https://api.api-tennis.com/tennis/");
-      endpoint.searchParams.set("method", "get_events");
-      endpoint.searchParams.set("event_key", eventId);
+      endpoint.searchParams.set("method", "get_fixtures");
+      endpoint.searchParams.set("match_key", eventId);
       endpoint.searchParams.set("APIkey", apiKey);
       const data = (await this.limitedFetch(endpoint)) as ApiTennisResponse | null;
       const events = Array.isArray(data?.result) ? data.result : Array.isArray(data?.response) ? data.response : [];
