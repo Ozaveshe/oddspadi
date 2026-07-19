@@ -48,8 +48,6 @@ export function useLiveBoard(initial: LiveScoreBoard | null, pollMs = 45_000, da
     return succeeded;
   }, [date]);
 
-  const mountedRef = useRef(false);
-
   // Guard against state updates / dangling fetches after unmount.
   useEffect(() => {
     aliveRef.current = true;
@@ -60,9 +58,10 @@ export function useLiveBoard(initial: LiveScoreBoard | null, pollMs = 45_000, da
   }, []);
 
   useEffect(() => {
-    // Refresh on mount (when no server board) and whenever the date changes.
-    if (!initial || mountedRef.current) void refresh();
-    mountedRef.current = true;
+    // Revalidate immediately even when an ISR snapshot was supplied. A cached
+    // page can straddle a UTC matchday or provider-recovery boundary; the JSON
+    // endpoint is CDN-shared, so this corrects the visible board cheaply.
+    void refresh();
 
     const start = () => {
       if (timerRef.current) return;
@@ -92,7 +91,7 @@ export function useLiveBoard(initial: LiveScoreBoard | null, pollMs = 45_000, da
       stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [initial, pollMs, refresh]);
+  }, [pollMs, refresh]);
 
   return { board, refreshing, updatedAt, refresh };
 }

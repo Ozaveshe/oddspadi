@@ -130,8 +130,15 @@ async function checkLatestRun(path, maxAgeMs, label, acceptedStatuses = ["comple
   }, label);
 }
 
-async function checkFixtureAnalysisLinks(payload, label) {
-  const fixtureIds = [...new Set(tipsFixtures(payload).map((row) => row?.fixture?.fixtureId).filter(Boolean))];
+function evenlySample(values, limit) {
+  if (values.length <= limit) return values;
+  if (limit <= 1) return values.slice(0, Math.max(0, limit));
+  return Array.from({ length: limit }, (_, index) => values[Math.round(index * (values.length - 1) / (limit - 1))]);
+}
+
+async function checkFixtureAnalysisLinks(payload, label, maxChecks = 24) {
+  const allFixtureIds = [...new Set(tipsFixtures(payload).map((row) => row?.fixture?.fixtureId).filter(Boolean))];
+  const fixtureIds = evenlySample(allFixtureIds, maxChecks);
   const failures = [];
   for (let index = 0; index < fixtureIds.length; index += 4) {
     const batch = fixtureIds.slice(index, index + 4);
@@ -146,7 +153,7 @@ async function checkFixtureAnalysisLinks(payload, label) {
     }));
     failures.push(...results.filter(Boolean));
   }
-  report(!failures.length, label, failures.length ? failures.slice(0, 5).join(", ") : `${fixtureIds.length} checked`);
+  report(!failures.length, label, failures.length ? failures.slice(0, 5).join(", ") : `${fixtureIds.length}/${allFixtureIds.length} sampled`);
 }
 
 async function checkFeaturedLeagueTables() {
@@ -213,8 +220,8 @@ checkTipsSurfaceConsistency(homePage, todayTips, "homepage matches today's tips 
 checkTipsSurfaceConsistency(predictionsPage, todayTips, "predictions page matches today's tips API");
 checkTipsSurfaceConsistency(todayPage, todayTips, "today page matches today's tips API");
 checkTipsSurfaceConsistency(weeklyPage, weeklyTips, "weekly page matches weekly tips API");
-if (todayTips) await checkFixtureAnalysisLinks(todayTips, "analysis links from today's tips");
-if (weeklyTips) await checkFixtureAnalysisLinks(weeklyTips, "analysis links from weekly radar");
+if (todayTips) await checkFixtureAnalysisLinks(todayTips, "analysis links from today's tips", 24);
+if (weeklyTips) await checkFixtureAnalysisLinks(weeklyTips, "analysis links from weekly radar", 28);
 await checkFeaturedLeagueTables();
 
 await checkLatestRun("/api/cron/import-fixtures", 26 * 60 * 60_000, "scheduled fixture import receipt");

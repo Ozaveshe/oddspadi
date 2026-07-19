@@ -106,6 +106,9 @@ describe("live OddsPadi product UI contract", () => {
     expect(health).toContain("checkFeaturedLeagueTables");
     expect(health).toContain('"featured league table links"');
     expect(health).toContain('"ligue-1"');
+    expect(health).toContain("function evenlySample(values, limit)");
+    expect(health).toContain('checkFixtureAnalysisLinks(todayTips, "analysis links from today\'s tips", 24)');
+    expect(health).toContain('checkFixtureAnalysisLinks(weeklyTips, "analysis links from weekly radar", 28)');
   });
 
   it("shows leans, watchlist, and no-pick reasons on the empty value-picks state", () => {

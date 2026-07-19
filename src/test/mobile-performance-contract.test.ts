@@ -27,11 +27,14 @@ describe("mobile performance contract", () => {
     const page = source("src/app/live-scores/page.tsx");
     const api = source("src/app/api/live/route.ts");
     const cache = source("src/lib/sports/cachedLiveScoreBoard.ts");
+    const client = source("src/components/live/useLiveBoard.ts");
     expect(page).toContain("getCachedLiveScoreBoard");
     expect(page).toContain("export const revalidate = 30");
     expect(api).toContain("getCachedLiveScoreBoard");
     expect(cache).toContain("unstable_cache");
     expect(cache).toContain("revalidate: 30");
+    expect(client).toContain("Revalidate immediately even when an ISR snapshot was supplied");
+    expect(client).not.toContain("if (!initial || mountedRef.current)");
   });
 
   it("bounds historical evidence reads when the backing store is degraded", () => {
