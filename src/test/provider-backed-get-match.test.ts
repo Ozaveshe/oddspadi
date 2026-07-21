@@ -120,7 +120,7 @@ describe("provider-backed match detail retrieval", () => {
     expect(first?.id).toBe("api-tennis:701");
     expect(first?.dataSource?.fixtureProvider).toBe("api-tennis");
     expect(second).toBe(first);
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
     const detailParams = new URL(calls[0]).searchParams;
     expect(detailParams.get("method")).toBe("get_fixtures");
     expect(detailParams.get("match_key")).toBe("701");
@@ -129,6 +129,10 @@ describe("provider-backed match detail retrieval", () => {
     expect(fixtureParams.get("method")).toBe("get_fixtures");
     expect(fixtureParams.get("date_start")).toBe("2026-07-10");
     expect(fixtureParams.get("date_stop")).toBe("2026-07-10");
+    const oddsParams = new URL(calls[2]).searchParams;
+    expect(oddsParams.get("method")).toBe("get_odds");
+    expect(oddsParams.get("date_start")).toBe("2026-07-10");
+    expect(oddsParams.get("date_stop")).toBe("2026-07-10");
     expect(fallback.getMatch).not.toHaveBeenCalled();
   });
 

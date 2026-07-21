@@ -16018,6 +16018,12 @@ describe("prediction utilities", () => {
       }
       expect(url).toContain("api.api-tennis.com/tennis/");
       const params = new URL(url).searchParams;
+      if (params.get("method") === "get_odds") {
+        return new Response(JSON.stringify({ result: {} }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
       expect(params.get("method")).toBe("get_fixtures");
       expect(params.get("date_start")).toBe("2026-06-24");
       expect(params.get("date_stop")).toBe("2026-06-24");
@@ -16101,7 +16107,7 @@ describe("prediction utilities", () => {
     const [match] = await provider.getFixtures("2026-06-24", "tennis");
     const matchById = await provider.getMatch(match.id);
 
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(5);
     expect(calls.some((url) => url.includes("api.the-odds-api.com/v4/sports/tennis_atp_halle/events/"))).toBe(true);
     expect(matchById).toBe(match);
     expect(match.id).toBe("api-tennis:701");

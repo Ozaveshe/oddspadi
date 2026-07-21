@@ -137,6 +137,11 @@ type ApiTennisResponse = {
   response?: ApiTennisEvent[];
 };
 
+type ApiTennisOddsResponse = {
+  result?: Record<string, unknown>;
+  response?: Record<string, unknown>;
+};
+
 type ApiFootballLineup = {
   team?: {
     id?: number | string;
@@ -368,6 +373,70 @@ function cleanText(value: unknown): string {
 function safeId(value: unknown, fallback: string): string {
   const text = String(value ?? "").trim();
   return text || fallback;
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function apiTennisSelectionSide(value: string, homeName: string, awayName: string): "home" | "away" | null {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (["home", "1", "player1", "firstplayer"].includes(normalized) || normalized === normalizedTeamName(homeName)) return "home";
+  if (["away", "2", "player2", "secondplayer"].includes(normalized) || normalized === normalizedTeamName(awayName)) return "away";
+  return null;
+}
+
+function apiTennisOddsEvents(events: ApiTennisEvent[], payload: ApiTennisOddsResponse | null): OddsApiEvent[] {
+  const result = recordValue(payload?.result ?? payload?.response);
+  const capturedAt = new Date().toISOString();
+  return events.flatMap((event) => {
+    const eventId = safeId(event.event_key ?? event.id, "");
+    const homeName = cleanText(event.event_first_player);
+    const awayName = cleanText(event.event_second_player);
+    if (!eventId || !homeName || !awayName) return [];
+    const eventOdds = recordValue(result[eventId]);
+    const winnerEntry = Object.entries(eventOdds).find(([marketName]) => {
+      const normalized = marketName.toLowerCase().replace(/[^a-z0-9]+/g, "");
+      return normalized === "homeaway" || normalized === "matchwinner" || normalized === "winner";
+    });
+    if (!winnerEntry) return [];
+    const selections = Object.entries(recordValue(winnerEntry[1]));
+    const classified = selections.map(([label, prices], index) => ({
+      side: apiTennisSelectionSide(label, homeName, awayName) ?? (selections.length === 2 ? (index === 0 ? "home" : "away") : null),
+      prices: recordValue(prices)
+    }));
+    const homePrices = classified.find((selection) => selection.side === "home")?.prices ?? {};
+    const awayPrices = classified.find((selection) => selection.side === "away")?.prices ?? {};
+    const bookmakers = Object.keys(homePrices).flatMap((bookmaker) => {
+      const home = numberOrNull(homePrices[bookmaker]);
+      const away = numberOrNull(awayPrices[bookmaker]);
+      if (home === null || away === null || home <= 1 || away <= 1) return [];
+      return [{
+        key: slug(bookmaker) || bookmaker,
+        title: bookmaker,
+        last_update: capturedAt,
+        markets: [{
+          key: "h2h",
+          last_update: capturedAt,
+          outcomes: [
+            { name: homeName, price: home },
+            { name: awayName, price: away }
+          ]
+        }]
+      } satisfies OddsApiBookmaker];
+    });
+    if (!bookmakers.length) return [];
+    return [{
+      id: eventId,
+      sport_key: "api-tennis",
+      sport_title: cleanText(event.tournament_name || event.league_name) || "Tennis",
+      commence_time: tennisKickoff(event),
+      home_team: homeName,
+      away_team: awayName,
+      last_update: capturedAt,
+      bookmakers
+    } satisfies OddsApiEvent];
+  });
 }
 
 function slug(value: string): string {
@@ -2916,12 +2985,18 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     endpoint.searchParams.set("date_start", date);
     endpoint.searchParams.set("date_stop", date);
     endpoint.searchParams.set("APIkey", apiKey);
-    const data = (await this.limitedFetch(endpoint)) as ApiTennisResponse | null;
-    const events = Array.isArray(data?.result) ? data.result : Array.isArray(data?.response) ? data.response : [];
-    const [oddsEvents, historicalStrengths] = await Promise.all([
-      this.getCurrentOddsEvents(date, "tennis"),
+    const oddsEndpoint = new URL(endpoint);
+    oddsEndpoint.searchParams.set("method", "get_odds");
+    const [data, apiTennisOddsPayload, historicalStrengths] = await Promise.all([
+      this.limitedFetch(endpoint) as Promise<ApiTennisResponse | null>,
+      this.limitedFetch(oddsEndpoint) as Promise<ApiTennisOddsResponse | null>,
       storedEnrichment ? this.getHistoricalTennisStrengths() : Promise.resolve(new Map())
     ]);
+    const events = Array.isArray(data?.result) ? data.result : Array.isArray(data?.response) ? data.response : [];
+    const apiTennisOdds = apiTennisOddsEvents(events, apiTennisOddsPayload);
+    // API-Tennis already supplies bookmaker prices for its own fixture IDs.
+    // Use The Odds API only as a fallback when that daily odds feed is empty.
+    const oddsEvents = apiTennisOdds.length ? apiTennisOdds : await this.getCurrentOddsEvents(date, "tennis");
     const oddsBackedMatches = oddsBackedTennisFixturesFromEvents(date, oddsEvents, historicalStrengths);
     if (!events.length) return oddsBackedMatches.length ? oddsBackedMatches : this.fallback.getFixtures(date, "tennis");
     const oddsByEvent = oddsMarketsByEvent(oddsEvents, "tennis");
@@ -2945,6 +3020,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       const kickoffTime = tennisKickoff(event);
       const oddsMarkets = oddsByEvent.get(eventKey(homeName, awayName, kickoffTime)) ?? [];
       const directOddsEvent = firstOddsEventForFixture(oddsEvents, homeName, awayName, kickoffTime);
+      const directOddsProvider = cleanText(directOddsEvent?.sport_key) === "api-tennis" ? "api-tennis-odds" : "the-odds-api";
 
       return [
         {
@@ -2992,7 +3068,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
             fixtureProviderId: eventId,
             season: cleanText(event.tournament_season) || undefined,
             round: cleanText(event.tournament_round) || undefined,
-            oddsProvider: oddsMarkets.length ? "the-odds-api" : undefined,
+            oddsProvider: oddsMarkets.length ? directOddsProvider : undefined,
             oddsProviderEventId: oddsMarkets.length ? cleanText(directOddsEvent?.id) || undefined : undefined,
             oddsCapturedAt: oddsMarkets.length ? cleanText(directOddsEvent?.last_update) || new Date().toISOString() : undefined,
             formProvider: homeRating.historical || awayRating.historical ? "supabase-tennis-historical-strength-v1" : undefined,
@@ -3001,7 +3077,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
             statusDetail: cleanText(event.event_status) || undefined,
             notes: [
               "Live tennis fixtures are provider-backed.",
-              ...(oddsMarkets.length ? ["Tennis match-winner and total-games odds are provider-backed where available."] : ["No matching tennis odds snapshot was found."]),
+              ...(oddsMarkets.length ? [`Tennis match-winner odds are provider-backed by ${directOddsProvider === "api-tennis-odds" ? "API-Tennis" : "The Odds API"}.`] : ["No matching tennis odds snapshot was found."]),
               homeRating.historical || awayRating.historical
                 ? "Player Elo, surface strength, historical form, rank, and rest use the latest real stored tennis feature rows where each player matched."
                 : "Stored tennis strength did not match these players, so ratings use a tournament baseline.",
