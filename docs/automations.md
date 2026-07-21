@@ -10,7 +10,7 @@ project `wncwtzqipnoqwmqlznqn`.
 | Function | Schedule (UTC) | What it does |
 | --- | --- | --- |
 | `decision-cycle-sweep` | `5,35 * * * *` | Football decision/prediction capture |
-| `multi-sport-decision-cycle-sweep` | `20 */2 * * *` | Runs the built basketball/tennis odds-refresh and daily-engine routes; fails when either sport is degraded |
+| `multi-sport-decision-cycle-sweep` | Manual fallback | Runs the built basketball/tennis odds-refresh and daily-engine routes on demand. The scheduled `sports-intelligence-sweep` already covers these sports, so this fallback is intentionally unscheduled to avoid duplicate paid provider reads. |
 | `sports-intelligence-sweep` | `25,55 * * * *` | Refreshes bookmaker odds and rebuilds canonical decisions for today, tomorrow, and day+2 inside the 45-minute basketball freshness boundary; fixture import and the seven-day slate remain receipt-guarded to one full cycle per day |
 | `sports-identity-enrichment-sweep` | `10 3 * * *` | Resolves the complete stored 400-day fixture horizon, including API-Football provider aliases, team crests, league artwork/flags, national-team countries, and domestic odds-only countries; then records a serialized receipt |
 | `football-settlement-sweep` | `*/30 * * * *` | Grades finished football picks |

@@ -49,6 +49,7 @@ describe("provider odds quota guard", () => {
   });
 
   it("uses The Odds API as a real basketball fixture source without an API-Basketball key", async () => {
+    vi.setSystemTime(new Date("2026-07-14T12:00:00Z"));
     const calls: string[] = [];
     const provider = new ProviderBackedSportsDataProvider({
       env: {

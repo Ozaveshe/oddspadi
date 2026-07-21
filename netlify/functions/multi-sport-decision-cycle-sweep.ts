@@ -1,4 +1,4 @@
-import type { Config, Context } from "@netlify/functions";
+import type { Context } from "@netlify/functions";
 
 declare const Netlify: {
   env: {
@@ -59,7 +59,3 @@ export default async function multiSportDecisionCycleSweep(_request: Request, co
     adminToken: clean(Netlify.env.get("ODDSPADI_ADMIN_TOKEN"))
   });
 }
-
-export const config: Config = {
-  schedule: "20 */2 * * *"
-};

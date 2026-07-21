@@ -3255,9 +3255,9 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     if (!apiKey) return [];
     const paidSportKeys = await this.getOddsSportKeys(sport, date);
     // Daily discovery never spends score credits on arbitrary active keys.
-    // Current relevant keys can still contribute live scores; completed-ticket
-    // settlement uses getSettlementFixtures with its exact persisted keys.
-    const scoreSportKeys = sport === "football" ? [] : paidSportKeys;
+    // Completed-ticket settlement uses getSettlementFixtures with its exact
+    // persisted keys, so current fixture discovery only needs paid odds reads.
+    const scoreSportKeys: string[] = [];
     const sportKeys = Array.from(new Set([...paidSportKeys, ...scoreSportKeys]));
     if (!sportKeys.length) return [];
     const paidKeySet = new Set(paidSportKeys);
