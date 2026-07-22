@@ -287,13 +287,16 @@ const WEEKLY_DECISION_PRIORITY: Record<SlatePublicStatus, number> = {
 };
 
 export function partitionWeeklyTipsDay(group: WeeklyTipsDay) {
-  const reviewed = group.fixtures
+  const reviewedRows = group.fixtures
     .filter((row) => row.decisionSummary.allMarketAnalyses.length > 0)
     .sort((left, right) => WEEKLY_DECISION_PRIORITY[left.publicStatus] - WEEKLY_DECISION_PRIORITY[right.publicStatus]);
-  const reviewedFixtureIds = new Set(reviewed.map((row) => row.fixture.fixtureId));
+  const reviewedFixtureIds = new Set(reviewedRows.map((row) => row.fixture.fixtureId));
+  const waitingRows = group.fixtures.filter((row) => !reviewedFixtureIds.has(row.fixture.fixtureId));
   return {
-    reviewed,
-    waitingForEvidence: group.fixtures.filter((row) => !reviewedFixtureIds.has(row.fixture.fixtureId))
+    reviewed: reviewedRows.slice(0, 12),
+    reviewedCount: reviewedRows.length,
+    waitingForEvidence: waitingRows.slice(0, 8),
+    waitingForEvidenceCount: waitingRows.length
   };
 }
 
@@ -359,7 +362,7 @@ export function WeeklySlateSections({ product }: { product: WeeklyTipsProduct })
   return (
     <div className="weekly-rundown">
       {product.days.map((group) => {
-        const { reviewed, waitingForEvidence } = partitionWeeklyTipsDay(group);
+        const { reviewed, reviewedCount, waitingForEvidence, waitingForEvidenceCount } = partitionWeeklyTipsDay(group);
         return (
           <section className="section weekly-day" key={group.date}>
             <div className="weekly-date">
@@ -367,21 +370,23 @@ export function WeeklySlateSections({ product }: { product: WeeklyTipsProduct })
               <time dateTime={group.date}>{new Date(`${group.date}T12:00:00Z`).toLocaleDateString([], { month: "short", day: "numeric" })}</time>
               <span>{group.fixtures.length} fixture{group.fixtures.length === 1 ? "" : "s"}</span>
               <div className="weekly-status-counts">
-                <span>{reviewed.length} reviewed</span><span>{waitingForEvidence.length} waiting</span><span>{group.counts.valuePick} value</span><span>{group.counts.watchlist + group.counts.stale} watchlist</span>
+                <span>{reviewedCount} reviewed</span><span>{waitingForEvidenceCount} waiting</span><span>{group.counts.valuePick} value</span><span>{group.counts.watchlist + group.counts.stale} watchlist</span>
               </div>
             </div>
             {group.fixtures.length ? (
               <div className="weekly-day-content">
                 {reviewed.length ? (
                   <>
-                    <div className="weekly-day-heading"><div><span className="section-kicker">Completed market review</span><h3>Reviewed decisions</h3></div><span className="badge scheduled">{reviewed.length}</span></div>
+                    <div className="weekly-day-heading"><div><span className="section-kicker">Completed market review</span><h3>Reviewed decisions</h3></div><span className="badge scheduled">{reviewedCount}</span></div>
                     <div className="intelligence-grid">{reviewed.map((row) => <SlateFixtureCard key={`reviewed-${row.fixture.fixtureId}`} row={row} compact asOf={product.generatedAt} />)}</div>
+                    {reviewedCount > reviewed.length ? <p className="small muted">Showing the first {reviewed.length} of {reviewedCount} reviewed fixtures for this date.</p> : null}
                   </>
                 ) : <div className="weekly-review-pending"><strong>No completed market review yet</strong><span>Provider fixtures remain visible below, but they are not presented as predictions.</span></div>}
-                {waitingForEvidence.length ? (
+                {waitingForEvidenceCount ? (
                   <details className="weekly-coverage-queue">
-                    <summary>Show {waitingForEvidence.length} provider fixture{waitingForEvidence.length === 1 ? "" : "s"} awaiting review</summary>
+                    <summary>Show {waitingForEvidenceCount} provider fixture{waitingForEvidenceCount === 1 ? "" : "s"} awaiting review</summary>
                     <div className="intelligence-grid">{waitingForEvidence.map((row) => <SlateFixtureCard key={`waiting-${row.fixture.fixtureId}`} row={row} compact asOf={product.generatedAt} />)}</div>
+                    {waitingForEvidenceCount > waitingForEvidence.length ? <p className="small muted">Showing {waitingForEvidence.length} representative fixtures from this date&apos;s evidence queue.</p> : null}
                   </details>
                 ) : <div className="weekly-queue-clear"><strong>Evidence queue clear</strong><span>Every listed fixture for this date has a completed market review.</span></div>}
               </div>
