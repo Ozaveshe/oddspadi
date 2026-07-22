@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { describe, expect, it, vi } from "vitest";
 import { buildDecisionOutcomeSettlement } from "@/lib/sports/prediction/decisionOutcomeSettlement";
 import { getHistorySummary, isPublicAccuracyEligible, type PublicPredictionHistoryItem } from "@/lib/sports/prediction/history";
 import { summarizeResultsBackfill } from "@/lib/sports/results/backfill";
@@ -7,11 +8,12 @@ import {
   buildPublicPickPublicationMetadata,
   dedupePublicPickDrafts,
   isCanonicalPublicPickEligible,
+  persistCanonicalPublicPicks,
   type PublicPickDraft
 } from "@/lib/sports/results/publicPicks";
 import { resolvePublicPickSettlement, type SettleablePublicPick } from "@/lib/sports/results/settlement";
 import type { CanonicalDecision } from "@/lib/sports/intelligence/types";
-import type { DecisionSummary } from "@/lib/sports/types";
+import type { DecisionSummary, Match } from "@/lib/sports/types";
 
 const now = new Date("2026-07-14T12:00:00.000Z");
 
@@ -128,6 +130,103 @@ describe("public results credibility", () => {
     const decision = { valueEdge: -0.02, expectedValue: -0.01, modelProbability: 0.5, impliedProbability: 0.52, noVigProbability: 0.51, decimalOdds: 1.9, publicStatus: "value_pick", isPreliminary: false } as CanonicalDecision;
     const summary = { publicStatus: "value_pick", bestPublishedPick: { edge: -0.02 }, auditSummary: { publicInvariantPassed: true } } as DecisionSummary;
     expect(isCanonicalPublicPickEligible(decision, summary)).toBe(false);
+  });
+
+  it("does not query the public-pick repository when no canonical pick is eligible", async () => {
+    const from = vi.fn();
+    const result = await persistCanonicalPublicPicks({
+      matches: [{ id: "fixture-1", dataSource: { kind: "provider" } } as Match],
+      summariesByFixture: new Map(),
+      decisionsByFixture: new Map(),
+      fixtureIds: new Map([["fixture-1", "fixture-db-1"]]),
+      client: { from } as unknown as SupabaseClient
+    });
+
+    expect(result).toEqual({ attempted: 0, published: 0, revised: 0, stale: 0, errors: [] });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("chunks public-pick prerequisite reads for a large eligible slate", async () => {
+    const summaryChunkSizes: number[] = [];
+    const pickChunkSizes: number[] = [];
+    const matches: Match[] = [];
+    const summariesByFixture = new Map<string, DecisionSummary>();
+    const decisionsByFixture = new Map<string, CanonicalDecision[]>();
+    const fixtureIds = new Map<string, string>();
+    for (let index = 0; index < 205; index += 1) {
+      const fixtureId = `fixture-${index}`;
+      matches.push({
+        id: fixtureId,
+        sport: "football",
+        league: { id: "league", name: "League", country: "World", strength: 0.5 },
+        kickoffTime: "2026-07-24T18:00:00.000Z",
+        homeTeam: { id: `home-${index}`, name: `Home ${index}`, country: "World", rating: 0.5 },
+        awayTeam: { id: `away-${index}`, name: `Away ${index}`, country: "World", rating: 0.5 },
+        homeForm: { teamId: `home-${index}`, recentResults: [], goalsFor: 0, goalsAgainst: 0, xgFor: null, xgAgainst: null, attackStrength: 0.5, defenseStrength: 0.5 },
+        awayForm: { teamId: `away-${index}`, recentResults: [], goalsFor: 0, goalsAgainst: 0, xgFor: null, xgAgainst: null, attackStrength: 0.5, defenseStrength: 0.5 },
+        status: "scheduled",
+        oddsMarkets: [],
+        dataQualityScore: 0.9,
+        dataSource: { kind: "provider", fixtureProvider: "provider", fixtureProviderId: fixtureId }
+      });
+      fixtureIds.set(fixtureId, `db-${index}`);
+      summariesByFixture.set(fixtureId, {
+        generatedAt: "2026-07-22T08:00:00.000Z",
+        publicStatus: "value_pick",
+        dataQuality: 0.9,
+        bestPublishedPick: {
+          marketId: "match_winner", selectionId: "home", label: "Home", odds: 2,
+          modelProbability: 0.6, rawImpliedProbability: 0.5, noVigImpliedProbability: 0.48,
+          edge: 0.12, expectedValue: 0.2
+        },
+        auditSummary: { publicInvariantPassed: true }
+      } as DecisionSummary);
+      decisionsByFixture.set(fixtureId, [{
+        decisionId: `decision-${index}`, market: "match_winner", selection: "home", label: "Home",
+        modelVersion: "model-v1", engineVersion: "engine-v1", modelProbability: 0.6,
+        impliedProbability: 0.5, noVigProbability: 0.48, decimalOdds: 2, valueEdge: 0.12,
+        expectedValue: 0.2, confidence: "medium", risk: "medium", publicStatus: "value_pick",
+        isPreliminary: false
+      } as CanonicalDecision]);
+    }
+
+    const client = {
+      from(table: string) {
+        return {
+          select() {
+            return {
+              in(_column: string, values: string[]) {
+                if (table === "op_fixture_decision_summaries") {
+                  summaryChunkSizes.push(values.length);
+                  return {
+                    async is() {
+                      return {
+                        data: values.map((value) => ({
+                          id: `summary-${value.slice(3)}`,
+                          fixture_id: value,
+                          fixture_external_id: `fixture-${value.slice(3)}`
+                        })),
+                        error: null
+                      };
+                    }
+                  };
+                }
+                pickChunkSizes.push(values.length);
+                return Promise.resolve({ data: [], error: null });
+              }
+            };
+          },
+          upsert() {
+            return { async select() { return { data: [], error: null }; } };
+          }
+        };
+      }
+    } as unknown as SupabaseClient;
+
+    const result = await persistCanonicalPublicPicks({ matches, summariesByFixture, decisionsByFixture, fixtureIds, client });
+    expect(summaryChunkSizes).toEqual([100, 100, 5]);
+    expect(pickChunkSizes).toEqual([100, 100, 5]);
+    expect(result).toMatchObject({ attempted: 205, errors: [] });
   });
 
   it("summarizes backfill pending, settled, duplicates, and manual review counts", () => {

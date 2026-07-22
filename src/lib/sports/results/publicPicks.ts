@@ -190,6 +190,19 @@ export type PublicPickPublicationResult = {
   errors: string[];
 };
 
+const PUBLIC_PICK_READ_CHUNK_SIZE = 100;
+
+function chunkValues<T>(values: T[], size = PUBLIC_PICK_READ_CHUNK_SIZE): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) chunks.push(values.slice(index, index + size));
+  return chunks;
+}
+
+function prerequisiteReadError(source: string, error: { message: string; code?: string; details?: string; hint?: string }): string {
+  const context = [error.code, error.details, error.hint].filter(Boolean).join(" | ");
+  return `${source} prerequisite read failed: ${error.message}${context ? ` (${context})` : ""}`;
+}
+
 export async function persistCanonicalPublicPicks({
   matches,
   summariesByFixture,
@@ -206,18 +219,44 @@ export async function persistCanonicalPublicPicks({
   const result: PublicPickPublicationResult = { attempted: 0, published: 0, revised: 0, stale: 0, errors: [] };
   if (!client || !matches.length) return result;
 
-  const fixtureDbIds = [...fixtureIds.values()];
-  const [{ data: summaryRows, error: summaryError }, { data: existingRows, error: existingError }] = await Promise.all([
-    fixtureDbIds.length
-      ? client.from("op_fixture_decision_summaries").select("id,fixture_id,fixture_external_id").in("fixture_id", fixtureDbIds).is("superseded_by", null)
-      : Promise.resolve({ data: [], error: null }),
-    client.from("op_public_picks")
+  const candidates = matches.flatMap((match) => {
+    const summary = summariesByFixture.get(match.id);
+    const published = summary?.bestPublishedPick;
+    if (!summary || !published || match.dataSource?.kind !== "provider") return [];
+    const decision = (decisionsByFixture.get(match.id) ?? []).find(
+      (row) => row.market === published.marketId && row.selection === published.selectionId
+    );
+    const fixtureDbId = fixtureIds.get(match.id);
+    if (!fixtureDbId || !isCanonicalPublicPickEligible(decision, summary)) return [];
+    return [{ match, summary, published, decision, fixtureDbId }];
+  });
+  if (!candidates.length) return result;
+
+  const summaryRows: Array<{ id: unknown; fixture_id: unknown; fixture_external_id: unknown }> = [];
+  for (const fixtureDbIdChunk of chunkValues(candidates.map((candidate) => candidate.fixtureDbId))) {
+    const { data, error } = await client
+      .from("op_fixture_decision_summaries")
+      .select("id,fixture_id,fixture_external_id")
+      .in("fixture_id", fixtureDbIdChunk)
+      .is("superseded_by", null);
+    if (error) {
+      result.errors.push(prerequisiteReadError("Decision summary", error));
+      return result;
+    }
+    summaryRows.push(...(data ?? []));
+  }
+
+  const existingRows: Array<Record<string, unknown>> = [];
+  for (const fixtureIdChunk of chunkValues(candidates.map((candidate) => candidate.match.id))) {
+    const { data, error } = await client
+      .from("op_public_picks")
       .select("id,fixture_id,market,selection,model_version,published_date,revision,status,settlement_status")
-      .in("fixture_id", matches.map((match) => match.id))
-  ]);
-  if (summaryError || existingError) {
-    result.errors.push(summaryError?.message ?? existingError?.message ?? "Public pick prerequisite read failed.");
-    return result;
+      .in("fixture_id", fixtureIdChunk);
+    if (error) {
+      result.errors.push(prerequisiteReadError("Existing public pick", error));
+      return result;
+    }
+    existingRows.push(...(data ?? []));
   }
 
   const summaryIdByFixture = new Map((summaryRows ?? []).map((row) => [String(row.fixture_external_id), String(row.id)]));
@@ -226,16 +265,9 @@ export async function persistCanonicalPublicPicks({
     row as Record<string, unknown>
   ]));
   const drafts: PublicPickDraft[] = [];
-  for (const match of matches) {
-    const summary = summariesByFixture.get(match.id);
-    const published = summary?.bestPublishedPick;
-    if (!summary || !published || match.dataSource?.kind !== "provider") continue;
-    const decision = (decisionsByFixture.get(match.id) ?? []).find(
-      (row) => row.market === published.marketId && row.selection === published.selectionId
-    );
-    const fixtureDbId = fixtureIds.get(match.id);
+  for (const { match, summary, published, decision, fixtureDbId } of candidates) {
     const publicDecisionId = summaryIdByFixture.get(match.id);
-    if (!fixtureDbId || !publicDecisionId || !isCanonicalPublicPickEligible(decision, summary)) continue;
+    if (!publicDecisionId) continue;
     const publishedDate = summary.generatedAt.slice(0, 10);
     const key = [match.id, decision.market, decision.selection, decision.modelVersion, publishedDate].join("|");
     const existing = existingByKey.get(key);
@@ -271,8 +303,8 @@ export async function persistCanonicalPublicPicks({
       settlementStatus: new Date(match.kickoffTime).getTime() > Date.now() ? "waiting_kickoff" : "awaiting_final_score",
       result: "pending",
       settlementReason: new Date(match.kickoffTime).getTime() > Date.now() ? "Waiting for kickoff." : "Waiting for provider final score.",
-      provider: match.dataSource.fixtureProvider ?? "unknown",
-      providerFixtureId: match.dataSource.fixtureProviderId ?? match.id,
+      provider: match.dataSource?.fixtureProvider ?? "unknown",
+      providerFixtureId: match.dataSource?.fixtureProviderId ?? match.id,
       revision: Number(existing?.revision ?? 0) + 1,
       publicationEvidence: {
         executionQuote: {

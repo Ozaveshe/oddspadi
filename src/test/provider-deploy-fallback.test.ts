@@ -29,15 +29,13 @@ describe("provider fallback in deployed Netlify contexts", () => {
     expect(getSportsProviderRuntimeStatus({ CONTEXT: "branch-deploy" }).runtimeProvider).toBe("unavailable");
   });
 
-  it("preserves mock fallback for a local development runtime", async () => {
+  it("keeps provider-backed local development reads honest-empty unless a mock fallback is explicitly injected", async () => {
     const provider = new ProviderBackedSportsDataProvider({
       env: { NODE_ENV: "development", API_BASKETBALL_KEY: "basketball-key" },
       fetchImpl: async () => emptyJsonResponse(),
       historicalBasketballStrengthLoader: async () => new Map()
     });
 
-    const fixtures = await provider.getFixtures("2026-07-18", "basketball");
-    expect(fixtures.length).toBeGreaterThan(0);
-    expect(fixtures.every((fixture) => fixture.dataSource?.fixtureProvider === "mockSportsDataProvider")).toBe(true);
+    await expect(provider.getFixtures("2026-07-18", "basketball")).resolves.toEqual([]);
   });
 });

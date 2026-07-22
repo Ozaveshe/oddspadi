@@ -2361,7 +2361,10 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
 
   private get fallback(): SportsDataProvider {
     if (this.options.fallback) return this.options.fallback;
-    return isDeployedRuntime(this.env)
+    // Once any real fixture or odds provider is configured, an empty upstream
+    // slate is authoritative. Never dilute it with demo fixtures merely because
+    // a serverless bundle omitted NODE_ENV or Netlify CONTEXT.
+    return isDeployedRuntime(this.env) || getSportsProviderRuntimeStatus(this.env).liveRuntimeBacked
       ? unavailableSportsDataProvider
       : mockSportsDataProvider;
   }

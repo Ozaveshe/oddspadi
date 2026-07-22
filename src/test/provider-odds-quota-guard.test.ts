@@ -120,8 +120,8 @@ describe("provider odds quota guard", () => {
     const first = await provider.getFixtures("2026-07-10", "basketball");
     const second = await provider.getFixtures("2026-07-10", "basketball");
 
-    expect(first[0]?.dataSource?.kind).toBe("mock");
-    expect(second[0]?.dataSource?.kind).toBe("mock");
+    expect(first).toEqual([]);
+    expect(second).toEqual([]);
     expect(calls).toHaveLength(2);
     expect(calls.filter((url) => new URL(url).pathname === "/v4/sports/")).toHaveLength(1);
     expect(calls.filter((url) => url.includes("/v4/sports/basketball_nba/events/"))).toHaveLength(1);
