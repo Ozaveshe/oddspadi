@@ -23,5 +23,5 @@ function weeklySummary(product: WeeklyTipsProduct) {
 export const GET = withApiHandler(async (request) => {
   const product = await getCachedWeeklyTipsProduct();
   const summaryView = new URL(request.url).searchParams.get("view") === "summary";
-  return apiSuccess(summaryView ? weeklySummary(product) : product, publicCacheInit(180));
+  return apiSuccess(summaryView ? weeklySummary(product) : product, publicCacheInit(180, ["view"]));
 });
