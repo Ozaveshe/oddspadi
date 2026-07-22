@@ -31,6 +31,22 @@ function chunks<T>(rows: T[], size = 300): T[][] {
   return result;
 }
 
+type ChunkedReadError = { message: string; code?: string; details?: string; hint?: string };
+
+export async function readRowsInChunks(
+  ids: string[],
+  read: (idChunk: string[]) => PromiseLike<{ data: unknown[] | null; error: ChunkedReadError | null }>,
+  size = 100
+): Promise<{ data: unknown[]; error: ChunkedReadError | null }> {
+  const data: unknown[] = [];
+  for (const idChunk of chunks(ids, size)) {
+    const result = await read(idChunk);
+    if (result.error) return { data, error: result.error };
+    data.push(...(result.data ?? []));
+  }
+  return { data, error: null };
+}
+
 function text(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -814,19 +830,19 @@ export async function readStoredSlate({
     lastRun
   ] = await Promise.all([
     databaseFixtureIds.length
-      ? client.from("op_odds_snapshots").select("id,fixture_id,fixture_external_id,provider,bookmaker,market,selection,decimal_odds,observed_at,captured_at,source,is_live,expires_at,metadata").in("fixture_id", databaseFixtureIds).order("captured_at", { ascending: false }).limit(10000)
+      ? readRowsInChunks(databaseFixtureIds, (idChunk) => client.from("op_odds_snapshots").select("id,fixture_id,fixture_external_id,provider,bookmaker,market,selection,decimal_odds,observed_at,captured_at,source,is_live,expires_at,metadata").in("fixture_id", idChunk).order("captured_at", { ascending: false }).limit(10000))
       : Promise.resolve({ data: [], error: null }),
     databaseFixtureIds.length
-      ? client.from("op_market_decisions").select("id,fixture_id,fixture_external_id,market,selection,odds_snapshot_id,model_version,engine_version,model_probability,implied_probability,no_vig_probability,value_edge,expected_value,confidence,risk,data_quality,evidence_quality,decision_status,public_status,reason,generated_at,expires_at,superseded_by,settlement_status,is_preliminary,provider").in("fixture_id", databaseFixtureIds).is("superseded_by", null).limit(10000)
+      ? readRowsInChunks(databaseFixtureIds, (idChunk) => client.from("op_market_decisions").select("id,fixture_id,fixture_external_id,market,selection,odds_snapshot_id,model_version,engine_version,model_probability,implied_probability,no_vig_probability,value_edge,expected_value,confidence,risk,data_quality,evidence_quality,decision_status,public_status,reason,generated_at,expires_at,superseded_by,settlement_status,is_preliminary,provider").in("fixture_id", idChunk).is("superseded_by", null).limit(10000))
       : Promise.resolve({ data: [], error: null }),
     databaseFixtureIds.length
-      ? client.from("op_fixture_decision_summaries").select("fixture_id,fixture_external_id,best_published_pick,best_lean,best_watchlist_candidate,no_pick_reason,all_market_analyses,public_status,engine_status,data_quality,evidence_quality,confidence,risk,generated_at,expires_at,audit_summary").in("fixture_id", databaseFixtureIds).is("superseded_by", null).order("generated_at", { ascending: false }).limit(1000)
+      ? readRowsInChunks(databaseFixtureIds, (idChunk) => client.from("op_fixture_decision_summaries").select("fixture_id,fixture_external_id,best_published_pick,best_lean,best_watchlist_candidate,no_pick_reason,all_market_analyses,public_status,engine_status,data_quality,evidence_quality,confidence,risk,generated_at,expires_at,audit_summary").in("fixture_id", idChunk).is("superseded_by", null).order("generated_at", { ascending: false }).limit(1000))
       : Promise.resolve({ data: [], error: null }),
     teamExternalIds.length
-      ? client.from("op_teams").select("sport,provider,external_id,country,metadata").in("external_id", teamExternalIds).limit(2000)
+      ? readRowsInChunks(teamExternalIds, (idChunk) => client.from("op_teams").select("sport,provider,external_id,country,metadata").in("external_id", idChunk).limit(2000))
       : Promise.resolve({ data: [], error: null }),
     leagueExternalIds.length
-      ? client.from("op_leagues").select("sport,provider,external_id,country,metadata").in("external_id", leagueExternalIds).limit(1000)
+      ? readRowsInChunks(leagueExternalIds, (idChunk) => client.from("op_leagues").select("sport,provider,external_id,country,metadata").in("external_id", idChunk).limit(1000))
       : Promise.resolve({ data: [], error: null }),
     readLatestProviderRun(jobTypes, client)
   ]);
