@@ -213,7 +213,7 @@ await checkRssFreshness("/news/rss.xml");
 
 const todayTips = await checkJson("/api/tips/today", tipsFreshnessProblem, "api today's tips freshness");
 await checkJson("/api/tips/tomorrow", tipsFreshnessProblem, "api tomorrow's tips freshness");
-const weeklyTips = await checkJson("/api/tips/week", (payload) => {
+const weeklyTips = await checkJson("/api/tips/week?view=summary", (payload) => {
   const problem = tipsFreshnessProblem(payload);
   if (problem) return problem;
   if (payload?.data?.days?.length !== 7) return "weekly product does not contain seven days";
