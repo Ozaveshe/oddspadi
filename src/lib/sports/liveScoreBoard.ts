@@ -192,6 +192,7 @@ const EXCLUDED_NAME_PATTERN = /friendl/i;
 const BOARD_TTL_MS = 30_000;
 const MAX_FIXTURES = 500;
 const REPOSITORY_COVERAGE_TIMEOUT_MS = 5_000;
+const STORED_COVERAGE_SPORTS = ["football", "basketball", "tennis"] as const;
 
 /** NaN from an invalid kickoff makes Array.sort's comparator inconsistent
  *  (order becomes engine-dependent); park unparseable dates at the end. */
@@ -483,6 +484,28 @@ function metadataText(metadata: Record<string, unknown> | null, key: string): st
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+export async function readStoredFixtureRowsForDate(
+  client: NonNullable<ReturnType<typeof getSupabaseServerClient>>,
+  date: string
+): Promise<RepositoryFixture[]> {
+  const from = `${date}T00:00:00.000Z`;
+  const untilDate = new Date(from);
+  untilDate.setUTCDate(untilDate.getUTCDate() + 1);
+  const until = untilDate.toISOString();
+  const sportPages = await Promise.all(STORED_COVERAGE_SPORTS.map(async (sport) => {
+    const { data, error } = await client.from("op_fixtures")
+      .select("id,sport,external_id,league_external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,country,last_synced_at,metadata")
+      .eq("sport", sport)
+      .gte("kickoff_at", from)
+      .lt("kickoff_at", until)
+      .order("kickoff_at")
+      .limit(MAX_FIXTURES);
+    if (error) throw new Error(`Stored ${sport} fixture read failed: ${error.message}`);
+    return (data ?? []) as RepositoryFixture[];
+  }));
+  return sportPages.flat();
+}
+
 export function normalizeStoredLiveBoardState(
   fixture: Pick<RepositoryFixture, "status" | "last_synced_at" | "home_score" | "away_score"> & { elapsed: number | null },
   now = new Date(),
@@ -526,13 +549,7 @@ export function normalizeStoredLiveBoardState(
 async function readStoredFixturesForDate(date: string): Promise<LiveBoardFixture[]> {
   const client = getSupabaseServerClient();
   if (!client) throw new Error("Supabase server client is unavailable.");
-  const from = `${date}T00:00:00.000Z`;
-  const untilDate = new Date(`${date}T00:00:00.000Z`);
-  untilDate.setUTCDate(untilDate.getUTCDate() + 1);
-  const { data, error } = await client.from("op_fixtures")
-    .select("id,sport,external_id,league_external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,country,last_synced_at,metadata")
-    .gte("kickoff_at", from).lt("kickoff_at", untilDate.toISOString()).order("kickoff_at").limit(MAX_FIXTURES);
-  if (error) throw new Error(`Stored fixture read failed: ${error.message}`);
+  const data = await readStoredFixtureRowsForDate(client, date);
   if (!data?.length) return [];
   const rows = (data as RepositoryFixture[]).filter((row) => row.sport === "football" || row.sport === "basketball" || row.sport === "tennis");
   const leagueIds = [...new Set(rows.map((row) => row.league_external_id).filter((id): id is string => Boolean(id)))];

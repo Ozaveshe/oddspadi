@@ -17,7 +17,10 @@ const FIXTURE_PAGE_SIZE = LIVE_BOARD_INITIAL_FIXTURES;
 // image or substituting another team's artwork.
 const CONFIRMED_MISSING_PROVIDER_ARTWORK = new Set([
   "https://media.api-sports.io/football/teams/28004.png",
-  "https://media.api-sports.io/basketball/teams/6301.png"
+  "https://media.api-sports.io/basketball/teams/6301.png",
+  "https://media.api-sports.io/basketball/teams/7354.png",
+  "https://media.api-sports.io/basketball/teams/7882.png",
+  "https://media.api-sports.io/basketball/teams/7889.png"
 ]);
 
 const SPORT_TABS: Array<{ id: SportTab; label: string; icon: string }> = [

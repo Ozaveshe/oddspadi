@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildFootballBoardFromPayloads, liveBoardFixtureFromMatch, mergeLiveBoardCoverage, normalizeStoredLiveBoardState, resolveRepositoryCoverage } from "@/lib/sports/liveScoreBoard";
+import { buildFootballBoardFromPayloads, liveBoardFixtureFromMatch, mergeLiveBoardCoverage, normalizeStoredLiveBoardState, readStoredFixtureRowsForDate, resolveRepositoryCoverage } from "@/lib/sports/liveScoreBoard";
 import type { Match } from "@/lib/sports/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 function providerMatch(sport: "basketball" | "tennis", kind: "provider" | "mock" = "provider"): Match {
   return {
@@ -56,6 +57,40 @@ describe("multi-sport live board", () => {
 
     expect(mergeLiveBoardCoverage(football, [duplicateStoredFootball, storedBasketball!]).map((fixture) => fixture.sport))
       .toEqual(["football", "basketball"]);
+  });
+
+  it("applies the stored fallback cap per sport so a tennis-heavy day cannot hide basketball", async () => {
+    const rowsBySport = {
+      football: Array.from({ length: 84 }, (_, index) => ({ sport: "football", external_id: `football-${index}` })),
+      basketball: Array.from({ length: 18 }, (_, index) => ({ sport: "basketball", external_id: `basketball-${index}` })),
+      tennis: Array.from({ length: 500 }, (_, index) => ({ sport: "tennis", external_id: `tennis-${index}` }))
+    };
+    const requestedSports: string[] = [];
+    const requestedLimits: number[] = [];
+    const client = {
+      from: vi.fn(() => {
+        let selectedSport = "";
+        const query = {
+          select: () => query,
+          eq: (_column: string, value: string) => { selectedSport = value; requestedSports.push(value); return query; },
+          gte: () => query,
+          lt: () => query,
+          order: () => query,
+          limit: async (value: number) => {
+            requestedLimits.push(value);
+            return { data: rowsBySport[selectedSport as keyof typeof rowsBySport], error: null };
+          }
+        };
+        return query;
+      })
+    } as unknown as SupabaseClient;
+
+    const rows = await readStoredFixtureRowsForDate(client, "2026-07-22");
+
+    expect(requestedSports).toEqual(["football", "basketball", "tennis"]);
+    expect(requestedLimits).toEqual([500, 500, 500]);
+    expect(rows).toHaveLength(602);
+    expect(rows.filter((row) => row.sport === "basketball")).toHaveLength(18);
   });
 
   it("withholds stale partial scores instead of presenting an old stored game as live", () => {
