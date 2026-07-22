@@ -30,6 +30,8 @@ export const metadata: Metadata = {
 
 type PageProps = { searchParams?: Promise<Record<string, string | string[] | undefined>> };
 const single = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
+const HISTORY_AUDIT_RENDER_LIMIT = 36;
+const HISTORY_QUEUE_RENDER_LIMIT = 12;
 
 function badgeClass(result: string, settlementStatus: string) {
   if (result === "won") return "positive";
@@ -121,13 +123,15 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
           {auditPartitions.reviewed.length ? (
             <div className="results-audit-reviewed">
               <div className="weekly-day-heading"><div><span className="section-kicker">Completed market review</span><h3>Reviewed decisions and abstentions</h3></div><span className="badge scheduled">{auditPartitions.reviewed.length}</span></div>
-              <div className="intelligence-grid">{auditPartitions.reviewed.map((row) => <SlateFixtureCard key={`audit-reviewed-${row.fixture.fixtureId}`} row={row} compact asOf={yesterdayAudit.generatedAt} />)}</div>
+              <div className="intelligence-grid">{auditPartitions.reviewed.slice(0, HISTORY_AUDIT_RENDER_LIMIT).map((row) => <SlateFixtureCard key={`audit-reviewed-${row.fixture.fixtureId}`} row={row} compact asOf={yesterdayAudit.generatedAt} />)}</div>
+              {auditPartitions.reviewed.length > HISTORY_AUDIT_RENDER_LIMIT ? <p className="small muted">Showing {HISTORY_AUDIT_RENDER_LIMIT} of {auditPartitions.reviewed.length} reviewed decisions; all rows remain included in the audit totals.</p> : null}
             </div>
           ) : <div className="weekly-review-pending"><strong>No completed market reviews were stored</strong><span>The provider fixture receipt remains visible below and is not presented as model analysis.</span></div>}
           {auditPartitions.awaitingReview.length ? (
             <details className="weekly-coverage-queue results-audit-queue">
               <summary>Show {auditPartitions.awaitingReview.length} provider fixture{auditPartitions.awaitingReview.length === 1 ? "" : "s"} without a completed market review</summary>
-              <div className="intelligence-grid">{auditPartitions.awaitingReview.map((row) => <SlateFixtureCard key={`audit-waiting-${row.fixture.fixtureId}`} row={row} compact asOf={yesterdayAudit.generatedAt} />)}</div>
+              <div className="intelligence-grid">{auditPartitions.awaitingReview.slice(0, HISTORY_QUEUE_RENDER_LIMIT).map((row) => <SlateFixtureCard key={`audit-waiting-${row.fixture.fixtureId}`} row={row} compact asOf={yesterdayAudit.generatedAt} />)}</div>
+              {auditPartitions.awaitingReview.length > HISTORY_QUEUE_RENDER_LIMIT ? <p className="small muted">Showing {HISTORY_QUEUE_RENDER_LIMIT} representative queued fixtures to keep this results page fast.</p> : null}
             </details>
           ) : null}
         </div>

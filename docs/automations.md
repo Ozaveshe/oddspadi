@@ -30,8 +30,9 @@ they 503; the workers additionally need `SUPABASE_URL` + `SUPABASE_SECRET_KEY`
 The sports-intelligence worker records provider fixtures, fresh bookmaker-priced
 fixtures, and canonical analysed fixtures separately for each of its three UTC
 dates. `ODDSPADI_MIN_ANALYSED_FIXTURES_PER_DAY` defaults to `100`; missing the
-target is an explicit failed readiness stage, never a reason to create mock
-fixtures or relax the public positive-EV publication gate.
+target is an explicit coverage warning rather than a failed provider stage.
+This keeps genuine off-season and light official slates healthy without ever
+creating mock fixtures or relaxing the public positive-EV publication gate.
 
 The football corpus worker uses `ODDSPADI_FOOTBALL_CORPUS_LEAGUE_ID` (default
 EPL `39`), `ODDSPADI_FOOTBALL_CORPUS_FIXTURE_LIMIT` (default `12`), and
@@ -104,3 +105,7 @@ creating accounts.
   the likes/replies tables double as many-to-many junctions.
 - The public prediction APIs accept `view=summary` — always prefer it unless
   you specifically need the decision dossier (full payload is megabytes).
+- `ODDSPADI_MIN_ANALYSED_FIXTURES_PER_DAY` is a coverage target, not a provider
+  health gate. A completed light or empty official slate remains operational
+  and reports `coverageTargetMet: false` with `coverageWarnings`; provider
+  `failed` and `unavailable` states still fail the scheduled cycle.

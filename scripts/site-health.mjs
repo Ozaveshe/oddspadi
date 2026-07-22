@@ -10,6 +10,7 @@
 const site = (process.argv.includes("--site") ? process.argv[process.argv.indexOf("--site") + 1] : null) ?? process.env.ODDSPADI_SITE_URL ?? "https://oddspadi.com";
 const adminToken = process.env.ODDSPADI_ADMIN_TOKEN?.trim();
 let failures = 0;
+const MAX_ANALYSIS_LINK_CHECKS = 8;
 
 function report(ok, label, detail = "") {
   if (!ok) failures += 1;
@@ -131,7 +132,12 @@ async function checkLatestRun(path, maxAgeMs, label, acceptedStatuses = ["comple
 }
 
 async function checkFixtureAnalysisLinks(payload, label) {
-  const fixtureIds = [...new Set(tipsFixtures(payload).map((row) => row?.fixture?.fixtureId).filter(Boolean))];
+  const allFixtureIds = [...new Set(tipsFixtures(payload).map((row) => row?.fixture?.fixtureId).filter(Boolean))];
+  const fixtureIds = allFixtureIds.length <= MAX_ANALYSIS_LINK_CHECKS
+    ? allFixtureIds
+    : Array.from({ length: MAX_ANALYSIS_LINK_CHECKS }, (_, index) =>
+      allFixtureIds[Math.floor(index * (allFixtureIds.length - 1) / (MAX_ANALYSIS_LINK_CHECKS - 1))]
+    );
   const failures = [];
   for (let index = 0; index < fixtureIds.length; index += 4) {
     const batch = fixtureIds.slice(index, index + 4);
@@ -146,7 +152,13 @@ async function checkFixtureAnalysisLinks(payload, label) {
     }));
     failures.push(...results.filter(Boolean));
   }
-  report(!failures.length, label, failures.length ? failures.slice(0, 5).join(", ") : `${fixtureIds.length} checked`);
+  report(
+    !failures.length,
+    label,
+    failures.length
+      ? failures.slice(0, 5).join(", ")
+      : `${fixtureIds.length}/${allFixtureIds.length} representative fixture links checked`
+  );
 }
 
 async function checkFeaturedLeagueTables() {

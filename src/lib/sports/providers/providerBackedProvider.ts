@@ -2040,6 +2040,12 @@ function warnProviderIssue(url: URL, reason: string, response?: Response): void 
   console.warn(`[sports-provider] ${url.host}${url.pathname} — ${reason}${quota}`);
 }
 
+export function apiFootballOddsCoverageFailed(
+  pagination: Pick<ApiFootballOddsFetchResult["pagination"], "pagesFailed" | "stoppedByQuota">
+): boolean {
+  return pagination.pagesFailed > 0 || pagination.stoppedByQuota;
+}
+
 async function fetchJson(fetchImpl: FetchLike, url: URL, init?: RequestInit, timeoutMs = 4_000): Promise<unknown | null> {
   const controller = new AbortController();
   const parentSignal = init?.signal;
@@ -2531,10 +2537,15 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
             outcome.pagination.stoppedByQuota ? "stopped by quota reserve" : "",
             outcome.pagination.pagesFailed ? `${outcome.pagination.pagesFailed} page(s) failed` : ""
           ].filter(Boolean);
-          warnProviderIssue(
-            endpoint,
-            `partial match-winner odds coverage (${outcome.pagination.pagesSucceeded}/${outcome.pagination.providerTotalPages} pages${reasons.length ? `; ${reasons.join(", ")}` : ""})`
-          );
+          const message = `partial match-winner odds coverage (${outcome.pagination.pagesSucceeded}/${outcome.pagination.providerTotalPages} pages${reasons.length ? `; ${reasons.join(", ")}` : ""})`;
+          if (apiFootballOddsCoverageFailed(outcome.pagination)) {
+            warnProviderIssue(endpoint, message);
+          } else {
+            // A configured page ceiling is deliberate quota control, not a
+            // provider failure. Keep it observable without degrading the
+            // canonical provider receipt to `partial`.
+            console.info(`[sports-provider] ${endpoint.host}${endpoint.pathname} — ${message}`);
+          }
         }
         return outcome;
       })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ProviderBackedSportsDataProvider } from "@/lib/sports/providers/providerBackedProvider";
+import { apiFootballOddsCoverageFailed, ProviderBackedSportsDataProvider } from "@/lib/sports/providers/providerBackedProvider";
 
 function json(body: unknown, headers: Record<string, string> = {}) {
   return Response.json(body, {
@@ -47,6 +47,12 @@ function apiFootballOddsRow(id: number, update: string, home = 2.25, draw = 3.35
 }
 
 describe("API-Football exact-ID odds fallback", () => {
+  it("does not classify an intentional page ceiling as a provider failure", () => {
+    expect(apiFootballOddsCoverageFailed({ pagesFailed: 0, stoppedByQuota: false })).toBe(false);
+    expect(apiFootballOddsCoverageFailed({ pagesFailed: 1, stoppedByQuota: false })).toBe(true);
+    expect(apiFootballOddsCoverageFailed({ pagesFailed: 0, stoppedByQuota: true })).toBe(true);
+  });
+
   it("widens the slate only for raw fixtures with an exact complete provider odds receipt", async () => {
     const kickoff = "2026-08-23T14:00:00Z";
     const fetchImpl = async (input: string | URL): Promise<Response> => {

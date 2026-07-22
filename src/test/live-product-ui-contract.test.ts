@@ -60,6 +60,8 @@ describe("live OddsPadi product UI contract", () => {
     expect(slate).toContain("Reviewed decisions");
     expect(slate).toContain("provider fixture");
     expect(slate).toContain("awaiting review");
+    expect(slate).toContain("DAILY_DECISION_RENDER_LIMIT = 36");
+    expect(slate).toContain("DAILY_QUEUE_RENDER_LIMIT = 12");
   });
 
   it("keeps anonymous tips routes read-only and shared-cache backed", () => {
@@ -103,6 +105,8 @@ describe("live OddsPadi product UI contract", () => {
     expect(health).toContain('const todayPage = await checkPage("/predictions/today"');
     expect(health).toContain('const weeklyPage = await checkPage("/predictions/week"');
     expect(health).toContain("HTML is unavailable while API provider status is");
+    expect(health).toContain("MAX_ANALYSIS_LINK_CHECKS = 8");
+    expect(health).toContain("representative fixture links checked");
     expect(health).toContain("checkFeaturedLeagueTables");
     expect(health).toContain('"featured league table links"');
     expect(health).toContain('"ligue-1"');
@@ -121,6 +125,8 @@ describe("live OddsPadi product UI contract", () => {
     expect(history).toContain("Yesterday&apos;s complete engine record");
     expect(history).toContain("partitionDecisionAuditRows");
     expect(history).toContain("Reviewed decisions and abstentions");
+    expect(history).toContain("HISTORY_AUDIT_RENDER_LIMIT = 36");
+    expect(history).toContain("HISTORY_QUEUE_RENDER_LIMIT = 12");
     expect(history).toContain("without a completed market review");
     expect(history).toContain("only picks that were actually published can affect accuracy or ROI");
   });

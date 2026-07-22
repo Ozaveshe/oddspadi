@@ -66,10 +66,28 @@ async function runStage(
     const coverageGaps = minimumAnalysedFixturesPerDate
       ? dailyCoverageGaps(result, minimumAnalysedFixturesPerDate)
       : [];
-    const terminalStatus = result.run.status === "completed" || result.run.status === "partial";
-    const ok = terminalStatus && !result.skippedOverlap && coverageGaps.length === 0;
-    const status = ok ? result.run.status === "partial" ? 207 : 200 : result.skippedOverlap ? 409 : 503;
-    return { path, ok, status, body: { success: ok, coverageGaps, data: result } };
+    // A light or empty official slate is a valid provider outcome, especially
+    // between seasons. Coverage targets are operational warnings, not proof
+    // that ingestion or the engine failed. An overlap is also a successful
+    // idempotent no-op: the already-running receipt remains authoritative.
+    const terminalStatus = ["completed", "partial", "empty"].includes(result.run.status);
+    const ok = result.skippedOverlap || terminalStatus;
+    const status = result.skippedOverlap ? 202 : ok ? result.run.status === "partial" ? 207 : 200 : 503;
+    return {
+      path,
+      ok,
+      status,
+      body: {
+        success: ok,
+        skippedOverlap: result.skippedOverlap,
+        coverageTargetMet: coverageGaps.length === 0,
+        coverageWarnings: coverageGaps,
+        // Retain the old field for operational consumers while they migrate to
+        // the more accurate warning terminology.
+        coverageGaps,
+        data: result
+      }
+    };
   } catch (error) {
     return { path, ok: false, status: 500, body: { error: error instanceof Error ? error.message : "Pipeline stage failed." } };
   }
@@ -128,6 +146,16 @@ export default async function sportsIntelligenceWorker(request: Request, _contex
   const fullCycle = shouldRunFullCycle({ requested: requestedFullCycle, now, fullRunHour, latestWeeklyRun });
   const stages = await runSportsIntelligenceCycle(fullCycle, defaultOperations, minimumAnalysedFixturesPerDate);
   const success = stages.every((stage) => stage.ok);
-  console.info(JSON.stringify({ event: "oddspadi-sports-intelligence-cycle", success, fullCycle, stages: stages.map(({ path, ok, status }) => ({ path, ok, status })) }));
-  return Response.json({ success, mode: "sports-intelligence-cycle", fullCycle, stages }, { status: success ? 200 : 502 });
+  const coverageTargetMet = stages.every((stage) => {
+    if (!stage.body || typeof stage.body !== "object" || !("coverageTargetMet" in stage.body)) return true;
+    return stage.body.coverageTargetMet !== false;
+  });
+  console.info(JSON.stringify({
+    event: "oddspadi-sports-intelligence-cycle",
+    success,
+    coverageTargetMet,
+    fullCycle,
+    stages: stages.map(({ path, ok, status }) => ({ path, ok, status }))
+  }));
+  return Response.json({ success, coverageTargetMet, mode: "sports-intelligence-cycle", fullCycle, stages }, { status: success ? 200 : 502 });
 }

@@ -63,7 +63,7 @@ describe("sports intelligence full-cycle retry", () => {
     expect(calls).toEqual(["refresh-odds", "run-daily-engine"]);
   });
 
-  it("fails the rolling production gate below 100 priced analyses on any required date", () => {
+  it("reports the rolling coverage target below 100 priced analyses on any requested date", () => {
     const result = {
       dateCoverage: healthyDateCoverage.map((coverage, index) => index === 1 ? { ...coverage, bookmakerPricedFixtures: 99, analysedFixtures: 99 } : coverage)
     } as never;
@@ -73,5 +73,56 @@ describe("sports intelligence full-cycle retry", () => {
       "2026-07-17: 99/100 bookmaker-backed analyses."
     ]);
     expect(dailyCoverageGaps({ dateCoverage: healthyDateCoverage } as never)).toEqual([]);
+  });
+
+  it("keeps an official light slate operational while exposing coverage warnings", async () => {
+    const lightDateCoverage = healthyDateCoverage.map((coverage) => ({
+      ...coverage,
+      providerBackedFixtures: 12,
+      bookmakerPricedFixtures: 7,
+      analysedFixtures: 7
+    }));
+    const result = (jobType: string) => async () => ({
+      run: { jobType, status: "completed" },
+      dateCoverage: lightDateCoverage,
+      skippedOverlap: false
+    }) as never;
+
+    const stages = await runSportsIntelligenceCycle(false, {
+      importFixtures: result("import-fixtures"),
+      refreshOdds: result("refresh-odds"),
+      runDailyEngine: result("run-daily-engine"),
+      generateWeeklyPredictions: result("generate-weekly-predictions")
+    });
+
+    expect(stages.every((stage) => stage.ok)).toBe(true);
+    expect(stages[1]?.status).toBe(200);
+    expect(stages[1]?.body).toMatchObject({
+      success: true,
+      coverageTargetMet: false,
+      coverageWarnings: expect.arrayContaining([
+        "2026-07-16: 12/100 provider-backed fixtures.",
+        "2026-07-16: 7/100 fixtures have fresh bookmaker prices.",
+        "2026-07-16: 7/100 bookmaker-backed analyses."
+      ])
+    });
+  });
+
+  it("treats a healthy empty slate and an overlapping run as successful no-ops", async () => {
+    const completed = (jobType: string) => async () => ({ run: { jobType, status: "completed" }, skippedOverlap: false }) as never;
+    const empty = async () => ({ run: { jobType: "run-daily-engine", status: "empty" }, dateCoverage: [], skippedOverlap: false }) as never;
+    const overlap = async () => ({ run: { jobType: "run-daily-engine", status: "running" }, dateCoverage: [], skippedOverlap: true }) as never;
+    const operations = (runDailyEngine: () => Promise<never>) => ({
+      importFixtures: completed("import-fixtures"),
+      refreshOdds: completed("refresh-odds"),
+      runDailyEngine,
+      generateWeeklyPredictions: completed("generate-weekly-predictions")
+    });
+
+    const emptyStages = await runSportsIntelligenceCycle(false, operations(empty));
+    const overlapStages = await runSportsIntelligenceCycle(false, operations(overlap));
+
+    expect(emptyStages[1]).toMatchObject({ ok: true, status: 200 });
+    expect(overlapStages[1]).toMatchObject({ ok: true, status: 202 });
   });
 });
