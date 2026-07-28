@@ -7,6 +7,7 @@ import { TipsterLeaderboard, type TipsterLeaderboardRow } from "@/components/com
 import { getCachedPredictionsPageData } from "@/lib/sports/prediction/cachedPublicReads";
 import { todayIsoDate } from "@/lib/sports/service";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = pageMetadata({
@@ -49,5 +50,8 @@ export default async function CommunityPage({ searchParams }: PageProps) {
     <TipsterLeaderboard rows={leaderboard} />
     {!supabase ? <div className="notice">The community feed isn&apos;t switched on for this environment yet.</div> : user ? <FeedComposer matches={matches} initialMatchId={params.match ?? ""} initialBody={params.prompt ?? ""} /> : <div className="notice"><Link className="inline-link" href="/account">Sign in</Link> to post to the feed.</div>}
     <section className="section" style={{ paddingTop: 20 }}><CommunityFeed initialPosts={posts} initialCursor={nextCursor} userId={user?.id ?? null} matches={matches} /></section>
+    {/* Member-authored tips get less scrutiny than the engine's, not more, so
+        the responsible-use framing matters at least as much here. */}
+    <section className="section"><ResponsibleUseNotice /></section>
   </main>;
 }

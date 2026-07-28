@@ -4,6 +4,7 @@ import Link from "next/link";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { buildPremierLeague2026Projection, premierLeague2026Baseline, seasonCoverageQueue } from "@/lib/sports/prediction/seasonOutlooks";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
+import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 
 export const revalidate = 21_600;
 
@@ -78,5 +79,8 @@ export default function SeasonOutlooksPage() {
     </section>
 
     <section className="story-cta"><strong>Ready for match-level analysis?</strong><p>Fixture predictions take over when teams, kickoff times and usable prices are confirmed.</p><Link className="button primary" href="/predictions">Open today&apos;s predictions</Link></section>
+    {/* Season-long probabilities are still predictions, and carried no
+        responsible-use framing at all. */}
+    <section className="section"><ResponsibleUseNotice /></section>
   </main>;
 }

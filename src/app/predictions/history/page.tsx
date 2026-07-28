@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { ShareBar } from "@/components/share/ShareBar";
 import { TipsSharePreview } from "@/components/odds/TipsSharePreview";
+import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 import { LocalTimeText } from "@/components/odds/LocalTime";
 import { absoluteUrl } from "@/lib/seo/pageMetadata";
 import { getCachedPublicPredictionHistory } from "@/lib/sports/prediction/cachedPublicReads";
@@ -210,5 +211,9 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
         </tr>)}</tbody>
       </table>
     </div> : <div className="empty-state"><div className="empty-emoji">🔎</div><h2>No published picks match these filters</h2><p className="muted">This is an honest empty state. Internal runs and demo outcomes are not used to fill the ledger.</p></div>}
+    {/* A page of past winners and losers is exactly where the "no analysis
+        removes risk" framing belongs; the daily tips surfaces carry it via
+        DailyTipsPageView, this one carried nothing. */}
+    <section className="section"><ResponsibleUseNotice /></section>
   </main>;
 }
