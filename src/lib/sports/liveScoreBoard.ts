@@ -484,13 +484,16 @@ function metadataText(metadata: Record<string, unknown> | null, key: string): st
 }
 
 export function normalizeStoredLiveBoardState(
-  fixture: Pick<RepositoryFixture, "status" | "last_synced_at" | "home_score" | "away_score"> & { elapsed: number | null },
+  fixture: Pick<RepositoryFixture, "status" | "kickoff_at" | "last_synced_at" | "home_score" | "away_score"> & { elapsed: number | null },
   now = new Date(),
   maxLiveAgeMs = STORED_LIVE_STATUS_MAX_AGE_MS
 ): Pick<LiveBoardFixture, "phase" | "statusShort" | "statusLabel" | "elapsed" | "goals"> {
   const status = fixture.status.toLowerCase();
   const live = status === "live" || status === "in_play";
-  if (live && !isStoredFixtureFresh(fixture.last_synced_at, now, maxLiveAgeMs)) {
+  const scheduled = status === "scheduled" || status === "not_started";
+  const kickoffMs = Date.parse(fixture.kickoff_at);
+  const scheduledPastGrace = scheduled && Number.isFinite(kickoffMs) && now.getTime() - kickoffMs > maxLiveAgeMs;
+  if ((live && !isStoredFixtureFresh(fixture.last_synced_at, now, maxLiveAgeMs)) || scheduledPastGrace) {
     return {
       phase: "other",
       statusShort: "STALE",
@@ -504,7 +507,7 @@ export function normalizeStoredLiveBoardState(
     ? "live"
     : status === "finished" || status === "ft"
       ? "finished"
-      : status === "scheduled" || status === "not_started"
+      : scheduled
         ? "upcoming"
         : "other";
   return {
@@ -620,6 +623,70 @@ export function mergeLiveBoardCoverage(
   ];
 }
 
+function fixtureIdentityKey(fixture: LiveBoardFixture): string {
+  const normalize = (value: string) => value.trim().toLocaleLowerCase("en").replace(/\s+/g, " ");
+  const kickoffMs = safeKickoffMs(fixture.kickoff);
+  const kickoff = Number.isFinite(kickoffMs) ? String(kickoffMs) : fixture.kickoff;
+  return [fixture.sport, kickoff, normalize(fixture.home.name), normalize(fixture.away.name)].join("|");
+}
+
+function fixtureEvidenceRank(fixture: LiveBoardFixture): number {
+  if (fixture.phase === "finished") return 4;
+  if (fixture.phase === "live") return 3;
+  if (fixture.phase === "other" && fixture.statusShort !== "STALE") return 2;
+  if (fixture.phase === "upcoming") return 1;
+  return 0;
+}
+
+function fixtureCompleteness(fixture: LiveBoardFixture): number {
+  return [
+    fixture.goals.home,
+    fixture.goals.away,
+    fixture.league.logo,
+    fixture.league.flag,
+    fixture.home.logo,
+    fixture.away.logo
+  ].filter((value) => value !== null).length;
+}
+
+function mergeFixtureMetadata(preferred: LiveBoardFixture, fallback: LiveBoardFixture): LiveBoardFixture {
+  return {
+    ...preferred,
+    analysis: preferred.analysis || fallback.analysis,
+    league: {
+      ...preferred.league,
+      logo: preferred.league.logo ?? fallback.league.logo,
+      flag: preferred.league.flag ?? fallback.league.flag,
+      round: preferred.league.round ?? fallback.league.round
+    },
+    home: { ...preferred.home, logo: preferred.home.logo ?? fallback.home.logo },
+    away: { ...preferred.away, logo: preferred.away.logo ?? fallback.away.logo }
+  };
+}
+
+/**
+ * Stored provider lanes can represent one real fixture more than once (for
+ * example, an odds event row plus a later score row). Keep the strongest
+ * observed state and reuse only source-provided artwork from its duplicate.
+ */
+export function deduplicateLiveBoardFixtures(fixtures: LiveBoardFixture[]): LiveBoardFixture[] {
+  const unique = new Map<string, LiveBoardFixture>();
+  for (const fixture of fixtures) {
+    const key = fixtureIdentityKey(fixture);
+    const existing = unique.get(key);
+    if (!existing) {
+      unique.set(key, fixture);
+      continue;
+    }
+    const existingScore = fixtureEvidenceRank(existing) * 10 + fixtureCompleteness(existing);
+    const fixtureScore = fixtureEvidenceRank(fixture) * 10 + fixtureCompleteness(fixture);
+    unique.set(key, fixtureScore > existingScore
+      ? mergeFixtureMetadata(fixture, existing)
+      : mergeFixtureMetadata(existing, fixture));
+  }
+  return [...unique.values()];
+}
+
 async function fetchLiveScoreBoardUncached(date: string): Promise<LiveScoreBoard> {
   const [football, basketballMatches, tennisMatches, repositoryCoverage] = await Promise.all([
     fetchFootballLiveScoreBoard(date),
@@ -632,7 +699,7 @@ async function fetchLiveScoreBoardUncached(date: string): Promise<LiveScoreBoard
     .filter((fixture): fixture is LiveBoardFixture => Boolean(fixture));
   const providerFixtures = [...football.fixtures, ...extraFixtures];
   const repositoryFixtures = repositoryCoverage.fixtures;
-  const fixtures = mergeLiveBoardCoverage(providerFixtures, repositoryFixtures).sort((a, b) => {
+  const fixtures = deduplicateLiveBoardFixtures(mergeLiveBoardCoverage(providerFixtures, repositoryFixtures)).sort((a, b) => {
     const phaseDiff = phaseOrder(a.phase) - phaseOrder(b.phase);
     if (phaseDiff !== 0) return phaseDiff;
     const sportDiff = a.sport.localeCompare(b.sport);
