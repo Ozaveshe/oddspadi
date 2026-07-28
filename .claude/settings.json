@@ -1,0 +1,14 @@
+{
+  "enabledPlugins": {
+    "accesslint@accesslint": true,
+    "superpowers@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "accesslint": {
+      "source": {
+        "source": "github",
+        "repo": "accesslint/claude-marketplace"
+      }
+    }
+  }
+}

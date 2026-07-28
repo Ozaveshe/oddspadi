@@ -6,6 +6,7 @@ import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { MatchCommunityDesk, type CommunityMarketOption } from "@/components/community/MatchCommunityDesk";
 import { DecisionPriceSignal } from "@/components/odds/DecisionPriceSignal";
+import { ProbabilityDistribution } from "@/components/odds/ProbabilityDistribution";
 import { marketPriorReceiptFor } from "@/lib/sports/prediction/marketPriorPresentation";
 
 export function StoredFixtureAnalysisView({ read }: { read: StoredFixtureAnalysisRead }) {
@@ -71,6 +72,32 @@ export function StoredFixtureAnalysisView({ read }: { read: StoredFixtureAnalysi
         </div>
         <div className="match-decision-actions"><Link className="button primary" href="/predictions/today">Today&apos;s tips</Link><Link className="button" href="/predictions/week">Weekly radar</Link><Link className="button" href="/predictions/history">Results ledger</Link></div>
       </section>
+
+      {/* The stored receipt already carries the 1X2 distribution — it was only
+          being handed to the community desk for crowd contrast. Showing it
+          means an archived fixture still explains what the model actually
+          thought, rather than only why it abstained. */}
+      {storedModelProbabilities ? (
+        <section className="section">
+          <div className="panel probability-panel">
+            <h2>Stored probability comparison</h2>
+            <p className="muted small">
+              The full bar is 100% of the model&apos;s stored 1X2 distribution at the time this receipt was written. It is
+              not recalculated from current data.
+            </p>
+            <ProbabilityDistribution
+              selections={[
+                { id: "home", label: analysis.homeTeam.name, value: storedModelProbabilities.home },
+                ...(analysis.sport === "football"
+                  ? [{ id: "draw" as const, label: "Draw", value: storedModelProbabilities.draw ?? 0 }]
+                  : []),
+                { id: "away", label: analysis.awayTeam.name, value: storedModelProbabilities.away }
+              ]}
+              dataQuality={analysis.dataQuality}
+            />
+          </div>
+        </section>
+      ) : null}
 
       {communitySport ? <MatchCommunityDesk fixtureId={analysis.fixtureId} sport={communitySport} homeTeam={analysis.homeTeam.name} awayTeam={analysis.awayTeam.name} kickoffAt={analysis.kickoffAt} markets={[...marketOptions.values()]} modelProbabilities={storedModelProbabilities} /> : null}
 
