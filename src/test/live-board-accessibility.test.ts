@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -45,24 +46,35 @@ describe("live surfaces", () => {
   });
 });
 
-describe("labelled control clusters", () => {
+describe("labelled containers", () => {
+  /**
+   * `aria-label` only applies to elements with a role that supports naming. On
+   * a plain `<div>` assistive technology discards it, so the label is simply
+   * lost — which is worse than no label, because the code reads as if the
+   * element is described. This swept the whole component and route tree
+   * because the pattern turned up in twelve places, not three.
+   */
   it("gives every aria-labelled container a role to attach the label to", async () => {
-    const files = [
-      "src/components/share/ShareBar.tsx",
-      "src/components/live/LiveTicker.tsx",
-      "src/components/live/LiveScoreBoard.tsx"
-    ];
-
+    const roots = ["src/app", "src/components"];
     const offenders: string[] = [];
-    for (const file of files) {
-      const source = await readFile(file, "utf8");
-      for (const [index, line] of source.split("\n").entries()) {
-        // A <div> carrying aria-label but no role has nothing to name.
-        if (!/<div[^>]*aria-label=/.test(line)) continue;
-        if (!/role=/.test(line)) offenders.push(`${file}:${index + 1}`);
+
+    async function walk(directory: string): Promise<void> {
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== "_archived") await walk(path);
+          continue;
+        }
+        if (!entry.name.endsWith(".tsx")) continue;
+        const source = await readFile(path, "utf8");
+        for (const [index, line] of source.split("\n").entries()) {
+          if (!/<div[^>]*aria-label=/.test(line)) continue;
+          if (!/role=/.test(line)) offenders.push(`${path}:${index + 1}`);
+        }
       }
     }
 
+    await Promise.all(roots.map(walk));
     expect(offenders).toEqual([]);
   });
 });

@@ -95,7 +95,7 @@ export function DecisionEvidenceProfile({
           </figcaption>
           {probabilityStages.length ? (
             <>
-              <div className="probability-journey-track" aria-label={probabilityStages.map((stage) => `${stage.label} ${formatPercent(stage.value)}`).join(", ")}>
+              <div className="probability-journey-track" role="img" aria-label={probabilityStages.map((stage) => `${stage.label} ${formatPercent(stage.value)}`).join(", ")}>
                 {hasConfidenceBand ? (
                   <span
                     className="probability-confidence-band"

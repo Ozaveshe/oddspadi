@@ -37,7 +37,7 @@ export default async function NewsPage() {
         <span className="section-kicker">The Matchday Desk</span>
         <h1>News that helps you <span className="accent">read the game.</span></h1>
         <p>Fresh briefings, transparent model notes, and season outlooks—built from the same evidence behind OddsPadi predictions.</p>
-        <div className="editorial-feed-links" aria-label="Subscribe to Matchday Desk updates">
+        <div className="editorial-feed-links" role="group" aria-label="Subscribe to Matchday Desk updates">
           <Link href="/news/rss.xml">RSS feed</Link>
           <Link href="/news/feed.json">JSON feed</Link>
         </div>

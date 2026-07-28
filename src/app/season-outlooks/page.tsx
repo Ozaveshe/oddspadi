@@ -56,7 +56,7 @@ export default function SeasonOutlooksPage() {
         <p className="small"><strong>Manager changes logged, not modelled:</strong> {premierLeague2026Baseline.confirmedManagerChangesSinceBaseline.join("; ")}.</p>
         <div className="season-sources"><strong>Official checks</strong>{premierLeague2026Baseline.officialSources.map(source => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.label} · checked {source.checkedAt} ↗</a>)}</div>
       </div>
-      <div className="season-podium" aria-label="Leading title probabilities">
+      <div className="season-podium" role="group" aria-label="Leading title probabilities">
         {projection.slice(0, 3).map((team, index) => <article key={team.name}>
           <span className="podium-rank">0{index + 1}</span><TeamCrest name={team.name} size={38} />
           <h3>{team.name}</h3><strong>{percent.format(team.titleProbability)}</strong><span>title baseline</span>

@@ -135,7 +135,7 @@ export default async function DecisionEnginePage() {
           <span className="section-kicker">Data coverage</span>
           <h2>{coverage === null ? "Today’s coverage was not read" : `${coverage}% of today's slate analysed`}</h2>
           <p className="muted">{providerReadable ? <>{product.summary.fixturesFound} provider-backed fixtures found. {providerGaps ? `${providerGaps} still need data or provider recovery.` : "No fixture is currently blocked by a provider gap."}</> : "The stored slate repository is unavailable. Zero coverage is not inferred, and this page does not invoke live providers."}</p>
-          <div className={`engine-rail${coverage === null ? " is-unavailable" : ""}`} aria-label={coverage === null ? "Fixture coverage unavailable" : `${coverage}% fixture coverage`}><span style={{ width: `${coverage ?? 0}%` }} /></div>
+          <div className={`engine-rail${coverage === null ? " is-unavailable" : ""}`} role="img" aria-label={coverage === null ? "Fixture coverage unavailable" : `${coverage}% fixture coverage`}><span style={{ width: `${coverage ?? 0}%` }} /></div>
           <ul className="engine-dashboard-list">
             <li><span>Provider health</span><strong>{slate.provider.status}</strong></li>
             <li><span>Provider source</span><strong>{slate.provider.providers.join(", ") || "No provider response"}</strong></li>

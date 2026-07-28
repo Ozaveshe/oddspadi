@@ -116,7 +116,7 @@ export default async function EnginePerformancePage() {
             </div>
           </div>
         ) : <>
-        <div className="evidence-ledger" aria-label="Historical data counts">
+        <div className="evidence-ledger" role="group" aria-label="Historical data counts">
           <div><span>Finished fixtures</span><strong>{count(evidence.census.totals.finishedFixtures)}</strong></div>
           <div><span>Odds snapshots</span><strong>{count(evidence.census.totals.oddsSnapshots)}</strong></div>
           <div><span>Feature rows</span><strong>{count(evidence.census.totals.featureSnapshots)}</strong></div>
@@ -144,7 +144,7 @@ export default async function EnginePerformancePage() {
             const completion = sport.featureSnapshots ? Math.min(100, Math.round((sport.completeFeatureSnapshots / sport.featureSnapshots) * 100)) : 0;
             return <article key={sport.sport} className="evidence-sport-card">
               <header><strong>{sport.sport}</strong><span>{completion}% complete features</span></header>
-              <div className="evidence-meter" aria-label={`${sport.sport} complete feature coverage ${completion}%`}><i style={{ width: `${completion}%` }} /></div>
+              <div className="evidence-meter" role="img" aria-label={`${sport.sport} complete feature coverage ${completion}%`}><i style={{ width: `${completion}%` }} /></div>
               <dl>
                 <div><dt>fixtures</dt><dd>{count(sport.finishedFixtures)}</dd></div>
                 <div><dt>odds</dt><dd>{count(sport.oddsSnapshots)}</dd></div>
@@ -220,7 +220,7 @@ export default async function EnginePerformancePage() {
             const actual = bucket.actualWinRate === null ? 0 : bucket.actualWinRate * 100;
             return <article key={bucket.id} className="calibration-rung">
               <div><strong>{bucket.label}</strong><span>{bucket.predictions} prediction{bucket.predictions === 1 ? "" : "s"}</span></div>
-              <div className="calibration-track" aria-label={`${bucket.label}: expected ${percent(bucket.averageProbability)}, actual ${percent(bucket.actualWinRate)}`}>
+              <div className="calibration-track" role="img" aria-label={`${bucket.label}: expected ${percent(bucket.averageProbability)}, actual ${percent(bucket.actualWinRate)}`}>
                 <span className="calibration-expected" style={{ width: `${Math.min(100, expected)}%` }} />
                 {bucket.actualWinRate !== null ? <i className="calibration-actual" style={{ left: `${Math.min(100, actual)}%` }} /> : null}
               </div>

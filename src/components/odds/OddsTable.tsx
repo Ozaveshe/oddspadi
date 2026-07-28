@@ -51,7 +51,7 @@ export function OddsTable({ match, prediction }: { match: Match; prediction: Pre
         </table>
       </div>
 
-      <div className="market-mobile-list" aria-label="Market analysis cards">
+      <div className="market-mobile-list" role="group" aria-label="Market analysis cards">
         {rows.map(({ id, market, selection, bookmaker, edge }) => (
           <article className="market-mobile-card" key={id}>
             <header>
