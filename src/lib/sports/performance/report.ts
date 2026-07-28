@@ -1,6 +1,7 @@
 import { getPublicPredictionHistory } from "@/lib/sports/prediction/history";
 import { getDailyTipsProduct } from "@/lib/sports/tips/product";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { siteUrl } from "@/lib/seo/pageMetadata";
 import { historicalModelCompatibility, isDecisionModelSport, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 import { readSupabaseTrainingCorpusCensus } from "@/lib/sports/training/supabaseTrainingCorpusCensus";
 import {
@@ -187,7 +188,9 @@ export function auditBacktestOddsCoverage(configValue: unknown) {
 }
 
 export async function getHistoricalEngineEvidence() {
-  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+  // The shared constant strips a trailing slash; this local copy did not, so
+  // a configured "https://site/" produced doubled slashes in every derived URL.
+  const origin = siteUrl;
   const censusPromise = readSupabaseTrainingCorpusCensus({ origin }).catch((error: unknown) => ({
     status: "failed" as const,
     summary: error instanceof Error ? error.message : "Training corpus census failed.",

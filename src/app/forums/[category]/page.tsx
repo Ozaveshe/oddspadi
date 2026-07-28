@@ -4,10 +4,15 @@ import { notFound } from "next/navigation";
 import { NewThreadForm } from "@/components/community/ForumComposers";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
+import { isIsoTimestampCursor } from "@/lib/security/inputValidation";
+import { absoluteUrl, pageMetadata } from "@/lib/seo/pageMetadata";
 
 export const dynamic = "force-dynamic";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+/** Percent-encoded so a slug can never break out of its path segment. */
+function categoryPath(slug: string): string {
+  return `/forums/${encodeURIComponent(slug)}`;
+}
 
 type PageProps = { params: Promise<{ category: string }>; searchParams?: Promise<{ cursor?: string }> };
 
@@ -29,7 +34,9 @@ function authorName(author: Thread["author"]): string {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { category: slug } = await params;
-  const fallback: Metadata = { title: "Forum category", alternates: { canonical: `/forums/${slug}` } };
+  // An unresolvable category 404s below, so the fallback must not advertise an
+  // indexable canonical for a page that does not exist.
+  const fallback: Metadata = { title: "Forum category", robots: { index: false, follow: true } };
   const supabase = await createSupabaseServerClient();
   if (!supabase) return fallback;
   const { data } = await supabase
@@ -39,12 +46,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .maybeSingle<{ name: string; description: string | null }>();
   if (!data) return fallback;
   const description = data.description ?? `Threads, predictions debate and match talk in ${data.name} on the OddsPadi forums.`;
-  return {
+  return pageMetadata({
     title: data.name,
     description,
-    alternates: { canonical: `/forums/${slug}` },
-    openGraph: { title: `${data.name} — OddsPadi Forums`, description }
-  };
+    path: categoryPath(slug),
+    socialTitle: `${data.name} — OddsPadi Forums`
+  });
 }
 
 export default async function ForumCategoryPage({ params, searchParams }: PageProps) {
@@ -72,7 +79,10 @@ export default async function ForumCategoryPage({ params, searchParams }: PagePr
       .eq("category_id", category.id)
       .order("is_pinned", { ascending: false })
       .order("last_activity_at", { ascending: false }).limit(21);
-  if (cursor) threadQuery = threadQuery.lt("last_activity_at", cursor);
+  // The community API validates its cursor with the same helper; this page did
+  // not, so an arbitrary query-string value reached the PostgREST filter and
+  // silently produced an empty thread list instead of an error.
+  if (cursor && isIsoTimestampCursor(cursor)) threadQuery = threadQuery.lt("last_activity_at", cursor);
   const [{ data: threadsData }, userResult] = await Promise.all([
     threadQuery,
     supabase.auth.getUser()
@@ -86,9 +96,9 @@ export default async function ForumCategoryPage({ params, searchParams }: PagePr
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Home", item: `${siteUrl}/` },
-      { "@type": "ListItem", position: 2, name: "Forums", item: `${siteUrl}/forums` },
-      { "@type": "ListItem", position: 3, name: category.name, item: `${siteUrl}/forums/${slug}` }
+      { "@type": "ListItem", position: 1, name: "Home", item: absoluteUrl("/") },
+      { "@type": "ListItem", position: 2, name: "Forums", item: absoluteUrl("/forums") },
+      { "@type": "ListItem", position: 3, name: category.name, item: absoluteUrl(categoryPath(slug)) }
     ]
   };
 

@@ -1,18 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Forums",
   description: "OddsPadi forums — match talk, predictions debate, and league chat with fellow fans.",
-  alternates: { canonical: "/forums" },
-  openGraph: {
-    title: "Forums — OddsPadi",
-    description: "OddsPadi forums — match talk, predictions debate, and league chat with fellow fans."
-  }
-};
+  path: "/forums",
+  socialTitle: "Forums — OddsPadi"
+});
 
 type Category = { id: string; slug: string; name: string; description: string | null };
 

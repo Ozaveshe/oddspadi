@@ -73,3 +73,41 @@ describe("route metadata", () => {
     expect(openGraphBlock).not.toMatch(/\burl:/);
   });
 });
+
+describe("origin configuration", () => {
+  /**
+   * Structured data, canonicals and feed URLs must all derive from one
+   * configured origin. Hardcoded or locally re-derived copies meant preview and
+   * staging deploys published URLs pointing at production, and a local copy
+   * that skipped the trailing-slash strip produced `//path` in every URL built
+   * from it.
+   */
+  it("derives every site URL from the shared constant", async () => {
+    const roots = ["src/app", "src/lib", "src/components"];
+    const offenders: string[] = [];
+
+    async function walk(directory: string): Promise<void> {
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== "_archived") await walk(path);
+          continue;
+        }
+        if (!entry.name.endsWith(".ts") && !entry.name.endsWith(".tsx")) continue;
+        if (path.endsWith("lib/seo/pageMetadata.ts")) continue;
+        const source = await readFile(path, "utf8");
+        for (const [index, line] of source.split("\n").entries()) {
+          // Deployment *documentation* may name the expected production domain;
+          // building a URL from it is what this guards against.
+          if (/https:\/\/oddspadi\.com/.test(line) && /`|url:|item:|href=|origin =/.test(line)) {
+            offenders.push(`${path}:${index + 1}`);
+          }
+          if (/NEXT_PUBLIC_SITE_URL\s*\?\?/.test(line)) offenders.push(`${path}:${index + 1}`);
+        }
+      }
+    }
+
+    await Promise.all(roots.map(walk));
+    expect(offenders).toEqual([]);
+  });
+});

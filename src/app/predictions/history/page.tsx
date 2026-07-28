@@ -3,6 +3,7 @@ import { CountryFlag } from "@/components/odds/CountryFlag";
 import { ShareBar } from "@/components/share/ShareBar";
 import { TipsSharePreview } from "@/components/odds/TipsSharePreview";
 import { LocalTimeText } from "@/components/odds/LocalTime";
+import { absoluteUrl } from "@/lib/seo/pageMetadata";
 import { getCachedPublicPredictionHistory } from "@/lib/sports/prediction/cachedPublicReads";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import {
@@ -79,7 +80,7 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
     "@type": "Dataset",
     name: "OddsPadi published public-pick results ledger",
     description: "Provider-backed value picks that were actually published, including settlement state and results.",
-    url: "https://oddspadi.com/predictions/history",
+    url: absoluteUrl("/predictions/history"),
     dateModified: ledger.generatedAt,
     measurementTechnique: "One-unit simulation across settled published public picks only; internal model runs are excluded.",
     variableMeasured: ["result", "settlement status", "model probability", "odds", "value edge", "closing line value"]

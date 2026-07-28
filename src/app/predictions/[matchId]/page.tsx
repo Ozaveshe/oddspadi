@@ -29,7 +29,9 @@ import { marketPriorReceiptFor } from "@/lib/sports/prediction/marketPriorPresen
 
 export const revalidate = 180;
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+// Shared so a trailing slash in NEXT_PUBLIC_SITE_URL cannot produce `//path`,
+// and so one definition governs every canonical the site emits.
+import { siteUrl } from "@/lib/seo/pageMetadata";
 
 type PageProps = {
   params: Promise<{ matchId: string }>;

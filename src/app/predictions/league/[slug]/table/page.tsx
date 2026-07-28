@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { LocalTimeText } from "@/components/odds/LocalTime";
-import { pageMetadata } from "@/lib/seo/pageMetadata";
+import { pageMetadata, siteUrl } from "@/lib/seo/pageMetadata";
 import {
   featuredFootballLeagueTables,
   currentFootballSeason,
@@ -17,7 +17,7 @@ import { serializeJsonLd } from "@/lib/security/jsonLd";
 
 export const dynamic = "force-dynamic";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+
 
 type Props = { params: Promise<{ slug: string }> };
 

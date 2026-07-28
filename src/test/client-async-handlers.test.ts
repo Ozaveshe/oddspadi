@@ -32,10 +32,14 @@ describe("client components that fetch", () => {
     const offenders: string[] = [];
     for (const file of files) {
       const source = await readFile(file, "utf8");
-      const setsBusy = /\bset(?:Busy|Saving|Submitting|Pending)\(true\)/.test(source);
-      if (!setsBusy) continue;
+      // Counted, not merely detected: a file-level "does a finally exist?"
+      // check passes as soon as *one* handler is guarded, which is how a second
+      // unguarded handler in an already-compliant file slipped through.
+      const busyStarts = source.match(/\bset(?:Busy|Saving|Submitting|Pending)\(true\)/g)?.length ?? 0;
+      if (busyStarts === 0) continue;
       if (!source.includes("await fetch(")) continue;
-      if (!/finally\s*\{/.test(source)) offenders.push(file);
+      const finallyBlocks = source.match(/finally\s*\{/g)?.length ?? 0;
+      if (finallyBlocks < busyStarts) offenders.push(`${file}: ${busyStarts} busy flag(s), ${finallyBlocks} finally block(s)`);
     }
 
     expect(offenders).toEqual([]);
