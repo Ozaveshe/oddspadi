@@ -7,11 +7,33 @@ export const alt = "OddsPadi match prediction and model probabilities";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-const bricolageFont = fetch("https://fonts.gstatic.com/s/bricolagegrotesque/v9/3y9U6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiaaD30YfKfjZZoLvfzlyM0.ttf")
-  .then((response) => {
-    if (!response.ok) throw new Error(`Could not load the Bricolage Grotesque OG font (${response.status}).`);
-    return response.arrayBuffer();
-  });
+const BRICOLAGE_TTF_URL =
+  "https://fonts.gstatic.com/s/bricolagegrotesque/v9/3y9U6as8bTXq_nANBjzKo3IeZx8z6up5BeSl5jBNz_19PpbpMXuECpwUxJBOm_OJWiaaD30YfKfjZZoLvfzlyM0.ttf";
+
+/**
+ * Lazily fetched and fail-soft.
+ *
+ * This used to be a module-scope `fetch(...).then(...)` that threw on a non-OK
+ * response. That produced an unhandled rejection at import time, and because a
+ * settled promise is cached for the lifetime of the module, one transient
+ * gstatic failure permanently 500'd this route on that server instance. A
+ * missing display font should cost the card its typeface, not the whole image.
+ */
+let bricolageFont: Promise<ArrayBuffer | null> | null = null;
+
+function loadBricolageFont(): Promise<ArrayBuffer | null> {
+  if (bricolageFont) return bricolageFont;
+  bricolageFont = fetch(BRICOLAGE_TTF_URL, { signal: AbortSignal.timeout(4_000) })
+    .then((response) => (response.ok ? response.arrayBuffer() : null))
+    .catch(() => null)
+    .then((data) => {
+      // Do not cache a failure: the next render should try again rather than
+      // serving an unstyled card forever.
+      if (!data) bricolageFont = null;
+      return data;
+    });
+  return bricolageFont;
+}
 
 function percent(value: number | undefined): string {
   return `${Math.round(Math.max(0, Math.min(1, value ?? 0)) * 100)}%`;
@@ -36,7 +58,7 @@ export default async function MatchOpenGraphImage({ params }: { params: Promise<
   let matchId = encodedMatchId;
   try { matchId = decodeURIComponent(encodedMatchId); } catch { /* Keep the route value as-is. */ }
   const row = await getCachedMatchPrediction(matchId);
-  const font = await bricolageFont;
+  const font = await loadBricolageFont();
 
   const home = row?.match.homeTeam.name ?? "Team A";
   const away = row?.match.awayTeam.name ?? "Team B";
@@ -84,6 +106,8 @@ export default async function MatchOpenGraphImage({ params }: { params: Promise<
         </div>
       </div>
     </div>,
-    { ...size, fonts: [{ name: "Bricolage Grotesque", data: font, weight: 700, style: "normal" }] }
+    // No `fonts` entry when the download failed: ImageResponse then falls back
+    // to its built-in face instead of the route erroring out.
+    { ...size, ...(font ? { fonts: [{ name: "Bricolage Grotesque", data: font, weight: 700, style: "normal" as const }] } : {}) }
   );
 }

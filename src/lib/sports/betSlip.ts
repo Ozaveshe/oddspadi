@@ -2,6 +2,12 @@ import type { Prediction } from "@/lib/sports/types";
 import type { MatchSummary, PredictionSummary } from "@/lib/sports/prediction/listRow";
 
 export const BET_SLIP_STORAGE_KEY = "oddspadi-bet-slip-v1";
+/**
+ * Hard cap on stored legs. Exported because callers must be able to *check* it:
+ * `writeSlip` truncates from the front, so appending a leg to a full slip
+ * silently discarded the new leg and the UI showed no change and no reason.
+ */
+export const BET_SLIP_MAX_LEGS = 20;
 export const BET_SLIP_CHANGED_EVENT = "oddspadi:bet-slip-changed";
 export type SlipLeg = { id: string; matchId: string; matchLabel: string; league: string; kickoffTime: string; selection: string; decimalOdds: number; modelProbability: number; noVigProbability: number; risk: Prediction["risk"] };
 export type SlipAnalysis = {
@@ -100,7 +106,7 @@ export function readSlip(): SlipLeg[] {
   if (typeof window === "undefined") return [];
   try {
     const value: unknown = JSON.parse(window.localStorage.getItem(BET_SLIP_STORAGE_KEY) ?? "[]");
-    return Array.isArray(value) ? value.filter(isSlipLeg).slice(0, 20) : [];
+    return Array.isArray(value) ? value.filter(isSlipLeg).slice(0, BET_SLIP_MAX_LEGS) : [];
   } catch {
     return [];
   }
@@ -109,7 +115,7 @@ export function readSlip(): SlipLeg[] {
 export function writeSlip(legs: SlipLeg[]): boolean {
   if (typeof window === "undefined") return false;
   try {
-    window.localStorage.setItem(BET_SLIP_STORAGE_KEY, JSON.stringify(legs.filter(isSlipLeg).slice(0, 20)));
+    window.localStorage.setItem(BET_SLIP_STORAGE_KEY, JSON.stringify(legs.filter(isSlipLeg).slice(0, BET_SLIP_MAX_LEGS)));
     window.dispatchEvent(new Event(BET_SLIP_CHANGED_EVENT));
     return true;
   } catch {

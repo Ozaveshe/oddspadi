@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeSlip, BET_SLIP_STORAGE_KEY, readSlip, slipLegFromPrediction, type SlipLeg } from "@/lib/sports/betSlip";
+import { analyzeSlip, BET_SLIP_MAX_LEGS, BET_SLIP_STORAGE_KEY, readSlip, slipLegFromPrediction, writeSlip, type SlipLeg } from "@/lib/sports/betSlip";
 import type { Match, Prediction } from "@/lib/sports/types";
 
 const leg = (id: string, odds: number, modelProbability: number): SlipLeg => ({ id, matchId: id, matchLabel: id, league: "League", kickoffTime: "2026-07-13T12:00:00Z", selection: "Home", decimalOdds: odds, modelProbability, noVigProbability: 1 / odds, risk: "medium" });
@@ -90,5 +90,43 @@ describe("Slip Check", () => {
   it("fails closed when a value status has no eligible canonical pick", () => {
     const prediction = { canonicalDecision: { publicStatus: "value_pick", bestPublishedPick: { ...publishedPick, publicationEligible: false } } } as Prediction;
     expect(slipLegFromPrediction(match, prediction)).toBeNull();
+  });
+});
+
+describe("Slip Check capacity", () => {
+  function stubWindow(store: Map<string, string>) {
+    const globals = globalThis as { window?: unknown };
+    const previous = globals.window;
+    globals.window = {
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value)
+      },
+      dispatchEvent: () => true
+    };
+    return () => { globals.window = previous; };
+  }
+
+  it("truncates from the front, so an appended leg is the one dropped when full", () => {
+    // This is the mechanism behind the silent add failure: the caller must
+    // check capacity itself, because writeSlip keeps the *oldest* legs.
+    const store = new Map<string, string>();
+    const restore = stubWindow(store);
+    try {
+      const full = Array.from({ length: BET_SLIP_MAX_LEGS }, (_, index) => leg(`existing-${index}`, 2, 0.5));
+      const appended = leg("brand-new", 2, 0.5);
+
+      writeSlip([...full, appended]);
+
+      const stored = readSlip();
+      expect(stored).toHaveLength(BET_SLIP_MAX_LEGS);
+      expect(stored.some((row) => row.id === "brand-new")).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it("exposes the cap so callers can refuse before writing", () => {
+    expect(BET_SLIP_MAX_LEGS).toBe(20);
   });
 });
