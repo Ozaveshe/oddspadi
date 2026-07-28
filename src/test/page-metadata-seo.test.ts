@@ -64,6 +64,25 @@ describe("route metadata", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("gives every page that declares openGraph a self-referencing url", async () => {
+    // A page that declares its own `openGraph` replaces the layout's block
+    // wholesale, so omitting `url` there means the page emits no `og:url` at
+    // all — crawlers and share cards fall back to the request URL, query string
+    // and tracking parameters included.
+    const pages = await collectPages(APP_ROOT);
+    const offenders: string[] = [];
+
+    for (const page of pages) {
+      const source = await readFile(page, "utf8");
+      if (!source.includes("openGraph")) continue;
+      if (source.includes("pageMetadata(")) continue;
+      const block = source.match(/openGraph:\s*\{[\s\S]{0,600}?\}/)?.[0] ?? "";
+      if (!/\burl:/.test(block)) offenders.push(page);
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
   it("never lets a page inherit the root og:url and claim to be the homepage", async () => {
     // Next merges metadata shallowly: a page without its own `openGraph` takes
     // the layout's whole block. The layout must therefore not declare a `url`.

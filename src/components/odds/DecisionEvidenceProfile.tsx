@@ -11,7 +11,8 @@ function signedPoints(value: number): string {
 }
 
 function factorBarStyle(value: number, maximum: number): CSSProperties {
-  const width = maximum > 0 ? Math.min(50, Math.abs(value) / maximum * 50) : 0;
+  // Guarded against a non-finite weighted score, which produced `width: NaN%`.
+  const width = maximum > 0 && Number.isFinite(value) ? Math.min(50, (Math.abs(value) / maximum) * 50) : 0;
   return value >= 0
     ? { left: "50%", width: `${width}%` }
     : { left: `${50 - width}%`, width: `${width}%` };
