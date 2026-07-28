@@ -149,10 +149,13 @@ export default async function HomePage() {
 
       <section className="section home-how">
         <div className="section-title"><div><span className="section-kicker">How OddsPadi works</span><h2>Read the match in three moves</h2></div></div>
+        {/* The step numerals are decorative: the <ol> already conveys order, so
+            leaving them exposed made screen readers announce "1, 1. Scan the
+            full schedule". */}
         <ol>
-          <li><span>1</span><div><h3>Scan the full schedule</h3><p>Every available provider fixture enters the daily board.</p></div></li>
-          <li><span>2</span><div><h3>Compare chances and price</h3><p>The model estimates the outcome, then compares it with the bookmaker&apos;s fair chance.</p></div></li>
-          <li><span>3</span><div><h3>Publish or abstain</h3><p>Value picks, leans, watchlists and no-pick reasons remain clearly separate.</p></div></li>
+          <li><span aria-hidden="true">1</span><div><h3>Scan the full schedule</h3><p>Every available provider fixture enters the daily board.</p></div></li>
+          <li><span aria-hidden="true">2</span><div><h3>Compare chances and price</h3><p>The model estimates the outcome, then compares it with the bookmaker&apos;s fair chance.</p></div></li>
+          <li><span aria-hidden="true">3</span><div><h3>Publish or abstain</h3><p>Value picks, leans, watchlists and no-pick reasons remain clearly separate.</p></div></li>
         </ol>
       </section>
 

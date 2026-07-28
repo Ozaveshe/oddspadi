@@ -73,8 +73,11 @@ export function ShareBar({ text, url, title = "OddsPadi analysis", pageContext, 
     }
   }
 
+  // `role="group"` is required for the label to be exposed: an `aria-label` on a
+  // plain <div> has no role to attach to, so assistive technology discarded it
+  // and this control cluster was announced unnamed.
   return (
-    <div className={`share-bar${compact ? " share-bar--compact" : ""}`} aria-label="Share this analysis">
+    <div className={`share-bar${compact ? " share-bar--compact" : ""}`} role="group" aria-label="Share this analysis">
       <span className="share-bar-label">Share</span>
       <a className="share-action share-action--whatsapp" href={links.whatsapp} target="_blank" rel="noreferrer" onClick={() => track("whatsapp")}>
         WhatsApp

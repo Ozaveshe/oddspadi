@@ -52,7 +52,10 @@ export function LiveTicker({ initial }: { initial: LiveScoreBoard | null }) {
 
   return (
     <div className="ticker-wrap">
-      <div className="ticker" aria-label="Live and upcoming matches" aria-live="polite" aria-atomic="false">
+      {/* A named group, not a live region: the ticker re-renders all 14 chips
+          on every 60s poll, so `aria-live` re-read the whole strip aloud each
+          time. The live board owns score announcements. */}
+      <div className="ticker" role="group" aria-label="Live and upcoming matches">
         {picks.map((fixture) => (
           <Link className="ticker-chip" href="/live-scores" key={fixture.id}>
             <span className="t-league">

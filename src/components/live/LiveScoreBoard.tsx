@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LiveBoardFixture, LiveFixturePhase, LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import { LIVE_BOARD_INITIAL_FIXTURES } from "@/lib/sports/liveBoardPresentation";
 import { LocalTimeText } from "@/components/odds/LocalTime";
+import { ScoreAnnouncer } from "./ScoreAnnouncer";
 import { useLiveBoard } from "./useLiveBoard";
 import { useFollowedTeams } from "@/components/account/FollowedTeamsProvider";
 
@@ -318,6 +319,7 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
 
   return (
     <div>
+      <ScoreAnnouncer fixtures={filtered} />
       <div className="sport-switcher" role="group" aria-label="Choose sport">
         {SPORT_TABS.map((item) => {
           const count = item.id === "all" ? totalFixtureCount : board.sportCounts[item.id];
@@ -417,7 +419,10 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
         ) : (
           <span className="badge finished">{dayLabel(activeDate)} · fixtures &amp; results</span>
         )}
-        <span suppressHydrationWarning aria-live="polite">
+        {/* Not a live region: this is a clock, and announcing it every 45s
+            drowns out everything else in the screen-reader queue. Real score
+            changes are announced by <ScoreAnnouncer /> below. */}
+        <span suppressHydrationWarning>
           {updatedAt ? <>Updated <LocalTimeText iso={new Date(updatedAt).toISOString()} variant="seconds" /></> : "Updating…"}
           {isToday ? " · auto-refreshes every 45s" : ""}
         </span>
@@ -449,7 +454,7 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
           <p className="muted">{board.note ?? "Scores will appear here as soon as the data feed is connected."}</p>
         </div>
       ) : groups.length ? (
-        <div className="match-list" aria-live="polite" aria-atomic="false">
+        <div className="match-list">
           {groups.map((group) => (
             <section className="league-group" key={group.key}>
               <header className="league-head">
