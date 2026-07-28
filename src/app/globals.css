@@ -943,6 +943,16 @@ p {
   min-width: 0;
 }
 
+/* The crest sits beside a two-row stack: team name, then its country line.
+   Without this the country renders inline at the baseline of a display-size
+   heading and reads as tiny text jammed onto the end of the name. */
+.team-inline > span {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
 .teams-vs {
   color: var(--faint);
   font-size: 14px;
