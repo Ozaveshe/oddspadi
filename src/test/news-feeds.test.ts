@@ -9,16 +9,38 @@ describe("Matchday Desk syndication feeds", () => {
     expect(jsonFeedDynamic).toBe("force-dynamic");
   });
 
-  it("keeps the current matchday revision source-dated and honest about the July 18 storage gap", () => {
+  it("publishes the July 22 UEFA qualifying desk without turning needs-data rows into picks", () => {
+    const story = newsStories.find((item) => item.slug === "uefa-qualifying-july-22-matchday-desk");
+    expect(newsStories[0]?.slug).toBe("uefa-qualifying-july-22-matchday-desk");
+    expect(story?.revision).toBe(1);
+    expect(story?.publishedAt).toBe("2026-07-22");
+    expect(story?.sourceAsOf).toBe("2026-07-22T08:28:31.260965Z");
+    expect(story?.sources?.every((source) => source.checkedAt === "2026-07-22")).toBe(true);
+    expect(story?.body.join(" ")).toContain("10 provider rows for those nine ties");
+    expect(story?.body.join(" ")).toContain("nine fresh API-Football summaries were all needs-data records");
+    expect(story?.body.join(" ")).toContain("canonical public-pick ledger remained empty");
+  });
+
+  it("publishes the World Cup final desk from matching stored fixtures without inventing a pick", () => {
+    const story = newsStories.find((item) => item.slug === "spain-argentina-world-cup-final-matchday-desk");
+    expect(story?.revision).toBe(1);
+    expect(story?.publishedAt).toBe("2026-07-19");
+    expect(story?.sourceAsOf).toBe("2026-07-19T06:36:19.178934Z");
+    expect(story?.sources?.every((source) => source.checkedAt === "2026-07-19")).toBe(true);
+    expect(story?.body.join(" ")).toContain("Spain face Argentina");
+    expect(story?.body.join(" ")).toContain("two provider records for the same final");
+    expect(story?.body.join(" ")).toContain("no model selection");
+  });
+
+  it("keeps the Summer League championship revision source-dated and honest about duplicate provider rows", () => {
     const story = newsStories.find((item) => item.slug === "basketball-summer-league-matchday-watchlist");
-    expect(newsStories[0]?.slug).toBe("basketball-summer-league-matchday-watchlist");
-    expect(story?.revision).toBe(8);
-    expect(story?.updatedAt).toBe("2026-07-18");
-    expect(story?.sourceAsOf).toBe("2026-07-18T06:40:12.107148Z");
-    expect(story?.sources?.every((source) => source.checkedAt === "2026-07-18")).toBe(true);
-    expect(story?.body.join(" ")).toContain("Houston faces Memphis at 6:30 p.m. ET");
-    expect(story?.body.join(" ")).toContain("no NBA Summer League fixture whose Las Vegas local date was July 18");
-    expect(story?.body.join(" ")).toContain("no prediction outcome or canonical public pick");
+    expect(story?.revision).toBe(9);
+    expect(story?.updatedAt).toBe("2026-07-19");
+    expect(story?.sourceAsOf).toBe("2026-07-19T06:36:45.442173Z");
+    expect(story?.sources?.every((source) => source.checkedAt === "2026-07-19")).toBe(true);
+    expect(story?.body.join(" ")).toContain("Memphis-Golden State");
+    expect(story?.body.join(" ")).toContain("representing those three matchups rather than five separate games");
+    expect(story?.body.join(" ")).toContain("None had a published decision, attached prediction outcome or canonical public pick");
   });
 
   it("keeps curated desk stories available when the public database is not configured", async () => {
