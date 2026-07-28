@@ -1,7 +1,8 @@
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseIsoDateParam } from "@/app/api/sports/_utils";
+import { parseIsoDateParam, parseSportsQuery } from "@/app/api/sports/_utils";
+import { isKnownSport, isSupportedSport } from "@/lib/sports/service";
 import { readBoundedJson } from "@/lib/security/boundedJson";
 import { PRIVATE_JSON_HEADERS, privateJson } from "@/lib/security/privateJson";
 import { parseRequestedSports } from "@/lib/sports/intelligence/auth";
@@ -161,5 +162,34 @@ describe("transport security headers", () => {
       expect(config).toContain("Cross-Origin-Opener-Policy");
       expect(config).toContain("Cross-Origin-Resource-Policy");
     }
+  });
+});
+
+describe("sport parameter", () => {
+  /**
+   * The catalogue carries six sports, three of them `active: false`. The
+   * validator checked only that the id existed, so `?sport=cricket` passed,
+   * reached a provider that returns nothing for it, and had that empty response
+   * cached under its own `Netlify-Vary` key — instead of a 400. The sport
+   * picker already disabled those options in the UI.
+   */
+  it("accepts only sports the product actually serves", () => {
+    for (const sport of ["football", "basketball", "tennis"]) {
+      expect(isSupportedSport(sport)).toBe(true);
+      expect(isKnownSport(sport)).toBe(true);
+    }
+    for (const sport of ["cricket", "rugby", "handball"]) {
+      expect(isSupportedSport(sport)).toBe(false);
+      // Still in the catalogue — the distinction is deliberate.
+      expect(isKnownSport(sport)).toBe(true);
+    }
+    expect(isSupportedSport("quidditch")).toBe(false);
+    expect(isKnownSport("quidditch")).toBe(false);
+    expect(isSupportedSport(null)).toBe(false);
+  });
+
+  it("rejects an inactive sport at the route boundary", () => {
+    const request = new Request("https://oddspadi.example/api/sports/fixtures?sport=cricket");
+    expect(parseSportsQuery(request)).toEqual({ error: "Invalid sport." });
   });
 });

@@ -49,7 +49,22 @@ export function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Whether the product actually serves this sport.
+ *
+ * This checked only that the id appeared in the catalogue, so the three
+ * `active: false` entries (cricket, rugby, handball) passed API validation and
+ * reached the provider — which returns nothing for them. The route then cached
+ * that empty response under its own `Netlify-Vary` key instead of answering
+ * "Invalid sport." The sport picker already disables them in the UI; the API
+ * now agrees.
+ */
 export function isSupportedSport(value: string | null | undefined): value is Sport {
+  return sports.some((sport) => sport.id === value && sport.active);
+}
+
+/** Every sport in the catalogue, including those not yet switched on. */
+export function isKnownSport(value: string | null | undefined): value is Sport {
   return sports.some((sport) => sport.id === value);
 }
 
