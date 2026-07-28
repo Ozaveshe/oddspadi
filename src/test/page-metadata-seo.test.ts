@@ -1,5 +1,5 @@
 import { readFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { absoluteUrl, pageMetadata, siteUrl } from "@/lib/seo/pageMetadata";
 
@@ -113,7 +113,9 @@ describe("origin configuration", () => {
           continue;
         }
         if (!entry.name.endsWith(".ts") && !entry.name.endsWith(".tsx")) continue;
-        if (path.endsWith("lib/seo/pageMetadata.ts")) continue;
+        // `join` yields backslashes on Windows, so compare on a normalised path:
+        // this is the file that *defines* the origin, and it must not self-report.
+        if (path.split(sep).join("/").endsWith("lib/seo/pageMetadata.ts")) continue;
         const source = await readFile(path, "utf8");
         for (const [index, line] of source.split("\n").entries()) {
           // Deployment *documentation* may name the expected production domain;
