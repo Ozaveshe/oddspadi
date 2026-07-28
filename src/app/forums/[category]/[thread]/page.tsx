@@ -126,7 +126,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
       <div className="page-heading">
         <div className="meta">
-          <Link className="inline-link" href={`/forums/${slug}`}>
+          <Link className="inline-link" href={`/forums/${encodeURIComponent(slug)}`}>
             ← Back
           </Link>
         </div>
@@ -154,7 +154,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
             </article>
           ))}
         </div>
-        {nextCursor ? <Link className="button secondary community-load-more" href={`/forums/${slug}/${thread.id}?cursor=${encodeURIComponent(nextCursor)}`}>Load more</Link> : null}
+        {nextCursor ? <Link className="button secondary community-load-more" href={`/forums/${encodeURIComponent(slug)}/${encodeURIComponent(thread.id)}?cursor=${encodeURIComponent(nextCursor)}`}>Load more</Link> : null}
 
         <div style={{ marginTop: 18 }}>
           {thread.is_locked ? (

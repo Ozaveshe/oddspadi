@@ -325,7 +325,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
               Scored {match.awayForm.goalsFor}, conceded {match.awayForm.goalsAgainst} · attack{" "}
               {formatPercent(match.awayForm.attackStrength)}, defence {formatPercent(match.awayForm.defenseStrength)}
             </p>
-            {leagueTableSlug ? <Link className="inline-link small" href={`/predictions/league/${leagueTableSlug}/table`}>View the full {match.league.name} table →</Link> : null}
+            {leagueTableSlug ? <Link className="inline-link small" href={`/predictions/league/${encodeURIComponent(leagueTableSlug)}/table`}>View the full {match.league.name} table →</Link> : null}
           </div>
 
           <div className="panel">

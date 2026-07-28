@@ -83,7 +83,7 @@ export function MatchPredictionTable({ rows }: { rows: PredictionListRow[] }) {
                 <td>
                   <Link
                     className="button"
-                    href={`/predictions/${match.id}`}
+                    href={`/predictions/${encodeURIComponent(match.id)}`}
                     aria-label={`Open ${match.homeTeam.name} vs ${match.awayTeam.name} analysis`}
                   >
                     Open

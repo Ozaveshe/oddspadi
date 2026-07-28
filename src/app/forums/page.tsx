@@ -44,7 +44,7 @@ export default async function ForumsPage() {
       ) : categories.length ? (
         <div className="forum-list">
           {categories.map((category) => (
-            <Link className="forum-row" key={category.id} href={`/forums/${category.slug}`}>
+            <Link className="forum-row" key={category.id} href={`/forums/${encodeURIComponent(category.slug)}`}>
               <span>
                 <strong style={{ display: "block", fontSize: 16 }}>{category.name}</strong>
                 {category.description ? <span className="muted small">{category.description}</span> : null}

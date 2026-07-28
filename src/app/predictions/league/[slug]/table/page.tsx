@@ -112,7 +112,7 @@ export default async function LeagueTablePage({ params }: Props) {
           <Link
             aria-current={featuredLeague.slug === slug ? "page" : undefined}
             className="league-table-switcher__link"
-            href={`/predictions/league/${featuredLeague.slug}/table`}
+            href={`/predictions/league/${encodeURIComponent(featuredLeague.slug)}/table`}
             key={featuredLeague.slug}
           >
             <CountryFlag country={featuredLeague.country} size={18} />

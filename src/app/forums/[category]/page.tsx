@@ -130,7 +130,7 @@ export default async function ForumCategoryPage({ params, searchParams }: PagePr
         {threads.length ? (
           <><div className="forum-list">
             {threads.map((thread) => (
-              <Link className="forum-row" key={thread.id} href={`/forums/${slug}/${thread.id}`}>
+              <Link className="forum-row" key={thread.id} href={`/forums/${encodeURIComponent(slug)}/${encodeURIComponent(thread.id)}`}>
                 <span>
                   <strong style={{ display: "block", fontSize: 15.5 }}>
                     {thread.is_pinned ? "📌 " : ""}
@@ -141,7 +141,7 @@ export default async function ForumCategoryPage({ params, searchParams }: PagePr
                 <span className="forum-meta">{thread.reply_count} repl{thread.reply_count === 1 ? "y" : "ies"}</span>
               </Link>
             ))}
-          </div>{nextCursor ? <Link className="button secondary community-load-more" href={`/forums/${slug}?cursor=${encodeURIComponent(nextCursor)}`}>Load more</Link> : null}</>
+          </div>{nextCursor ? <Link className="button secondary community-load-more" href={`/forums/${encodeURIComponent(slug)}?cursor=${encodeURIComponent(nextCursor)}`}>Load more</Link> : null}</>
         ) : (
           <div className="empty-state">
             <div className="empty-emoji" aria-hidden="true">
