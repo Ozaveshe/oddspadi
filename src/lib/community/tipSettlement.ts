@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { MatchStatus } from "@/lib/sports/types";
 import { isMissingDatabaseRelation } from "@/lib/security/databaseError";
 import { finishProviderRun, startProviderRun } from "@/lib/sports/intelligence/repository";
 import { buildDecisionOutcomeSettlement } from "@/lib/sports/prediction/decisionOutcomeSettlement";
@@ -23,7 +24,7 @@ export type SettleableCommunityTip = {
 
 export type CommunitySettlementFixture = {
   provider: string;
-  status: "scheduled" | "live" | "finished" | "postponed" | "cancelled";
+  status: MatchStatus;
   homeScore: number | null;
   awayScore: number | null;
   observedAt: string;
@@ -63,6 +64,25 @@ function finiteNumber(value: unknown): number | null {
 
 function text(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+const MATCH_STATUSES: ReadonlySet<string> = new Set<MatchStatus>([
+  "scheduled",
+  "live",
+  "finished",
+  "postponed",
+  "cancelled",
+  "suspended"
+]);
+
+/**
+ * Narrows the stored status instead of asserting it. The previous `as` cast
+ * claimed a union the database does not enforce, so any unexpected value
+ * arrived typed as a known state and took whichever branch it fell through to.
+ */
+function matchStatus(value: unknown): MatchStatus | null {
+  const normalized = text(value)?.toLowerCase();
+  return normalized && MATCH_STATUSES.has(normalized) ? (normalized as MatchStatus) : null;
 }
 
 function relation(value: unknown): Record<string, unknown> | null {
@@ -108,8 +128,23 @@ export function resolveCommunityTipSettlement(
       ? { status: "settled", result: "void", netUnits: 0, reason: "The fixture remained postponed beyond the 24-hour void window." }
       : { status: "waiting", result: null, netUnits: null, reason: "The provider marked the fixture postponed." };
   }
+  if (fixture.status === "suspended") {
+    // The engine's own settlement path (lib/sports/results/settlement.ts) has
+    // always handled this. This one omitted "suspended" from its status union
+    // entirely, so a suspended fixture fell through every branch to the
+    // finished path and settled a published tip on the scoreline as it stood
+    // when play stopped.
+    return overdue
+      ? { status: "manual_review", result: null, netUnits: null, reason: "The fixture remained suspended more than 24 hours after kickoff." }
+      : { status: "waiting", result: null, netUnits: null, reason: "The provider marked the fixture suspended; there is no final result yet." };
+  }
   if (fixture.status === "scheduled" || fixture.status === "live") {
     return { status: "waiting", result: null, netUnits: null, reason: fixture.status === "live" ? "The fixture is live." : "Waiting for a final provider status." };
+  }
+  if (fixture.status !== "finished") {
+    // Exhaustive by construction today, but a new provider status reaching the
+    // stored column must never be treated as "finished" by default.
+    return { status: "manual_review", result: null, netUnits: null, reason: "The provider status is not a recognised final state." };
   }
   if (fixture.homeScore === null || fixture.awayScore === null) {
     return {
@@ -156,7 +191,7 @@ function rowToCandidate(row: CommunityTipRow): { tip: SettleableCommunityTip; fi
   const withdrawal = revisions.find((revision) => revision.revision_kind === "withdrawal");
   const fixtureRow = relation(row.fixture);
   const provider = text(fixtureRow?.provider);
-  const status = text(fixtureRow?.status) as CommunitySettlementFixture["status"] | null;
+  const status = matchStatus(fixtureRow?.status);
   const observedAt = text(fixtureRow?.last_synced_at) ?? text(fixtureRow?.updated_at);
   return {
     tip: {

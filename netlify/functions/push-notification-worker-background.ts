@@ -13,6 +13,13 @@ const tokenMatches = (a: string, b: string) => {
   return left.length === right.length && timingSafeEqual(left, right);
 };
 
+// `op_fixtures.status` stores the normalised MatchStatus union, not the raw
+// provider string. The previous filters also listed "not_started", "ft" and
+// "completed", none of which the column can ever hold — dead entries that read
+// as coverage while matching nothing.
+const KICKOFF_STATUSES = ["scheduled"] as const;
+const FINISHED_STATUSES = ["finished"] as const;
+
 // Ceilings for one sweep. The sweep runs every ten minutes, so anything not
 // covered by this pass is picked up by the next one rather than being lost.
 const MAX_SUBSCRIPTIONS_PER_SWEEP = 2_000;
@@ -70,8 +77,8 @@ export async function runPushNotificationWorker({
     db.from("op_push_subscriptions").select("id,user_id,endpoint,p256dh,auth").limit(MAX_SUBSCRIPTIONS_PER_SWEEP),
     db.from("op_followed_teams").select("user_id,team_id").limit(MAX_FOLLOW_ROWS),
     db.from("op_teams").select("id,external_id,name").limit(MAX_TEAM_ROWS),
-    db.from("op_fixtures").select("external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,updated_at").gte("kickoff_at", now.toISOString()).lte("kickoff_at", soon).in("status", ["scheduled", "not_started"]),
-    db.from("op_fixtures").select("external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,updated_at").gte("updated_at", from).in("status", ["finished", "ft", "completed"])
+    db.from("op_fixtures").select("external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,updated_at").gte("kickoff_at", now.toISOString()).lte("kickoff_at", soon).in("status", KICKOFF_STATUSES),
+    db.from("op_fixtures").select("external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,updated_at").gte("updated_at", from).in("status", FINISHED_STATUSES)
   ]);
 
   const readError = [subscriptionResult, followResult, teamResult, kickoffResult, finishedResult].find((result) => result.error)?.error;

@@ -5,7 +5,11 @@ import type { Match, OddsMarket, Sport } from "@/lib/sports/types";
 
 type IngestStatus = "stored" | "dry-run" | "not-configured" | "failed";
 type IngestSourceKind = "real" | "demo";
-type FixtureStatus = "scheduled" | "live" | "finished" | "postponed" | "cancelled";
+// Mirrors MatchStatus. "suspended" was missing, and because an unrecognised
+// status silently defaulted to "finished", a suspended fixture entered the
+// training corpus as a completed match carrying the scoreline from the moment
+// play stopped.
+type FixtureStatus = "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "suspended";
 type WinnerSelection = "home" | "draw" | "away";
 type NewsSignalType = "injury" | "lineup" | "weather" | "transfer" | "sentiment" | "tactical" | "other";
 type AvailabilityStatus = "available" | "doubtful" | "injured" | "suspended" | "unknown";
@@ -251,7 +255,8 @@ function integerOrNull(value: unknown): number | null {
 }
 
 function isFixtureStatus(value: unknown): value is FixtureStatus {
-  return value === "scheduled" || value === "live" || value === "finished" || value === "postponed" || value === "cancelled";
+  return value === "scheduled" || value === "live" || value === "finished" ||
+    value === "postponed" || value === "cancelled" || value === "suspended";
 }
 
 function isWinnerSelection(value: unknown): value is WinnerSelection {
@@ -294,7 +299,13 @@ function normalizeFixture(input: HistoricalFootballFixtureInput, index: number):
   if (!cleanText(input.awayTeam?.externalId)) return { error: `fixtures[${index}].awayTeam.externalId is required.` };
   if (!cleanText(input.awayTeam?.name)) return { error: `fixtures[${index}].awayTeam.name is required.` };
 
-  const status = isFixtureStatus(input.status) ? input.status : "finished";
+  // An absent status still defaults to "finished" — a historical corpus is
+  // overwhelmingly completed matches. An explicitly supplied but unrecognised
+  // status is a caller error and must not be coerced into a settled result.
+  if (input.status !== undefined && !isFixtureStatus(input.status)) {
+    return { error: `fixtures[${index}].status is not a recognised fixture status.` };
+  }
+  const status: FixtureStatus = input.status ?? "finished";
   const homeScore = integerOrNull(input.homeScore);
   const awayScore = integerOrNull(input.awayScore);
   if (status === "finished" && (homeScore === null || awayScore === null)) {
