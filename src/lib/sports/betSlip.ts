@@ -2,9 +2,28 @@ import type { Prediction } from "@/lib/sports/types";
 import type { MatchSummary, PredictionSummary } from "@/lib/sports/prediction/listRow";
 
 export const BET_SLIP_STORAGE_KEY = "oddspadi-bet-slip-v1";
+/**
+ * Hard cap on stored legs. Exported because callers must be able to *check* it:
+ * `writeSlip` truncates from the front, so appending a leg to a full slip
+ * silently discarded the new leg and the UI showed no change and no reason.
+ */
+export const BET_SLIP_MAX_LEGS = 20;
 export const BET_SLIP_CHANGED_EVENT = "oddspadi:bet-slip-changed";
 export type SlipLeg = { id: string; matchId: string; matchLabel: string; league: string; kickoffTime: string; selection: string; decimalOdds: number; modelProbability: number; noVigProbability: number; risk: Prediction["risk"] };
-export type SlipAnalysis = { combinedOdds: number; modelProbability: number; bookmakerProbability: number; probabilityGap: number; weakestLegId: string | null };
+export type SlipAnalysis = {
+  combinedOdds: number;
+  modelProbability: number;
+  /** Implied probability of the combined price, bookmaker margin included. */
+  bookmakerProbability: number;
+  /** Margin-free market probability — the benchmark an edge is measured against. */
+  fairProbability: number;
+  probabilityGap: number;
+  weakestLegId: string | null;
+};
+
+function isProbability(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 1;
+}
 
 function isSlipLeg(value: unknown): value is SlipLeg {
   if (!value || typeof value !== "object") return false;
@@ -18,10 +37,11 @@ function isSlipLeg(value: unknown): value is SlipLeg {
     && typeof leg.decimalOdds === "number"
     && Number.isFinite(leg.decimalOdds)
     && leg.decimalOdds > 1
-    && typeof leg.modelProbability === "number"
-    && Number.isFinite(leg.modelProbability)
-    && leg.modelProbability > 0
-    && leg.modelProbability <= 1;
+    && isProbability(leg.modelProbability)
+    // `noVigProbability` was declared `number` but never validated, so a
+    // corrupt or hand-edited localStorage entry could put a string or NaN into
+    // a typed numeric field and propagate it straight into the analysis.
+    && isProbability(leg.noVigProbability);
 }
 
 export function slipLegFromPrediction(match: MatchSummary, prediction: PredictionSummary): SlipLeg | null {
@@ -49,20 +69,44 @@ export function slipLegFromPrediction(match: MatchSummary, prediction: Predictio
     risk: pick.risk
   };
 }
+/**
+ * Combines a slip's legs as independent events.
+ *
+ * The gap is measured against the **no-vig** market probability, matching the
+ * engine's own published formula (`edge = modelProbability - noVigProbability`).
+ * It previously used `1 / combinedOdds`, which is the vigged price: that folds
+ * the bookmaker's margin into the model's favour on every leg and compounds it,
+ * so a three-leg slip overstated its own edge by roughly the cube of the
+ * per-leg margin. Each leg already carries the no-vig figure the engine
+ * computed for it — it was captured and then never read.
+ *
+ * The vigged probability is still reported, because it is the real price of the
+ * slip; it just is not the benchmark an edge is measured against.
+ */
 export function analyzeSlip(legs: SlipLeg[]): SlipAnalysis {
-  if (!legs.length) return { combinedOdds: 1, modelProbability: 0, bookmakerProbability: 0, probabilityGap: 0, weakestLegId: null };
+  if (!legs.length) {
+    return { combinedOdds: 1, modelProbability: 0, bookmakerProbability: 0, fairProbability: 0, probabilityGap: 0, weakestLegId: null };
+  }
   const combinedOdds = legs.reduce((value, leg) => value * leg.decimalOdds, 1);
   const modelProbability = legs.reduce((value, leg) => value * leg.modelProbability, 1);
   const bookmakerProbability = 1 / combinedOdds;
+  const fairProbability = legs.reduce((value, leg) => value * leg.noVigProbability, 1);
   const weakest = legs.reduce<SlipLeg | null>((current, leg) => !current || leg.modelProbability < current.modelProbability ? leg : current, null);
-  return { combinedOdds, modelProbability, bookmakerProbability, probabilityGap: modelProbability - bookmakerProbability, weakestLegId: weakest?.id ?? null };
+  return {
+    combinedOdds,
+    modelProbability,
+    bookmakerProbability,
+    fairProbability,
+    probabilityGap: modelProbability - fairProbability,
+    weakestLegId: weakest?.id ?? null
+  };
 }
 
 export function readSlip(): SlipLeg[] {
   if (typeof window === "undefined") return [];
   try {
     const value: unknown = JSON.parse(window.localStorage.getItem(BET_SLIP_STORAGE_KEY) ?? "[]");
-    return Array.isArray(value) ? value.filter(isSlipLeg).slice(0, 20) : [];
+    return Array.isArray(value) ? value.filter(isSlipLeg).slice(0, BET_SLIP_MAX_LEGS) : [];
   } catch {
     return [];
   }
@@ -71,7 +115,7 @@ export function readSlip(): SlipLeg[] {
 export function writeSlip(legs: SlipLeg[]): boolean {
   if (typeof window === "undefined") return false;
   try {
-    window.localStorage.setItem(BET_SLIP_STORAGE_KEY, JSON.stringify(legs.filter(isSlipLeg).slice(0, 20)));
+    window.localStorage.setItem(BET_SLIP_STORAGE_KEY, JSON.stringify(legs.filter(isSlipLeg).slice(0, BET_SLIP_MAX_LEGS)));
     window.dispatchEvent(new Event(BET_SLIP_CHANGED_EVENT));
     return true;
   } catch {

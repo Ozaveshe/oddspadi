@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildFootballBoardFromPayloads, liveBoardFixtureFromMatch, mergeLiveBoardCoverage, normalizeStoredLiveBoardState, resolveRepositoryCoverage } from "@/lib/sports/liveScoreBoard";
+import { buildFootballBoardFromPayloads, deduplicateLiveBoardFixtures, liveBoardFixtureFromMatch, mergeLiveBoardCoverage, normalizeStoredLiveBoardState, readStoredFixtureRowsForDate, resolveRepositoryCoverage } from "@/lib/sports/liveScoreBoard";
 import type { Match } from "@/lib/sports/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 function providerMatch(sport: "basketball" | "tennis", kind: "provider" | "mock" = "provider"): Match {
   return {
@@ -58,9 +59,44 @@ describe("multi-sport live board", () => {
       .toEqual(["football", "basketball"]);
   });
 
+  it("applies the stored fallback cap per sport so a tennis-heavy day cannot hide basketball", async () => {
+    const rowsBySport = {
+      football: Array.from({ length: 84 }, (_, index) => ({ sport: "football", external_id: `football-${index}` })),
+      basketball: Array.from({ length: 18 }, (_, index) => ({ sport: "basketball", external_id: `basketball-${index}` })),
+      tennis: Array.from({ length: 500 }, (_, index) => ({ sport: "tennis", external_id: `tennis-${index}` }))
+    };
+    const requestedSports: string[] = [];
+    const requestedLimits: number[] = [];
+    const client = {
+      from: vi.fn(() => {
+        let selectedSport = "";
+        const query = {
+          select: () => query,
+          eq: (_column: string, value: string) => { selectedSport = value; requestedSports.push(value); return query; },
+          gte: () => query,
+          lt: () => query,
+          order: () => query,
+          limit: async (value: number) => {
+            requestedLimits.push(value);
+            return { data: rowsBySport[selectedSport as keyof typeof rowsBySport], error: null };
+          }
+        };
+        return query;
+      })
+    } as unknown as SupabaseClient;
+
+    const rows = await readStoredFixtureRowsForDate(client, "2026-07-22");
+
+    expect(requestedSports).toEqual(["football", "basketball", "tennis"]);
+    expect(requestedLimits).toEqual([500, 500, 500]);
+    expect(rows).toHaveLength(602);
+    expect(rows.filter((row) => row.sport === "basketball")).toHaveLength(18);
+  });
+
   it("withholds stale partial scores instead of presenting an old stored game as live", () => {
     const state = normalizeStoredLiveBoardState({
       status: "live",
+      kickoff_at: "2026-07-17T00:00:00.000Z",
       last_synced_at: "2026-07-17T00:27:21.504Z",
       home_score: 13,
       away_score: 0,
@@ -79,6 +115,7 @@ describe("multi-sport live board", () => {
   it("keeps a recently synchronized stored game live", () => {
     const state = normalizeStoredLiveBoardState({
       status: "live",
+      kickoff_at: "2026-07-17T04:00:00.000Z",
       last_synced_at: "2026-07-17T04:00:00.000Z",
       home_score: 48,
       away_score: 44,
@@ -91,6 +128,55 @@ describe("multi-sport live board", () => {
       statusLabel: "28'",
       goals: { home: 48, away: 44 }
     });
+  });
+
+  it("does not call a stored scheduled fixture upcoming after its kickoff grace expires", () => {
+    const state = normalizeStoredLiveBoardState({
+      status: "scheduled",
+      kickoff_at: "2026-07-19T00:30:00.000Z",
+      last_synced_at: "2026-07-19T03:57:00.000Z",
+      home_score: null,
+      away_score: null,
+      elapsed: null
+    }, new Date("2026-07-19T04:10:00.000Z"));
+
+    expect(state).toEqual({
+      phase: "other",
+      statusShort: "STALE",
+      statusLabel: "Awaiting update",
+      elapsed: null,
+      goals: { home: null, away: null }
+    });
+  });
+
+  it("deduplicates cross-provider fixture rows into the strongest real state", () => {
+    const scheduled = liveBoardFixtureFromMatch({
+      ...providerMatch("basketball"),
+      id: "the-odds-api:event-1",
+      kickoffTime: "2026-07-19T00:30:00.000Z",
+      status: "scheduled",
+      score: undefined,
+      league: { ...providerMatch("basketball").league, name: "NBA Summer League" },
+      homeTeam: { ...providerMatch("basketball").homeTeam, logo: null },
+      awayTeam: { ...providerMatch("basketball").awayTeam, logo: null }
+    })!;
+    const finished = liveBoardFixtureFromMatch({
+      ...providerMatch("basketball"),
+      id: "api-basketball:504367",
+      kickoffTime: "2026-07-19T00:30:00.000Z",
+      status: "finished",
+      score: { home: 88, away: 84, minute: 40 },
+      league: { ...providerMatch("basketball").league, name: "NBA - Las Vegas Summer League" }
+    })!;
+
+    expect(deduplicateLiveBoardFixtures([scheduled, finished])).toEqual([
+      expect.objectContaining({
+        id: "api-basketball:504367",
+        phase: "finished",
+        goals: { home: 88, away: 84 },
+        home: expect.objectContaining({ logo: "https://example.com/home.svg" })
+      })
+    ]);
   });
 
   it("fails open with an explicit timeout state when stored coverage stalls", async () => {

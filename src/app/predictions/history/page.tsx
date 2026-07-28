@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { ShareBar } from "@/components/share/ShareBar";
 import { TipsSharePreview } from "@/components/odds/TipsSharePreview";
+import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
+import { LocalTimeText } from "@/components/odds/LocalTime";
+import { absoluteUrl } from "@/lib/seo/pageMetadata";
 import { getCachedPublicPredictionHistory } from "@/lib/sports/prediction/cachedPublicReads";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
 import {
@@ -78,7 +81,7 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
     "@type": "Dataset",
     name: "OddsPadi published public-pick results ledger",
     description: "Provider-backed value picks that were actually published, including settlement state and results.",
-    url: "https://oddspadi.com/predictions/history",
+    url: absoluteUrl("/predictions/history"),
     dateModified: ledger.generatedAt,
     measurementTechnique: "One-unit simulation across settled published public picks only; internal model runs are excluded.",
     variableMeasured: ["result", "settlement status", "model probability", "odds", "value edge", "closing line value"]
@@ -192,7 +195,7 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
       {[{ title: "Accuracy by league", rows: breakdown("league") }, { title: "Accuracy by market", rows: breakdown("market") }].map((group) => <div className="panel" key={group.title}><h2>{group.title}</h2><div className="breakdown-list">{group.rows.map((row) => <div key={row.label}><span>{row.label}</span><strong>{formatPercent(row.accuracy)} <small>({row.wins}–{row.losses})</small></strong></div>)}</div></div>)}
     </section> : null}
 
-    <p className="live-meta-row"><span className={`badge ${ledger.source === "live" ? "positive" : "no-value"}`}>{ledger.source === "live" ? "Published-pick ledger" : "Results unavailable"}</span>{ledger.source === "live" ? `Updated ${new Date(ledger.generatedAt).toLocaleString()}.` : ledger.reason}</p>
+    <p className="live-meta-row"><span className={`badge ${ledger.source === "live" ? "positive" : "no-value"}`}>{ledger.source === "live" ? "Published-pick ledger" : "Results unavailable"}</span>{ledger.source === "live" ? <>Updated <LocalTimeText iso={ledger.generatedAt} variant="datetime" />.</> : ledger.reason}</p>
 
     {ledger.source === "unavailable" ? <div className="empty-state"><div className="empty-emoji">📒</div><h2>We can&apos;t read the public ledger</h2><p className="muted">No internal, preview, or demo results are substituted. Settlement automation will retry the repository.</p></div> : history.length ? <div className="table-wrap">
       <table className="data-table results-ledger-table">
@@ -204,9 +207,13 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
           <td>{item.pick}<br/><span className="small muted">{item.market.replaceAll("_", " ")} · {item.confidence} confidence</span></td>
           <td>{formatOdds(item.odds)}{item.closingOdds ? <><br/><span className="small muted">Close {formatOdds(item.closingOdds)}</span></> : null}</td>
           <td>{formatSignedPercent(item.edge)}<br/><span className="small muted">EV {formatSignedPercent(item.expectedValue)}</span></td>
-          <td><span className={`badge ${badgeClass(item.result, item.settlementStatus)}`}>{item.result === "pending" ? item.pendingReasonLabel ?? "Pending" : item.result}</span>{item.result === "pending" ? <p className="small muted settlement-reason">{item.settlementReason}</p> : item.settledAt ? <p className="small muted settlement-reason">Settled {new Date(item.settledAt).toLocaleString()}</p> : null}</td>
+          <td><span className={`badge ${badgeClass(item.result, item.settlementStatus)}`}>{item.result === "pending" ? item.pendingReasonLabel ?? "Pending" : item.result}</span>{item.result === "pending" ? <p className="small muted settlement-reason">{item.settlementReason}</p> : item.settledAt ? <p className="small muted settlement-reason">Settled <LocalTimeText iso={item.settledAt} variant="datetime" /></p> : null}</td>
         </tr>)}</tbody>
       </table>
     </div> : <div className="empty-state"><div className="empty-emoji">🔎</div><h2>No published picks match these filters</h2><p className="muted">This is an honest empty state. Internal runs and demo outcomes are not used to fill the ledger.</p></div>}
+    {/* A page of past winners and losers is exactly where the "no analysis
+        removes risk" framing belongs; the daily tips surfaces carry it via
+        DailyTipsPageView, this one carried nothing. */}
+    <section className="section"><ResponsibleUseNotice /></section>
   </main>;
 }

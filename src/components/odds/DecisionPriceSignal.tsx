@@ -1,5 +1,5 @@
 import * as React from "react";
-import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
+import { formatOdds, formatPercent, formatSignedPercent, percentLength } from "@/lib/sports/prediction/format";
 import { formatFairOdds } from "@/lib/sports/prediction/decisionMarketIntelligence";
 import type { MarketPriorReceipt } from "@/lib/sports/prediction/marketPriorPresentation";
 import { buildMarketPriorPresentation } from "@/lib/sports/prediction/marketPriorPresentation";
@@ -24,7 +24,7 @@ type DecisionPriceSignalProps = {
 };
 
 function probabilityWidth(value: number): string {
-  return `${Math.max(0, Math.min(100, value * 100)).toFixed(1)}%`;
+  return percentLength(value);
 }
 
 export function DecisionPriceSignal({

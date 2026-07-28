@@ -1,18 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Forums",
   description: "OddsPadi forums — match talk, predictions debate, and league chat with fellow fans.",
-  alternates: { canonical: "/forums" },
-  openGraph: {
-    title: "Forums — OddsPadi",
-    description: "OddsPadi forums — match talk, predictions debate, and league chat with fellow fans."
-  }
-};
+  path: "/forums",
+  socialTitle: "Forums — OddsPadi"
+});
 
 type Category = { id: string; slug: string; name: string; description: string | null };
 
@@ -46,7 +44,7 @@ export default async function ForumsPage() {
       ) : categories.length ? (
         <div className="forum-list">
           {categories.map((category) => (
-            <Link className="forum-row" key={category.id} href={`/forums/${category.slug}`}>
+            <Link className="forum-row" key={category.id} href={`/forums/${encodeURIComponent(category.slug)}`}>
               <span>
                 <strong style={{ display: "block", fontSize: 16 }}>{category.name}</strong>
                 {category.description ? <span className="muted small">{category.description}</span> : null}

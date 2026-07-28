@@ -20,12 +20,22 @@ export function FollowTeamButton({ teamName, sport }: { teamName: string; sport:
     const team = follows.teams.find((item) => normalizeTeamName(item.name) === normalizeTeamName(teamName));
     if (!team) return;
     setBusy(true);
-    const response = await fetch(`/api/account/followed-teams?teamId=${encodeURIComponent(team.id)}`, { method: "DELETE" });
-    if (response.ok) {
+    setNote(null);
+    // `follow()` already had try/finally; this one did not, so a dropped
+    // request left `busy` true and the button disabled until a reload.
+    try {
+      const response = await fetch(`/api/account/followed-teams?teamId=${encodeURIComponent(team.id)}`, { method: "DELETE" });
+      if (!response.ok) {
+        setNote("Could not unfollow — try again");
+        return;
+      }
       window.dispatchEvent(new Event("oddspadi:follows-changed"));
       trackEvent("team_unfollowed", { team_id: team.id, team_name: team.name, sport: team.sport, country: team.country ?? "unknown" });
+    } catch {
+      setNote("Could not unfollow — try again");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function follow() {
@@ -50,25 +60,34 @@ export function FollowTeamButton({ teamName, sport }: { teamName: string; sport:
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ teamId: team.id })
       });
-      if (response.ok) {
-        window.dispatchEvent(new Event("oddspadi:follows-changed"));
-        trackEvent("team_followed", { team_id: team.id, team_name: team.name, sport: team.sport, country: team.country ?? "unknown" });
+      if (!response.ok) {
+        setNote("Could not follow — try again");
+        return;
       }
+      window.dispatchEvent(new Event("oddspadi:follows-changed"));
+      trackEvent("team_followed", { team_id: team.id, team_name: team.name, sport: team.sport, country: team.country ?? "unknown" });
+    } catch {
+      setNote("Could not follow — try again");
     } finally {
       setBusy(false);
     }
   }
 
-  if (note) return <span className="muted small">{note}</span>;
+  // The note renders *beside* the button, not instead of it. Replacing the
+  // button meant one failed lookup removed the only way to retry, permanently,
+  // for the rest of the page's life.
   return (
-    <button
-      className={`button small-btn${followed ? "" : " secondary"}`}
-      type="button"
-      disabled={busy}
-      aria-pressed={followed}
-      onClick={() => void (followed ? unfollow() : follow())}
-    >
-      {busy ? "…" : followed ? `Following ${teamName} ✓` : `Follow ${teamName}`}
-    </button>
+    <span className="follow-team-control">
+      <button
+        className={`button small-btn${followed ? "" : " secondary"}`}
+        type="button"
+        disabled={busy}
+        aria-pressed={followed}
+        onClick={() => void (followed ? unfollow() : follow())}
+      >
+        {busy ? "…" : followed ? `Following ${teamName} ✓` : `Follow ${teamName}`}
+      </button>
+      {note ? <span className="muted small" role="status">{note}</span> : null}
+    </span>
   );
 }

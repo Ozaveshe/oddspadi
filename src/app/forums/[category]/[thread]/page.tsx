@@ -4,10 +4,15 @@ import { notFound } from "next/navigation";
 import { ReplyForm } from "@/components/community/ForumComposers";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
+import { isIsoTimestampCursor, isUuid } from "@/lib/security/inputValidation";
+import { absoluteUrl, pageMetadata } from "@/lib/seo/pageMetadata";
 
 export const dynamic = "force-dynamic";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+/** Percent-encoded so a slug can never break out of its path segment. */
+function threadPath(slug: string, threadId: string): string {
+  return `/forums/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}`;
+}
 
 type PageProps = { params: Promise<{ category: string; thread: string }>; searchParams?: Promise<{ cursor?: string }> };
 
@@ -31,13 +36,11 @@ function authorName(author: AuthorRaw | AuthorRaw[] | null): string {
   return a?.username ?? "padi";
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { category: slug, thread: threadId } = await params;
   const fallback: Metadata = { title: "Forum thread", robots: { index: false, follow: true } };
   const supabase = await createSupabaseServerClient();
-  if (!supabase || !UUID.test(threadId)) return fallback;
+  if (!supabase || !isUuid(threadId)) return fallback;
   const { data } = await supabase
     .from("op_forum_threads")
     .select("title, body")
@@ -45,19 +48,20 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .maybeSingle<{ title: string; body: string }>();
   if (!data) return fallback;
   const description = data.body.replace(/\s+/g, " ").trim().slice(0, 155) || "A discussion on the OddsPadi forums.";
-  return {
+  return pageMetadata({
     title: data.title,
     description,
-    alternates: { canonical: `/forums/${slug}/${threadId}` },
-    openGraph: { type: "article", title: `${data.title} — OddsPadi Forums`, description }
-  };
+    path: threadPath(slug, threadId),
+    type: "article",
+    socialTitle: `${data.title} — OddsPadi Forums`
+  });
 }
 
 export default async function ThreadPage({ params, searchParams }: PageProps) {
   const { category: slug, thread: threadId } = await params;
   const supabase = await createSupabaseServerClient();
   const cursor = (await searchParams)?.cursor;
-  if (!supabase || !UUID.test(threadId)) notFound();
+  if (!supabase || !isUuid(threadId)) notFound();
 
   const { data: thread } = await supabase
     .from("op_forum_threads")
@@ -71,7 +75,9 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
       .select("id, body, created_at, author:op_profiles!op_forum_replies_author_id_fkey(username)")
       .eq("thread_id", threadId)
       .order("created_at", { ascending: true }).limit(51);
-  if (cursor) replyQuery = replyQuery.gt("created_at", cursor);
+  // Validated like the community API's cursor: an arbitrary query-string value
+  // reached the PostgREST filter and silently emptied the reply list.
+  if (cursor && isIsoTimestampCursor(cursor)) replyQuery = replyQuery.gt("created_at", cursor);
   const [{ data: repliesData }, userResult] = await Promise.all([
     replyQuery,
     supabase.auth.getUser()
@@ -80,16 +86,16 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
   const replies = replyRows.slice(0, 50);
   const nextCursor = replyRows.length > 50 ? replies[49]?.created_at : null;
   const user = userResult.data.user;
-  const threadUrl = `${siteUrl}/forums/${slug}/${thread.id}`;
+  const threadUrl = absoluteUrl(threadPath(slug, thread.id));
 
   const jsonLd = [
     {
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",
       itemListElement: [
-        { "@type": "ListItem", position: 1, name: "Home", item: `${siteUrl}/` },
-        { "@type": "ListItem", position: 2, name: "Forums", item: `${siteUrl}/forums` },
-        { "@type": "ListItem", position: 3, name: prettifySlug(slug), item: `${siteUrl}/forums/${slug}` },
+        { "@type": "ListItem", position: 1, name: "Home", item: absoluteUrl("/") },
+        { "@type": "ListItem", position: 2, name: "Forums", item: absoluteUrl("/forums") },
+        { "@type": "ListItem", position: 3, name: prettifySlug(slug), item: absoluteUrl(`/forums/${encodeURIComponent(slug)}`) },
         { "@type": "ListItem", position: 4, name: thread.title, item: threadUrl }
       ]
     },
@@ -120,7 +126,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
       <div className="page-heading">
         <div className="meta">
-          <Link className="inline-link" href={`/forums/${slug}`}>
+          <Link className="inline-link" href={`/forums/${encodeURIComponent(slug)}`}>
             ← Back
           </Link>
         </div>
@@ -148,7 +154,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
             </article>
           ))}
         </div>
-        {nextCursor ? <Link className="button secondary community-load-more" href={`/forums/${slug}/${thread.id}?cursor=${encodeURIComponent(nextCursor)}`}>Load more</Link> : null}
+        {nextCursor ? <Link className="button secondary community-load-more" href={`/forums/${encodeURIComponent(slug)}/${encodeURIComponent(thread.id)}?cursor=${encodeURIComponent(nextCursor)}`}>Load more</Link> : null}
 
         <div style={{ marginTop: 18 }}>
           {thread.is_locked ? (

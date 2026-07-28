@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 import Link from "next/link";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { buildPremierLeague2026Projection, premierLeague2026Baseline, seasonCoverageQueue } from "@/lib/sports/prediction/seasonOutlooks";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
+import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 
 export const revalidate = 21_600;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "2026/27 season predictions and outlooks",
   description: "Revision-dated football, basketball and tennis season outlooks with transparent probabilities, source dates and missing-input warnings.",
-  alternates: { canonical: "/season-outlooks" }
-};
+  path: "/season-outlooks",
+  socialTitle: "2026/27 season outlooks — transparent probabilities",
+  socialDescription: "Revision-dated season projections with the source dates and missing inputs stated up front."
+});
 
 const percent = new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 1 });
 
@@ -53,7 +57,7 @@ export default function SeasonOutlooksPage() {
         <p className="small"><strong>Manager changes logged, not modelled:</strong> {premierLeague2026Baseline.confirmedManagerChangesSinceBaseline.join("; ")}.</p>
         <div className="season-sources"><strong>Official checks</strong>{premierLeague2026Baseline.officialSources.map(source => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.label} · checked {source.checkedAt} ↗</a>)}</div>
       </div>
-      <div className="season-podium" aria-label="Leading title probabilities">
+      <div className="season-podium" role="group" aria-label="Leading title probabilities">
         {projection.slice(0, 3).map((team, index) => <article key={team.name}>
           <span className="podium-rank">0{index + 1}</span><TeamCrest name={team.name} size={38} />
           <h3>{team.name}</h3><strong>{percent.format(team.titleProbability)}</strong><span>title baseline</span>
@@ -75,5 +79,8 @@ export default function SeasonOutlooksPage() {
     </section>
 
     <section className="story-cta"><strong>Ready for match-level analysis?</strong><p>Fixture predictions take over when teams, kickoff times and usable prices are confirmed.</p><Link className="button primary" href="/predictions">Open today&apos;s predictions</Link></section>
+    {/* Season-long probabilities are still predictions, and carried no
+        responsible-use framing at all. */}
+    <section className="section"><ResponsibleUseNotice /></section>
   </main>;
 }

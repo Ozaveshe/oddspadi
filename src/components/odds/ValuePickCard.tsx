@@ -28,7 +28,7 @@ export function ValuePickCard({ match, prediction }: { match: MatchSummary; pred
         </div>
         <Link
           className="button small-btn"
-          href={`/predictions/${match.id}`}
+          href={`/predictions/${encodeURIComponent(match.id)}`}
           aria-label={`See why: ${match.homeTeam.name} vs ${match.awayTeam.name}`}
           data-analytics-event="value_pick_clicked"
           data-analytics-match-id={match.id}

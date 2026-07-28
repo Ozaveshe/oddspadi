@@ -2,19 +2,18 @@ import type { Metadata } from "next";
 import { LiveScoreBoardView } from "@/components/live/LiveScoreBoard";
 import { getCachedLiveScoreBoard } from "@/lib/sports/cachedLiveScoreBoard";
 import { initialLiveBoardWindow } from "@/lib/sports/liveBoardPresentation";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
 export const revalidate = 30;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Live sports scores today — football, basketball and tennis",
   description:
     "Follow provider-backed live football, basketball and tennis scores, upcoming fixtures and final results in one matchday board.",
-  alternates: { canonical: "/live-scores" },
-  openGraph: {
-    title: "Live Football Scores Today — OddsPadi",
-    description: "Real-time football scores from leagues across Africa, Europe and the world. Updates automatically."
-  }
-};
+  path: "/live-scores",
+  socialTitle: "Live Football Scores Today — OddsPadi",
+  socialDescription: "Real-time football scores from leagues across Africa, Europe and the world. Updates automatically."
+});
 
 export default async function LiveScoresPage() {
   const board = await getCachedLiveScoreBoard();

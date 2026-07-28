@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 import Link from "next/link";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Terms of use",
   description: "The plain-language terms for using OddsPadi: analysis only, no betting, no guarantees, 18+ framing, and community rules.",
-  alternates: { canonical: "/terms" }
-};
+  path: "/terms"
+});
 
 export default function TermsPage() {
   return (

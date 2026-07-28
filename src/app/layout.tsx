@@ -9,7 +9,8 @@ import { FollowedTeamsProvider } from "@/components/account/FollowedTeamsProvide
 import { ServiceWorkerRegistration } from "@/components/pwa/ServiceWorkerRegistration";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+import { siteUrl } from "@/lib/seo/pageMetadata";
+
 const googleSiteVerification = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION?.trim();
 
 export const metadata: Metadata = {
@@ -38,15 +39,12 @@ export const metadata: Metadata = {
   creator: "OddsPadi",
   publisher: "OddsPadi",
   category: "sports",
-  alternates: {
-    types: {
-      "application/rss+xml": [{ url: "/news/rss.xml", title: "OddsPadi Matchday Desk" }],
-      "application/feed+json": [{ url: "/news/feed.json", title: "OddsPadi Matchday Desk" }]
-    }
-  },
+  // No `url` here: Next merges metadata shallowly, so every page that does not
+  // declare its own `openGraph` inherits this block verbatim. With a `url` set,
+  // eleven routes told crawlers their `og:url` was the homepage. Pages now build
+  // their own self-referencing card via `pageMetadata()`.
   openGraph: {
     type: "website",
-    url: siteUrl,
     siteName: "OddsPadi",
     locale: "en_NG",
     title: "OddsPadi — Football Predictions, Live Scores & Model Analysis",
@@ -84,23 +82,40 @@ export const viewport: Viewport = {
   viewportFit: "cover"
 };
 
+const ORGANIZATION_ID = `${siteUrl}/#organization`;
+const WEBSITE_ID = `${siteUrl}/#website`;
+
 const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
+  // A stable @id lets the WebSite node point at this Organization instead of
+  // repeating it, so crawlers resolve one entity rather than two unlinked ones.
+  "@id": ORGANIZATION_ID,
   name: "OddsPadi",
   url: siteUrl,
-  logo: `${siteUrl}/brand/oddspadi-mark.svg`,
+  // A raster logo is what the knowledge-panel and article rich results accept;
+  // the SVG mark alone left the logo property effectively unusable.
+  logo: {
+    "@type": "ImageObject",
+    url: `${siteUrl}/brand/oddspadi-icon-512-maskable.png`,
+    width: 512,
+    height: 512
+  },
   description:
-    "Model-led football predictions, live scores, and value analysis for fans across Africa and beyond.",
-  sameAs: []
+    "Model-led football predictions, live scores, and value analysis for fans across Africa and beyond."
+  // `sameAs` is omitted rather than shipped empty: an empty array is not a
+  // signal, it is just noise in the graph.
 };
 
 const webSiteJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebSite",
+  "@id": WEBSITE_ID,
   name: "OddsPadi",
   alternateName: "Odds Padi",
   url: siteUrl,
+  inLanguage: "en",
+  publisher: { "@id": ORGANIZATION_ID },
   potentialAction: {
     "@type": "SearchAction",
     target: {
@@ -124,6 +139,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           type="font/woff2"
           crossOrigin="anonymous"
         />
+        {/*
+          Feed autodiscovery lives here rather than in `metadata.alternates`:
+          Next replaces an inherited `alternates` block wholesale, and every page
+          declares its own canonical, so the layout's feed links never reached a
+          single rendered page.
+        */}
+        <link rel="alternate" type="application/rss+xml" title="OddsPadi Matchday Desk" href="/news/rss.xml" />
+        <link rel="alternate" type="application/feed+json" title="OddsPadi Matchday Desk" href="/news/feed.json" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(organizationJsonLd) }} />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(webSiteJsonLd) }} />
       </head>

@@ -12,11 +12,20 @@ if (!token) {
   process.exit(1);
 }
 
-const response = await fetch(`${site}/.netlify/functions/editorial-generation-worker-background`, {
-  method: "POST",
-  headers: { "x-oddspadi-schedule-token": token },
-  signal: AbortSignal.timeout(30_000)
-});
+// A bare top-level `await fetch` turns a DNS or timeout failure into an
+// unhandled rejection and a raw stack trace, which reads like a bug in the
+// script rather than "the site was unreachable".
+let response;
+try {
+  response = await fetch(`${site}/.netlify/functions/editorial-generation-worker-background`, {
+    method: "POST",
+    headers: { "x-oddspadi-schedule-token": token },
+    signal: AbortSignal.timeout(30_000)
+  });
+} catch (error) {
+  console.error(`Could not reach ${site}: ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
+}
 
 // Background functions ack with 202 and finish asynchronously.
 console.log(`Worker responded ${response.status}${response.status === 202 ? " (accepted — generation runs in the background)" : ""}`);

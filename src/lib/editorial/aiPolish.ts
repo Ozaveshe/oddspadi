@@ -103,15 +103,33 @@ export async function polishEditorialStory(
   }
 }
 
+/**
+ * The desk can generate a dozen or more stories per edition, and `Promise.all`
+ * over the whole set fired every OpenAI request simultaneously — enough to trip
+ * a rate limit, at which point each rejected call silently falls back to the
+ * deterministic draft and the polish pass quietly does nothing. Four at a time
+ * keeps the pass useful without serialising it.
+ */
+const POLISH_CONCURRENCY = 4;
+
 export async function polishEditorialStories(
   stories: GeneratedEditorialStory[],
   options: { apiKey: string | null; model?: string | null; fetchImpl?: typeof fetch }
 ): Promise<GeneratedEditorialStory[]> {
   const apiKey = options.apiKey?.trim();
   if (!apiKey) return stories;
-  return Promise.all(
-    stories.map((story) =>
-      polishEditorialStory(story, { apiKey, model: options.model ?? undefined, fetchImpl: options.fetchImpl })
-    )
-  );
+
+  const polished = [...stories];
+  let cursor = 0;
+  async function worker(): Promise<void> {
+    for (let index = cursor++; index < stories.length; index = cursor++) {
+      polished[index] = await polishEditorialStory(stories[index], {
+        apiKey: apiKey as string,
+        model: options.model ?? undefined,
+        fetchImpl: options.fetchImpl
+      });
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(POLISH_CONCURRENCY, stories.length) }, worker));
+  return polished;
 }

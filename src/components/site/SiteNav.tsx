@@ -138,7 +138,10 @@ export function MobileTabBar() {
           className="tabbar-more"
           type="button"
           ref={moreButtonRef}
-          aria-controls="mobile-more-menu"
+          // Only reference the sheet while it is in the DOM: a dangling
+          // `aria-controls` IDREF is invalid and some screen readers announce
+          // the relationship as broken rather than ignoring it.
+          aria-controls={moreOpen ? "mobile-more-menu" : undefined}
           aria-expanded={moreOpen}
           aria-current={!moreOpen && moreActive ? "true" : undefined}
           onClick={() => setMoreOpen((open) => !open)}

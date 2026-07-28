@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { privateJson } from "@/lib/security/privateJson";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
@@ -20,9 +21,9 @@ function teamRows(rows: Array<{ team: unknown }> | null) {
 
 async function authClient() {
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return { error: Response.json({ error: "Followed teams are not configured." }, { status: 503 }) };
+  if (!supabase) return { error: privateJson({ error: "Followed teams are not configured." }, { status: 503 }) };
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: Response.json({ error: "Sign in to follow teams." }, { status: 401 }) };
+  if (!user) return { error: privateJson({ error: "Sign in to follow teams." }, { status: 401 }) };
   return { supabase, user };
 }
 
@@ -33,7 +34,7 @@ export async function GET() {
   // console while mutations continue to require authentication.
   if (auth.error) {
     if (auth.error.status === 401) {
-      return Response.json({ teams: [], authenticated: false }, { headers: PRIVATE_READ_HEADERS });
+      return privateJson({ teams: [], authenticated: false }, { headers: PRIVATE_READ_HEADERS });
     }
     return auth.error;
   }
@@ -41,7 +42,7 @@ export async function GET() {
     .select("team:op_teams!op_followed_teams_team_id_fkey(id,external_id,name,sport,country,metadata)")
     .eq("user_id", auth.user.id).order("created_at");
   if (error) return databaseUnavailable("followed teams read", error, "Followed teams are temporarily unavailable.");
-  return Response.json(
+  return privateJson(
     { teams: teamRows(data as Array<{ team: unknown }> | null), authenticated: true },
     { headers: PRIVATE_READ_HEADERS }
   );
@@ -55,12 +56,12 @@ export async function POST(request: Request) {
   if (!parsed.ok) return parsed.response;
   const payload = parsed.value;
   const teamId = typeof payload.teamId === "string" ? payload.teamId : "";
-  if (!isUuid(teamId)) return Response.json({ error: "Choose a team to follow." }, { status: 400 });
+  if (!isUuid(teamId)) return privateJson({ error: "Choose a team to follow." }, { status: 400 });
   const { error } = await auth.supabase.from("op_followed_teams").insert({ user_id: auth.user.id, team_id: teamId });
   // Following an already-followed team is an idempotent success. Avoiding an
   // upsert also means the public API never needs UPDATE privileges on the join.
   if (error && error.code !== "23505") return databaseUnavailable("follow team", error, "Could not follow that team right now.");
-  return Response.json({ ok: true }, { status: 201 });
+  return privateJson({ ok: true }, { status: 201 });
 }
 
 export async function DELETE(request: Request) {
@@ -68,8 +69,8 @@ export async function DELETE(request: Request) {
   const auth = await authClient(); if (auth.error) return auth.error;
   const rateLimit = await enforceUserRateLimit(auth.supabase, "follow_team"); if (rateLimit) return rateLimit;
   const teamId = new URL(request.url).searchParams.get("teamId") ?? "";
-  if (!isUuid(teamId)) return Response.json({ error: "Choose a team to unfollow." }, { status: 400 });
+  if (!isUuid(teamId)) return privateJson({ error: "Choose a team to unfollow." }, { status: 400 });
   const { error } = await auth.supabase.from("op_followed_teams").delete().eq("user_id", auth.user.id).eq("team_id", teamId);
   if (error) return databaseUnavailable("unfollow team", error, "Could not unfollow that team right now.");
-  return Response.json({ ok: true });
+  return privateJson({ ok: true });
 }

@@ -48,6 +48,7 @@ export function FeedComposer({ matches = [], initialMatchId = "", initialBody = 
         rows={3}
         maxLength={2000}
         aria-label="Write a post"
+        aria-describedby="feed-composer-count"
       />
       {matches.length ? (
         <label className="composer-match-picker">
@@ -64,7 +65,12 @@ export function FeedComposer({ matches = [], initialMatchId = "", initialBody = 
         </p>
       ) : null}
       <div className="row-between" style={{ marginTop: 10, alignItems: "center" }}>
-        <span className="small muted">{body.length}/2000</span>
+        {/* Associated with the textarea via aria-describedby, and polite so the
+            remaining-characters count is available without narrating every
+            keystroke. */}
+        <span className="small muted" id="feed-composer-count" aria-live="polite">
+          {body.length}/2000
+        </span>
         <button className="button primary small-btn" type="submit" disabled={busy || !body.trim()}>
           {busy ? "Posting…" : "Post"}
         </button>

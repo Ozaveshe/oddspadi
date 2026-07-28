@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { LiveBoardFixture, LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
+import { LocalTime } from "@/components/odds/LocalTime";
 
 function sportLabel(fixture: LiveBoardFixture): string {
   if (fixture.sport === "football") return "Football";
@@ -7,10 +8,15 @@ function sportLabel(fixture: LiveBoardFixture): string {
   return "Tennis";
 }
 
-function fixtureMoment(fixture: LiveBoardFixture): string {
-  if (fixture.phase === "live") return fixture.statusLabel || "Live";
-  if (fixture.phase === "finished") return fixture.statusLabel || "Final";
-  return new Date(fixture.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+/**
+ * Kickoffs render through LocalTime so the visitor sees their own clock; this
+ * card is a server component, so a raw toLocaleTimeString would pin every time
+ * to the deploy host's zone (UTC).
+ */
+function FixtureMoment({ fixture }: { fixture: LiveBoardFixture }) {
+  if (fixture.phase === "live") return <>{fixture.statusLabel || "Live"}</>;
+  if (fixture.phase === "finished") return <>{fixture.statusLabel || "Final"}</>;
+  return <LocalTime iso={fixture.kickoff} />;
 }
 
 function coverageLabel(fixture: LiveBoardFixture): string {
@@ -28,7 +34,7 @@ export function MatchdayFixtureCard({ fixture, featured = false }: { fixture: Li
     <article className={`matchday-fallback-card${featured ? " featured" : ""}`}>
       <div className="matchday-fallback-topline">
         <span>{sportLabel(fixture)} &middot; {fixture.league.name}</span>
-        <strong className={fixture.phase === "live" ? "is-live" : undefined}>{fixtureMoment(fixture)}</strong>
+        <strong className={fixture.phase === "live" ? "is-live" : undefined}><FixtureMoment fixture={fixture} /></strong>
       </div>
       <div className="matchday-fallback-teams">
         <span>{fixture.home.name}</span>

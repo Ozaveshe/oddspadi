@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { trackEvent } from "@/lib/analytics/events";
+import { RelativeTime } from "./RelativeTime";
 
 export type FeedComment = {
   id: string;
@@ -17,13 +18,10 @@ function author(comment: FeedComment) {
   return Array.isArray(comment.author) ? comment.author[0] : comment.author;
 }
 
-function ago(iso: string) {
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  return mins < 1 ? "just now" : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : new Date(iso).toLocaleDateString([], { day: "numeric", month: "short" });
-}
-
 export function PostComments({ postId, userId, onCountChange }: { postId: string; userId: string | null; onCountChange: (delta: number) => void }) {
   const [comments, setComments] = useState<FeedComment[] | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,8 +32,10 @@ export function PostComments({ postId, userId, onCountChange }: { postId: string
     (async () => {
       try {
         const response = await fetch(`/api/community/comments?postId=${encodeURIComponent(postId)}`);
-        const result = (await response.json().catch(() => ({}))) as { comments?: FeedComment[] };
-        if (alive) setComments(result.comments ?? []);
+        const result = (await response.json().catch(() => ({}))) as { comments?: FeedComment[]; nextCursor?: string | null };
+        if (!alive) return;
+        setComments(result.comments ?? []);
+        setNextCursor(result.nextCursor ?? null);
       } catch {
         if (alive) setComments([]);
       }
@@ -55,28 +55,66 @@ export function PostComments({ postId, userId, onCountChange }: { postId: string
     if (!body || busy) return;
     setBusy(true);
     setError(null);
-    const response = await fetch("/api/community/comments", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ postId, body })
-    });
-    const result = (await response.json().catch(() => ({}))) as { comment?: FeedComment; error?: string };
-    if (response.ok && result.comment) {
-      setComments((rows) => [...(rows ?? []), result.comment as FeedComment]);
-      setDraft("");
-      onCountChange(1);
-      trackEvent("community_comment_posted", { post_id: postId });
-    } else {
-      setError(result.error ?? "The comment could not be posted.");
+    // A throwing fetch used to skip the `setBusy(false)` below, leaving the
+    // composer permanently disabled after a single dropped request.
+    try {
+      const response = await fetch("/api/community/comments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ postId, body })
+      });
+      const result = (await response.json().catch(() => ({}))) as { comment?: FeedComment; error?: string };
+      if (response.ok && result.comment) {
+        setComments((rows) => [...(rows ?? []), result.comment as FeedComment]);
+        setDraft("");
+        onCountChange(1);
+        trackEvent("community_comment_posted", { post_id: postId });
+      } else {
+        setError(result.error ?? "The comment could not be posted.");
+      }
+    } catch {
+      setError("The comment could not be posted. Check your connection and try again.");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
+  }
+
+  // Threads past the first hundred comments used to be truncated with nothing
+  // in the UI to say so; the route now returns a cursor to continue from.
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const response = await fetch(
+        `/api/community/comments?postId=${encodeURIComponent(postId)}&cursor=${encodeURIComponent(nextCursor)}`
+      );
+      const result = (await response.json().catch(() => ({}))) as { comments?: FeedComment[]; nextCursor?: string | null };
+      if (!response.ok) {
+        setError("More comments could not be loaded.");
+        return;
+      }
+      setComments((rows) => [...(rows ?? []), ...(result.comments ?? [])]);
+      setNextCursor(result.nextCursor ?? null);
+    } catch {
+      setError("More comments could not be loaded. Check your connection and try again.");
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   async function remove(commentId: string) {
-    const response = await fetch(`/api/community/comments?commentId=${encodeURIComponent(commentId)}`, { method: "DELETE" });
-    if (response.ok) {
+    try {
+      const response = await fetch(`/api/community/comments?commentId=${encodeURIComponent(commentId)}`, { method: "DELETE" });
+      if (!response.ok) {
+        setError("That comment could not be deleted.");
+        return;
+      }
       setComments((rows) => (rows ?? []).filter((row) => row.id !== commentId));
       onCountChange(-1);
+    } catch {
+      // Previously a failed delete was entirely silent: the comment stayed on
+      // screen with no indication that anything had gone wrong.
+      setError("That comment could not be deleted. Check your connection and try again.");
     }
   }
 
@@ -90,7 +128,7 @@ export function PostComments({ postId, userId, onCountChange }: { postId: string
             <div className="feed-comment" key={comment.id}>
               <div className="feed-comment-head">
                 <Link href={`/community/u/${encodeURIComponent(handle)}`}><strong>@{handle}</strong></Link>
-                <span className="muted small">{ago(comment.created_at)}</span>
+                <span className="muted small"><RelativeTime iso={comment.created_at} /></span>
                 {userId === comment.author_id ? (
                   <button type="button" className="feed-comment-delete" onClick={() => void remove(comment.id)} aria-label="Delete comment">×</button>
                 ) : null}
@@ -102,6 +140,11 @@ export function PostComments({ postId, userId, onCountChange }: { postId: string
       ) : (
         <p className="muted small">No comments yet — start the thread.</p>
       )}
+      {nextCursor ? (
+        <button className="auth-text-button" type="button" onClick={() => void loadMore()} disabled={loadingMore}>
+          {loadingMore ? "Loading…" : "Load more comments"}
+        </button>
+      ) : null}
       {userId ? (
         <form className="feed-comment-form" onSubmit={submit}>
           <input

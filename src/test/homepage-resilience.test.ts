@@ -38,8 +38,11 @@ describe("homepage matchday resilience", () => {
     expect(state.fixtureCount).toBe(0);
     expect(state.liveBoardFixtureCount).toBe(2);
     expect(state.providerState).toBe("unavailable");
-    expect(state.providerLabel).toBe("unavailable");
-    expect(state.sourceLabel).toBe("Prediction engine");
+    expect(state.providerLabel).toBe("Feed unavailable");
+    // The engine produced nothing here, so the page must not credit it as the
+    // source of the fixtures it is showing.
+    expect(state.usesLiveFallback).toBe(true);
+    expect(state.sourceLabel).toBe("Live score board (engine produced no fixtures)");
     expect(state.featuredFixture?.id).toBe("live-1");
     expect(state.previewFixtures).toHaveLength(2);
     expect(state.lastUpdatedAt).toBeNull();
@@ -88,7 +91,10 @@ describe("homepage matchday resilience", () => {
     expect(state.liveBoardFixtureCount).toBe(1);
     expect(state.liveCount + state.upcomingCount + state.finishedCount).toBe(0);
     expect(state.providerState).toBe("running");
+    expect(state.providerLabel).toBe("Run in progress");
     expect(state.usesLiveFallback).toBe(false);
+    // The engine is the source here, and the label says so.
+    expect(state.sourceLabel).toBe("Prediction engine");
   });
 
   it("describes a completed empty week without claiming an outage or live coverage", () => {
