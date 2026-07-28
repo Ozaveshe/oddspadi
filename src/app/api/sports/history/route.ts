@@ -1,4 +1,4 @@
-import { apiSuccess, withApiHandler } from "@/app/api/sports/_utils";
+import { apiSuccess, publicCacheInit, withApiHandler } from "@/app/api/sports/_utils";
 import { filterPublicPredictionHistory, getHistorySummary, getPublicPredictionHistory } from "@/lib/sports/prediction/history";
 
 export const GET = withApiHandler(async (request: Request) => {
@@ -14,9 +14,24 @@ export const GET = withApiHandler(async (request: Request) => {
     confidence: url.searchParams.get("confidence") ?? "all",
     edge: (url.searchParams.get("edge") ?? "all") as "all" | "positive" | "negative"
   });
-  return apiSuccess({
-    ...ledger,
-    items,
-    summary: getHistorySummary(items)
-  });
+  // Every request previously re-read the whole public ledger and re-filtered it
+  // at the origin, with no cache headers at all — the only public read route
+  // without them. The payload is identical for identical filters.
+  return apiSuccess(
+    {
+      ...ledger,
+      items,
+      summary: getHistorySummary(items)
+    },
+    publicCacheInit(300, [
+      "sport",
+      "result",
+      "range",
+      "market",
+      "publicStatus",
+      "settlementStatus",
+      "confidence",
+      "edge"
+    ])
+  );
 });

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 import Link from "next/link";
 import { DailyDecisionOverview, DailyTipsSections, ProviderRunStrip } from "@/components/odds/IntelligenceSlate";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
@@ -8,11 +9,13 @@ import type { Sport } from "@/lib/sports/types";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Today's Provider-Backed Sports Predictions",
   description: "Today's real provider fixtures, model probabilities, fresh odds, value decisions and honest no-pick states from the OddsPadi engine.",
-  alternates: { canonical: "/predictions" }
-};
+  path: "/predictions",
+  socialTitle: "Today's sports predictions — probabilities, odds and value",
+  socialDescription: "Every fixture on today's board with model probabilities, live odds and a clear reason whenever there is no pick."
+});
 
 type PageProps = { searchParams?: Promise<{ sport?: string | string[] }> };
 

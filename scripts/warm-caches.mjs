@@ -19,13 +19,24 @@ const targets = [
   "/api/sports/predictions?sport=basketball&view=summary"
 ];
 
+// Failures are counted and surfaced through the exit code. This script had no
+// exit handling at all, so `npm run ops:warm` reported success after a deploy
+// even when every single target had failed — the one signal the step exists to
+// provide.
+let failures = 0;
+
 for (const path of targets) {
   const started = Date.now();
   try {
     const response = await fetch(`${site}${path}`, { signal: AbortSignal.timeout(60_000) });
     await response.arrayBuffer();
+    if (!response.ok) failures += 1;
     console.log(`${response.ok ? "warm" : "FAIL"}  ${path} (${response.status}, ${Date.now() - started}ms)`);
   } catch (error) {
+    failures += 1;
     console.log(`FAIL  ${path} — ${error}`);
   }
 }
+
+console.log(failures ? `\n${failures}/${targets.length} target(s) failed to warm.` : `\nAll ${targets.length} targets warmed.`);
+process.exit(failures ? 1 : 0);

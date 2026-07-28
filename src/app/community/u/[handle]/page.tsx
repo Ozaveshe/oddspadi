@@ -2,10 +2,25 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { LocalTime } from "@/components/odds/LocalTime";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ handle: string }> };
-export const metadata: Metadata = { title: "Community profile", robots: { index: false, follow: true } };
+/**
+ * Every handle previously shared the literal title "Community profile", so the
+ * browser tab, history entries and any share card were identical across every
+ * tipster on the site. The page stays out of the index (member-authored, thin
+ * until a tipster builds a record) but still deserves a distinct title.
+ */
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const handle = decodeURIComponent((await params).handle).slice(0, 40);
+  return {
+    title: `@${handle} — community tipster record`,
+    description: `Published tips, settled results and net units for @${handle} on OddsPadi.`,
+    alternates: { canonical: `/community/u/${encodeURIComponent(handle)}` },
+    robots: { index: false, follow: true }
+  };
+}
 
 type Profile = {
   id: string;
@@ -118,7 +133,7 @@ export default async function CommunityProfilePage({ params }: Props) {
             <header><div><span>{marketLabel(tip.market)}</span><h3>{tip.selection_label}</h3></div><strong>{number(tip.tipped_odds).toFixed(2)}</strong></header>
             <Link href={`/predictions/${encodeURIComponent(tip.fixture_id)}`}>{tip.home_team} vs {tip.away_team}</Link>
             <p>{tip.rationale}</p>
-            <footer><time dateTime={tip.published_at}>{new Date(tip.published_at).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}</time><span>{number(tip.stake_units).toFixed(1)}u risked</span><b className={units === null ? "pending" : units >= 0 ? "positive" : "negative"}>{withdrawn ? "Withdrawn" : settlement ? `${settlement.result} · ${units! >= 0 ? "+" : ""}${units!.toFixed(2)}u` : "Pending"}</b></footer>
+            <footer><LocalTime iso={tip.published_at} variant="date" /><span>{number(tip.stake_units).toFixed(1)}u risked</span><b className={units === null ? "pending" : units >= 0 ? "positive" : "negative"}>{withdrawn ? "Withdrawn" : settlement ? `${settlement.result} · ${units! >= 0 ? "+" : ""}${units!.toFixed(2)}u` : "Pending"}</b></footer>
           </article>;
         })}</div> : <div className="community-empty-compact"><strong>No published tips yet</strong><p>This profile has no immutable community-tip record.</p></div>}
       </section>

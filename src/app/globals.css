@@ -106,12 +106,29 @@
   --shadow-soft: 0 14px 32px -22px rgba(7, 94, 51, 0.28);
   --shadow: 0 22px 48px -28px rgba(7, 94, 51, 0.36);
   --shadow-lg: 0 38px 76px -36px rgba(7, 94, 51, 0.42);
+  /* Focus ring. Referenced by .share-action since it was written, but never
+     defined — so `outline: 3px solid var(--focus-ring)` was an invalid value and
+     the outline resolved to none, leaving the share buttons with no visible
+     focus indicator at all. */
+  --focus-ring: #0f7a3d;
   --glow-green: 0 16px 34px -22px rgba(8, 116, 62, 0.34);
   --glow-gold: 0 16px 34px -22px rgba(191, 122, 0, 0.28);
 
   --radius-xl: 24px;
   --radius-lg: 18px;
   --radius: 15px;
+  /* Aliases that were referenced across the sheet but never declared. An
+     undefined var() makes the whole declaration invalid at computed-value time,
+     so each of these silently fell back to the property's initial value:
+       --accent          won-result dots rendered transparent (invisible) on the
+                         public record strip, while lost dots stayed red
+       --ink             text colour fell through to whatever was inherited
+       --radius-md       border-radius collapsed to 0, squaring two panels
+       --surface-raised  invalidated a color-mix(), leaving no background */
+  --radius-md: 12px;
+  --accent: var(--green-strong);
+  --ink: var(--text);
+  --surface-raised: var(--surface-strong);
   --radius-sm: 11px;
   --radius-xs: 8px;
 
@@ -3051,7 +3068,10 @@ a.score-row:active,
 .feed-comment-delete { background: none; border: 0; color: var(--faint); cursor: pointer; font-size: 14px; line-height: 1; margin-left: auto; padding: 2px 6px; }
 .feed-comment-form { display: flex; gap: 8px; }
 .feed-comment-form input { background: transparent; border: 1px solid var(--border); border-radius: 999px; color: var(--ink); flex: 1; font: inherit; font-size: 16px; padding: 8px 14px; }
-.feed-comment-form input:focus-visible { border-color: var(--green-line); outline: none; }
+/* A border-colour change alone is not a visible focus indicator (WCAG 2.4.11):
+   it is colour-only and only 1px. Every other input in the sheet pairs
+   `outline: none` with a 3px ring; this one did not. */
+.feed-comment-form input:focus-visible { border-color: var(--green-line); outline: 3px solid var(--focus-ring); outline-offset: 1px; }
 .community-load-more { display: table; margin: 18px auto 0; }
 .discuss-match-cta { display: inline-flex; margin: 10px 0 22px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--green-strong); font-size: 13px; font-weight: 800; text-decoration: none; }
 .auth-panel { display: grid; gap: 14px; }.auth-panel .seg { margin-bottom: 4px; }.auth-panel .button { width: 100%; }.auth-text-button { margin: -4px auto 0; text-decoration: underline; }.auth-error { color: var(--red); }.auth-success { color: var(--green-strong); }

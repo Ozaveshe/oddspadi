@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { trackEvent } from "@/lib/analytics/events";
 
 /**
  * Route-level error boundary. Keeps a runtime error on one page from blanking
@@ -10,6 +11,16 @@ import { useEffect } from "react";
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") console.error(error);
+    // React error boundaries swallow the error, so it never reaches the
+    // window `error`/`unhandledrejection` listeners that feed telemetry. This
+    // boundary catching a page crash was therefore completely silent in
+    // production — the single most important thing to know about. `trackEvent`
+    // is consent-gated and never throws.
+    trackEvent("client_error", {
+      error_kind: error.name || "route_boundary",
+      boundary: "route",
+      ...(error.digest ? { digest: error.digest } : {})
+    });
   }, [error]);
 
   return (

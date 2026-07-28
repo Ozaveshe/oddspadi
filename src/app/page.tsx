@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MatchdayFixtureCard } from "@/components/live/MatchdayFallback";
 import { LiveTicker } from "@/components/live/LiveTicker";
+import { LocalTime } from "@/components/odds/LocalTime";
 import { SlateFixtureCard } from "@/components/odds/IntelligenceSlate";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 import { deriveHomepageMatchdayState, getWeeklyEmptyState } from "@/lib/sports/homepageState";
@@ -34,12 +35,16 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
     })
   ]);
 }
+// Calendar-day label, not an instant: pin the zone so the weekday cannot slide
+// a day on a non-UTC host, and the locale so it reads the same everywhere.
+const WEEKDAY_FORMAT = new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "UTC" });
+
 function weekdayLabel(date: string, firstDate: string): string {
   if (date === firstDate) return "Today";
   const tomorrow = new Date(`${firstDate}T00:00:00.000Z`);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
   if (date === tomorrow.toISOString().slice(0, 10)) return "Tomorrow";
-  return new Date(`${date}T12:00:00.000Z`).toLocaleDateString([], { weekday: "short" });
+  return WEEKDAY_FORMAT.format(new Date(`${date}T12:00:00.000Z`));
 }
 
 export default async function HomePage() {
@@ -104,7 +109,7 @@ export default async function HomePage() {
         <div><span>Prediction fixtures</span><strong>{matchday.fixtureCount}</strong></div>
         <div><span>Tips published</span><strong>{matchday.valuePickCount}</strong></div>
         <div><span>Watchlist</span><strong>{matchday.watchlistCount}</strong></div>
-        <div><span>Last engine run</span><strong>{lastRun ? new Date(lastRun).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Waiting"}</strong></div>
+        <div><span>Last engine run</span><strong>{lastRun ? <LocalTime iso={lastRun} /> : "Waiting"}</strong></div>
         <div><span>Provider health</span><strong className={`engine-health status-${matchday.providerState}`}>{matchday.providerLabel}</strong><Link className="engine-audit-link" href="/engine/performance">Audit evidence →</Link></div>
       </section>
 
@@ -144,10 +149,13 @@ export default async function HomePage() {
 
       <section className="section home-how">
         <div className="section-title"><div><span className="section-kicker">How OddsPadi works</span><h2>Read the match in three moves</h2></div></div>
+        {/* The step numerals are decorative: the <ol> already conveys order, so
+            leaving them exposed made screen readers announce "1, 1. Scan the
+            full schedule". */}
         <ol>
-          <li><span>1</span><div><h3>Scan the full schedule</h3><p>Every available provider fixture enters the daily board.</p></div></li>
-          <li><span>2</span><div><h3>Compare chances and price</h3><p>The model estimates the outcome, then compares it with the bookmaker&apos;s fair chance.</p></div></li>
-          <li><span>3</span><div><h3>Publish or abstain</h3><p>Value picks, leans, watchlists and no-pick reasons remain clearly separate.</p></div></li>
+          <li><span aria-hidden="true">1</span><div><h3>Scan the full schedule</h3><p>Every available provider fixture enters the daily board.</p></div></li>
+          <li><span aria-hidden="true">2</span><div><h3>Compare chances and price</h3><p>The model estimates the outcome, then compares it with the bookmaker&apos;s fair chance.</p></div></li>
+          <li><span aria-hidden="true">3</span><div><h3>Publish or abstain</h3><p>Value picks, leans, watchlists and no-pick reasons remain clearly separate.</p></div></li>
         </ol>
       </section>
 

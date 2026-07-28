@@ -53,3 +53,54 @@ describe("community tip settlement", () => {
     expect(resolveCommunityTipSettlement(TIP, null, new Date("2026-07-19T18:00:00.000Z")).status).toBe("manual_review");
   });
 });
+
+describe("community tip settlement — non-final provider states", () => {
+  const tip = {
+    id: "tip-1",
+    fixtureId: "api-football:1",
+    sport: "football" as const,
+    kickoffAt: "2026-07-20T12:00:00.000Z",
+    market: "match_winner",
+    selection: "home",
+    selectionLabel: "Arsenal",
+    tippedOdds: 2,
+    stakeUnits: 1,
+    withdrawnAt: null
+  };
+
+  function fixtureWith(status: string) {
+    return {
+      provider: "api-football",
+      status: status as never,
+      homeScore: 2,
+      awayScore: 1,
+      observedAt: "2026-07-20T13:00:00.000Z"
+    };
+  }
+
+  it("never settles a suspended fixture on the scoreline when play stopped", () => {
+    // The engine's own settlement path always handled this; the community path
+    // omitted "suspended" from its union, so it fell through to the finished
+    // branch and paid out a published tip on an interrupted match.
+    const soon = resolveCommunityTipSettlement(tip, fixtureWith("suspended"), new Date("2026-07-20T13:30:00.000Z"));
+    expect(soon.status).toBe("waiting");
+    expect(soon.result).toBeNull();
+
+    const overdue = resolveCommunityTipSettlement(tip, fixtureWith("suspended"), new Date("2026-07-22T13:30:00.000Z"));
+    expect(overdue.status).toBe("manual_review");
+    expect(overdue.result).toBeNull();
+  });
+
+  it("routes an unrecognised provider status to manual review, not to settlement", () => {
+    const decision = resolveCommunityTipSettlement(tip, fixtureWith("abandoned_by_referee"), new Date("2026-07-20T13:30:00.000Z"));
+    expect(decision.status).toBe("manual_review");
+    expect(decision.result).toBeNull();
+  });
+
+  it("still settles a genuinely finished fixture", () => {
+    const decision = resolveCommunityTipSettlement(tip, fixtureWith("finished"), new Date("2026-07-20T14:00:00.000Z"));
+    expect(decision.status).toBe("settled");
+    expect(decision.result).toBe("won");
+    expect(decision.netUnits).toBeCloseTo(1);
+  });
+});

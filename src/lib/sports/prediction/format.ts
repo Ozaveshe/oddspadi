@@ -7,6 +7,20 @@ export function clampProbability(value: number): number {
   return value < 0 ? 0 : value > 1 ? 1 : value;
 }
 
+/**
+ * A CSS length for a bar/offset, in percent.
+ *
+ * Every numeric formatter here already treats non-finite input as 0 so a bad
+ * upstream value cannot render as "NaN%". Inline width and offset styles were
+ * computing their own `${value * 100}%` without that guard, so a NaN reached
+ * the style attribute, made the declaration invalid, and collapsed the bar with
+ * no indication anything was wrong.
+ */
+export function percentLength(value: number, scale = 100): string {
+  if (!Number.isFinite(value)) return "0%";
+  return `${Math.max(0, Math.min(100, value * scale))}%`;
+}
+
 export function formatPercent(value: number): string {
   return `${Math.round(clampProbability(value) * 100)}%`;
 }

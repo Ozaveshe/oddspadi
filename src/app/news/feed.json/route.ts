@@ -1,6 +1,5 @@
 import { getNewsStories } from "@/lib/editorial/news";
-
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+import { absoluteUrl, siteUrl } from "@/lib/seo/pageMetadata";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +11,11 @@ export async function GET() {
     home_page_url: `${siteUrl}/news`,
     feed_url: `${siteUrl}/news/feed.json`,
     description: "Sports briefings, model explainers and upcoming-season outlooks.",
+    // Slugs are database values: percent-encode them so a slug containing a
+    // space, `#` or `?` cannot produce an item URL that resolves elsewhere.
     items: newsStories.map((story) => ({
-      id: `${siteUrl}/news/${story.slug}`,
-      url: `${siteUrl}/news/${story.slug}`,
+      id: absoluteUrl(`/news/${encodeURIComponent(story.slug)}`),
+      url: absoluteUrl(`/news/${encodeURIComponent(story.slug)}`),
       title: story.title,
       summary: story.excerpt,
       content_text: story.body.join("\n\n"),

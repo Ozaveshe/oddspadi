@@ -3,12 +3,17 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import type { LiveBoardFixture, LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
+import { LocalTimeText } from "@/components/odds/LocalTime";
 import { useLiveBoard } from "./useLiveBoard";
 
-function chipStatus(fixture: LiveBoardFixture): string {
-  if (fixture.phase === "live") return fixture.statusLabel;
-  if (fixture.phase === "finished") return fixture.statusLabel;
-  return new Date(fixture.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+/**
+ * Live/finished chips carry a provider status label; upcoming chips carry the
+ * kickoff, which must go through LocalTime so the server-rendered pass and the
+ * hydrated pass agree before settling on the visitor's own zone.
+ */
+function ChipStatus({ fixture }: { fixture: LiveBoardFixture }) {
+  if (fixture.phase === "live" || fixture.phase === "finished") return <>{fixture.statusLabel}</>;
+  return <LocalTimeText iso={fixture.kickoff} />;
 }
 
 export function LiveTicker({ initial }: { initial: LiveScoreBoard | null }) {
@@ -47,7 +52,10 @@ export function LiveTicker({ initial }: { initial: LiveScoreBoard | null }) {
 
   return (
     <div className="ticker-wrap">
-      <div className="ticker" aria-label="Live and upcoming matches" aria-live="polite" aria-atomic="false">
+      {/* A named group, not a live region: the ticker re-renders all 14 chips
+          on every 60s poll, so `aria-live` re-read the whole strip aloud each
+          time. The live board owns score announcements. */}
+      <div className="ticker" role="group" aria-label="Live and upcoming matches">
         {picks.map((fixture) => (
           <Link className="ticker-chip" href="/live-scores" key={fixture.id}>
             <span className="t-league">
@@ -68,10 +76,10 @@ export function LiveTicker({ initial }: { initial: LiveScoreBoard | null }) {
             <span className="t-row">
               <span className="team-name">{fixture.away.name}</span>
               {fixture.phase === "live" ? (
-                <span className="t-min">{chipStatus(fixture)}</span>
+                <span className="t-min"><ChipStatus fixture={fixture} /></span>
               ) : (
-                <span className="muted small" suppressHydrationWarning>
-                  {chipStatus(fixture)}
+                <span className="muted small">
+                  <ChipStatus fixture={fixture} />
                 </span>
               )}
             </span>

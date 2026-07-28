@@ -34,7 +34,7 @@ describe("health route live-data readiness", () => {
     clearReadinessEnv();
     process.env.API_FOOTBALL_KEY = "configured-provider-key";
 
-    const response = GET(new Request("https://oddspadi.example/api/health"));
+    const response = await GET(new Request("https://oddspadi.example/api/health"));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(expect.objectContaining({
       status: "ok",
@@ -54,7 +54,7 @@ describe("health route live-data readiness", () => {
     process.env.SUPABASE_PROJECT_REF = "wncwtzqipnoqwmqlznqn";
     process.env.SUPABASE_SECRET_KEY = "sb_secret_configured_server_key";
 
-    const response = GET(new Request("https://oddspadi.example/api/health"));
+    const response = await GET(new Request("https://oddspadi.example/api/health"));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(expect.objectContaining({
       liveDataReady: true,
@@ -73,7 +73,7 @@ describe("health route live-data readiness", () => {
     process.env.SUPABASE_PROJECT_REF = "wncwtzqipnoqwmqlznqn";
     process.env.SUPABASE_SECRET_KEY = "*******************0";
 
-    const response = GET(new Request("https://oddspadi.example/api/health"));
+    const response = await GET(new Request("https://oddspadi.example/api/health"));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
@@ -86,10 +86,10 @@ describe("health route live-data readiness", () => {
     clearReadinessEnv();
     process.env.ODDSPADI_ADMIN_TOKEN = "health-admin-token";
 
-    const queryResponse = GET(new Request("https://oddspadi.example/api/health?token=health-admin-token"));
+    const queryResponse = await GET(new Request("https://oddspadi.example/api/health?token=health-admin-token"));
     expect(await queryResponse.json()).not.toHaveProperty("providers");
 
-    const headerResponse = GET(new Request("https://oddspadi.example/api/health", {
+    const headerResponse = await GET(new Request("https://oddspadi.example/api/health", {
       headers: { authorization: "Bearer health-admin-token" }
     }));
     expect(await headerResponse.json()).toHaveProperty("providers");

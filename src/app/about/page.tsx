@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 import Link from "next/link";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "About OddsPadi",
   description:
     "What OddsPadi is, how the prediction engine works, and the promises we make to fans: transparent results, plain language, and responsible-play framing.",
-  alternates: { canonical: "/about" }
-};
+  path: "/about",
+  socialTitle: "About OddsPadi — model-led football analysis with receipts",
+  socialDescription: "Free sports analysis for African fans: live scores, model probabilities and results that stay visible whether they won or lost."
+});
 
 export default function AboutPage() {
   return (

@@ -81,7 +81,7 @@ export function MatchCard({ match, prediction }: { match: MatchSummary; predicti
         </div>
         <Link
           className="button small-btn"
-          href={`/predictions/${match.id}`}
+          href={`/predictions/${encodeURIComponent(match.id)}`}
           aria-label={`Full analysis: ${match.homeTeam.name} vs ${match.awayTeam.name}`}
         >
           Full analysis

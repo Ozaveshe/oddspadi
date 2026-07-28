@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CommunityPollChoice } from "@/lib/community/predictionContracts";
 import { buildConsensusResearchReceipt, type ConsensusDistribution, type ConsensusSide } from "@/lib/community/consensusResearch";
+import { LocalTime } from "@/components/odds/LocalTime";
 
 export type CommunityMarketOption = {
   id: string;
@@ -239,7 +240,7 @@ export function MatchCommunityDesk({ fixtureId, sport, homeTeam, awayTeam, kicko
             <strong>{totalVotes}<small> votes</small></strong>
           </header>
           {pollState === "loading" ? (
-            <div className="community-skeleton" aria-label="Loading fan pulse"><span /><span /><span /></div>
+            <div className="community-skeleton" role="status" aria-label="Loading fan pulse"><span /><span /><span /></div>
           ) : poll ? (
             <div className="community-poll-options">
               {choices.map((choice) => (
@@ -303,7 +304,7 @@ export function MatchCommunityDesk({ fixtureId, sport, homeTeam, awayTeam, kicko
           {publishMessage ? <p className={`community-inline-note ${publishState}`} role={publishState === "error" ? "alert" : "status"}>{publishMessage} {publishMessage.toLowerCase().includes("sign in") ? <Link href="/account">Open account</Link> : null}</p> : null}
 
           {tipsState === "loading" ? (
-            <div className="community-skeleton tips" aria-label="Loading community tips"><span /><span /></div>
+            <div className="community-skeleton tips" role="status" aria-label="Loading community tips"><span /><span /></div>
           ) : tips.length ? (
             <div className="community-tip-list">
               {tips.slice(0, 6).map((tip) => {
@@ -313,7 +314,7 @@ export function MatchCommunityDesk({ fixtureId, sport, homeTeam, awayTeam, kicko
                 return (
                   <article className={`community-tip ${withdrawn ? "withdrawn" : ""}`} key={tip.id}>
                     <div className="community-tip-meta">
-                      <div><span>{author ? <Link href={`/community/u/${encodeURIComponent(author.username)}`}>{author.display_name || `@${author.username}`}</Link> : "Community tipster"}</span><time dateTime={tip.published_at}>{new Date(tip.published_at).toLocaleDateString([], { month: "short", day: "numeric" })}</time></div>
+                      <div><span>{author ? <Link href={`/community/u/${encodeURIComponent(author.username)}`}>{author.display_name || `@${author.username}`}</Link> : "Community tipster"}</span><LocalTime iso={tip.published_at} variant="daymonth" /></div>
                       <span className={`community-tip-result ${settlement?.result ?? (withdrawn ? "void" : "pending")}`}>{withdrawn ? "withdrawn" : settlement?.result ?? "pending"}</span>
                     </div>
                     <div className="community-tip-pick"><span>{readableMarket(tip.market)}</span><strong>{tip.selection_label}</strong><b>{asNumber(tip.tipped_odds).toFixed(2)}</b></div>

@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
-
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+import { siteUrl } from "@/lib/seo/pageMetadata";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -8,9 +7,13 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/", "/account"]
+        // `/offline` is the service worker's fallback shell and `/tips` is a
+        // permanent alias for `/predictions/today`; neither should be crawled
+        // as a page in its own right.
+        disallow: ["/api/", "/account", "/offline", "/tips"]
       }
     ],
-    sitemap: `${siteUrl}/sitemap.xml`
+    sitemap: `${siteUrl}/sitemap.xml`,
+    host: siteUrl
   };
 }

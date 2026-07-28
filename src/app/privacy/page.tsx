@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { AnalyticsPreferencesButton } from "@/components/analytics/Analytics";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Privacy & analytics",
   description: "How OddsPadi uses analytics, what we measure, and how visitors control their choice.",
-  alternates: { canonical: "/privacy" }
-};
+  path: "/privacy"
+});
 
 export default function PrivacyPage() {
   return (

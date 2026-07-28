@@ -29,7 +29,9 @@ import { marketPriorReceiptFor } from "@/lib/sports/prediction/marketPriorPresen
 
 export const revalidate = 180;
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+// Shared so a trailing slash in NEXT_PUBLIC_SITE_URL cannot produce `//path`,
+// and so one definition governs every canonical the site emits.
+import { siteUrl } from "@/lib/seo/pageMetadata";
 
 type PageProps = {
   params: Promise<{ matchId: string }>;
@@ -49,7 +51,10 @@ function decodeMatchId(value: string): string {
   }
 }
 
-function shortDate(value: string) { const date = new Date(value); return Number.isFinite(date.getTime()) ? date.toLocaleDateString("en", { day: "numeric", month: "short", year: "numeric" }) : "Previous meeting"; }
+// Head-to-head dates are calendar days, not instants: pin the zone so the label
+// does not slide a day across hosts, and the locale so hydration stays stable.
+const SHORT_DATE_FORMAT = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+function shortDate(value: string) { const date = new Date(value); return Number.isFinite(date.getTime()) ? SHORT_DATE_FORMAT.format(date) : "Previous meeting"; }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { matchId: rawMatchId } = await params;
@@ -209,7 +214,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
               <div className="match-decision-context">
                 <div><span>Confidence</span><ConfidenceBadge level={canonical.confidence} /></div>
                 <div><span>Risk</span><RiskBadge level={canonical.risk} /></div>
-                <div><span>Decision clock</span><strong>{new Date(canonical.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</strong></div>
+                <div><span>Decision clock</span><strong><LocalTime iso={canonical.generatedAt} /></strong></div>
               </div>
             </>
           ) : <p className="muted">{canonical.noPickReason ?? "No clear value found."}</p>}
@@ -279,8 +284,8 @@ export default async function MatchDetailPage({ params }: PageProps) {
           <div className="panel odds-history-panel">
             <h2>Odds movement and freshness</h2>
             <div className="metrics-grid results-metrics">
-              <div className="metric"><span className="metric-label">Decision generated</span><span className="metric-value">{new Date(canonical.generatedAt).toLocaleString()}</span></div>
-              <div className="metric"><span className="metric-label">Price expires</span><span className="metric-value">{canonical.expiresAt ? new Date(canonical.expiresAt).toLocaleString() : "Awaiting fresh odds"}</span></div>
+              <div className="metric"><span className="metric-label">Decision generated</span><span className="metric-value"><LocalTime iso={canonical.generatedAt} variant="datetime" /></span></div>
+              <div className="metric"><span className="metric-label">Price expires</span><span className="metric-value">{canonical.expiresAt ? <LocalTime iso={canonical.expiresAt} variant="datetime" /> : "Awaiting fresh odds"}</span></div>
             </div>
             <OddsMovementChart history={oddsHistory} market={historyMarket} marketLabel={historyMarketLabel} />
           </div>
@@ -320,7 +325,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
               Scored {match.awayForm.goalsFor}, conceded {match.awayForm.goalsAgainst} · attack{" "}
               {formatPercent(match.awayForm.attackStrength)}, defence {formatPercent(match.awayForm.defenseStrength)}
             </p>
-            {leagueTableSlug ? <Link className="inline-link small" href={`/predictions/league/${leagueTableSlug}/table`}>View the full {match.league.name} table →</Link> : null}
+            {leagueTableSlug ? <Link className="inline-link small" href={`/predictions/league/${encodeURIComponent(leagueTableSlug)}/table`}>View the full {match.league.name} table →</Link> : null}
           </div>
 
           <div className="panel">

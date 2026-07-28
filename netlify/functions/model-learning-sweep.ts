@@ -8,10 +8,21 @@ export default async function modelLearningSweep(_request: Request, context: Con
   const token = clean(Netlify.env.get("ODDSPADI_ADMIN_TOKEN"));
   if (!siteUrl || !token) return Response.json({ success: false, error: "Model learning sweep configuration is incomplete." }, { status: 503 });
   try {
-    return await fetch(new URL("/.netlify/functions/model-learning-worker-background", siteUrl), {
+    // Read and rebuild rather than returning the worker's Response object
+    // straight through: a pass-through forwards every upstream header verbatim
+    // into the scheduled-function reply. The other sweeps in this directory
+    // already do it this way.
+    const response = await fetch(new URL("/.netlify/functions/model-learning-worker-background", siteUrl), {
       method: "POST",
       headers: { "x-oddspadi-schedule-token": token },
       signal: AbortSignal.timeout(25_000)
+    });
+    return new Response(await response.text(), {
+      status: response.status,
+      headers: {
+        "content-type": response.headers.get("content-type") ?? "application/json",
+        "cache-control": "no-store"
+      }
     });
   } catch (error) {
     return Response.json({ success: false, error: error instanceof Error ? error.message : "Model learning sweep failed." }, { status: 504 });

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
+import { LocalTimeText } from "@/components/odds/LocalTime";
+import { pageMetadata, siteUrl } from "@/lib/seo/pageMetadata";
 import {
   featuredFootballLeagueTables,
   currentFootballSeason,
@@ -15,19 +17,23 @@ import { serializeJsonLd } from "@/lib/security/jsonLd";
 
 export const dynamic = "force-dynamic";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+
 
 type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const league = leagueBySlug((await params).slug);
-  if (!league) return { title: "League table" };
+  // An unknown slug 404s below. Keep it out of the index so a mistyped or
+  // retired league URL cannot be crawled as a thin soft-404.
+  if (!league) return { title: "League table", robots: { index: false, follow: false } };
 
-  return {
+  return pageMetadata({
     title: `${league.leagueName} Table`,
     description: `Current ${league.leagueName} standings: position, results, goal difference, points and recent form.`,
-    alternates: { canonical: `/predictions/league/${league.slug}/table` },
-  };
+    path: `/predictions/league/${league.slug}/table`,
+    socialTitle: `${league.leagueName} table — standings, form and points`,
+    socialDescription: `Live ${league.leagueName} standings with position, goal difference, points and recent form for every side.`
+  });
 }
 
 function Form({ value }: { value: string }) {
@@ -106,7 +112,7 @@ export default async function LeagueTablePage({ params }: Props) {
           <Link
             aria-current={featuredLeague.slug === slug ? "page" : undefined}
             className="league-table-switcher__link"
-            href={`/predictions/league/${featuredLeague.slug}/table`}
+            href={`/predictions/league/${encodeURIComponent(featuredLeague.slug)}/table`}
             key={featuredLeague.slug}
           >
             <CountryFlag country={featuredLeague.country} size={18} />
@@ -170,7 +176,7 @@ export default async function LeagueTablePage({ params }: Props) {
           <p className="muted small standings-source">
             {historicalFallback ? "Latest verified final table. " : ""}
             Source: {table.source === "api-football-standings" ? "API-Football" : "latest stored OddsPadi snapshot"}. Updated{" "}
-            {new Date(table.updatedAt).toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}.
+            <LocalTimeText iso={table.updatedAt} variant="datetime" />.
           </p>
         </>
       ) : (

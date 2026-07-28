@@ -9,13 +9,25 @@ export function publicReadAbortSignal(): AbortSignal {
   return AbortSignal.timeout(PUBLIC_READ_TIMEOUT_MS);
 }
 
+// Reused across requests, the way `getSupabaseServerClient` already does.
+// Rebuilding the client on every public read allocated a fresh auth/realtime
+// object graph per call on the hottest read paths in the app.
+let cachedClient: { cacheKey: string; client: SupabaseClient } | null = null;
+
 export function getSupabasePublicReadClient(): SupabaseClient | null {
   const config = supabasePublicConfig();
   if (!config) return null;
-  return createClient(config.url, config.key, {
+
+  const cacheKey = `${config.url}:${config.key}`;
+  if (cachedClient?.cacheKey === cacheKey) return cachedClient.client;
+
+  const client = createClient(config.url, config.key, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: {
       fetch: (input, init) => fetch(input, { ...init, cache: "no-store" })
     }
   });
+
+  cachedClient = { cacheKey, client };
+  return client;
 }

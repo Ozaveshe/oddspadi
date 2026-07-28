@@ -13,6 +13,19 @@ const tokenMatches = (a: string, b: string) => {
   return left.length === right.length && timingSafeEqual(left, right);
 };
 
+// `op_fixtures.status` stores the normalised MatchStatus union, not the raw
+// provider string. The previous filters also listed "not_started", "ft" and
+// "completed", none of which the column can ever hold — dead entries that read
+// as coverage while matching nothing.
+const KICKOFF_STATUSES = ["scheduled"] as const;
+const FINISHED_STATUSES = ["finished"] as const;
+
+// Ceilings for one sweep. The sweep runs every ten minutes, so anything not
+// covered by this pass is picked up by the next one rather than being lost.
+const MAX_SUBSCRIPTIONS_PER_SWEEP = 2_000;
+const MAX_FOLLOW_ROWS = 20_000;
+const MAX_TEAM_ROWS = 10_000;
+
 type Subscription = { id: string; user_id: string; endpoint: string; p256dh: string; auth: string };
 type Follow = { user_id: string; team_id: string };
 type Team = { id: string; external_id: string; name: string };
@@ -58,11 +71,14 @@ export async function runPushNotificationWorker({
   const from = new Date(now.getTime() - 45 * 60_000).toISOString();
   const soon = new Date(now.getTime() + 20 * 60_000).toISOString();
   const [subscriptionResult, followResult, teamResult, kickoffResult, finishedResult] = await Promise.all([
-    db.from("op_push_subscriptions").select("id,user_id,endpoint,p256dh,auth"),
-    db.from("op_followed_teams").select("user_id,team_id"),
-    db.from("op_teams").select("id,external_id,name"),
-    db.from("op_fixtures").select("external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,updated_at").gte("kickoff_at", now.toISOString()).lte("kickoff_at", soon).in("status", ["scheduled", "not_started"]),
-    db.from("op_fixtures").select("external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,updated_at").gte("updated_at", from).in("status", ["finished", "ft", "completed"])
+    // These reads were unbounded. A scheduled function has a hard wall-clock
+    // budget, so "select every row" stops working long before the product
+    // does — an explicit ceiling fails visibly instead of timing out.
+    db.from("op_push_subscriptions").select("id,user_id,endpoint,p256dh,auth").limit(MAX_SUBSCRIPTIONS_PER_SWEEP),
+    db.from("op_followed_teams").select("user_id,team_id").limit(MAX_FOLLOW_ROWS),
+    db.from("op_teams").select("id,external_id,name").limit(MAX_TEAM_ROWS),
+    db.from("op_fixtures").select("external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,updated_at").gte("kickoff_at", now.toISOString()).lte("kickoff_at", soon).in("status", KICKOFF_STATUSES),
+    db.from("op_fixtures").select("external_id,kickoff_at,status,home_team_external_id,away_team_external_id,home_score,away_score,updated_at").gte("updated_at", from).in("status", FINISHED_STATUSES)
   ]);
 
   const readError = [subscriptionResult, followResult, teamResult, kickoffResult, finishedResult].find((result) => result.error)?.error;
@@ -92,6 +108,29 @@ export async function runPushNotificationWorker({
     ...kickoff.map((fixture) => ({ fixture, kind: "kickoff" as const })),
     ...finished.map((fixture) => ({ fixture, kind: "full-time" as const }))
   ];
+
+  // Every candidate event key for this sweep, loaded once.
+  //
+  // The dedupe check used to run *inside* the subscription x fixture loop as a
+  // separate awaited round-trip — 1,000 subscribers and 50 candidate fixtures
+  // meant up to 50,000 sequential queries in a function with a wall-clock
+  // budget measured in seconds, so the sweep could not finish. One query for
+  // the whole sweep replaces all of them.
+  const eventKeys = fixtures.map((event) => `${event.kind}:${event.fixture.external_id}`);
+  const alreadyDelivered = new Set<string>();
+  if (eventKeys.length && subscriptions.length) {
+    const { data: priorDeliveries, error: priorError } = await db
+      .from("op_push_notification_deliveries")
+      .select("subscription_id,event_key")
+      .in("event_key", eventKeys)
+      .in("subscription_id", subscriptions.map((subscription) => subscription.id));
+    if (priorError) {
+      console.error("[push-worker] delivery ledger read failed", { code: priorError.code ?? "unknown" });
+      return Response.json({ success: false, error: "Push delivery history is unavailable." }, { status: 502 });
+    }
+    for (const row of priorDeliveries ?? []) alreadyDelivered.add(`${row.subscription_id}:${row.event_key}`);
+  }
+
   let sent = 0;
   let removed = 0;
   let failed = 0;
@@ -112,12 +151,7 @@ export async function runPushNotificationWorker({
       if (!followed?.has(event.fixture.home_team_external_id) && !followed?.has(event.fixture.away_team_external_id)) continue;
 
       const eventKey = `${event.kind}:${event.fixture.external_id}`;
-      const { data: prior } = await db.from("op_push_notification_deliveries")
-        .select("event_key")
-        .eq("subscription_id", subscription.id)
-        .eq("event_key", eventKey)
-        .maybeSingle();
-      if (prior) continue;
+      if (alreadyDelivered.has(`${subscription.id}:${eventKey}`)) continue;
 
       const home = teamByExternalId.get(event.fixture.home_team_external_id)?.name ?? "Home";
       const away = teamByExternalId.get(event.fixture.away_team_external_id)?.name ?? "Away";
@@ -140,8 +174,20 @@ export async function runPushNotificationWorker({
           { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
           JSON.stringify(payload)
         );
-        await db.from("op_push_notification_deliveries").insert({ subscription_id: subscription.id, event_key: eventKey });
-        sent++;
+        // The dedupe ledger is what stops this notification going out again on
+        // the next sweep. The insert result was discarded, so a failed write
+        // meant the same push every ten minutes, indefinitely — count it as a
+        // failure rather than reporting a delivery that will repeat.
+        const { error: ledgerError } = await db
+          .from("op_push_notification_deliveries")
+          .insert({ subscription_id: subscription.id, event_key: eventKey });
+        if (ledgerError) {
+          console.error("[push-worker] delivery ledger write failed", { code: ledgerError.code ?? "unknown" });
+          failed++;
+        } else {
+          alreadyDelivered.add(`${subscription.id}:${eventKey}`);
+          sent++;
+        }
       } catch (error) {
         const status = (error as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) {

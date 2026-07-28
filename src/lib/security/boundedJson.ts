@@ -12,6 +12,41 @@ function jsonError(error: string, status: number): BoundedJsonResult<never> {
   };
 }
 
+/**
+ * Reads the body a chunk at a time and aborts as soon as the running byte count
+ * passes the limit.
+ *
+ * `request.text()` buffers the whole body first and only then measures it, so a
+ * chunked upload with no (or a lying) `Content-Length` was fully materialised in
+ * function memory before being rejected — the declared-length check it was
+ * paired with is trivially skipped by omitting the header.
+ */
+async function readCappedText(request: Request, maxBytes: number): Promise<string | null> {
+  const body = request.body;
+  if (!body) return "";
+
+  const decoder = new TextDecoder();
+  const reader = body.getReader();
+  let received = 0;
+  let text = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > maxBytes) return null;
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    // Releasing the lock lets the runtime discard whatever is still queued
+    // instead of leaving the stream pinned after an early return.
+    reader.releaseLock();
+  }
+
+  return text + decoder.decode();
+}
+
 /** Reads a small JSON request with both declared and measured byte limits. */
 export async function readBoundedJson<T = unknown>(
   request: Request,
@@ -27,8 +62,13 @@ export async function readBoundedJson<T = unknown>(
     if (bytes > maxBytes) return jsonError("Request body is too large.", 413);
   }
 
-  const body = await request.text();
-  if (new TextEncoder().encode(body).byteLength > maxBytes) return jsonError("Request body is too large.", 413);
+  let body: string | null;
+  try {
+    body = await readCappedText(request, maxBytes);
+  } catch {
+    return jsonError("Request body could not be read.", 400);
+  }
+  if (body === null) return jsonError("Request body is too large.", 413);
 
   try {
     return { ok: true, value: JSON.parse(body) as T };
