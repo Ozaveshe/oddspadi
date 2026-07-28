@@ -57,9 +57,6 @@ export default async function ForumsPage() {
         </div>
       ) : (
         <div className="empty-state">
-          <div className="empty-emoji" aria-hidden="true">
-            🗣️
-          </div>
           <h2>Forums are being set up</h2>
           <p className="muted">Categories will appear here shortly.</p>
         </div>

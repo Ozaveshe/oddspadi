@@ -53,7 +53,7 @@ function row(status: SlatePublicStatus, blockers: string[] = []): SlateFixture {
       modelVersion: "football-v4",
       engineVersion: "decision-v3",
       thresholdProfile: "football",
-      thresholds: { minimumValueEdge: 0.04, minimumExpectedValue: 0.03, minimumConfidenceForValuePick: "medium", minimumDataQuality: 0.62, maximumOddsAgeMinutes: 60, minimumConsensusBookmakers: 3, maximumConsensusProbabilitySpread: 0.1, minimumOdds: 1.2, maximumOdds: 5, minimumKickoffLeadMinutes: 10, maxMarketsPerFixture: 3 },
+      thresholds: { minimumValueEdge: 0.04, minimumExpectedValue: 0.03, minimumConfidenceForValuePick: "medium", minimumDataQuality: 0.62, maximumOddsAgeMinutes: 60, minimumConsensusBookmakers: 3, maximumConsensusProbabilitySpread: 0.1, minimumOdds: 1.2, maximumOdds: 5, minimumKickoffLeadMinutes: 10, maxMarketsPerFixture: 3, uncalibratedMinimumValueEdge: 0.08, uncalibratedMinimumExpectedValue: 0.06, uncalibratedMaximumValueEdge: 0.15 },
       marketsAnalysed: 1,
       publishedCandidates: status === "value_pick" ? 1 : 0,
       leanCandidates: status === "lean" ? 1 : 0,

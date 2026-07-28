@@ -397,6 +397,22 @@ export interface DecisionThresholdConfig {
   maximumOdds: number;
   minimumKickoffLeadMinutes: number;
   maxMarketsPerFixture: number;
+  /**
+   * Raw edge/EV required to publish while no calibration profile has been
+   * promoted, so there is no empirical 95% floor to clear. Deliberately
+   * stricter than the calibrated thresholds: with no measured reliability, the
+   * only compensating control is demanding a larger modelled edge.
+   */
+  uncalibratedMinimumValueEdge: number;
+  uncalibratedMinimumExpectedValue: number;
+  /**
+   * Upper bound on the raw edge an uncalibrated pick may claim. A model
+   * asserting it beats an efficient market by more than this is far more
+   * likely to be miscalibrated than to have found value, and with no empirical
+   * profile there is nothing to catch that. Above the ceiling the pick stays on
+   * the watchlist instead of being published.
+   */
+  uncalibratedMaximumValueEdge: number;
 }
 
 export interface DecisionMarketAnalysis extends ValueEdge {

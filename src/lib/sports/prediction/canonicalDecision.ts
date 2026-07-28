@@ -35,7 +35,10 @@ export const SPORT_DECISION_THRESHOLDS: Record<Extract<Sport, "football" | "bask
     minimumOdds: 1.25,
     maximumOdds: 4.5,
     minimumKickoffLeadMinutes: 15,
-    maxMarketsPerFixture: 6
+    maxMarketsPerFixture: 6,
+    uncalibratedMinimumValueEdge: 0.08,
+    uncalibratedMinimumExpectedValue: 0.06,
+    uncalibratedMaximumValueEdge: 0.15
   },
   basketball: {
     minimumValueEdge: 0.035,
@@ -48,7 +51,10 @@ export const SPORT_DECISION_THRESHOLDS: Record<Extract<Sport, "football" | "bask
     minimumOdds: 1.2,
     maximumOdds: 4,
     minimumKickoffLeadMinutes: 10,
-    maxMarketsPerFixture: 6
+    maxMarketsPerFixture: 6,
+    uncalibratedMinimumValueEdge: 0.07,
+    uncalibratedMinimumExpectedValue: 0.05,
+    uncalibratedMaximumValueEdge: 0.15
   },
   tennis: {
     minimumValueEdge: 0.04,
@@ -61,7 +67,10 @@ export const SPORT_DECISION_THRESHOLDS: Record<Extract<Sport, "football" | "bask
     minimumOdds: 1.25,
     maximumOdds: 4.5,
     minimumKickoffLeadMinutes: 15,
-    maxMarketsPerFixture: 6
+    maxMarketsPerFixture: 6,
+    uncalibratedMinimumValueEdge: 0.08,
+    uncalibratedMinimumExpectedValue: 0.06,
+    uncalibratedMaximumValueEdge: 0.15
   }
 };
 
@@ -262,17 +271,37 @@ function classifyAnalysis({
   const executionIntegrityPasses = priceMethodPasses && sourcePasses && timestampPasses && consensusDepthPasses && consensusDisagreementPasses;
   const economicConfidenceTracked = edge.economicConfidence !== undefined;
   const economicConfidenceVerified = !economicConfidenceTracked || edge.economicConfidence?.status === "verified";
-  const economicEdgePasses = !economicConfidenceTracked || (
+  /**
+   * "unavailable" means no calibration profile has been promoted yet, so there
+   * is no empirical floor to measure against — which is not the same as a pick
+   * that was measured and failed. Treating the two identically blocked every
+   * publication permanently, including picks with a large modelled edge.
+   *
+   * A cold-start pick may publish on raw edge alone, but only over the
+   * stricter uncalibrated bar. The decision still carries its
+   * `economicConfidence` receipt with status "unavailable", so the match page
+   * keeps stating that the value floor is unverified.
+   */
+  const economicConfidenceUnavailable = economicConfidenceTracked && edge.economicConfidence?.status === "unavailable";
+  const uncalibratedEdgeImplausible = edge.edge > thresholds.uncalibratedMaximumValueEdge;
+  const uncalibratedPasses =
+    economicConfidenceUnavailable &&
+    edge.edge >= thresholds.uncalibratedMinimumValueEdge &&
+    edge.expectedValue >= thresholds.uncalibratedMinimumExpectedValue &&
+    !uncalibratedEdgeImplausible;
+  const economicEdgePasses = !economicConfidenceTracked || economicConfidenceUnavailable || (
     edge.economicConfidence?.edgeLow !== null &&
     edge.economicConfidence?.edgeLow !== undefined &&
     edge.economicConfidence.edgeLow >= thresholds.minimumValueEdge
   );
-  const economicEvPasses = !economicConfidenceTracked || (
+  const economicEvPasses = !economicConfidenceTracked || economicConfidenceUnavailable || (
     edge.economicConfidence?.expectedValueLow !== null &&
     edge.economicConfidence?.expectedValueLow !== undefined &&
     edge.economicConfidence.expectedValueLow >= thresholds.minimumExpectedValue
   );
-  const economicConfidencePasses = economicConfidenceVerified && economicEdgePasses && economicEvPasses;
+  const economicConfidencePasses = economicConfidenceUnavailable
+    ? uncalibratedPasses
+    : economicConfidenceVerified && economicEdgePasses && economicEvPasses;
 
   if (!providerBacked) blockers.push("fixture is not provider-backed");
   if (fixtureSuspended) blockers.push("fixture is not open for pre-match publication");
@@ -284,7 +313,15 @@ function classifyAnalysis({
   if (!consensusDepthPasses) blockers.push(`best-price comparison needs at least ${thresholds.minimumConsensusBookmakers} independent bookmakers`);
   if (!consensusDisagreementPasses) blockers.push(`cross-book probability disagreement exceeds ${Math.round(thresholds.maximumConsensusProbabilitySpread * 100)}%`);
   if (!pricePasses) blockers.push("decimal odds are outside the publication range");
-  if (!economicConfidenceVerified) blockers.push("empirical 95% value floor is unavailable for this runtime");
+  if (economicConfidenceUnavailable && uncalibratedEdgeImplausible) {
+    blockers.push(
+      `raw edge ${Math.round(edge.edge * 100)}% exceeds the ${Math.round(thresholds.uncalibratedMaximumValueEdge * 100)}% plausibility ceiling for an uncalibrated runtime; treated as a model fault, not value`
+    );
+  } else if (economicConfidenceUnavailable && !uncalibratedPasses) {
+    blockers.push(
+      `uncalibrated publication needs at least ${Math.round(thresholds.uncalibratedMinimumValueEdge * 100)}% raw edge and ${Math.round(thresholds.uncalibratedMinimumExpectedValue * 100)}% raw EV until a calibration profile is promoted`
+    );
+  } else if (!economicConfidenceVerified) blockers.push("empirical 95% value floor is unavailable for this runtime");
   else {
     if (!economicEdgePasses) blockers.push(`empirical 95% lower-bound edge is below ${Math.round(thresholds.minimumValueEdge * 100)}%`);
     if (!economicEvPasses) blockers.push(`empirical 95% lower-bound EV is below ${Math.round(thresholds.minimumExpectedValue * 100)}%`);

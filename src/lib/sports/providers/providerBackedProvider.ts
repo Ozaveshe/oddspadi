@@ -1964,6 +1964,133 @@ class RequestSemaphore {
   }
 }
 
+/**
+ * Requests-per-minute budget per upstream host.
+ *
+ * The concurrency semaphore bounds how many requests are *in flight*, which is
+ * not the same as how many are issued *per minute*: 12 parallel requests
+ * against a ~200ms upstream sustain ~3,600/min. API-Sports plans cap at 450/min
+ * (`x-ratelimit-limit`), and everything over that comes back 429 — which used
+ * to collapse to `null` and silently empty the slate rather than surface a
+ * fault. Budgets sit under the true ceiling because scheduled sweeps and
+ * on-demand page traffic share one key.
+ *
+ * Hosts absent from this map are not paced. The Odds API is deliberately
+ * omitted: it meters monthly credits rather than a per-minute rate, so adding a
+ * bucket there would invent a bottleneck that the plan does not impose.
+ */
+const PROVIDER_REQUESTS_PER_MINUTE: Record<string, number> = {
+  "v3.football.api-sports.io": 360,
+  "v1.basketball.api-sports.io": 360,
+  "v1.tennis.api-sports.io": 360
+};
+
+const PROVIDER_RATE_LIMIT_MAX_COOLDOWN_MS = 20_000;
+
+function sleep(ms: number): Promise<void> {
+  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+}
+
+/**
+ * Token bucket that paces requests to one upstream host, plus a shared cooldown
+ * armed by any 429. The cooldown is what makes this correct under fan-out: a
+ * rate limit applies to the whole API key, so one rejected request has to stall
+ * every other caller for that host, not just retry itself.
+ */
+class HostRateLimiter {
+  private tokens: number;
+  private lastRefillMs: number;
+  private cooldownUntilMs = 0;
+  /** Serialises admission so concurrent waiters can't all wake and overdraw. */
+  private admissions: Promise<unknown> = Promise.resolve();
+
+  constructor(
+    private readonly perMinute: number,
+    private readonly nowMs: () => number = Date.now,
+    private readonly delay: (ms: number) => Promise<void> = sleep
+  ) {
+    this.tokens = perMinute;
+    this.lastRefillMs = nowMs();
+  }
+
+  /** Resolves once this host is allowed to issue one more request. */
+  acquire(): Promise<void> {
+    const admitted = this.admissions.then(() => this.reserve());
+    // Keep the chain alive: a rejection must not poison later admissions.
+    this.admissions = admitted.catch(() => undefined);
+    return admitted;
+  }
+
+  /** A 429 means the key is over budget — stall every caller for this host. */
+  penalise(retryAfterMs: number, attempt: number): void {
+    const backoffMs = retryAfterMs > 0 ? retryAfterMs : Math.min(2_000 * 2 ** (attempt - 1), PROVIDER_RATE_LIMIT_MAX_COOLDOWN_MS);
+    const cooldownMs = Math.min(backoffMs, PROVIDER_RATE_LIMIT_MAX_COOLDOWN_MS);
+    this.cooldownUntilMs = Math.max(this.cooldownUntilMs, this.nowMs() + cooldownMs);
+    this.tokens = 0;
+  }
+
+  private refill(nowMs: number): void {
+    const elapsedMs = nowMs - this.lastRefillMs;
+    if (elapsedMs <= 0) return;
+    this.lastRefillMs = nowMs;
+    this.tokens = Math.min(this.perMinute, this.tokens + (elapsedMs * this.perMinute) / 60_000);
+  }
+
+  private async reserve(): Promise<void> {
+    for (;;) {
+      const nowMs = this.nowMs();
+      this.refill(nowMs);
+      const cooldownWaitMs = this.cooldownUntilMs - nowMs;
+      if (cooldownWaitMs > 0) {
+        await this.delay(cooldownWaitMs);
+        continue;
+      }
+      if (this.tokens >= 1) {
+        this.tokens -= 1;
+        return;
+      }
+      await this.delay(Math.ceil(((1 - this.tokens) * 60_000) / this.perMinute));
+    }
+  }
+}
+
+/**
+ * One limiter per host, module-scoped so every provider instance in a runtime
+ * shares the budget. Note this paces a single process only — on serverless each
+ * instance keeps its own bucket — but the heavy fan-out lives in the scheduled
+ * sweeps, which run as one invocation, so that is where it bites.
+ */
+const hostRateLimiters = new Map<string, HostRateLimiter>();
+
+function hostRateLimiter(host: string, env: EnvMap): HostRateLimiter | null {
+  const configured = Number(env.SPORTS_PROVIDER_REQUESTS_PER_MINUTE);
+  const perMinute = Number.isFinite(configured) && configured > 0
+    ? Math.round(clampRange(configured, 30, 1_200))
+    : PROVIDER_REQUESTS_PER_MINUTE[host];
+  if (!perMinute) return null;
+  const key = `${host}:${perMinute}`;
+  let limiter = hostRateLimiters.get(key);
+  if (!limiter) {
+    limiter = new HostRateLimiter(perMinute);
+    hostRateLimiters.set(key, limiter);
+  }
+  return limiter;
+}
+
+/** Host of a fetch input, or "" when it isn't an absolute URL (never paced). */
+function hostOf(input: string | URL): string {
+  try {
+    return new URL(String(input)).host;
+  } catch {
+    return "";
+  }
+}
+
+function providerRateLimitRetries(env: EnvMap): number {
+  const configured = Number(env.SPORTS_PROVIDER_RATE_LIMIT_RETRIES);
+  return Number.isFinite(configured) && configured >= 0 ? Math.round(clampRange(configured, 0, 5)) : 2;
+}
+
 const PROVIDER_CACHE_MAX_ENTRIES = 500;
 
 /**
@@ -2046,25 +2173,61 @@ export function apiFootballOddsCoverageFailed(
   return pagination.pagesFailed > 0 || pagination.stoppedByQuota;
 }
 
-async function fetchJson(fetchImpl: FetchLike, url: URL, init?: RequestInit, timeoutMs = 4_000): Promise<unknown | null> {
+/**
+ * Result of one upstream request. A 429 is separated from ordinary failure so
+ * the caller can pace itself and retry instead of treating "ask again shortly"
+ * as "this data does not exist".
+ */
+type ProviderFetchOutcome =
+  | { kind: "ok"; data: unknown }
+  | { kind: "rate-limited"; retryAfterMs: number }
+  | { kind: "failed" };
+
+/**
+ * `Retry-After` is either a delay in seconds or an HTTP date. Returns null when
+ * the header is absent or unparseable, leaving the caller on its own backoff.
+ */
+function parseRetryAfterMs(header: string | null, nowMs: number): number | null {
+  if (!header) return null;
+  const trimmed = header.trim();
+  if (!trimmed) return null;
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds)) return Math.max(0, Math.round(seconds * 1_000));
+  const at = Date.parse(trimmed);
+  return Number.isFinite(at) ? Math.max(0, at - nowMs) : null;
+}
+
+async function fetchJsonOutcome(
+  fetchImpl: FetchLike,
+  url: URL,
+  init?: RequestInit,
+  timeoutMs = 4_000
+): Promise<ProviderFetchOutcome> {
   const controller = new AbortController();
   const parentSignal = init?.signal;
   const abortFromParent = () => controller.abort();
-  if (parentSignal?.aborted) return null;
+  if (parentSignal?.aborted) return { kind: "failed" };
   parentSignal?.addEventListener("abort", abortFromParent, { once: true });
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetchImpl(url, { ...init, signal: controller.signal });
+    if (response.status === 429) {
+      // Deliberately not warned here — the caller logs once it stops retrying,
+      // so a burst that recovers on its own doesn't flood the issue ledger.
+      const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"), Date.now());
+      return { kind: "rate-limited", retryAfterMs: retryAfterMs ?? 0 };
+    }
     if (!response.ok) {
       warnProviderIssue(url, `HTTP ${response.status} ${response.statusText}`.trim(), response);
-      return null;
+      return { kind: "failed" };
     }
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {
       warnProviderIssue(url, `non-JSON response (${contentType || "no content-type"})`, response);
-      return null;
+      return { kind: "failed" };
     }
-    return response.json().catch(() => null);
+    const data = await response.json().catch(() => null);
+    return { kind: "ok", data };
   } catch (error) {
     if (controller.signal.aborted && parentSignal?.aborted) {
       // Parent request was cancelled — not a provider fault, stay quiet.
@@ -2073,7 +2236,7 @@ async function fetchJson(fetchImpl: FetchLike, url: URL, init?: RequestInit, tim
     } else {
       warnProviderIssue(url, error instanceof Error ? error.message : "network error");
     }
-    return null;
+    return { kind: "failed" };
   } finally {
     clearTimeout(timeout);
     parentSignal?.removeEventListener("abort", abortFromParent);
@@ -2327,7 +2490,33 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private limitedFetch(url: URL, init?: RequestInit): Promise<unknown | null> {
     if (!this.requestLimiter) this.requestLimiter = new RequestSemaphore(providerMaxConcurrency(this.env));
     const timeoutMs = providerRequestTimeoutMs(this.env);
-    return this.requestLimiter.run(() => fetchJson(this.fetchImpl, url, init, timeoutMs));
+    return this.requestLimiter.run(() => this.pacedFetch(url, init, timeoutMs));
+  }
+
+  /**
+   * Paces the request against the host's per-minute budget, then retries a 429
+   * after backing off. Without this a rate-limited burst reads as "no fixtures"
+   * and publishes an empty slate.
+   */
+  private async pacedFetch(url: URL, init: RequestInit | undefined, timeoutMs: number): Promise<unknown | null> {
+    const limiter = hostRateLimiter(url.host, this.env);
+    const maxAttempts = providerRateLimitRetries(this.env) + 1;
+    for (let attempt = 1; ; attempt += 1) {
+      if (init?.signal?.aborted) return null;
+      if (limiter) await limiter.acquire();
+      const outcome = await fetchJsonOutcome(this.fetchImpl, url, init, timeoutMs);
+      if (outcome.kind === "ok") return outcome.data;
+      if (outcome.kind === "failed") return null;
+      if (attempt >= maxAttempts) {
+        warnProviderIssue(url, `HTTP 429 Too Many Requests (gave up after ${attempt} attempts)`);
+        return null;
+      }
+      if (limiter) limiter.penalise(outcome.retryAfterMs, attempt);
+      else {
+        const backoffMs = outcome.retryAfterMs > 0 ? outcome.retryAfterMs : 2_000 * 2 ** (attempt - 1);
+        await sleep(Math.min(backoffMs, PROVIDER_RATE_LIMIT_MAX_COOLDOWN_MS));
+      }
+    }
   }
 
   /**
@@ -2338,6 +2527,11 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private limitedResponseFetch(input: string | URL, init?: RequestInit): Promise<Response> {
     if (!this.requestLimiter) this.requestLimiter = new RequestSemaphore(providerMaxConcurrency(this.env));
     const timeoutMs = providerRequestTimeoutMs(this.env);
+    // This path serves the paginated API-Football odds reads, so it draws on the
+    // same per-minute budget as `pacedFetch`. Retry stays with the adapter — it
+    // owns the quota headers — but a 429 here still has to slow every other
+    // caller for the host, since the limit belongs to the key, not the request.
+    const limiter = hostRateLimiter(hostOf(input), this.env);
     return this.requestLimiter.run(async () => {
       const controller = new AbortController();
       const parentSignal = init?.signal;
@@ -2346,7 +2540,12 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       parentSignal?.addEventListener("abort", abortFromParent, { once: true });
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        return await this.fetchImpl(input, { ...init, signal: controller.signal });
+        if (limiter) await limiter.acquire();
+        const response = await this.fetchImpl(input, { ...init, signal: controller.signal });
+        if (response.status === 429 && limiter) {
+          limiter.penalise(parseRetryAfterMs(response.headers.get("retry-after"), Date.now()) ?? 0, 1);
+        }
+        return response;
       } finally {
         clearTimeout(timeout);
         parentSignal?.removeEventListener("abort", abortFromParent);
