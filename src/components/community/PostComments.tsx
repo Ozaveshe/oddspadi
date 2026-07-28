@@ -51,28 +51,43 @@ export function PostComments({ postId, userId, onCountChange }: { postId: string
     if (!body || busy) return;
     setBusy(true);
     setError(null);
-    const response = await fetch("/api/community/comments", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ postId, body })
-    });
-    const result = (await response.json().catch(() => ({}))) as { comment?: FeedComment; error?: string };
-    if (response.ok && result.comment) {
-      setComments((rows) => [...(rows ?? []), result.comment as FeedComment]);
-      setDraft("");
-      onCountChange(1);
-      trackEvent("community_comment_posted", { post_id: postId });
-    } else {
-      setError(result.error ?? "The comment could not be posted.");
+    // A throwing fetch used to skip the `setBusy(false)` below, leaving the
+    // composer permanently disabled after a single dropped request.
+    try {
+      const response = await fetch("/api/community/comments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ postId, body })
+      });
+      const result = (await response.json().catch(() => ({}))) as { comment?: FeedComment; error?: string };
+      if (response.ok && result.comment) {
+        setComments((rows) => [...(rows ?? []), result.comment as FeedComment]);
+        setDraft("");
+        onCountChange(1);
+        trackEvent("community_comment_posted", { post_id: postId });
+      } else {
+        setError(result.error ?? "The comment could not be posted.");
+      }
+    } catch {
+      setError("The comment could not be posted. Check your connection and try again.");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function remove(commentId: string) {
-    const response = await fetch(`/api/community/comments?commentId=${encodeURIComponent(commentId)}`, { method: "DELETE" });
-    if (response.ok) {
+    try {
+      const response = await fetch(`/api/community/comments?commentId=${encodeURIComponent(commentId)}`, { method: "DELETE" });
+      if (!response.ok) {
+        setError("That comment could not be deleted.");
+        return;
+      }
       setComments((rows) => (rows ?? []).filter((row) => row.id !== commentId));
       onCountChange(-1);
+    } catch {
+      // Previously a failed delete was entirely silent: the comment stayed on
+      // screen with no indication that anything had gone wrong.
+      setError("That comment could not be deleted. Check your connection and try again.");
     }
   }
 
