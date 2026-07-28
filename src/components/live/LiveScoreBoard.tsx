@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LiveBoardFixture, LiveFixturePhase, LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import { LIVE_BOARD_INITIAL_FIXTURES } from "@/lib/sports/liveBoardPresentation";
+import { LocalTimeText } from "@/components/odds/LocalTime";
 import { useLiveBoard } from "./useLiveBoard";
 import { useFollowedTeams } from "@/components/account/FollowedTeamsProvider";
 
@@ -37,9 +38,6 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: "finished", label: "Finished" }
 ];
 
-function kickoffTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
 
 function StatusCell({ fixture }: { fixture: LiveBoardFixture }) {
   if (fixture.phase === "live") {
@@ -52,7 +50,7 @@ function StatusCell({ fixture }: { fixture: LiveBoardFixture }) {
   if (fixture.phase === "upcoming") {
     return (
       <span className="score-status">
-        <span suppressHydrationWarning>{kickoffTime(fixture.kickoff)}</span>
+        <LocalTimeText iso={fixture.kickoff} />
       </span>
     );
   }
@@ -216,12 +214,22 @@ function shiftIso(iso: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+// Pinned locale + zone: this label is produced during render on both the server
+// and the client, so a floating locale ("Sat, 26 Jul" vs "Sat 26 Jul") or a
+// floating zone would desync hydration.
+const DAY_LABEL_FORMAT = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC"
+});
+
 function dayLabel(iso: string): string {
   const today = todayIso();
   if (iso === today) return "Today";
   if (iso === shiftIso(today, -1)) return "Yesterday";
   if (iso === shiftIso(today, 1)) return "Tomorrow";
-  return new Date(`${iso}T12:00:00Z`).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+  return DAY_LABEL_FORMAT.format(new Date(`${iso}T12:00:00Z`));
 }
 
 const DATE_WINDOW_BACK = 6;
@@ -410,7 +418,7 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
           <span className="badge finished">{dayLabel(activeDate)} · fixtures &amp; results</span>
         )}
         <span suppressHydrationWarning aria-live="polite">
-          {updatedAt ? `Updated ${new Date(updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "Updating…"}
+          {updatedAt ? <>Updated <LocalTimeText iso={new Date(updatedAt).toISOString()} variant="seconds" /></> : "Updating…"}
           {isToday ? " · auto-refreshes every 45s" : ""}
         </span>
         <button className="button small-btn" type="button" onClick={() => void refresh()} disabled={refreshing}>

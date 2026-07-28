@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { PerformanceRow } from "@/lib/sports/performance/analytics";
 import { getEnginePerformanceReport } from "@/lib/sports/performance/report";
+import { LocalTime, LocalTimeText } from "@/components/odds/LocalTime";
 
 export const revalidate = 300;
 
@@ -81,7 +82,7 @@ export default async function EnginePerformancePage() {
           <span>Current read</span>
           <strong>{report.verdict.label}</strong>
           <p>{report.verdict.detail}</p>
-          <small>Generated {new Date(report.generatedAt).toLocaleString()}</small>
+          <small>Generated <LocalTimeText iso={report.generatedAt} variant="datetime" /></small>
         </aside>
       </header>
 
@@ -90,7 +91,7 @@ export default async function EnginePerformancePage() {
       <section className="section" aria-labelledby="engine-health-heading">
         <div className="section-title"><div><span className="section-kicker">01 / Engine Health</span><h2 id="engine-health-heading">Is the daily system operating?</h2></div><span className={`badge ${report.engineHealth.providerHealth === "completed" ? "positive" : "scheduled"}`}>{report.engineHealth.providerHealth}</span></div>
         <div className="performance-health-strip">
-          <div><span>Latest provider attempt</span><strong>{report.engineHealth.latestRunTime ? new Date(report.engineHealth.latestRunTime).toLocaleString() : "No recorded attempt"}</strong></div>
+          <div><span>Latest provider attempt</span><strong>{report.engineHealth.latestRunTime ? <LocalTime iso={report.engineHealth.latestRunTime} variant="datetime" /> : "No recorded attempt"}</strong></div>
           <div><span>Fixtures analysed</span><strong>{report.engineHealth.fixturesAnalysed}</strong></div>
           <div><span>Decisions generated</span><strong>{report.engineHealth.decisionsGenerated}</strong></div>
           <div><span>Public picks today</span><strong>{report.engineHealth.publicPicksPublished}</strong></div>

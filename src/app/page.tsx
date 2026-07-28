@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MatchdayFixtureCard } from "@/components/live/MatchdayFallback";
 import { LiveTicker } from "@/components/live/LiveTicker";
+import { LocalTime } from "@/components/odds/LocalTime";
 import { SlateFixtureCard } from "@/components/odds/IntelligenceSlate";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 import { deriveHomepageMatchdayState, getWeeklyEmptyState } from "@/lib/sports/homepageState";
@@ -34,12 +35,16 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
     })
   ]);
 }
+// Calendar-day label, not an instant: pin the zone so the weekday cannot slide
+// a day on a non-UTC host, and the locale so it reads the same everywhere.
+const WEEKDAY_FORMAT = new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "UTC" });
+
 function weekdayLabel(date: string, firstDate: string): string {
   if (date === firstDate) return "Today";
   const tomorrow = new Date(`${firstDate}T00:00:00.000Z`);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
   if (date === tomorrow.toISOString().slice(0, 10)) return "Tomorrow";
-  return new Date(`${date}T12:00:00.000Z`).toLocaleDateString([], { weekday: "short" });
+  return WEEKDAY_FORMAT.format(new Date(`${date}T12:00:00.000Z`));
 }
 
 export default async function HomePage() {
@@ -104,7 +109,7 @@ export default async function HomePage() {
         <div><span>Prediction fixtures</span><strong>{matchday.fixtureCount}</strong></div>
         <div><span>Tips published</span><strong>{matchday.valuePickCount}</strong></div>
         <div><span>Watchlist</span><strong>{matchday.watchlistCount}</strong></div>
-        <div><span>Last engine run</span><strong>{lastRun ? new Date(lastRun).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Waiting"}</strong></div>
+        <div><span>Last engine run</span><strong>{lastRun ? <LocalTime iso={lastRun} /> : "Waiting"}</strong></div>
         <div><span>Provider health</span><strong className={`engine-health status-${matchday.providerState}`}>{matchday.providerLabel}</strong><Link className="engine-audit-link" href="/engine/performance">Audit evidence →</Link></div>
       </section>
 

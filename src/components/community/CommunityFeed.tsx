@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { ComposerMatch } from "./FeedComposer";
 import { PostComments } from "./PostComments";
+import { RelativeTime } from "./RelativeTime";
 import { trackEvent } from "@/lib/analytics/events";
 
 export type CommunityPost = {
@@ -14,7 +15,6 @@ export type CommunityPost = {
 };
 
 function author(post: CommunityPost) { return Array.isArray(post.author) ? post.author[0] : post.author; }
-function ago(iso: string) { const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000); return mins < 1 ? "just now" : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : new Date(iso).toLocaleDateString([], { day: "numeric", month: "short" }); }
 
 function commentCount(post: CommunityPost) { return post.comments?.[0]?.count ?? 0; }
 
@@ -59,7 +59,7 @@ export function CommunityFeed({ initialPosts, initialCursor, userId, matches }: 
   return <div className="feed-list">
     {posts.map((post) => { const profile = author(post); const handle = profile?.username ?? "padi"; const liked = Boolean(post.likes?.some((like) => like.user_id === userId)); const threadOpen = openThread === post.id; const comments = commentCount(post) + (countAdjust[post.id] ?? 0); return (
       <article className="panel feed-post" key={post.id}>
-        <div className="feed-post-head"><Link href={`/community/u/${encodeURIComponent(handle)}`}><strong>@{handle}</strong></Link>{profile?.display_name ? <span className="muted small">{profile.display_name}</span> : null}<span className="muted small" suppressHydrationWarning style={{ marginLeft: "auto" }}>{ago(post.created_at)}</span></div>
+        <div className="feed-post-head"><Link href={`/community/u/${encodeURIComponent(handle)}`}><strong>@{handle}</strong></Link>{profile?.display_name ? <span className="muted small">{profile.display_name}</span> : null}<span className="muted small" style={{ marginLeft: "auto" }}><RelativeTime iso={post.created_at} /></span></div>
         <p style={{ margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{post.body}</p>
         {post.match_id ? <Link className="community-match-chip" href={`/predictions/${encodeURIComponent(post.match_id)}`}>⚽ {labels.get(post.match_id) ?? "Match discussion"}</Link> : null}
         <div className="feed-actions">

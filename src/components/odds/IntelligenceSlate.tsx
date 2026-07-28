@@ -62,7 +62,7 @@ export function ProviderRunStrip({ slate }: { slate: SportsSlate }) {
         <div><dt>Value picks</dt><dd>{value(slate.summary.valuePicksPublished)}</dd></div>
         <div><dt>Leans</dt><dd>{value(slate.summary.leansPublished)}</dd></div>
         <div><dt>Watchlist</dt><dd>{value(slate.summary.watchlist)}</dd></div>
-        <div><dt>Last run</dt><dd>{lastRun?.finishedAt ? new Date(lastRun.finishedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : readable ? "Not completed" : "Not read"}</dd></div>
+        <div><dt>Last run</dt><dd>{lastRun?.finishedAt ? <LocalTime iso={lastRun.finishedAt} /> : readable ? "Not completed" : "Not read"}</dd></div>
       </dl>
       {slate.provider.errors.length ? <details><summary>{slate.provider.errors.length} provider or pipeline issue{slate.provider.errors.length === 1 ? "" : "s"}</summary><ul>{slate.provider.errors.map((error) => <li key={error}>{error}</li>)}</ul></details> : null}
     </section>
@@ -110,7 +110,7 @@ export function SlateFixtureCard({ row, compact = false, asOf }: { row: SlateFix
           <div className="decision-freshness">
             <span className={`badge ${presentation.freshness === "fresh" ? "positive" : presentation.freshness === "stale" ? "no-value" : "scheduled"}`}>{presentation.freshnessLabel}</span>
             <span>Model {presentation.modelVersion ?? "version recorded"}</span>
-            <span>Generated <time dateTime={decisionSummary.generatedAt}>{new Date(decisionSummary.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></span>
+            <span>Generated <LocalTime iso={decisionSummary.generatedAt} /></span>
           </div>
         </>
       ) : <p className="muted small">{noPickExplanation(row)}</p>}
@@ -264,12 +264,16 @@ export function DailyTipsSections({ product, fallbackBoard = null }: { product: 
   );
 }
 
+// Date-only label: pin locale and zone so the server pass and the hydrated
+// pass cannot disagree about the weekday name.
+const WEEKLY_WEEKDAY_FORMAT = new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone: "UTC" });
+
 function weeklyDayLabel(date: string, firstDate: string): string {
   if (date === firstDate) return "Today";
   const tomorrow = new Date(`${firstDate}T00:00:00.000Z`);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
   if (date === tomorrow.toISOString().slice(0, 10)) return "Tomorrow";
-  return new Date(`${date}T12:00:00.000Z`).toLocaleDateString([], { weekday: "long" });
+  return WEEKLY_WEEKDAY_FORMAT.format(new Date(`${date}T12:00:00.000Z`));
 }
 
 const WEEKLY_DECISION_PRIORITY: Record<SlatePublicStatus, number> = {
@@ -367,7 +371,7 @@ export function WeeklySlateSections({ product }: { product: WeeklyTipsProduct })
           <section className="section weekly-day" key={group.date}>
             <div className="weekly-date">
               <span className="section-kicker">{weeklyDayLabel(group.date, product.slate.range.from)}</span>
-              <time dateTime={group.date}>{new Date(`${group.date}T12:00:00Z`).toLocaleDateString([], { month: "short", day: "numeric" })}</time>
+              <LocalTime iso={`${group.date}T12:00:00Z`} variant="daymonth" />
               <span>{group.fixtures.length} fixture{group.fixtures.length === 1 ? "" : "s"}</span>
               <div className="weekly-status-counts">
                 <span>{reviewedCount} reviewed</span><span>{waitingForEvidenceCount} waiting</span><span>{group.counts.valuePick} value</span><span>{group.counts.watchlist + group.counts.stale} watchlist</span>
@@ -428,7 +432,7 @@ export function HomepageIntelligencePanels({ daily, weekly, yesterday }: { daily
       <article className="panel homepage-product-card engine-card">
         <div className="panel-header"><div><span className="section-kicker">Engine Status</span><h2>{daily?.slate.provider.status ?? "Unavailable"}</h2></div><span className={`badge ${daily?.slate.provider.status === "completed" ? "positive" : "scheduled"}`}>{daily?.slate.provider.status ?? "offline"}</span></div>
         <div className="engine-rail" aria-hidden="true"><span style={{ width: `${daily?.summary.fixturesFound ? Math.min(100, (daily.summary.fixturesAnalysed / daily.summary.fixturesFound) * 100) : 0}%` }} /></div>
-        <div className="intelligence-home-metrics"><div><span>Odds snapshots</span><strong>{daily?.summary.oddsSnapshotsUsed ?? 0}</strong></div><div><span>Last run</span><strong>{daily?.slate.provider.lastRun?.finishedAt ? new Date(daily.slate.provider.lastRun.finishedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Waiting"}</strong></div><div><span>Provider</span><strong>{daily?.slate.provider.providers.join(", ") || "No provider response"}</strong></div></div>
+        <div className="intelligence-home-metrics"><div><span>Odds snapshots</span><strong>{daily?.summary.oddsSnapshotsUsed ?? 0}</strong></div><div><span>Last run</span><strong>{daily?.slate.provider.lastRun?.finishedAt ? <LocalTime iso={daily.slate.provider.lastRun.finishedAt} /> : "Waiting"}</strong></div><div><span>Provider</span><strong>{daily?.slate.provider.providers.join(", ") || "No provider response"}</strong></div></div>
       </article>
     </section>
   );

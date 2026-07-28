@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
+import { LocalTimeText } from "@/components/odds/LocalTime";
 import {
   featuredFootballLeagueTables,
   currentFootballSeason,
@@ -170,7 +171,7 @@ export default async function LeagueTablePage({ params }: Props) {
           <p className="muted small standings-source">
             {historicalFallback ? "Latest verified final table. " : ""}
             Source: {table.source === "api-football-standings" ? "API-Football" : "latest stored OddsPadi snapshot"}. Updated{" "}
-            {new Date(table.updatedAt).toLocaleString("en", { dateStyle: "medium", timeStyle: "short" })}.
+            <LocalTimeText iso={table.updatedAt} variant="datetime" />.
           </p>
         </>
       ) : (

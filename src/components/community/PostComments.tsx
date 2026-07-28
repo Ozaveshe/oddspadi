@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { trackEvent } from "@/lib/analytics/events";
+import { RelativeTime } from "./RelativeTime";
 
 export type FeedComment = {
   id: string;
@@ -15,11 +16,6 @@ export type FeedComment = {
 
 function author(comment: FeedComment) {
   return Array.isArray(comment.author) ? comment.author[0] : comment.author;
-}
-
-function ago(iso: string) {
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  return mins < 1 ? "just now" : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : new Date(iso).toLocaleDateString([], { day: "numeric", month: "short" });
 }
 
 export function PostComments({ postId, userId, onCountChange }: { postId: string; userId: string | null; onCountChange: (delta: number) => void }) {
@@ -90,7 +86,7 @@ export function PostComments({ postId, userId, onCountChange }: { postId: string
             <div className="feed-comment" key={comment.id}>
               <div className="feed-comment-head">
                 <Link href={`/community/u/${encodeURIComponent(handle)}`}><strong>@{handle}</strong></Link>
-                <span className="muted small">{ago(comment.created_at)}</span>
+                <span className="muted small"><RelativeTime iso={comment.created_at} /></span>
                 {userId === comment.author_id ? (
                   <button type="button" className="feed-comment-delete" onClick={() => void remove(comment.id)} aria-label="Delete comment">×</button>
                 ) : null}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
+import { LocalTime } from "@/components/odds/LocalTime";
 import { ProviderRunStrip, SlateFixtureCard } from "@/components/odds/IntelligenceSlate";
 import { getHistoricalEngineEvidence } from "@/lib/sports/performance/report";
 import { getDailyTipsProduct } from "@/lib/sports/tips/product";
@@ -74,7 +75,7 @@ export default async function DecisionEnginePage() {
       <ProviderRunStrip slate={slate} />
 
       <section className="section engine-run-summary" aria-label="Latest engine run summary">
-        <div className="section-title"><div><span className="section-kicker">Latest engine run</span><h2>{runStatusLabel}</h2></div><span className={`badge ${lastRun?.status === "completed" ? "positive" : "scheduled"}`}>{lastRun?.finishedAt ? new Date(lastRun.finishedAt).toLocaleString() : providerReadable ? "Awaiting completion" : "No stored run"}</span></div>
+        <div className="section-title"><div><span className="section-kicker">Latest engine run</span><h2>{runStatusLabel}</h2></div><span className={`badge ${lastRun?.status === "completed" ? "positive" : "scheduled"}`}>{lastRun?.finishedAt ? <LocalTime iso={lastRun.finishedAt} variant="datetime" /> : providerReadable ? "Awaiting completion" : "No stored run"}</span></div>
         <div className="metrics-grid engine-run-metrics">
           <div className="metric"><span className="metric-label">Fixtures analysed</span><span className="metric-value">{currentValue(product.summary.fixturesAnalysed)}</span></div>
           <div className="metric"><span className="metric-label">Value picks</span><span className="metric-value">{currentValue(product.summary.valuePicks)}</span></div>

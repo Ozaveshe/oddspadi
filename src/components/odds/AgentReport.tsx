@@ -1,11 +1,6 @@
 import type { DecisionAiAgentResult, DecisionBoundaryMetric, DecisionEngineReport, FootballModelDiagnostics, PredictionAgentReport } from "@/lib/sports/types";
 import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/prediction/format";
-
-function formatTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
+import { LocalTime, LocalTimeText } from "@/components/odds/LocalTime";
 
 function formatBoundaryMetricNumber(metric: DecisionBoundaryMetric | undefined, value: number | null, role: "value" | "margin" = "value"): string {
   if (value === null || !Number.isFinite(value)) return "N/A";
@@ -136,7 +131,7 @@ export function DecisionEnginePanel({ decision }: { decision: DecisionEngineRepo
         </div>
         <div className="metric">
           <span className="metric-label">Next review</span>
-          <span className="metric-value">{formatTime(decision.notebook.nextReviewAt)}</span>
+          <span className="metric-value"><LocalTime iso={decision.notebook.nextReviewAt} fallback="Unknown" /></span>
         </div>
       </div>
       <p className="small muted">{decision.notebook.summary}</p>
@@ -823,7 +818,7 @@ export function DecisionEnginePanel({ decision }: { decision: DecisionEngineRepo
         </div>
         <div className="metric">
           <span className="metric-label">Next review</span>
-          <span className="metric-value">{formatTime(decision.monitoringPlan.nextReviewAt)}</span>
+          <span className="metric-value"><LocalTime iso={decision.monitoringPlan.nextReviewAt} fallback="Unknown" /></span>
         </div>
       </div>
       <p className="small muted">{decision.monitoringPlan.summary}</p>
@@ -831,7 +826,7 @@ export function DecisionEnginePanel({ decision }: { decision: DecisionEngineRepo
         {decision.monitoringPlan.tasks.slice(0, 4).map((task) => (
           <div className="metric" key={task.id}>
             <span className="metric-label">
-              {task.priority} priority - {task.source.toString().replaceAll("-", " ")} - due {formatTime(task.dueAt)}
+              {task.priority} priority - {task.source.toString().replaceAll("-", " ")} - due <LocalTimeText iso={task.dueAt} fallback="Unknown" />
             </span>
             <span className="metric-value">{task.label}</span>
             <p className="small muted">{task.trigger}</p>

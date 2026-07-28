@@ -6,11 +6,20 @@ const WIDTH = 720;
 const HEIGHT = 250;
 const PAD = { top: 18, right: 26, bottom: 38, left: 48 };
 
+// SVG <text> cannot host the LocalTime client component, so chart axes are
+// pinned to UTC and labelled as such rather than silently inheriting whatever
+// zone the render host happens to run in.
+const AXIS_TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "UTC"
+});
+
 function timeLabel(value: string): string {
   const date = new Date(value);
-  return Number.isFinite(date.getTime())
-    ? date.toLocaleString("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
-    : "Unknown time";
+  return Number.isFinite(date.getTime()) ? `${AXIS_TIME_FORMAT.format(date)} UTC` : "Unknown time";
 }
 
 function movementLabel(value: number): string {
