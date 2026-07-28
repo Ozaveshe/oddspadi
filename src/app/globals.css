@@ -393,22 +393,12 @@ p {
   color: var(--text);
 }
 
+/* The pill already says "you are here". The glowing dot that used to sit under
+   it was a second indicator for the same state, and because it hung below the
+   pill's rounded edge it read as a stray artifact rather than a marker. */
 .nav-links a[aria-current="page"] {
   background: var(--green-soft);
   color: var(--green-strong);
-}
-
-.nav-links a[aria-current="page"]::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -1px;
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--green);
-  transform: translateX(-50%);
-  box-shadow: 0 0 8px var(--green);
 }
 
 .nav-live-dot {

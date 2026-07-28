@@ -246,6 +246,7 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
   const [visibleCount, setVisibleCount] = useState(LIVE_BOARD_INITIAL_FIXTURES);
   const [completeBoardFailed, setCompleteBoardFailed] = useState(false);
   const loadingCompleteBoardRef = useRef(false);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
   const activeDate = date ?? board?.date ?? todayIso();
   const isToday = activeDate === todayIso();
@@ -302,6 +303,25 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
   const groups = useMemo(() => groupByLeague(visibleFixtures), [visibleFixtures]);
   const visibleResultCount = boardIsPartial && !requiresCompleteBoard ? totalFixtureCount : filtered.length;
   const remainingFixtures = Math.max(0, visibleResultCount - visibleFixtures.length);
+
+  // Reveal the next page as the sentinel nears the viewport. The button stays
+  // below as a keyboard-reachable fallback and for browsers without
+  // IntersectionObserver, so this never becomes the only way to page.
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || remainingFixtures <= 0 || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setVisibleCount((count) => count + FIXTURE_PAGE_SIZE);
+        void ensureCompleteBoard();
+      },
+      // Start fetching before the user actually hits the bottom.
+      { rootMargin: "600px 0px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [ensureCompleteBoard, remainingFixtures]);
 
   if (!board) return <BoardSkeleton />;
 
@@ -471,20 +491,23 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
             </section>
           ))}
           {remainingFixtures > 0 ? (
-            <div className="live-results-footer" role="status">
-              <span>Showing {visibleFixtures.length} of {visibleResultCount} matches</span>
-              <button
-                className="button small-btn"
-                type="button"
-                onClick={() => {
-                  setVisibleCount((count) => count + FIXTURE_PAGE_SIZE);
-                  void ensureCompleteBoard();
-                }}
-                disabled={refreshing}
-              >
-                {refreshing && boardIsPartial ? "Loading matches…" : `Show next ${Math.min(FIXTURE_PAGE_SIZE, remainingFixtures)}`}
-              </button>
-            </div>
+            <>
+              <div aria-hidden="true" ref={loadMoreSentinelRef} />
+              <div className="live-results-footer" role="status">
+                <span>Showing {visibleFixtures.length} of {visibleResultCount} matches</span>
+                <button
+                  className="button small-btn"
+                  type="button"
+                  onClick={() => {
+                    setVisibleCount((count) => count + FIXTURE_PAGE_SIZE);
+                    void ensureCompleteBoard();
+                  }}
+                  disabled={refreshing}
+                >
+                  {refreshing && boardIsPartial ? "Loading matches…" : `Show next ${Math.min(FIXTURE_PAGE_SIZE, remainingFixtures)}`}
+                </button>
+              </div>
+            </>
           ) : null}
         </div>
       ) : (
