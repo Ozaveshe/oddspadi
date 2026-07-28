@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { privateJson } from "@/lib/security/privateJson";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
@@ -10,12 +11,12 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return Response.json({ error: "Community is not enabled yet." }, { status: 503 });
+  if (!supabase) return privateJson({ error: "Community is not enabled yet." }, { status: 503 });
 
   const {
     data: { user }
   } = await supabase.auth.getUser();
-  if (!user) return Response.json({ error: "Sign in to start a thread." }, { status: 401 });
+  if (!user) return privateJson({ error: "Sign in to start a thread." }, { status: 401 });
   const rateLimit = await enforceUserRateLimit(supabase, "forum_thread"); if (rateLimit) return rateLimit;
 
   const parsed = await readBoundedJson<{ categoryId?: unknown; title?: unknown; body?: unknown }>(request, 24_576);
@@ -24,9 +25,9 @@ export async function POST(request: Request) {
   const categoryId = typeof payload.categoryId === "string" ? payload.categoryId : "";
   const title = typeof payload.title === "string" ? payload.title.trim() : "";
   const body = typeof payload.body === "string" ? payload.body.trim() : "";
-  if (!isUuid(categoryId)) return Response.json({ error: "Missing category." }, { status: 400 });
-  if (title.length < 3 || title.length > 160) return Response.json({ error: "Title must be 3–160 characters." }, { status: 400 });
-  if (body.length < 1 || body.length > 8000) return Response.json({ error: "Post must be 1–8000 characters." }, { status: 400 });
+  if (!isUuid(categoryId)) return privateJson({ error: "Missing category." }, { status: 400 });
+  if (title.length < 3 || title.length > 160) return privateJson({ error: "Title must be 3–160 characters." }, { status: 400 });
+  if (body.length < 1 || body.length > 8000) return privateJson({ error: "Post must be 1–8000 characters." }, { status: 400 });
 
   const { data, error } = await supabase
     .from("op_forum_threads")
@@ -35,5 +36,5 @@ export async function POST(request: Request) {
     .single();
 
   if (error) return databaseUnavailable("forum thread create", error, "Could not start that thread right now.");
-  return Response.json({ id: data.id }, { status: 201 });
+  return privateJson({ id: data.id }, { status: 201 });
 }

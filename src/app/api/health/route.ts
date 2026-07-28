@@ -1,3 +1,4 @@
+import { withApiHandler } from "@/app/api/sports/_utils";
 import { isConfiguredSecretValue } from "@/lib/env";
 import { isCronAuthorized } from "@/lib/sports/intelligence/auth";
 import { getSupabaseRuntimeStatus } from "@/lib/supabase/server";
@@ -16,7 +17,9 @@ function anyConfigured(...keys: string[]): boolean {
  * additionally returns a per-provider configuration breakdown — the
  * quick config check that the archived ops console used to provide.
  */
-export function GET(request: Request) {
+// Wrapped so a throw from the Supabase runtime probe returns a structured 500
+// rather than an unhandled crash — this is the endpoint uptime monitors poll.
+export const GET = withApiHandler((request: Request) => {
   const supabaseRuntime = getSupabaseRuntimeStatus();
   const providers = {
     apiFootball: anyConfigured("API_FOOTBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"),
@@ -59,4 +62,4 @@ export function GET(request: Request) {
     },
     { headers: { "Cache-Control": "no-store" } }
   );
-}
+});

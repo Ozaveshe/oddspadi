@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
+import { privateJson } from "@/lib/security/privateJson";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable, reportDatabaseError } from "@/lib/security/databaseError";
 import { isUuid } from "@/lib/security/inputValidation";
@@ -13,9 +14,9 @@ const COMMENT_SELECT = "id, post_id, author_id, body, created_at, author:op_prof
 
 export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return Response.json({ comments: [] });
+  if (!supabase) return privateJson({ comments: [] });
   const postId = new URL(request.url).searchParams.get("postId") ?? "";
-  if (!isUuid(postId)) return Response.json({ error: "Missing post." }, { status: 400 });
+  if (!isUuid(postId)) return privateJson({ error: "Missing post." }, { status: 400 });
   const { data, error } = await supabase
     .from("op_feed_comments")
     .select(COMMENT_SELECT)
@@ -24,17 +25,17 @@ export async function GET(request: Request) {
     .limit(100);
   if (error) {
     reportDatabaseError("community comments read", error);
-    return Response.json({ comments: [], note: "Comments are temporarily unavailable." });
+    return privateJson({ comments: [], note: "Comments are temporarily unavailable." });
   }
-  return Response.json({ comments: data ?? [] });
+  return privateJson({ comments: data ?? [] });
 }
 
 export async function POST(request: Request) {
   const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return Response.json({ error: "Community is not enabled yet." }, { status: 503 });
+  if (!supabase) return privateJson({ error: "Community is not enabled yet." }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return Response.json({ error: "Sign in to comment." }, { status: 401 });
+  if (!user) return privateJson({ error: "Sign in to comment." }, { status: 401 });
   const rateLimit = await enforceUserRateLimit(supabase, "community_comment"); if (rateLimit) return rateLimit;
 
   const parsed = await readBoundedJson<{ postId?: unknown; body?: unknown }>(request, 8_192);
@@ -42,8 +43,8 @@ export async function POST(request: Request) {
   const payload = parsed.value;
   const postId = typeof payload.postId === "string" ? payload.postId : "";
   const body = typeof payload.body === "string" ? payload.body.trim() : "";
-  if (!isUuid(postId)) return Response.json({ error: "Missing post." }, { status: 400 });
-  if (!body || body.length > 1000) return Response.json({ error: "A comment must be between 1 and 1000 characters." }, { status: 400 });
+  if (!isUuid(postId)) return privateJson({ error: "Missing post." }, { status: 400 });
+  if (!body || body.length > 1000) return privateJson({ error: "A comment must be between 1 and 1000 characters." }, { status: 400 });
 
   // RLS enforces author_id = auth.uid() on insert.
   const { data, error } = await supabase
@@ -52,20 +53,20 @@ export async function POST(request: Request) {
     .select(COMMENT_SELECT)
     .single();
   if (error) return databaseUnavailable("community comment create", error, "Could not publish that comment right now.");
-  return Response.json({ comment: data }, { status: 201 });
+  return privateJson({ comment: data }, { status: 201 });
 }
 
 export async function DELETE(request: Request) {
   const originError = rejectCrossSiteMutation(request); if (originError) return originError;
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return Response.json({ error: "Community is not enabled yet." }, { status: 503 });
+  if (!supabase) return privateJson({ error: "Community is not enabled yet." }, { status: 503 });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return Response.json({ error: "Sign in to delete a comment." }, { status: 401 });
+  if (!user) return privateJson({ error: "Sign in to delete a comment." }, { status: 401 });
   const rateLimit = await enforceUserRateLimit(supabase, "community_comment"); if (rateLimit) return rateLimit;
   const commentId = new URL(request.url).searchParams.get("commentId") ?? "";
-  if (!isUuid(commentId)) return Response.json({ error: "Missing comment." }, { status: 400 });
+  if (!isUuid(commentId)) return privateJson({ error: "Missing comment." }, { status: 400 });
   // RLS is the final ownership check; author_id also avoids ambiguous success.
   const { error } = await supabase.from("op_feed_comments").delete().eq("id", commentId).eq("author_id", user.id);
   if (error) return databaseUnavailable("community comment delete", error, "Could not delete that comment right now.");
-  return Response.json({ ok: true });
+  return privateJson({ ok: true });
 }

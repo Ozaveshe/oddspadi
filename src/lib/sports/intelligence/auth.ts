@@ -16,11 +16,18 @@ export function isCronAuthorized(request: Request, env: Record<string, string | 
   return Boolean(supplied && tokenMatches(expected, supplied));
 }
 
+const SUPPORTED_SPORTS = new Set<Sport>(["football", "basketball", "tennis"]);
+// Three sports exist; anything longer is malformed input, and splitting it
+// first would build a large array before a single value is validated.
+const MAX_SPORTS_PARAM_LENGTH = 64;
+
 export function parseRequestedSports(request: Request): { sports?: Sport[]; error?: string } {
-  const value = new URL(request.url).searchParams.get("sports") ?? new URL(request.url).searchParams.get("sport");
+  const params = new URL(request.url).searchParams;
+  const value = params.get("sports") ?? params.get("sport");
   if (!value) return {};
-  const supported = new Set<Sport>(["football", "basketball", "tennis"]);
+  const invalid = { error: "Invalid sports. Use football, basketball, or tennis." };
+  if (value.length > MAX_SPORTS_PARAM_LENGTH) return invalid;
   const sports = value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
-  if (!sports.length || sports.some((sport) => !supported.has(sport as Sport))) return { error: "Invalid sports. Use football, basketball, or tennis." };
+  if (!sports.length || sports.some((sport) => !SUPPORTED_SPORTS.has(sport as Sport))) return invalid;
   return { sports: Array.from(new Set(sports)) as Sport[] };
 }
