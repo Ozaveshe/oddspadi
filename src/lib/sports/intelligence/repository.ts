@@ -830,7 +830,7 @@ export async function readStoredSlate({
     lastRun
   ] = await Promise.all([
     databaseFixtureIds.length
-      ? readRowsInChunks(databaseFixtureIds, (idChunk) => client.from("op_odds_snapshots").select("id,fixture_id,fixture_external_id,provider,bookmaker,market,selection,decimal_odds,observed_at,captured_at,source,is_live,expires_at,metadata").in("fixture_id", idChunk).order("captured_at", { ascending: false }).limit(10000))
+      ? client.rpc("op_latest_odds_for_fixtures", { p_fixture_ids: databaseFixtureIds })
       : Promise.resolve({ data: [], error: null }),
     databaseFixtureIds.length
       ? readRowsInChunks(databaseFixtureIds, (idChunk) => client.from("op_market_decisions").select("id,fixture_id,fixture_external_id,market,selection,odds_snapshot_id,model_version,engine_version,model_probability,implied_probability,no_vig_probability,value_edge,expected_value,confidence,risk,data_quality,evidence_quality,decision_status,public_status,reason,generated_at,expires_at,superseded_by,settlement_status,is_preliminary,provider").in("fixture_id", idChunk).is("superseded_by", null).limit(10000))
@@ -853,10 +853,15 @@ export async function readStoredSlate({
   if (leaguesError) throw new Error(`Stored league identity read failed: ${leaguesError.message}`);
 
   const latestOdds = new Map<string, CanonicalOddsSnapshot>();
+  // The RPC returns one row per (fixture_id, market, selection), but the key
+  // here is the *external* id, which can repeat across providers — so pick the
+  // newest explicitly rather than trusting arrival order.
   for (const row of (odds ?? []) as Array<Record<string, unknown>>) {
     const key = `${row.fixture_external_id}:${row.market}:${row.selection}`;
-    if (latestOdds.has(key)) continue;
-    latestOdds.set(key, canonicalOddsSnapshotFromRow(row));
+    const snapshot = canonicalOddsSnapshotFromRow(row);
+    const seen = latestOdds.get(key);
+    if (seen && Date.parse(seen.capturedAt) >= Date.parse(snapshot.capturedAt)) continue;
+    latestOdds.set(key, snapshot);
   }
   const oddsByFixture = new Map<string, CanonicalOddsSnapshot[]>();
   for (const snapshot of latestOdds.values()) oddsByFixture.set(snapshot.fixtureId, [...(oddsByFixture.get(snapshot.fixtureId) ?? []), snapshot]);

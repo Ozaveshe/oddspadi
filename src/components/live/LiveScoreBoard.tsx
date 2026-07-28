@@ -434,13 +434,11 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
 
       {requiresCompleteBoard && !completeBoardFailed ? (
         <div className="empty-state" aria-live="polite">
-          <div className="empty-emoji">↻</div>
           <h2>Loading full matchday coverage</h2>
           <p className="muted">Fetching the complete cached board for this filter.</p>
         </div>
       ) : requiresCompleteBoard ? (
         <div className="empty-state" aria-live="polite">
-          <div className="empty-emoji">📡</div>
           <h2>Full filtered coverage is temporarily unavailable</h2>
           <p className="muted">The first match window is still intact. Retry when the live feed is reachable.</p>
           <button className="button small-btn" type="button" onClick={() => void ensureCompleteBoard()}>
@@ -449,7 +447,6 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
         </div>
       ) : board.source === "none" ? (
         <div className="empty-state">
-          <div className="empty-emoji">📡</div>
           <h2>Live scores are warming up</h2>
           <p className="muted">{board.note ?? "Scores will appear here as soon as the data feed is connected."}</p>
         </div>
@@ -492,7 +489,6 @@ export function LiveScoreBoardView({ initial }: { initial: LiveScoreBoard | null
         </div>
       ) : (
         <div className="empty-state">
-          <div className="empty-emoji">🕐</div>
           <h2>{tab === "live" ? "No matches are live right now" : "Nothing here yet"}</h2>
           <p className="muted">
             {tab === "live"

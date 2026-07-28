@@ -197,7 +197,7 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
 
     <p className="live-meta-row"><span className={`badge ${ledger.source === "live" ? "positive" : "no-value"}`}>{ledger.source === "live" ? "Published-pick ledger" : "Results unavailable"}</span>{ledger.source === "live" ? <>Updated <LocalTimeText iso={ledger.generatedAt} variant="datetime" />.</> : ledger.reason}</p>
 
-    {ledger.source === "unavailable" ? <div className="empty-state"><div className="empty-emoji">📒</div><h2>We can&apos;t read the public ledger</h2><p className="muted">No internal, preview, or demo results are substituted. Settlement automation will retry the repository.</p></div> : history.length ? <div className="table-wrap">
+    {ledger.source === "unavailable" ? <div className="empty-state"><h2>We can&apos;t read the public ledger</h2><p className="muted">No internal, preview, or demo results are substituted. Settlement automation will retry the repository.</p></div> : history.length ? <div className="table-wrap">
       <table className="data-table results-ledger-table">
         <thead><tr><th>Date</th><th>Sport</th><th>Match</th><th>Published pick</th><th>Odds</th><th>Edge / EV</th><th>Status</th></tr></thead>
         <tbody>{history.map((item) => <tr key={item.id}>
@@ -210,7 +210,7 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
           <td><span className={`badge ${badgeClass(item.result, item.settlementStatus)}`}>{item.result === "pending" ? item.pendingReasonLabel ?? "Pending" : item.result}</span>{item.result === "pending" ? <p className="small muted settlement-reason">{item.settlementReason}</p> : item.settledAt ? <p className="small muted settlement-reason">Settled <LocalTimeText iso={item.settledAt} variant="datetime" /></p> : null}</td>
         </tr>)}</tbody>
       </table>
-    </div> : <div className="empty-state"><div className="empty-emoji">🔎</div><h2>No published picks match these filters</h2><p className="muted">This is an honest empty state. Internal runs and demo outcomes are not used to fill the ledger.</p></div>}
+    </div> : <div className="empty-state"><h2>No published picks match these filters</h2><p className="muted">This is an honest empty state. Internal runs and demo outcomes are not used to fill the ledger.</p></div>}
     {/* A page of past winners and losers is exactly where the "no analysis
         removes risk" framing belongs; the daily tips surfaces carry it via
         DailyTipsPageView, this one carried nothing. */}

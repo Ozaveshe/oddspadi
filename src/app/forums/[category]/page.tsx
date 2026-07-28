@@ -144,9 +144,6 @@ export default async function ForumCategoryPage({ params, searchParams }: PagePr
           </div>{nextCursor ? <Link className="button secondary community-load-more" href={`/forums/${encodeURIComponent(slug)}?cursor=${encodeURIComponent(nextCursor)}`}>Load more</Link> : null}</>
         ) : (
           <div className="empty-state">
-            <div className="empty-emoji" aria-hidden="true">
-              💬
-            </div>
             <h2>No threads yet</h2>
             <p className="muted">Start the first conversation in {category.name}.</p>
           </div>
