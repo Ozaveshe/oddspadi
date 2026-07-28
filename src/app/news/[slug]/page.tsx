@@ -5,27 +5,56 @@ import { getNewsStory } from "@/lib/editorial/news";
 import { LocalTime } from "@/components/odds/LocalTime";
 import { ShareBar } from "@/components/share/ShareBar";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
+import { absoluteUrl, pageMetadata } from "@/lib/seo/pageMetadata";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const story = await getNewsStory((await params).slug);
-  return story ? {
+  // A slug with no story 404s below; keep it out of the index rather than
+  // letting the fallback metadata be crawled as a thin duplicate of the shell.
+  if (!story) return { title: "Story not found", robots: { index: false, follow: true } };
+  return pageMetadata({
     title: story.title,
     description: story.excerpt,
-    alternates: { canonical: `/news/${story.slug}` },
-    openGraph: { type: "article", title: story.title, description: story.excerpt, publishedTime: story.publishedAt, modifiedTime: story.updatedAt ?? story.publishedAt }
-  } : {};
+    path: `/news/${story.slug}`,
+    type: "article",
+    publishedTime: story.publishedAt,
+    modifiedTime: story.updatedAt ?? story.publishedAt
+  });
 }
 
 export default async function StoryPage({ params }: { params: Promise<{ slug: string }> }) {
   const story = await getNewsStory((await params).slug);
   if (!story) notFound();
-  const articleJsonLd = { "@context": "https://schema.org", "@type": "NewsArticle", headline: story.title, datePublished: story.publishedAt, dateModified: story.updatedAt ?? story.publishedAt, description: story.excerpt, mainEntityOfPage: `https://oddspadi.com/news/${story.slug}`, author: { "@type": "Organization", name: "OddsPadi" }, publisher: { "@type": "Organization", name: "OddsPadi", url: "https://oddspadi.com" }, citation: story.sources?.map(source => source.url) ?? [] };
+  // URLs are derived from NEXT_PUBLIC_SITE_URL rather than hardcoded, so preview
+  // and staging deploys do not publish structured data pointing at production.
+  const storyUrl = absoluteUrl(`/news/${story.slug}`);
+  const articleJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: story.title,
+    datePublished: story.publishedAt,
+    dateModified: story.updatedAt ?? story.publishedAt,
+    description: story.excerpt,
+    inLanguage: "en",
+    mainEntityOfPage: { "@type": "WebPage", "@id": storyUrl },
+    // Google's article rich result requires a publisher logo; without it the
+    // story is ineligible however complete the rest of the markup is.
+    image: [absoluteUrl("/opengraph-image")],
+    author: { "@type": "Organization", name: "OddsPadi", url: absoluteUrl("/") },
+    publisher: {
+      "@type": "Organization",
+      name: "OddsPadi",
+      url: absoluteUrl("/"),
+      logo: { "@type": "ImageObject", url: absoluteUrl("/brand/oddspadi-icon-512-maskable.png"), width: 512, height: 512 }
+    },
+    citation: story.sources?.map((source) => source.url) ?? []
+  };
   const breadcrumbJsonLd = { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [
-    { "@type": "ListItem", position: 1, name: "Home", item: "https://oddspadi.com/" },
-    { "@type": "ListItem", position: 2, name: "News", item: "https://oddspadi.com/news" },
-    { "@type": "ListItem", position: 3, name: story.title, item: `https://oddspadi.com/news/${story.slug}` }
+    { "@type": "ListItem", position: 1, name: "Home", item: absoluteUrl("/") },
+    { "@type": "ListItem", position: 2, name: "News", item: absoluteUrl("/news") },
+    { "@type": "ListItem", position: 3, name: story.title, item: storyUrl }
   ] };
   return <main id="main" className="container story-page">
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(articleJsonLd) }} />

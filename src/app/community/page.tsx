@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 import Link from "next/link";
 import { CommunityFeed, type CommunityPost } from "@/components/community/CommunityFeed";
 import { FeedComposer, type ComposerMatch } from "@/components/community/FeedComposer";
@@ -8,7 +9,13 @@ import { todayIsoDate } from "@/lib/sports/service";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Community feed", description: "What football fans are saying on OddsPadi — reads, reactions and matchday talk.", alternates: { canonical: "/community" } };
+export const metadata: Metadata = pageMetadata({
+  title: "Community feed",
+  description: "What football fans are saying on OddsPadi — reads, reactions and matchday talk.",
+  path: "/community",
+  socialTitle: "OddsPadi community feed",
+  socialDescription: "Fan reads, matchday reactions and tipster records, all in one feed."
+});
 type PageProps = { searchParams?: Promise<{ match?: string; prompt?: string }> };
 
 export default async function CommunityPage({ searchParams }: PageProps) {

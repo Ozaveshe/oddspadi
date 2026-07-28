@@ -1,15 +1,23 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 import Link from "next/link";
 import { getNewsStories } from "@/lib/editorial/news";
 import { getSupabasePublicReadClient, publicReadAbortSignal } from "@/lib/supabase/publicReadClient";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+const newsMetadata = pageMetadata({
   title: "Sports news, match previews and season outlooks",
   description: "OddsPadi matchday briefings, sports prediction explainers and upcoming-season outlooks for football, basketball and tennis.",
+  path: "/news",
+  socialTitle: "OddsPadi Matchday Desk",
+  socialDescription: "Matchday briefings, prediction explainers and season outlooks, refreshed four times a day."
+});
+
+export const metadata: Metadata = {
+  ...newsMetadata,
   alternates: {
-    canonical: "/news",
+    ...newsMetadata.alternates,
     types: {
       "application/rss+xml": "/news/rss.xml",
       "application/feed+json": "/news/feed.json"

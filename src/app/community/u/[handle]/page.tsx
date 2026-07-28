@@ -6,7 +6,21 @@ import { LocalTime } from "@/components/odds/LocalTime";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ handle: string }> };
-export const metadata: Metadata = { title: "Community profile", robots: { index: false, follow: true } };
+/**
+ * Every handle previously shared the literal title "Community profile", so the
+ * browser tab, history entries and any share card were identical across every
+ * tipster on the site. The page stays out of the index (member-authored, thin
+ * until a tipster builds a record) but still deserves a distinct title.
+ */
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const handle = decodeURIComponent((await params).handle).slice(0, 40);
+  return {
+    title: `@${handle} — community tipster record`,
+    description: `Published tips, settled results and net units for @${handle} on OddsPadi.`,
+    alternates: { canonical: `/community/u/${encodeURIComponent(handle)}` },
+    robots: { index: false, follow: true }
+  };
+}
 
 type Profile = {
   id: string;

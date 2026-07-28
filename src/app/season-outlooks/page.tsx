@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 import Link from "next/link";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { buildPremierLeague2026Projection, premierLeague2026Baseline, seasonCoverageQueue } from "@/lib/sports/prediction/seasonOutlooks";
@@ -6,11 +7,13 @@ import { serializeJsonLd } from "@/lib/security/jsonLd";
 
 export const revalidate = 21_600;
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "2026/27 season predictions and outlooks",
   description: "Revision-dated football, basketball and tennis season outlooks with transparent probabilities, source dates and missing-input warnings.",
-  alternates: { canonical: "/season-outlooks" }
-};
+  path: "/season-outlooks",
+  socialTitle: "2026/27 season outlooks — transparent probabilities",
+  socialDescription: "Revision-dated season projections with the source dates and missing inputs stated up front."
+});
 
 const percent = new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 1 });
 

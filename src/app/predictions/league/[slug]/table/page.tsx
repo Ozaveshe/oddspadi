@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { LocalTimeText } from "@/components/odds/LocalTime";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 import {
   featuredFootballLeagueTables,
   currentFootballSeason,
@@ -22,13 +23,17 @@ type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const league = leagueBySlug((await params).slug);
-  if (!league) return { title: "League table" };
+  // An unknown slug 404s below. Keep it out of the index so a mistyped or
+  // retired league URL cannot be crawled as a thin soft-404.
+  if (!league) return { title: "League table", robots: { index: false, follow: false } };
 
-  return {
+  return pageMetadata({
     title: `${league.leagueName} Table`,
     description: `Current ${league.leagueName} standings: position, results, goal difference, points and recent form.`,
-    alternates: { canonical: `/predictions/league/${league.slug}/table` },
-  };
+    path: `/predictions/league/${league.slug}/table`,
+    socialTitle: `${league.leagueName} table — standings, form and points`,
+    socialDescription: `Live ${league.leagueName} standings with position, goal difference, points and recent form for every side.`
+  });
 }
 
 function Form({ value }: { value: string }) {

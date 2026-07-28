@@ -4,7 +4,7 @@ import type { Match } from "@/lib/sports/types";
 import { getNewsStories } from "@/lib/editorial/news";
 import { footballLeagues } from "@/lib/sports/leagueStandings";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://oddspadi.com";
+import { siteUrl } from "@/lib/seo/pageMetadata";
 
 /** Never let a slow/failed provider block sitemap generation. */
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -23,14 +23,22 @@ function shiftIso(iso: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+const MAX_MATCH_ENTRIES = 2_000;
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
-  const newsStories = await getNewsStories();
+  // The desk read is guarded the same way fixtures are: an editorial outage
+  // must degrade the sitemap to its static routes, not fail the whole file and
+  // leave crawlers with nothing.
+  const newsStories = await withTimeout(getNewsStories(), 4_000, []);
 
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: `${siteUrl}/`, lastModified: now, changeFrequency: "hourly", priority: 1 },
     { url: `${siteUrl}/live-scores`, lastModified: now, changeFrequency: "always", priority: 0.9 },
     { url: `${siteUrl}/predictions`, lastModified: now, changeFrequency: "hourly", priority: 0.9 },
+    { url: `${siteUrl}/predictions/today`, lastModified: now, changeFrequency: "hourly", priority: 0.9 },
+    { url: `${siteUrl}/predictions/tomorrow`, lastModified: now, changeFrequency: "hourly", priority: 0.8 },
+    { url: `${siteUrl}/predictions/week`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
     { url: `${siteUrl}/predictions/value-picks`, lastModified: now, changeFrequency: "hourly", priority: 0.8 },
     { url: `${siteUrl}/predictions/history`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
     { url: `${siteUrl}/predictions/decision-engine`, lastModified: now, changeFrequency: "daily", priority: 0.5 },
@@ -56,7 +64,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         withTimeout(sportsProvider.getFixtures(date, "football"), 4_000, [] as Match[])
       )
     );
-    for (const list of lists) {
+    // The cap has to break both loops: breaking only the inner one let the
+    // second day's fixtures keep appending past the limit.
+    outer: for (const list of lists) {
       for (const match of list) {
         if (seen.has(match.id)) continue;
         seen.add(match.id);
@@ -66,7 +76,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           changeFrequency: "hourly",
           priority: 0.6
         });
-        if (matchEntries.length >= 2_000) break;
+        if (matchEntries.length >= MAX_MATCH_ENTRIES) break outer;
       }
     }
   } catch {
