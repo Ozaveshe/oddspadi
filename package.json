@@ -25,7 +25,8 @@
     "ops:editorial": "node scripts/run-editorial-sweep.mjs",
     "ops:seed-feed": "node scripts/seed-community-posts.mjs",
     "results:backfill": "node scripts/backfill-public-results.mjs",
-    "player-history:prepare": "vite-node --config scripts/vite-node.config.ts scripts/prepare-player-history.ts"
+    "player-history:prepare": "vite-node --config scripts/vite-node.config.ts scripts/prepare-player-history.ts",
+    "ops:calibration": "node scripts/promote-calibration.mjs"
   },
   "engines": {
     "node": "22.x"

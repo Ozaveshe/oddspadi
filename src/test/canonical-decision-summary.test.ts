@@ -210,8 +210,14 @@ describe("canonical DecisionSummary", () => {
     expect(decision.bestWatchlistCandidate?.blockers).toContain("data quality is below the sport threshold");
   });
 
-  it("keeps point-estimate value on the watchlist when an empirical 95% value floor is tracked but unavailable", async () => {
+  // v1.1: an unavailable floor no longer blocks outright — it raises the bar.
+  // A point estimate under the uncalibrated bar still earns nothing, which is
+  // what this case guards; clearing that bar is covered in
+  // uncalibrated-publication-gate.test.ts.
+  it("keeps point-estimate value on the watchlist when it misses the uncalibrated bar", async () => {
     const decision = summary(await fixture(), bttsEdge({
+      edge: 0.05,
+      expectedValue: 0.05,
       economicConfidence: {
         status: "unavailable",
         method: "unavailable",
@@ -228,7 +234,7 @@ describe("canonical DecisionSummary", () => {
 
     expect(decision.publicStatus).toBe("watchlist");
     expect(decision.bestPublishedPick).toBeNull();
-    expect(decision.bestWatchlistCandidate?.blockers).toContain("empirical 95% value floor is unavailable for this runtime");
+    expect(decision.bestWatchlistCandidate?.blockers.join(" | ")).toContain("uncalibrated publication needs at least 8% raw edge");
   });
 
   it("requires the empirical lower-bound edge and EV to clear the same publication thresholds", async () => {
