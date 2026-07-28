@@ -82,8 +82,16 @@ if (!profiles?.length) {
   process.exit(1);
 }
 
+/** Stable per-persona offset so the rotation does not depend on run order. */
+function personaOffset(username) {
+  let hash = 0;
+  for (const character of username) hash = (hash * 31 + character.charCodeAt(0)) % 997;
+  return hash;
+}
+
 const cutoff = new Date(Date.now() - 20 * 3_600_000).toISOString();
 let posted = 0;
+let failed = 0;
 for (const profile of profiles) {
   const { data: recent } = await db
     .from("op_feed_posts")
@@ -96,13 +104,21 @@ for (const profile of profiles) {
     continue;
   }
   const pool = pools[profile.username];
-  const body = pool[(dayIndex + posted) % pool.length];
+  // Indexed by day and by a stable hash of the username. It previously used the
+  // running `posted` counter, so a skipped or failed persona shifted every
+  // persona after it — contradicting the documented promise that a rerun on the
+  // same day is stable.
+  const body = pool[(dayIndex + personaOffset(profile.username)) % pool.length];
   const { error } = await db.from("op_feed_posts").insert({ author_id: profile.id, body });
   if (error) {
+    failed += 1;
     console.error(`FAIL  ${profile.username} — ${error.message}`);
     continue;
   }
   posted += 1;
   console.log(`post  ${profile.username}`);
 }
-console.log(`\n${posted} new post(s).`);
+console.log(`\n${posted} new post(s)${failed ? `, ${failed} failed` : ""}.`);
+// Without this the script always exited 0, so `npm run ops:seed-feed` reported
+// success even when every insert had been rejected.
+process.exit(failed ? 1 : 0);
