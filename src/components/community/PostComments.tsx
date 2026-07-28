@@ -20,6 +20,8 @@ function author(comment: FeedComment) {
 
 export function PostComments({ postId, userId, onCountChange }: { postId: string; userId: string | null; onCountChange: (delta: number) => void }) {
   const [comments, setComments] = useState<FeedComment[] | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,8 +32,10 @@ export function PostComments({ postId, userId, onCountChange }: { postId: string
     (async () => {
       try {
         const response = await fetch(`/api/community/comments?postId=${encodeURIComponent(postId)}`);
-        const result = (await response.json().catch(() => ({}))) as { comments?: FeedComment[] };
-        if (alive) setComments(result.comments ?? []);
+        const result = (await response.json().catch(() => ({}))) as { comments?: FeedComment[]; nextCursor?: string | null };
+        if (!alive) return;
+        setComments(result.comments ?? []);
+        setNextCursor(result.nextCursor ?? null);
       } catch {
         if (alive) setComments([]);
       }
@@ -75,6 +79,29 @@ export function PostComments({ postId, userId, onCountChange }: { postId: string
     }
   }
 
+  // Threads past the first hundred comments used to be truncated with nothing
+  // in the UI to say so; the route now returns a cursor to continue from.
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const response = await fetch(
+        `/api/community/comments?postId=${encodeURIComponent(postId)}&cursor=${encodeURIComponent(nextCursor)}`
+      );
+      const result = (await response.json().catch(() => ({}))) as { comments?: FeedComment[]; nextCursor?: string | null };
+      if (!response.ok) {
+        setError("More comments could not be loaded.");
+        return;
+      }
+      setComments((rows) => [...(rows ?? []), ...(result.comments ?? [])]);
+      setNextCursor(result.nextCursor ?? null);
+    } catch {
+      setError("More comments could not be loaded. Check your connection and try again.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
   async function remove(commentId: string) {
     try {
       const response = await fetch(`/api/community/comments?commentId=${encodeURIComponent(commentId)}`, { method: "DELETE" });
@@ -113,6 +140,11 @@ export function PostComments({ postId, userId, onCountChange }: { postId: string
       ) : (
         <p className="muted small">No comments yet — start the thread.</p>
       )}
+      {nextCursor ? (
+        <button className="auth-text-button" type="button" onClick={() => void loadMore()} disabled={loadingMore}>
+          {loadingMore ? "Loading…" : "Load more comments"}
+        </button>
+      ) : null}
       {userId ? (
         <form className="feed-comment-form" onSubmit={submit}>
           <input

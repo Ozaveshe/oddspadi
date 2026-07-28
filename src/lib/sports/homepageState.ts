@@ -22,6 +22,21 @@ export type HomepageMatchdayState = {
   previewFixtures: LiveBoardFixture[];
 };
 
+/**
+ * Human copy for each engine run status.
+ *
+ * The homepage rendered the raw enum under a "Provider health" label, so
+ * visitors read bare tokens like `unavailable`, `partial` and `empty`.
+ */
+const PROVIDER_LABELS: Record<ProviderRunStatus, string> = {
+  running: "Run in progress",
+  completed: "Healthy",
+  partial: "Partial run",
+  empty: "No fixtures returned",
+  failed: "Run failed",
+  unavailable: "Feed unavailable"
+};
+
 function preferredBoardFixtures(board: LiveScoreBoard | null): LiveBoardFixture[] {
   const fixtures = board?.fixtures ?? [];
   return [
@@ -52,8 +67,12 @@ export function deriveHomepageMatchdayState(
     valuePickCount: daily?.summary.valuePicks ?? 0,
     watchlistCount: daily?.summary.watchlist ?? 0,
     providerState: rawProviderState,
-    providerLabel: rawProviderState,
-    sourceLabel: "Prediction engine",
+    providerLabel: PROVIDER_LABELS[rawProviderState] ?? rawProviderState,
+    // Say which source the visitor is actually looking at. When the engine
+    // returns nothing the page falls back to live-board fixtures, but the
+    // label still read "Prediction engine" — crediting the engine for coverage
+    // it did not produce, on a product whose whole pitch is transparency.
+    sourceLabel: usesLiveFallback ? "Live score board (engine produced no fixtures)" : "Prediction engine",
     lastUpdatedAt: daily?.slate.provider.lastRun?.finishedAt ?? null,
     usesLiveFallback,
     featuredFixture: usesLiveFallback ? boardFixtures[0] ?? null : null,
