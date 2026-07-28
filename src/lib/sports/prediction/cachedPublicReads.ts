@@ -72,12 +72,35 @@ function cachePromise<T>(cache: Map<string, MemoryEntry<T>>, key: string, ttl: n
   return promise;
 }
 
+/**
+ * Durable per-match snapshots, for the same reason the predictions page has
+ * one: `getMatchPrediction` re-runs a provider fan-out (match, head-to-head,
+ * league table, learning profile, case memory, odds history) on every miss, and
+ * a module-scope Map misses on every serverless cold start. That showed up as a
+ * ~5s time-to-first-byte on the match page for ~49KB of HTML.
+ *
+ * The in-memory Map stays in front as an L1 so repeated reads within a single
+ * invocation — the page body and its opengraph-image both ask for this — don't
+ * each pay a Data Cache round trip.
+ */
+const readMatchPrediction = unstable_cache(
+  async (matchId: string) => getMatchPrediction(matchId),
+  ["match-prediction-v1"],
+  { revalidate: 180 }
+);
+
+const readStoredFixture = unstable_cache(
+  async (matchId: string) => readStoredFixtureAnalysis(matchId),
+  ["stored-fixture-analysis-v1"],
+  { revalidate: 180 }
+);
+
 export function getCachedMatchPrediction(matchId: string) {
-  return cachePromise(matchPredictionCache, matchId, 180_000, () => getMatchPrediction(matchId));
+  return cachePromise(matchPredictionCache, matchId, 180_000, () => readMatchPrediction(matchId));
 }
 
 export function getCachedStoredFixtureAnalysis(matchId: string) {
-  return cachePromise(storedFixtureCache, matchId, 180_000, () => readStoredFixtureAnalysis(matchId));
+  return cachePromise(storedFixtureCache, matchId, 180_000, () => readStoredFixture(matchId));
 }
 
 export const getCachedPublicPredictionHistory = unstable_cache(

@@ -17,6 +17,29 @@ export type NewsStory = {
 
 export const newsStories: NewsStory[] = [
   {
+    slug: "uefa-qualifying-july-22-matchday-desk",
+    title: "UEFA qualifying July 22: the evidence desk",
+    excerpt: "Three Champions League and six Conference League first legs are stored; all nine fresh summaries need data, with no canonical public pick.",
+    category: "Matchday briefing",
+    sport: "Football",
+    publishedAt: "2026-07-22",
+    sourceAsOf: "2026-07-22T08:28:31.260965Z",
+    revision: 1,
+    readMinutes: 5,
+    body: [
+      "UEFA's official schedule lists three Champions League second-qualifying-round first legs on Wednesday, July 22: Omonia v Kairat Almaty at 19:00, Levski Sofia v Universitatea Craiova at 19:30 and Egnatia v Celje at 21:00. OddsPadi's provider rows resolve those kickoffs to 17:00, 17:30 and 19:00 UTC respectively, and the return legs are scheduled for July 28 or 29.",
+      "The official Conference League schedule adds six July 22 first legs: Neftchi v Dinamo-Minsk, Bohemians v Ballkani, Basaksehir v Inter Turku, Vardar v Riga, Spartak Trnava v CSKA 1948 and Zeleznicar Pancevo v Braga. All six appear in the fresh stored slate alongside the three Champions League ties.",
+      "A read-only OddsPadi database check at 08:28:31 UTC found 10 provider rows for those nine ties because Omonia-Kairat appears once from API-Football and once from The Odds API. The nine fresh API-Football summaries were all needs-data records because bookmaker odds were missing; the older duplicate was an expired watchlist. The 57 underlying market analyses were internal-only, split between 29 no-clear-value avoids and 28 watchlists. No checked fixture had an attached outcome, and the canonical public-pick ledger remained empty.",
+      "UEFA says the Champions League winners advance to the third qualifying round while the defeated sides move into Europa League qualifying; Conference League winners also advance to their third qualifying round. This desk therefore confirms the slate and competition stakes without making a selection or inventing lineup, injury or late-team-news claims."
+    ],
+    sources: [
+      { label: "UEFA Champions League qualifying fixtures and format", url: "https://www.uefa.com/uefachampionsleague/accesslist/", checkedAt: "2026-07-22" },
+      { label: "UEFA Conference League qualifying fixtures and format", url: "https://www.uefa.com/uefaconferenceleague/news/02a6-20e5e911587f-cc10425958b3-1000--conference-league-qualifying-fixtures-results-dates-how-it-/", checkedAt: "2026-07-22" },
+      { label: "UEFA 2026 competition calendar", url: "https://www.uefa.com/news-media/news/02a0-1f71bdf70a9a-b6067bd647f2-1000--2026-european-football-calendar-match-and-draw-dates-for-a/", checkedAt: "2026-07-22" },
+      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-22" }
+    ]
+  },
+  {
     slug: "how-oddspadi-reads-a-match-before-kickoff",
     title: "How OddsPadi reads a match before kickoff",
     excerpt: "A plain-language guide to form, prices, missing information, and why the engine sometimes refuses to make a pick.",
@@ -32,27 +55,47 @@ export const newsStories: NewsStory[] = [
     sources: [{ label: "OddsPadi prediction methodology", url: "/predictions/decision-engine", checkedAt: "2026-07-12" }]
   },
   {
+    slug: "spain-argentina-world-cup-final-matchday-desk",
+    title: "Spain v Argentina World Cup final: the evidence desk",
+    excerpt: "The 104th and final match kicks off at 19:00 UTC; OddsPadi has two matching provider rows, but no canonical public pick or outcome at its check.",
+    category: "Matchday briefing",
+    sport: "Football",
+    publishedAt: "2026-07-19",
+    sourceAsOf: "2026-07-19T06:36:19.178934Z",
+    revision: 1,
+    readMinutes: 4,
+    body: [
+      "Spain face Argentina in the FIFA World Cup final at New York New Jersey Stadium on Sunday, July 19. FIFA lists kickoff at 3:00 p.m. New York time (19:00 UTC), with the European champions meeting the defending world and South American champions in the 104th and final match of the tournament.",
+      "A read-only OddsPadi database check completed at 06:36:19 UTC found two provider records for the same final: API-Football and The Odds API both listed Spain v Argentina at 19:00 UTC. The newer provider record had been synchronized at 06:26:47 UTC and generated a watchlist summary at 06:27:30 UTC; neither record had a published pick, attached outcome or canonical public-pick row.",
+      "That distinction matters on a final. A stored fixture and market watchlist are not a recommendation, and paper-only outcome projections are not public picks. This desk therefore confirms the matchup and timing, but makes no model selection and does not infer lineups, injuries or late team news that were not present in the checked evidence."
+    ],
+    sources: [
+      { label: "FIFA World Cup 2026 final: all you need to know", url: "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/final-live-watch-teams-tickets", checkedAt: "2026-07-19" },
+      { label: "Official FIFA Spain v Argentina match preview", url: "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/spain-v-argentina-live-stream-team-news-tickets-and-more", checkedAt: "2026-07-19" },
+      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-19" }
+    ]
+  },
+  {
     slug: "basketball-summer-league-matchday-watchlist",
-    title: "NBA Summer League July 18 semifinal desk",
-    excerpt: "Rockets-Grizzlies tip at 6:30 p.m. ET and Warriors-Lakers at 8:30; OddsPadi found no Las Vegas July 18 rows, outcomes or public picks at its check.",
+    title: "NBA Summer League July 19 championship desk",
+    excerpt: "Memphis-Golden State is stored for the 6:00 p.m. Las Vegas championship slot; the three checked matchups remain watchlist-only with no public pick.",
     category: "Matchday briefing",
     sport: "Basketball",
     publishedAt: "2026-07-12",
-    updatedAt: "2026-07-18",
-    sourceAsOf: "2026-07-18T06:40:12.107148Z",
-    revision: 8,
+    updatedAt: "2026-07-19",
+    sourceAsOf: "2026-07-19T06:36:45.442173Z",
+    revision: 9,
     readMinutes: 4,
     body: [
-      "The NBA's semifinal field is set for Saturday, July 18. Houston faces Memphis at 6:30 p.m. ET (22:30 UTC), followed by Golden State against the Los Angeles Lakers at 8:30 p.m. ET (00:30 UTC Sunday); both games are at Thomas & Mack Center on Prime Video. The Lakers finished pool play as the only unbeaten team, while the Rockets, Grizzlies and Warriors completed the four-team field.",
-      "The published format advances the top four records after each team's first four games into a single-elimination semifinal round, with the winners meeting in the July 19 championship. The official July 18 schedule contains seven slots: five consolation games around the two-game semifinal doubleheader.",
-      "An exact, read-only OddsPadi database check completed on July 18 at 06:40:12 UTC found 91 fixtures in the UTC day but no NBA Summer League fixture whose Las Vegas local date was July 18. The 90 current fixture summaries were 88 needs-data records and two expired watchlists; no prediction outcome or canonical public pick was attached to the checked window. This desk therefore makes no model pick and does not relabel the previous night's consolation rows as Saturday evidence."
+      "The official NBA schedule closes the Las Vegas event on Sunday, July 19 with three Thomas & Mack Center slots at 1:30, 3:30 and 6:00 p.m. local time, with the last designated as the championship. OddsPadi storage maps the earlier slots to Oklahoma City-Brooklyn and Toronto-Denver, and identifies Memphis-Golden State in the final slot at 01:00 UTC on Monday.",
+      "An exact, read-only database check at 06:36:45 UTC found five provider rows for the Las Vegas local date, representing those three matchups rather than five separate games. Oklahoma City-Brooklyn and Toronto-Denver each appeared once from API-Basketball and once from The Odds API; Memphis-Golden State appeared in the fresher odds-provider slate. The latest provider synchronization was 06:27:04 UTC.",
+      "Every checked matchup remained watchlist-only. None had a published decision, attached prediction outcome or canonical public pick, and the two older API-Basketball summaries had already expired by the check. This desk therefore confirms the schedule and duplicate-provider shape without promoting a selection or treating a paper-only projection as a public result."
     ],
     sources: [
-      { label: "NBA Summer League semifinal field and matchups", url: "https://www.nba.com/news/starting-5-july-17-2026", checkedAt: "2026-07-18" },
-      { label: "Official NBA Day 8 recap", url: "https://www.nba.com/news/live-updates-2026-nba-summer-league-day-8", checkedAt: "2026-07-18" },
-      { label: "Official NBA Summer League schedule PDF", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-18" },
-      { label: "Official 2026 Summer League format and tiebreakers", url: "https://www.nba.com/news/2026-summer-league-format", checkedAt: "2026-07-18" },
-      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-18" }
+      { label: "Official NBA Summer League schedule PDF", url: "https://cdn.nba.com/teams/uploads/sites/1610612759/2026/07/2026-NBA-Summer-League-Schedule-6.26.26.pdf", checkedAt: "2026-07-19" },
+      { label: "Official NBA Summer League dates and championship format", url: "https://www.nba.com/news/2026-nba-summer-league-what-to-watch-key-dates", checkedAt: "2026-07-19" },
+      { label: "NBA Summer League semifinal field", url: "https://www.nba.com/news/starting-5-july-17-2026", checkedAt: "2026-07-19" },
+      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: "2026-07-19" }
     ]
   },
   {
