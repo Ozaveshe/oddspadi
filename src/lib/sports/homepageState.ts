@@ -1,6 +1,7 @@
 import type { LiveBoardFixture, LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import type { ProviderRunStatus } from "@/lib/sports/intelligence/types";
 import type { DailyTipsProduct } from "@/lib/sports/tips/product";
+import type { HomepageMatchdaySummary } from "@/lib/sports/homepageSummary";
 
 export type HomepageProviderState = ProviderRunStatus;
 
@@ -63,24 +64,27 @@ function preferredBoardFixtures(board: LiveScoreBoard | null): LiveBoardFixture[
 
 export function deriveHomepageMatchdayState(
   daily: DailyTipsProduct | null,
-  liveBoard: LiveScoreBoard | null
+  liveBoard: LiveScoreBoard | null,
+  // Counts-only read. It finishes well inside the render budget, so it carries
+  // the card whenever the full product read does not arrive in time.
+  summary: HomepageMatchdaySummary | null = null
 ): HomepageMatchdayState {
   const boardFixtures = preferredBoardFixtures(liveBoard);
-  const engineFixtureCount = daily?.summary.fixturesFound ?? 0;
+  const engineFixtureCount = daily?.summary.fixturesFound ?? summary?.fixtureCount ?? 0;
   const usesLiveFallback = boardFixtures.length > 0 && engineFixtureCount === 0;
-  const rawProviderState: ProviderRunStatus = daily?.slate.provider.status ?? "unavailable";
+  const rawProviderState: ProviderRunStatus = daily?.slate.provider.status ?? (summary ? "completed" : "unavailable");
   const displayedFixtures = usesLiveFallback ? boardFixtures : [];
 
   return {
-    dataState: daily === null ? "pending" : "ready",
+    dataState: daily === null && summary === null ? "pending" : "ready",
     fixtureCount: engineFixtureCount,
     liveBoardFixtureCount: boardFixtures.length,
     liveCount: displayedFixtures.filter((fixture) => fixture.phase === "live").length,
     upcomingCount: displayedFixtures.filter((fixture) => fixture.phase === "upcoming").length,
     finishedCount: displayedFixtures.filter((fixture) => fixture.phase === "finished").length,
-    analysedCount: daily?.summary.fixturesAnalysed ?? 0,
-    valuePickCount: daily?.summary.valuePicks ?? 0,
-    watchlistCount: daily?.summary.watchlist ?? 0,
+    analysedCount: daily?.summary.fixturesAnalysed ?? summary?.analysedCount ?? 0,
+    valuePickCount: daily?.summary.valuePicks ?? summary?.valuePickCount ?? 0,
+    watchlistCount: daily?.summary.watchlist ?? summary?.watchlistCount ?? 0,
     providerState: rawProviderState,
     providerLabel: PROVIDER_LABELS[rawProviderState] ?? rawProviderState,
     // Say which source the visitor is actually looking at. When the engine
@@ -88,7 +92,7 @@ export function deriveHomepageMatchdayState(
     // label still read "Prediction engine" — crediting the engine for coverage
     // it did not produce, on a product whose whole pitch is transparency.
     sourceLabel: usesLiveFallback ? "Live score board (engine produced no fixtures)" : "Prediction engine",
-    lastUpdatedAt: daily?.slate.provider.lastRun?.finishedAt ?? null,
+    lastUpdatedAt: daily?.slate.provider.lastRun?.finishedAt ?? summary?.lastRunAt ?? null,
     usesLiveFallback,
     featuredFixture: usesLiveFallback ? boardFixtures[0] ?? null : null,
     previewFixtures: usesLiveFallback ? boardFixtures.slice(0, 3) : []

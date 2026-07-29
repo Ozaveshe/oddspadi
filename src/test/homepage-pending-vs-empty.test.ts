@@ -54,3 +54,42 @@ describe("homepage pending vs empty", () => {
     expect(unavailable.title).toMatch(/unavailable/i);
   });
 });
+
+describe("homepage summary fallback", () => {
+  const summary = { fixtureCount: 698, analysedCount: 343, valuePickCount: 0, watchlistCount: 308, lastRunAt: "2026-07-29T08:00:00.000Z" };
+
+  it("carries the card from counts when the full product read times out", () => {
+    // The whole point: the product read misses its budget on nearly every
+    // production load, but the counts arrive in milliseconds.
+    const state = deriveHomepageMatchdayState(null, emptyBoard, summary);
+
+    expect(state.dataState).toBe("ready");
+    expect(state.fixtureCount).toBe(698);
+    expect(state.watchlistCount).toBe(308);
+  });
+
+  it("stops reporting the feed unavailable once counts arrive", () => {
+    const state = deriveHomepageMatchdayState(null, emptyBoard, summary);
+
+    expect(state.providerLabel).not.toMatch(/unavailable/i);
+  });
+
+  it("does not fall back to the live board when the engine has fixtures", () => {
+    const board = { fixtures: [{ phase: "live" }] } as unknown as LiveScoreBoard;
+    const state = deriveHomepageMatchdayState(null, board, summary);
+
+    expect(state.usesLiveFallback).toBe(false);
+  });
+
+  it("stays pending when neither the product nor the counts return", () => {
+    const state = deriveHomepageMatchdayState(null, emptyBoard, null);
+
+    expect(state.dataState).toBe("pending");
+  });
+
+  it("prefers the full product over the counts when both arrive", () => {
+    const state = deriveHomepageMatchdayState(daily(12), emptyBoard, summary);
+
+    expect(state.fixtureCount).toBe(12);
+  });
+});

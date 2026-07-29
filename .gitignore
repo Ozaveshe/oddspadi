@@ -25,3 +25,6 @@ dashboard-smoke.html
 fixtures-smoke.json
 materializer-smoke.json
 predictions-smoke.json
+
+# Delivered training corpus: large CSVs, tracked outside git.
+training-data/
