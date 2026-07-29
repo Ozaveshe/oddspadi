@@ -18,6 +18,7 @@ import {
   applyLearnedProbabilityCalibration,
   applyLearnedProbabilityCalibrationToDiagnostics
 } from "./learnedProbabilityCalibration";
+import { buildModelSkillAnchor } from "./modelSkillAnchor";
 import { footballMarketPriorEvidencePolicy } from "./marketPriorPolicy";
 import {
   applyMarketPriorAdjustmentToDiagnostics,
@@ -84,7 +85,8 @@ export function applyRuntimeProbabilityPipeline({
     match.oddsMarkets,
     learnedCalibrationDiagnostics.dataQualityScore,
     footballMarketPriorEvidencePolicy(match),
-    marketPriorScalingPolicy ?? learningProfile?.marketPriorScalingPolicy ?? undefined
+    marketPriorScalingPolicy ?? learningProfile?.marketPriorScalingPolicy ?? undefined,
+    buildModelSkillAnchor(learningProfile)
   );
 
   return {

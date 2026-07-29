@@ -649,6 +649,17 @@ export interface Prediction {
   generatedAt: string;
   evidenceHash: string;
   markets: PredictionMarket[];
+  /**
+   * Probabilities as the model itself produced them, before the market prior
+   * is blended in. `markets` is the published view and is deliberately anchored
+   * to the priced market; this is the model's own opinion.
+   *
+   * Model evaluation must read this, not `markets`. Anchoring first makes every
+   * model look alike — champion and challenger collapse onto the same market
+   * price — so no model could ever demonstrate improvement, and therefore none
+   * could ever earn promotion out of being anchored.
+   */
+  modelMarkets: PredictionMarket[];
   diagnostics: FootballModelDiagnostics;
   calibrationAdjustment?: LearnedProbabilityCalibrationAdjustment;
   contextAdjustment: MatchContextAdjustment;

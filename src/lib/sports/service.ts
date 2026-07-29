@@ -278,6 +278,7 @@ export function buildPrediction(
     generatedAt,
     evidenceHash,
     markets,
+    modelMarkets: runtimePipeline.learnedCalibratedMarkets,
     diagnostics,
     calibrationAdjustment: runtimePipeline.calibrationAdjustment,
     contextAdjustment: runtimePipeline.contextAdjustment,

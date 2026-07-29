@@ -102,6 +102,17 @@ function idempotencyConflict(error: { code?: string | null; message?: string | n
   return error?.code === "23505" || message.includes("duplicate key") || message.includes("unique constraint");
 }
 
+/**
+ * The model's own probability for a selection, before the market prior is
+ * blended in. Falls back to the published value for records built before the
+ * model/published split existed.
+ */
+function modelProbabilityFor(prediction: Prediction, market: string, selection: string): number | undefined {
+  return (prediction.modelMarkets ?? prediction.markets)
+    .find((entry) => entry.marketId === market)
+    ?.probabilities[selection];
+}
+
 export function buildShadowPredictionDraft({
   match,
   championPrediction,
@@ -139,6 +150,12 @@ export function buildShadowPredictionDraft({
     return { status: "failed", reason: "Champion outcome identity or probability is incomplete." };
   }
 
+  // Provenance and divergence are two different questions and need two
+  // different probabilities.
+  //
+  // Provenance ("is this prediction really the one behind that stored
+  // outcome?") must use the published probability, because that is what was
+  // durably recorded against the outcome.
   const championPredictionProbability = championPrediction.markets
     .find((market) => market.marketId === championOutcome.market)
     ?.probabilities[championOutcome.selection];
@@ -165,7 +182,24 @@ export function buildShadowPredictionDraft({
   if (!finiteProbability(challengerProbability)) {
     return { status: "failed", reason: "The challenger did not produce the champion's exact market and selection probability." };
   }
-  if (Math.abs(challengerProbability - championOutcome.modelProbability) < 0.000001) {
+
+  // Divergence ("do these two models actually disagree?") must use the models'
+  // own probabilities. The published values are anchored to the priced market,
+  // which by design pulls every model toward the same number — comparing those
+  // would report champion and challenger as identical however much the models
+  // differ, so no challenger could ever prove it deserves promotion.
+  // A challenger is distinguishable if it differs at *either* stage, so take the
+  // larger of the two gaps. A rival model diverges before the anchor; a
+  // challenger that only retunes the market prior diverges after it. Checking
+  // one stage alone silently marks the other kind of challenger "identical".
+  const championModelProbability = modelProbabilityFor(championPrediction, championOutcome.market, championOutcome.selection);
+  const challengerModelProbability = modelProbabilityFor(challengerPrediction, championOutcome.market, championOutcome.selection);
+  const modelDivergence = finiteProbability(championModelProbability) && finiteProbability(challengerModelProbability)
+    ? Math.abs(challengerModelProbability - championModelProbability)
+    : 0;
+  const publishedDivergence = Math.abs(challengerProbability - championOutcome.modelProbability);
+  const divergence = Math.max(modelDivergence, publishedDivergence);
+  if (divergence < 0.000001) {
     return { status: "not-applicable", reason: "The challenger probability is identical to the champion for this exact selection." };
   }
 

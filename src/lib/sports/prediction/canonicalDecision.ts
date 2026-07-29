@@ -18,7 +18,7 @@ import type {
   ValueEdge
 } from "@/lib/sports/types";
 import { isRequiredProductionDataSignalBlocked } from "./contextSignalPolicy";
-import { governedHoldoutPublicationBlockers } from "./decisionEngine";
+import { governedHoldoutPublicationBlockers, unprovenSportPublicationBlockers } from "./decisionEngine";
 import { withDecisionSummaryHash } from "./decisionSnapshotIdentity";
 
 const MINUTE_MS = 60_000;
@@ -36,8 +36,8 @@ export const SPORT_DECISION_THRESHOLDS: Record<Extract<Sport, "football" | "bask
     maximumOdds: 4.5,
     minimumKickoffLeadMinutes: 15,
     maxMarketsPerFixture: 6,
-    uncalibratedMinimumValueEdge: 0.08,
-    uncalibratedMinimumExpectedValue: 0.06,
+    uncalibratedMinimumValueEdge: 0.05,
+    uncalibratedMinimumExpectedValue: 0.04,
     uncalibratedMaximumValueEdge: 0.15
   },
   basketball: {
@@ -52,8 +52,8 @@ export const SPORT_DECISION_THRESHOLDS: Record<Extract<Sport, "football" | "bask
     maximumOdds: 4,
     minimumKickoffLeadMinutes: 10,
     maxMarketsPerFixture: 6,
-    uncalibratedMinimumValueEdge: 0.07,
-    uncalibratedMinimumExpectedValue: 0.05,
+    uncalibratedMinimumValueEdge: 0.045,
+    uncalibratedMinimumExpectedValue: 0.035,
     uncalibratedMaximumValueEdge: 0.15
   },
   tennis: {
@@ -68,8 +68,8 @@ export const SPORT_DECISION_THRESHOLDS: Record<Extract<Sport, "football" | "bask
     maximumOdds: 4.5,
     minimumKickoffLeadMinutes: 15,
     maxMarketsPerFixture: 6,
-    uncalibratedMinimumValueEdge: 0.08,
-    uncalibratedMinimumExpectedValue: 0.06,
+    uncalibratedMinimumValueEdge: 0.05,
+    uncalibratedMinimumExpectedValue: 0.04,
     uncalibratedMaximumValueEdge: 0.15
   }
 };
@@ -197,6 +197,7 @@ function enginePublicationAllowed(decision: CanonicalDecisionModelOutput["decisi
     blockers.push("uncertainty decomposition classifies the recommendation as high-risk");
   }
   blockers.push(...governedHoldoutPublicationBlockers(decision.learningProfile));
+  blockers.push(...unprovenSportPublicationBlockers(decision.learningProfile));
   return { allowed: blockers.length === 0, blockers };
 }
 
