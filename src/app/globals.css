@@ -3273,6 +3273,18 @@ a.score-row:active,
 .match-decision-context > div { display: inline-flex; align-items: center; gap: 7px; }
 .match-decision-context strong { font-size: 12px; font-variant-numeric: tabular-nums; }
 .match-risk-list { margin: 16px 0 0; color: var(--muted); }
+
+/* Model-vs-market read shown when nothing cleared the publication bar. */
+.match-engine-view { margin: 18px 0 0; }
+.match-engine-view > strong { display: block; font-size: 0.95rem; }
+.match-engine-view > p { margin: 4px 0 10px; }
+.match-engine-view table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.match-engine-view th,
+.match-engine-view td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+.match-engine-view th:first-child,
+.match-engine-view td:first-child { text-align: left; }
+.match-engine-view thead th { color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.74rem; }
+.match-engine-view tbody tr:last-child td { border-bottom: 0; }
 .match-decision-actions { display: flex; min-width: 170px; flex-direction: column; align-items: stretch; gap: 8px; }
 .match-decision-actions .button { justify-content: center; border-radius: 9px; }
 .slip-action-lock { display: grid; gap: 3px; max-width: 220px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--blue) 38%, var(--border)); border-radius: 8px; background: var(--surface-2); color: var(--text); font-size: 13px; line-height: 1.35; }
