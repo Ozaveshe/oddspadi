@@ -24,11 +24,11 @@
     "ops:warm": "node scripts/warm-caches.mjs",
     "ops:editorial": "node scripts/run-editorial-sweep.mjs",
     "ops:seed-feed": "node scripts/seed-community-posts.mjs",
-    "results:backfill": "node scripts/backfill-public-results.mjs",
+    "results:backfill": "node --env-file-if-exists=.env.local scripts/backfill-public-results.mjs",
     "player-history:prepare": "vite-node --config scripts/vite-node.config.ts scripts/prepare-player-history.ts",
-    "ops:calibration": "node scripts/promote-calibration.mjs",
-    "ops:settle": "node scripts/settle-market-decisions.mjs",
-    "ops:calibration-report": "node scripts/calibration-report.mjs"
+    "ops:calibration": "node --env-file-if-exists=.env.local scripts/promote-calibration.mjs",
+    "ops:settle": "node --env-file-if-exists=.env.local scripts/settle-market-decisions.mjs",
+    "ops:calibration-report": "node --env-file-if-exists=.env.local scripts/calibration-report.mjs"
   },
   "engines": {
     "node": "22.x"

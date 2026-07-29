@@ -61,17 +61,48 @@ function summarise(rows) {
 
 async function settledRows(sport) {
   // Only settled markets carry a truth value to calibrate against.
-  const { data, error } = await client
-    .from("op_market_decisions")
-    .select("model_probability,settlement_result,fixture_id,op_fixtures!inner(sport)")
-    .eq("op_fixtures.sport", sport)
-    .not("model_probability", "is", null)
-    .not("settlement_result", "is", null)
-    .gte("generated_at", new Date(Date.now() - days * 86_400_000).toISOString())
-    .limit(50_000);
-  if (error) throw new Error(error.message);
-  return (data ?? [])
-    .map((row) => ({ p: Number(row.model_probability), won: row.settlement_result === "won" ? 1 : 0 }))
+  //
+  // The column is `settlement_status`; this asked for `settlement_result`,
+  // which has never existed, so every sport fell into the catch below and the
+  // report printed "could not read settled decisions" no matter what was in the
+  // table. Filtering to won/lost matters just as much: the column is never
+  // null (it defaults to 'pending'), so a not-null filter admits everything and
+  // scores every unsettled row as a loss. void and push carry no truth value
+  // either — a decision that never resolved is not a decision the model got
+  // wrong.
+  //
+  // Paginate. PostgREST caps a response at its `max-rows` setting (1000 here)
+  // and `.limit(50_000)` does not raise that ceiling — it silently returns the
+  // first page. Worse, the rows are not randomly ordered, so the truncated
+  // slice is biased: tennis came back as 1000 straight wins, a base rate of
+  // 1.000 and therefore a reference Brier of 0, which forced Brier skill to a
+  // meaningless 0.0000. An ordered full sweep is the only honest read.
+  // Keyset, not offset: a growing OFFSET made Postgres re-sort the whole join
+  // every page and the football sweep died on `statement timeout`. Walking the
+  // primary key forward stays on the index.
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const pageSize = 1000;
+  const rows = [];
+  let cursor = "00000000-0000-0000-0000-000000000000";
+  for (;;) {
+    const { data, error } = await client
+      .from("op_market_decisions")
+      .select("id,model_probability,settlement_status,fixture_id,op_fixtures!inner(sport)")
+      .eq("op_fixtures.sport", sport)
+      .not("model_probability", "is", null)
+      .in("settlement_status", ["won", "lost"])
+      .is("superseded_by", null)
+      .gte("generated_at", since)
+      .gt("id", cursor)
+      .order("id", { ascending: true })
+      .limit(pageSize);
+    if (error) throw new Error(error.message);
+    rows.push(...(data ?? []));
+    if (!data || data.length < pageSize) break;
+    cursor = data[data.length - 1].id;
+  }
+  return rows
+    .map((row) => ({ p: Number(row.model_probability), won: row.settlement_status === "won" ? 1 : 0 }))
     .filter((row) => Number.isFinite(row.p) && row.p >= 0 && row.p <= 1);
 }
 

@@ -12,6 +12,12 @@ output
 .env*.local
 supabase/.temp
 
+# Expanded training corpora are extracted locally, never committed: the v2
+# football odds CSV alone is 185MB. `training-data/standard-v1` predates this
+# and stays tracked.
+training-data/*
+!training-data/standard-v1/
+
 # local workspace/tooling artifacts
 .codex
 .codex-logs
