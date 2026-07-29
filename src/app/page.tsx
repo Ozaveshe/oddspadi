@@ -8,6 +8,7 @@ import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 import { deriveHomepageMatchdayState, getWeeklyEmptyState } from "@/lib/sports/homepageState";
 import { fetchLiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import {
+  getCachedHomepageMatchdaySummary,
   getCachedTodayTipsProduct,
   getCachedWeeklyTipsProduct,
   getCachedYesterdayResultsProduct
@@ -48,13 +49,16 @@ function weekdayLabel(date: string, firstDate: string): string {
 }
 
 export default async function HomePage() {
-  const [daily, weekly, yesterday, liveBoard] = await Promise.all([
+  const [summary, daily, weekly, yesterday, liveBoard] = await Promise.all([
+    // Counts finish in milliseconds, so the card no longer depends on the full
+    // product read completing inside the budget.
+    withTimeout(getCachedHomepageMatchdaySummary(), 2_500, null),
     withTimeout(getCachedTodayTipsProduct(), 2_500, null),
     withTimeout(getCachedWeeklyTipsProduct(), 2_500, null),
     withTimeout(getCachedYesterdayResultsProduct(), 2_500, null),
     withTimeout(fetchLiveScoreBoard(), 2_500, null)
   ]);
-  const matchday = deriveHomepageMatchdayState(daily, liveBoard);
+  const matchday = deriveHomepageMatchdayState(daily, liveBoard, summary);
   const weeklyHasFixtures = weekly?.days.some((day) => day.fixtures.length > 0) ?? false;
   const todayBest = daily?.sections.valuePicks[0] ?? daily?.sections.leans[0] ?? daily?.sections.watchlist[0] ?? null;
   const tipsPreview = daily
