@@ -28,7 +28,8 @@
     "player-history:prepare": "vite-node --config scripts/vite-node.config.ts scripts/prepare-player-history.ts",
     "ops:calibration": "node --env-file-if-exists=.env.local scripts/promote-calibration.mjs",
     "ops:settle": "node --env-file-if-exists=.env.local scripts/settle-market-decisions.mjs",
-    "ops:calibration-report": "node --env-file-if-exists=.env.local scripts/calibration-report.mjs"
+    "ops:calibration-report": "node --env-file-if-exists=.env.local scripts/calibration-report.mjs",
+    "ops:closing-lines": "node --env-file-if-exists=.env.local scripts/mark-closing-odds.mjs"
   },
   "engines": {
     "node": "22.x"
