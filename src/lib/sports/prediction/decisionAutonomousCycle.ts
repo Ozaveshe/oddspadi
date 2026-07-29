@@ -172,8 +172,44 @@ function verdictRank(verdict: DecisionEngineReport["verdict"]): number {
   return 1;
 }
 
-function rankRows(rows: PredictionRow[]): PredictionRow[] {
+/**
+ * Matches the closing window the odds importers and `op_mark_closing_odds` use.
+ * A quote taken inside it is the closing price; once kickoff passes there is no
+ * second chance to record one.
+ */
+const CLOSING_CAPTURE_WINDOW_MS = 90 * 60_000;
+
+function insideClosingWindow(row: PredictionRow, now: Date): boolean {
+  const kickoff = new Date(row.match.kickoffTime).getTime();
+  if (!Number.isFinite(kickoff)) return false;
+  const untilKickoff = kickoff - now.getTime();
+  return untilKickoff >= 0 && untilKickoff <= CLOSING_CAPTURE_WINDOW_MS;
+}
+
+/**
+ * Value first, except for fixtures about to start.
+ *
+ * The cycle prices at most `limit` fixtures per date across a three-day window,
+ * and kickoff time used to be the last tiebreaker — so a match starting in
+ * thirty minutes lost its slot to one three days out with a better verdict. The
+ * far-out match can be priced again tomorrow; the imminent one cannot. That is
+ * why football's last pre-kickoff quote sat a median of 266 minutes before
+ * kickoff and closing-line coverage stalled at 0.27 against a 0.80 promotion
+ * gate, while tennis (which polls close to kickoff) reached 0.58.
+ *
+ * Fixtures inside the closing window are therefore ranked first, and ordered
+ * among themselves by imminence. Everything outside keeps the original
+ * value-based ordering exactly, so which matches get analysed and published is
+ * otherwise unchanged.
+ */
+function rankRows(rows: PredictionRow[], now: Date): PredictionRow[] {
   return rows.slice().sort((left, right) => {
+    const leftClosing = insideClosingWindow(left, now);
+    const rightClosing = insideClosingWindow(right, now);
+    if (leftClosing !== rightClosing) return leftClosing ? -1 : 1;
+    if (leftClosing && rightClosing) {
+      return new Date(left.match.kickoffTime).getTime() - new Date(right.match.kickoffTime).getTime();
+    }
     const verdictDifference = verdictRank(right.prediction.decision.verdict) - verdictRank(left.prediction.decision.verdict);
     if (verdictDifference) return verdictDifference;
     const rightEv = right.prediction.canonicalDecision.bestPublishedPick?.expectedValue ?? -1;
@@ -341,7 +377,7 @@ export async function runDecisionAutonomousCycle({
   });
   const providerRows = rows.filter((row) => isVerifiedProviderDecisionMatch(row.match));
   const actionableRows = providerRows.filter((row) => row.match.status !== "finished");
-  const selectedRows = rankRows(actionableRows).slice(0, boundedFixtureLimit);
+  const selectedRows = rankRows(actionableRows, now).slice(0, boundedFixtureLimit);
   const decisions: DecisionAutonomousCycleItem[] = [];
   let aiCalls = 0;
   const shadowArtifact: ShadowModelArtifactResult = runRequested && persist
