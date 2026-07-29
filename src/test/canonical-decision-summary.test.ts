@@ -77,6 +77,7 @@ function prediction(match: Match, canonicalDecision: DecisionSummary): Predictio
     generatedAt: canonicalDecision.generatedAt,
     evidenceHash: canonicalDecision.auditSummary.evidenceHash ?? "decision-evidence-v1:test",
     markets: [],
+    modelMarkets: [],
     diagnostics: { modelVersion: "canonical-test", dataQualityScore: match.dataQualityScore } as Prediction["diagnostics"],
     contextAdjustment: {} as Prediction["contextAdjustment"],
     marketPriorAdjustment: {} as Prediction["marketPriorAdjustment"],
@@ -216,8 +217,8 @@ describe("canonical DecisionSummary", () => {
   // uncalibrated-publication-gate.test.ts.
   it("keeps point-estimate value on the watchlist when it misses the uncalibrated bar", async () => {
     const decision = summary(await fixture(), bttsEdge({
-      edge: 0.05,
-      expectedValue: 0.05,
+      edge: 0.03,
+      expectedValue: 0.03,
       economicConfidence: {
         status: "unavailable",
         method: "unavailable",
@@ -234,7 +235,7 @@ describe("canonical DecisionSummary", () => {
 
     expect(decision.publicStatus).toBe("watchlist");
     expect(decision.bestPublishedPick).toBeNull();
-    expect(decision.bestWatchlistCandidate?.blockers.join(" | ")).toContain("uncalibrated publication needs at least 8% raw edge");
+    expect(decision.bestWatchlistCandidate?.blockers.join(" | ")).toContain("uncalibrated publication needs at least 5% raw edge");
   });
 
   it("requires the empirical lower-bound edge and EV to clear the same publication thresholds", async () => {

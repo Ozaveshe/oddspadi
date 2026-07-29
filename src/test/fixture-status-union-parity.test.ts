@@ -17,15 +17,29 @@ describe("fixture status union parity", () => {
   it("declares the same six states everywhere a fixture status is modelled", async () => {
     const offenders: string[] = [];
 
-    async function walk(directory: string): Promise<void> {
+    // Collect the paths first, then read them concurrently. Reading each file
+    // in sequence walked all of src/lib one round trip at a time, which landed
+    // ~5s under the 60s timeout and tipped over whenever a file was added — the
+    // guard became a timing lottery rather than a check on the status union.
+    async function collect(directory: string): Promise<string[]> {
+      const paths: string[] = [];
       for (const entry of await readdir(directory, { withFileTypes: true })) {
         const path = join(directory, entry.name);
         if (entry.isDirectory()) {
-          if (entry.name !== "_archived") await walk(path);
+          if (entry.name !== "_archived") paths.push(...(await collect(path)));
           continue;
         }
-        if (!entry.name.endsWith(".ts")) continue;
-        const source = await readFile(path, "utf8");
+        if (entry.name.endsWith(".ts")) paths.push(path);
+      }
+      return paths;
+    }
+
+    async function walk(directory: string): Promise<void> {
+      const paths = await collect(directory);
+      const sources = await Promise.all(
+        paths.map(async (path) => [path, await readFile(path, "utf8")] as const)
+      );
+      for (const [path, source] of sources) {
         for (const [index, line] of source.split("\n").entries()) {
           // A union listing "postponed" and "cancelled" is modelling a fixture
           // status; if it stops there it has dropped "suspended".

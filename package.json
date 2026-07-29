@@ -26,7 +26,9 @@
     "ops:seed-feed": "node scripts/seed-community-posts.mjs",
     "results:backfill": "node scripts/backfill-public-results.mjs",
     "player-history:prepare": "vite-node --config scripts/vite-node.config.ts scripts/prepare-player-history.ts",
-    "ops:calibration": "node scripts/promote-calibration.mjs"
+    "ops:calibration": "node scripts/promote-calibration.mjs",
+    "ops:settle": "node scripts/settle-market-decisions.mjs",
+    "ops:calibration-report": "node scripts/calibration-report.mjs"
   },
   "engines": {
     "node": "22.x"

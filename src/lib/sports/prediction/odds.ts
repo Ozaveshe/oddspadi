@@ -14,6 +14,7 @@ import { confidenceFromEdgeAndProbability, riskLevelFromConfidenceAndOdds } from
 import { evaluateEmpiricalValueGuard } from "./empiricalValueGuard";
 import { evaluateSegmentValueGuard } from "./segmentValueGuard";
 import { buildValueEdgeEconomicConfidence } from "./valueEdgeEconomicConfidence";
+import type { ModelSkillAnchor } from "./modelSkillAnchor";
 
 export function clampProbability(value: number): number {
   if (Number.isNaN(value)) return 0;
@@ -285,7 +286,8 @@ function marketPriorWeight(
   bookmakerCount: number,
   maxProbabilitySpread: number | null,
   evidencePolicy?: MarketPriorEvidencePolicy,
-  scalingPolicy?: Pick<MarketPriorScalingPolicy, "weightScale">
+  scalingPolicy?: Pick<MarketPriorScalingPolicy, "weightScale">,
+  skillAnchor?: ModelSkillAnchor
 ): number {
   const quality = clampProbability(dataQuality);
   const qualityWeight = 0.08 + (1 - quality) * 0.16;
@@ -317,7 +319,19 @@ function marketPriorWeight(
   const evidenceFloor = coherentMarket && evidencePolicy
     ? clampProbability(evidencePolicy.minimumWeight) * evidenceMarketReliability * selectionDepth * consensusReliability
     : 0;
-  return round(clampRange(Math.max(standardWeight * weightScale * consensusReliability, evidenceFloor), 0, 0.9));
+  // An unproven model must stay anchored to the priced market. The floor is
+  // scaled by consensus reliability for the same reason the rest of the weight
+  // is: a thin or disagreeing market is not something to anchor to either.
+  //
+  // `weightScale` scales the floor too, so a shadow challenger exploring a
+  // different market-prior strength still produces a different probability. A
+  // fixed floor would swallow the override, make every challenger identical to
+  // the champion, and leave the anchor permanently unfalsifiable. Live runtimes
+  // use weightScale 1 and are unaffected; shadow artifacts are private and
+  // never publicly exposed, so letting them probe below the floor is how a
+  // better anchor gets discovered in the first place.
+  const skillFloor = skillAnchor ? skillAnchor.marketWeightFloor * consensusReliability * weightScale : 0;
+  return round(clampRange(Math.max(standardWeight * weightScale * consensusReliability, evidenceFloor, skillFloor), 0, 0.9));
 }
 
 function normalizeSelectionSubset(probabilities: Record<string, number>, selectionIds: string[]): Record<string, number> {
@@ -355,7 +369,8 @@ export function applyMarketPriorAdjustmentToMarkets(
   oddsMarkets: OddsMarket[],
   dataQuality: number,
   evidencePolicy?: MarketPriorEvidencePolicy,
-  scalingPolicy?: Pick<MarketPriorScalingPolicy, "weightScale">
+  scalingPolicy?: Pick<MarketPriorScalingPolicy, "weightScale">,
+  skillAnchor?: ModelSkillAnchor
 ): { markets: PredictionMarket[]; adjustment: MarketPriorAdjustment } {
   const marketAdjustments: MarketPriorAdjustment["markets"] = [];
   let adjustedSelections = 0;
@@ -389,7 +404,8 @@ export function applyMarketPriorAdjustmentToMarkets(
       bookmakerCount,
       maxProbabilitySpread,
       evidencePolicy,
-      scalingPolicy
+      scalingPolicy,
+      skillAnchor
     );
     const blended = { ...predictionMarket.probabilities };
 
