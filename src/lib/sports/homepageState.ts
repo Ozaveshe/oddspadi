@@ -5,6 +5,20 @@ import type { DailyTipsProduct } from "@/lib/sports/tips/product";
 export type HomepageProviderState = ProviderRunStatus;
 
 export type HomepageMatchdayState = {
+  /**
+   * Whether the daily read actually completed.
+   *
+   * The homepage races each read against a 2.5s budget and falls back to null,
+   * and a null read was rendered as a hard `0 prediction fixtures ready today`.
+   * On a cold serverless start that read takes ~14s, so a board holding ~698
+   * fixtures routinely told visitors there were none. A timeout is "not yet
+   * known", never "nothing there".
+   *
+   * This governs the count display only. When live-board fixtures are present
+   * the page still falls back to showing them and still reports the prediction
+   * feed as unavailable, which is accurate about the engine specifically.
+   */
+  dataState: "ready" | "pending";
   fixtureCount: number;
   liveBoardFixtureCount: number;
   liveCount: number;
@@ -58,6 +72,7 @@ export function deriveHomepageMatchdayState(
   const displayedFixtures = usesLiveFallback ? boardFixtures : [];
 
   return {
+    dataState: daily === null ? "pending" : "ready",
     fixtureCount: engineFixtureCount,
     liveBoardFixtureCount: boardFixtures.length,
     liveCount: displayedFixtures.filter((fixture) => fixture.phase === "live").length,
@@ -80,7 +95,20 @@ export function deriveHomepageMatchdayState(
   };
 }
 
-export function getWeeklyEmptyState(providerStatus: ProviderRunStatus | null, liveCoverageAvailable: boolean) {
+export function getWeeklyEmptyState(
+  providerStatus: ProviderRunStatus | null,
+  liveCoverageAvailable: boolean,
+  // Same distinction as the matchday card: a read that never returned is not
+  // evidence that the weekly feed is down.
+  pending = false
+) {
+  if (pending) {
+    return {
+      title: "Still loading the seven-day board",
+      detail: "The weekly read did not finish in time for this render. Refresh in a moment.",
+      showLiveLink: liveCoverageAvailable
+    };
+  }
   const scheduledEmpty = providerStatus === "completed" || providerStatus === "empty";
   return {
     title: scheduledEmpty ? "No weekly fixtures are published yet" : "Weekly analysis is currently unavailable",

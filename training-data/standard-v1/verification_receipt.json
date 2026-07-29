@@ -1,0 +1,139 @@
+{
+  "verified_at": "2026-07-29T09:25:51.145Z",
+  "package_version": "standard-v1",
+  "result": "pass",
+  "assertions": [
+    {
+      "id": "football_row_count",
+      "status": "pass",
+      "observed": 5256,
+      "expected": 5256
+    },
+    {
+      "id": "football_unique_match_id",
+      "status": "pass",
+      "observed": 5256,
+      "expected": 5256
+    },
+    {
+      "id": "football_odds_row_count",
+      "status": "pass",
+      "observed": 121032,
+      "expected": 121032
+    },
+    {
+      "id": "tennis_row_count",
+      "status": "pass",
+      "observed": 13642,
+      "expected": 13642
+    },
+    {
+      "id": "tennis_unique_match_id",
+      "status": "pass",
+      "observed": 13642,
+      "expected": 13642
+    },
+    {
+      "id": "tennis_odds_row_count",
+      "status": "pass",
+      "observed": 102069,
+      "expected": 102069
+    },
+    {
+      "id": "manifest_row_count",
+      "status": "pass",
+      "observed": 21,
+      "expected": 21
+    },
+    {
+      "id": "football_score_result_consistency",
+      "status": "pass",
+      "observed": 0,
+      "expected": 0
+    },
+    {
+      "id": "tennis_score_consistency",
+      "status": "pass",
+      "observed": 0,
+      "expected": 0
+    },
+    {
+      "id": "football_odds_orphans",
+      "status": "pass",
+      "observed": 0,
+      "expected": 0
+    },
+    {
+      "id": "football_odds_invalid_decimal",
+      "status": "pass",
+      "observed": 0,
+      "expected": 0
+    },
+    {
+      "id": "football_odds_duplicate_key",
+      "status": "pass",
+      "observed": 0,
+      "expected": 0
+    },
+    {
+      "id": "football_opening_closing_pair_coverage",
+      "status": "pass",
+      "observed": 1,
+      "expected": ">=0.8"
+    },
+    {
+      "id": "football_market_average_closing_coverage",
+      "status": "pass",
+      "observed": 1,
+      "expected": ">=0.8"
+    },
+    {
+      "id": "tennis_odds_orphans",
+      "status": "pass",
+      "observed": 0,
+      "expected": 0
+    },
+    {
+      "id": "tennis_odds_invalid_decimal",
+      "status": "pass",
+      "observed": 0,
+      "expected": 0
+    },
+    {
+      "id": "tennis_odds_duplicate_key",
+      "status": "pass",
+      "observed": 0,
+      "expected": 0
+    },
+    {
+      "id": "sha256_footballMatches",
+      "status": "pass",
+      "observed": "4b072adaa18898d04cab677594e2c8674f07c116007d52614f5a4b32dda7ce7f",
+      "expected": "4b072adaa18898d04cab677594e2c8674f07c116007d52614f5a4b32dda7ce7f"
+    },
+    {
+      "id": "sha256_footballOdds",
+      "status": "pass",
+      "observed": "c6a3c67fe51ab2501538b50e6c76f9fe3ba979fad41ad5625bfbd1ae30c8642b",
+      "expected": "c6a3c67fe51ab2501538b50e6c76f9fe3ba979fad41ad5625bfbd1ae30c8642b"
+    },
+    {
+      "id": "sha256_tennisMatches",
+      "status": "pass",
+      "observed": "5403bb0c402255e75a4ef8c665e30b76f5168e82d56fa6f4f8782cea8363a8fc",
+      "expected": "5403bb0c402255e75a4ef8c665e30b76f5168e82d56fa6f4f8782cea8363a8fc"
+    },
+    {
+      "id": "sha256_tennisOdds",
+      "status": "pass",
+      "observed": "05f49f1a192a0c7fc27feff2a5384a690ac3453b78d9604c5d380ba08e3642e7",
+      "expected": "05f49f1a192a0c7fc27feff2a5384a690ac3453b78d9604c5d380ba08e3642e7"
+    },
+    {
+      "id": "sha256_sourceManifest",
+      "status": "pass",
+      "observed": "d953af07ebc4ab598ea9a57534e6f3cd92ee111a3a9fce98b37f52bf001ebdef",
+      "expected": "d953af07ebc4ab598ea9a57534e6f3cd92ee111a3a9fce98b37f52bf001ebdef"
+    }
+  ]
+}

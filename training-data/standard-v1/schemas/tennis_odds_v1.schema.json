@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tennis odds snapshots v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "match_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sport": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tour": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "season": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "match_date": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "bookmaker": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "market": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "selection": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "decimal_odds": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "snapshot_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "is_closing": {
+      "type": "boolean"
+    },
+    "observed_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_column": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_provider": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "quality_flags": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "match_id",
+    "sport",
+    "tour",
+    "season",
+    "match_date",
+    "bookmaker",
+    "market",
+    "selection",
+    "decimal_odds",
+    "snapshot_type",
+    "is_closing",
+    "source_column",
+    "source_provider",
+    "source_url",
+    "quality_flags"
+  ]
+}

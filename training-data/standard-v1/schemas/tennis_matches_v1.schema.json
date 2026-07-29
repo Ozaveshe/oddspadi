@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tennis matches with scores v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "match_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "match_key_loose": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sport": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tour": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "season": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "match_date": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tournament": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "location": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "series": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "court": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "surface": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "round": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "player_1_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "player_2_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "winner_side": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "player_1_sets": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "player_2_sets": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "set_scores_json": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "score_text": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_status": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "gradeable_match_winner": {
+      "type": "boolean"
+    },
+    "gradeable_set_markets": {
+      "type": "boolean"
+    },
+    "player_1_rank": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "player_2_rank": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "source_provider": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_row_number": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "source_checked_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "license_status": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "match_id",
+    "match_key_loose",
+    "sport",
+    "tour",
+    "season",
+    "match_date",
+    "tournament",
+    "location",
+    "series",
+    "court",
+    "surface",
+    "round",
+    "player_1_name",
+    "player_2_name",
+    "winner_side",
+    "player_1_sets",
+    "player_2_sets",
+    "set_scores_json",
+    "score_text",
+    "source_status",
+    "gradeable_match_winner",
+    "gradeable_set_markets",
+    "player_1_rank",
+    "player_2_rank",
+    "source_provider",
+    "source_url",
+    "source_row_number",
+    "source_checked_at",
+    "license_status"
+  ]
+}
