@@ -70,7 +70,9 @@ export default async function HomePage() {
       : matchday.featuredFixture?.phase === "finished"
         ? "A final result from today"
         : "A match on today’s board";
-  const weeklyEmpty = getWeeklyEmptyState(weekly?.slate.provider.status ?? null, Boolean(liveBoard?.fixtures.length));
+  // A read that did not finish must not be rendered as a zero count.
+  const pendingBoard = matchday.dataState === "pending";
+  const weeklyEmpty = getWeeklyEmptyState(weekly?.slate.provider.status ?? null, Boolean(liveBoard?.fixtures.length), weekly === null);
 
   return (
     <main id="main" className="container home-product">
@@ -87,10 +89,13 @@ export default async function HomePage() {
         </div>
         <aside className="home-matchday-brief" aria-label="Matchday at a glance">
           <span className="section-kicker">Matchday at a glance</span>
-          <strong>{matchday.fixtureCount}</strong>
-          <span>prediction fixtures ready today</span>
+          <strong aria-live="polite">{matchday.dataState === "pending" ? "—" : matchday.fixtureCount}</strong>
+          <span>{matchday.dataState === "pending" ? "still counting today's fixtures" : "prediction fixtures ready today"}</span>
           <div>
-            {matchday.usesLiveFallback ? <>
+            {matchday.dataState === "pending" ? <>
+              <span>Reading the board</span>
+              <span>Refresh in a moment</span>
+            </> : matchday.usesLiveFallback ? <>
               <span>{matchday.liveBoardFixtureCount} score-board fixtures</span>
               <span>{matchday.liveCount} live</span>
               <span>{matchday.upcomingCount} upcoming</span>
@@ -106,10 +111,10 @@ export default async function HomePage() {
       </section>
 
       <section className="home-engine-strip" aria-label="Latest engine status">
-        <div><span>Prediction fixtures</span><strong>{matchday.fixtureCount}</strong></div>
-        <div><span>Tips published</span><strong>{matchday.valuePickCount}</strong></div>
-        <div><span>Watchlist</span><strong>{matchday.watchlistCount}</strong></div>
-        <div><span>Last engine run</span><strong>{lastRun ? <LocalTime iso={lastRun} /> : "Waiting"}</strong></div>
+        <div><span>Prediction fixtures</span><strong>{pendingBoard ? "—" : matchday.fixtureCount}</strong></div>
+        <div><span>Tips published</span><strong>{pendingBoard ? "—" : matchday.valuePickCount}</strong></div>
+        <div><span>Watchlist</span><strong>{pendingBoard ? "—" : matchday.watchlistCount}</strong></div>
+        <div><span>Last engine run</span><strong>{lastRun ? <LocalTime iso={lastRun} /> : pendingBoard ? "Checking" : "Waiting"}</strong></div>
         <div><span>Provider health</span><strong className={`engine-health status-${matchday.providerState}`}>{matchday.providerLabel}</strong><Link className="engine-audit-link" href="/engine/performance">Audit evidence →</Link></div>
       </section>
 

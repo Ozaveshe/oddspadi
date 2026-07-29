@@ -22,6 +22,7 @@ import { ShareBar } from "@/components/share/ShareBar";
 import { FollowTeamButton } from "@/components/account/FollowTeamButton";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 import Link from "next/link";
+import { presentBlockers } from "@/lib/sports/prediction/blockerPresentation";
 import { leagueSlugFromProviderId } from "@/lib/sports/leagueStandings";
 import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
 import { MatchCommunityDesk } from "@/components/community/MatchCommunityDesk";
@@ -111,7 +112,9 @@ export default async function MatchDetailPage({ params }: PageProps) {
           : canonical.publicStatus === "suspended"
             ? "Suspended — no new pre-match decision."
             : "No clear value found.";
-  const publicRisks = [...new Set([...(displayedDecision?.blockers ?? []), ...canonical.auditSummary.blockers])].slice(0, 3);
+  // Engine blockers are internal vocabulary and often restate one another;
+  // present them as distinct, readable reasons.
+  const publicRisks = presentBlockers([...(displayedDecision?.blockers ?? []), ...canonical.auditSummary.blockers]);
   const leagueTableSlug = leagueSlugFromProviderId(match.league.id);
   const homeStanding = match.leagueTable?.rows.find((row) => row.teamId === match.homeTeam.id || row.teamName.toLowerCase() === match.homeTeam.name.toLowerCase());
   const awayStanding = match.leagueTable?.rows.find((row) => row.teamId === match.awayTeam.id || row.teamName.toLowerCase() === match.awayTeam.name.toLowerCase());
@@ -218,7 +221,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
               </div>
             </>
           ) : <p className="muted">{canonical.noPickReason ?? "No clear value found."}</p>}
-          <div className="match-risk-list"><strong>Key risks</strong>{publicRisks.length ? <ul>{publicRisks.map((risk) => <li key={risk}>{risk}</li>)}</ul> : <p className="muted small">No extra blocker is attached to the current public decision. Match and price uncertainty still applies.</p>}</div>
+          <div className="match-risk-list"><strong>Key risks</strong>{publicRisks.length ? <ul>{publicRisks.map((risk) => <li key={risk.topic}>{risk.text}</li>)}</ul> : <p className="muted small">No extra blocker is attached to the current public decision. Match and price uncertainty still applies.</p>}</div>
         </div>
         <div className="match-decision-actions">
           <AddToSlipButton match={match} prediction={prediction} />
