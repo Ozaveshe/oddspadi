@@ -40,6 +40,14 @@ export type FootballDataHistoricalPromotionProofInput = {
   includePublicHistory?: boolean;
   includeBridge?: boolean;
   includeModelPromotion?: boolean;
+  /**
+   * Season CSV reader. The dossier and benchmark already accept one; leaving it
+   * unexposed here meant the only test covering this proof downloaded ten
+   * seasons from football-data.co.uk inside a 30s timeout, so `npm test` failed
+   * intermittently on network speed alone — and `npm run release:verify` gates
+   * releases on that suite.
+   */
+  fetchCsv?: (url: string) => Promise<string>;
 };
 
 export async function buildFootballDataHistoricalPromotionProof({
@@ -57,7 +65,8 @@ export async function buildFootballDataHistoricalPromotionProof({
   limit,
   includePublicHistory = true,
   includeBridge = true,
-  includeModelPromotion = true
+  includeModelPromotion = true,
+  fetchCsv
 }: FootballDataHistoricalPromotionProofInput): Promise<FootballDataHistoricalPromotionProof> {
   const historicalLearningDossier = includePublicHistory
     ? await buildFootballDataHistoricalLearningDossier({
@@ -68,7 +77,8 @@ export async function buildFootballDataHistoricalPromotionProof({
         minEdge,
         minModelProbability,
         minPickCount,
-        minTrainingSeasons
+        minTrainingSeasons,
+        ...(fetchCsv ? { fetchCsv } : {})
       })
     : null;
   const publicHistoricalTrainingEvidence = historicalLearningDossier ? buildPublicHistoricalTrainingEvidence({ dossier: historicalLearningDossier }) : null;
@@ -81,7 +91,8 @@ export async function buildFootballDataHistoricalPromotionProof({
           maxSeasons,
           trainRatio,
           minEdge,
-          minModelProbability
+          minModelProbability,
+          ...(fetchCsv ? { fetchCsv } : {})
         })
       : null;
 

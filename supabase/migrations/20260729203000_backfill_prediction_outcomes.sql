@@ -41,6 +41,9 @@ create or replace function public.nullif_implausible_odds(p_odds numeric)
 returns numeric
 language sql
 immutable
+-- Pinned even though this touches no tables: an unset search_path trips the
+-- Supabase security linter (0011_function_search_path_mutable).
+set search_path = ''
 as $$
   select case when p_odds is null or p_odds <= 1 or p_odds > 100 then null else p_odds end;
 $$;
