@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { readHomepageMatchdaySummary } from "@/lib/sports/homepageSummary";
 import {
   getDailyTipsProduct,
   getWeeklyTipsProduct,
@@ -40,4 +41,14 @@ export const getCachedYesterdayResultsProduct = unstable_cache(
   () => getYesterdayResultsProduct(),
   ["public-yesterday-results-v1"],
   { revalidate: 300 }
+);
+
+/**
+ * Counts-only read for the homepage card. Cheap enough to finish inside the
+ * page's render budget, unlike the full tips product it replaced there.
+ */
+export const getCachedHomepageMatchdaySummary = unstable_cache(
+  () => readHomepageMatchdaySummary(),
+  ["public-homepage-matchday-summary-v1"],
+  { revalidate: 120 }
 );
