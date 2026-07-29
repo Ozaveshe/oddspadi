@@ -103,6 +103,7 @@ function predictionFor(match: Match, edgeOverrides: Partial<ValueEdge> = {}, act
     generatedAt: "2026-07-13T12:00:00.000Z",
     evidenceHash: "decision-evidence-v1:daily-intelligence-test",
     markets: [{ marketId: "match_winner", probabilities: { home: 0.62, draw: 0.21, away: 0.17 } }],
+    modelMarkets: [{ marketId: "match_winner", probabilities: { home: 0.62, draw: 0.21, away: 0.17 } }],
     diagnostics: { modelVersion: "test-model-v1" } as Prediction["diagnostics"],
     contextAdjustment: {} as Prediction["contextAdjustment"],
     marketPriorAdjustment: {} as Prediction["marketPriorAdjustment"],

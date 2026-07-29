@@ -880,6 +880,25 @@ const MINIMUM_GOVERNED_HOLDOUT_FIXTURES = 100;
  * Once an exact-runtime holdout is large enough to judge, negative betting
  * economics are a hard publication veto rather than merely an inactive weight.
  */
+/**
+ * A sport with no settled evidence at all cannot have its error bounded, so it
+ * must not publish regardless of how large a modelled edge it reports. Tennis
+ * reached production with zero calibration candidates and promptly produced a
+ * 20.9% average edge peaking at 57.4% — an unfalsifiable claim, not value.
+ * Analysis still renders; only publication is withheld.
+ */
+export function unprovenSportPublicationBlockers(learningProfile?: DecisionLearningProfile): string[] {
+  if (!learningProfile) return [];
+  // A profile that failed to load reports zero settled fixtures too, but that
+  // means "could not read the corpus", not "the corpus is empty". Blocking on
+  // it would let a transient Supabase outage silently halt all publication.
+  // Unreadable evidence is a data-coverage problem and is handled there.
+  if (learningProfile.status === "failed") return [];
+  const settled = learningProfile.realFinishedFixtures ?? 0;
+  if (settled > 0) return [];
+  return ["no settled outcomes exist for this sport, so model error cannot be bounded"];
+}
+
 export function governedHoldoutPublicationBlockers(
   learningProfile?: DecisionLearningProfile
 ): string[] {

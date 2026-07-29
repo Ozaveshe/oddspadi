@@ -74,7 +74,7 @@ async function decide(edge: ValueEdge) {
 
 describe("uncalibrated publication gate", () => {
   it("publishes a large raw edge while no calibration profile exists", async () => {
-    // Football's uncalibrated bar is 8% edge / 6% EV; this clears both.
+    // Football's uncalibrated bar is 5% edge / 4% EV; this clears both.
     const decision = await decide(edgeWith({ edge: 0.1, expectedValue: 0.15, economicConfidence: unavailableFloor() }));
 
     expect(decision.publicStatus).toBe("value_pick");
@@ -82,18 +82,18 @@ describe("uncalibrated publication gate", () => {
   });
 
   it("still withholds an edge that clears the calibrated bar but not the uncalibrated one", async () => {
-    // 5% edge would publish with a promoted profile (4% bar) but not without one.
-    const decision = await decide(edgeWith({ edge: 0.05, expectedValue: 0.05, economicConfidence: unavailableFloor() }));
+    // 3% edge would publish with a promoted profile (4% bar) but not without one.
+    const decision = await decide(edgeWith({ edge: 0.03, expectedValue: 0.03, economicConfidence: unavailableFloor() }));
 
     expect(decision.publicStatus).not.toBe("value_pick");
     expect(decision.allMarketAnalyses[0]?.analysisStatus).toBe("watchlist");
   });
 
   it("names the uncalibrated bar in the blocker rather than the old dead-end message", async () => {
-    const decision = await decide(edgeWith({ edge: 0.05, expectedValue: 0.05, economicConfidence: unavailableFloor() }));
+    const decision = await decide(edgeWith({ edge: 0.03, expectedValue: 0.03, economicConfidence: unavailableFloor() }));
     const blockers = decision.auditSummary.blockers.join(" | ");
 
-    expect(blockers).toContain("uncalibrated publication needs at least 8% raw edge");
+    expect(blockers).toContain("uncalibrated publication needs at least 5% raw edge");
     expect(blockers).not.toContain("empirical 95% value floor is unavailable");
   });
 
