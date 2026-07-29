@@ -14,7 +14,9 @@ describe("live OddsPadi product UI contract", () => {
     expect(home).toContain("<LiveTicker initial={liveBoard}");
     expect(home).toContain("getCachedTodayTipsProduct()");
     expect(home).toContain("getCachedWeeklyTipsProduct()");
-    expect(home).toContain("deriveHomepageMatchdayState(daily, liveBoard)");
+    // The card also accepts a counts-only summary, which carries it when the
+    // full product read misses the page's 2.5s budget.
+    expect(home).toContain("deriveHomepageMatchdayState(daily, liveBoard, summary)");
     expect(home).toContain("matchday.featuredFixture");
     expect(home).toContain("matchday.previewFixtures");
     expect(home).not.toMatch(/loading\.\.\.|loading forever|spinner/i);
