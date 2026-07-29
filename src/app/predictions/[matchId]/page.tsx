@@ -22,7 +22,7 @@ import { ShareBar } from "@/components/share/ShareBar";
 import { FollowTeamButton } from "@/components/account/FollowTeamButton";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 import Link from "next/link";
-import { presentBlockers } from "@/lib/sports/prediction/blockerPresentation";
+import { buildEngineViewRows, presentBlockers } from "@/lib/sports/prediction/blockerPresentation";
 import { leagueSlugFromProviderId } from "@/lib/sports/leagueStandings";
 import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
 import { MatchCommunityDesk } from "@/components/community/MatchCommunityDesk";
@@ -114,6 +114,16 @@ export default async function MatchDetailPage({ params }: PageProps) {
             : "No clear value found.";
   // Engine blockers are internal vocabulary and often restate one another;
   // present them as distinct, readable reasons.
+  // A fixture with no publishable decision still has a model read and live
+  // prices. The page promises "everything the engine sees", so withholding
+  // those because nothing cleared the publication bar left it near-empty.
+  const engineView = displayedDecision
+    ? []
+    : buildEngineViewRows({
+        selections: match.oddsMarkets.find((market) => market.id === (winner?.marketId ?? "match_winner"))?.selections ?? [],
+        probabilities: winner?.probabilities ?? {}
+      });
+
   const publicRisks = presentBlockers([...(displayedDecision?.blockers ?? []), ...canonical.auditSummary.blockers]);
   const leagueTableSlug = leagueSlugFromProviderId(match.league.id);
   const homeStanding = match.leagueTable?.rows.find((row) => row.teamId === match.homeTeam.id || row.teamName.toLowerCase() === match.homeTeam.name.toLowerCase());
@@ -220,7 +230,30 @@ export default async function MatchDetailPage({ params }: PageProps) {
                 <div><span>Decision clock</span><strong><LocalTime iso={canonical.generatedAt} /></strong></div>
               </div>
             </>
-          ) : <p className="muted">{canonical.noPickReason ?? "No clear value found."}</p>}
+          ) : (
+            <>
+              <p className="muted">{canonical.noPickReason ?? "No clear value found."}</p>
+              {engineView.length ? (
+                <div className="match-engine-view">
+                  <strong>What the model sees</strong>
+                  <p className="muted small">No pick cleared the publication bar, so these numbers are the model&apos;s read, not a recommendation.</p>
+                  <table>
+                    <thead><tr><th>Selection</th><th>Model</th><th>Market</th><th>Best price</th></tr></thead>
+                    <tbody>
+                      {engineView.map((row) => (
+                        <tr key={row.id}>
+                          <td>{row.label}</td>
+                          <td>{row.modelProbability === null ? "—" : `${Math.round(row.modelProbability * 100)}%`}</td>
+                          <td>{row.impliedProbability === null ? "—" : `${Math.round(row.impliedProbability * 100)}%`}</td>
+                          <td>{row.odds > 1 ? row.odds.toFixed(2) : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </>
+          )}
           <div className="match-risk-list"><strong>Key risks</strong>{publicRisks.length ? <ul>{publicRisks.map((risk) => <li key={risk.topic}>{risk.text}</li>)}</ul> : <p className="muted small">No extra blocker is attached to the current public decision. Match and price uncertainty still applies.</p>}</div>
         </div>
         <div className="match-decision-actions">

@@ -66,3 +66,43 @@ export function presentBlockers(blockers: readonly string[], limit = 3): Present
 
   return presented;
 }
+
+export type EngineViewRow = {
+  id: string;
+  label: string;
+  odds: number;
+  modelProbability: number | null;
+  impliedProbability: number | null;
+};
+
+/**
+ * Model-vs-market read for a fixture that produced no publishable decision.
+ *
+ * A suspended or abstained fixture has no published pick, lean or watchlist
+ * candidate, so the match page rendered only a status line — despite holding
+ * both the model's probabilities and live prices, and despite promising the
+ * reader "everything the engine sees". These rows are that evidence; they are
+ * explicitly not a recommendation.
+ */
+export function buildEngineViewRows({
+  selections,
+  probabilities
+}: {
+  selections: ReadonlyArray<{ id: string; label: string; decimalOdds: number }>;
+  probabilities: Record<string, number>;
+}): EngineViewRow[] {
+  const rows = selections.map((selection) => {
+    const modelProbability = probabilities[selection.id];
+    return {
+      id: selection.id,
+      label: selection.label,
+      odds: selection.decimalOdds,
+      modelProbability: typeof modelProbability === "number" && Number.isFinite(modelProbability) ? modelProbability : null,
+      // Odds of 1.0 or less carry no information; treat them as absent rather
+      // than dividing into a nonsense implied probability.
+      impliedProbability: selection.decimalOdds > 1 ? 1 / selection.decimalOdds : null
+    };
+  });
+  // Showing a table of dashes is worse than showing nothing.
+  return rows.some((row) => row.modelProbability !== null || row.impliedProbability !== null) ? rows : [];
+}

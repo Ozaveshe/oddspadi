@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { presentBlockers } from "@/lib/sports/prediction/blockerPresentation";
+import { buildEngineViewRows, presentBlockers } from "@/lib/sports/prediction/blockerPresentation";
 
 describe("blocker presentation", () => {
   it("collapses the three ways the engine says it abstained into one reason", () => {
@@ -53,5 +53,48 @@ describe("blocker presentation", () => {
     const presented = presentBlockers(["", "  ", "data quality is below the sport threshold", "kickoff is too close for a new published pick"], 1);
 
     expect(presented).toHaveLength(1);
+  });
+});
+
+describe("engine view rows", () => {
+  const selections = [
+    { id: "home", label: "N. Arakawa", decimalOdds: 1.75 },
+    { id: "away", label: "Ri. Alame", decimalOdds: 2.1 }
+  ];
+
+  it("pairs the model read against the market price", () => {
+    const rows = buildEngineViewRows({ selections, probabilities: { home: 0.57, away: 0.43 } });
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ label: "N. Arakawa", modelProbability: 0.57 });
+    expect(rows[0]!.impliedProbability).toBeCloseTo(1 / 1.75, 5);
+  });
+
+  it("shows market prices even when the model produced no probability", () => {
+    // A suspended fixture still has live prices worth seeing.
+    const rows = buildEngineViewRows({ selections, probabilities: {} });
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.modelProbability).toBeNull();
+    expect(rows[0]!.impliedProbability).not.toBeNull();
+  });
+
+  it("returns nothing rather than a table of dashes", () => {
+    const rows = buildEngineViewRows({
+      selections: [{ id: "home", label: "Home", decimalOdds: 1 }],
+      probabilities: {}
+    });
+
+    expect(rows).toEqual([]);
+  });
+
+  it("treats a non-informative price as absent instead of dividing by it", () => {
+    const rows = buildEngineViewRows({
+      selections: [{ id: "home", label: "Home", decimalOdds: 1 }],
+      probabilities: { home: 0.6 }
+    });
+
+    expect(rows[0]!.impliedProbability).toBeNull();
+    expect(rows[0]!.modelProbability).toBe(0.6);
   });
 });
