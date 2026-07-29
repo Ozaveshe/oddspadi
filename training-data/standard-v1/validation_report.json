@@ -1,0 +1,85 @@
+{
+  "generated_at": "2026-07-29T08:44:31Z",
+  "package_version": "standard-v1",
+  "live_baseline": {
+    "odds_padi_project_ref": "wncwtzqipnoqwmqlznqn",
+    "tennis_linked_fixtures": 1608,
+    "tennis_past_or_finished_unscored_fixtures": 1300,
+    "tennis_pending_unscored_decisions": 196900,
+    "tennis_current_pending_unscored_decisions": 136432,
+    "football_latest_calibration_closing_rows": 12,
+    "football_latest_calibration_settled_rows": 18,
+    "football_latest_calibration_closing_coverage": 0.666667,
+    "football_closing_gate": 0.8,
+    "additional_closing_outcomes_needed_at_current_denominator": 3
+  },
+  "provider_proof": {
+    "api_football": {
+      "status": "active",
+      "plan": "Ultra",
+      "daily_limit": 75000,
+      "remaining_at_check": 44521,
+      "ends_at": "2026-08-09T15:43:27Z"
+    },
+    "api_basketball": {
+      "status": "quota_exhausted",
+      "plan": "not_confirmed"
+    },
+    "api_tennis": {
+      "status": "active_endpoint_proved",
+      "plan": "not_exposed_by_provider_response",
+      "fetched_for_2026_07_28": 449
+    },
+    "the_odds_api": {
+      "status": "configured_but_quota_exhausted",
+      "production_plan": "not_confirmed",
+      "preview_label_only": "100k"
+    }
+  },
+  "datasets": {
+    "football_matches": 5256,
+    "football_odds_rows": 121032,
+    "football_any_closing_match_coverage": 1,
+    "football_market_average_closing_coverage": 1,
+    "football_opening_closing_pair_coverage": 1,
+    "tennis_matches_with_scores": 13642,
+    "tennis_gradeable_match_winner_rows": 13216,
+    "tennis_odds_rows": 102069,
+    "tennis_score_coverage": 1
+  },
+  "gates": [
+    {
+      "id": "football_closing_coverage_080",
+      "threshold": 0.8,
+      "observed": 1,
+      "status": "pass"
+    },
+    {
+      "id": "football_opening_closing_pair_coverage_080",
+      "threshold": 0.8,
+      "observed": 1,
+      "status": "pass"
+    },
+    {
+      "id": "tennis_score_coverage_099",
+      "threshold": 0.99,
+      "observed": 1,
+      "status": "pass"
+    }
+  ],
+  "warnings": [
+    "The public tennis dataset is a standard research/training corpus, not a direct identity-perfect patch for the 1,300 live OddsPadi fixtures.",
+    "API-Tennis production backfill should be the primary recovery path because the live fixtures already use provider api-tennis identifiers.",
+    "Retired, walkover, and awarded tennis matches remain in the corpus with source status, but their gradeable flags are false.",
+    "Football-Data closing columns are explicit, but exact observation timestamps are absent.",
+    "Football-Data warns that Pinnacle prices may be stale after 2025-07-23; prefer Market Average closing prices for the primary gate.",
+    "No production database rows were written by this package build."
+  ],
+  "sha256": {
+    "footballMatches": "4b072adaa18898d04cab677594e2c8674f07c116007d52614f5a4b32dda7ce7f",
+    "footballOdds": "c6a3c67fe51ab2501538b50e6c76f9fe3ba979fad41ad5625bfbd1ae30c8642b",
+    "tennisMatches": "5403bb0c402255e75a4ef8c665e30b76f5168e82d56fa6f4f8782cea8363a8fc",
+    "tennisOdds": "05f49f1a192a0c7fc27feff2a5384a690ac3453b78d9604c5d380ba08e3642e7",
+    "sourceManifest": "d953af07ebc4ab598ea9a57534e6f3cd92ee111a3a9fce98b37f52bf001ebdef"
+  }
+}

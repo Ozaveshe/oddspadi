@@ -8,12 +8,15 @@ export type HomepageMatchdayState = {
   /**
    * Whether the daily read actually completed.
    *
-   * The homepage races each read against a 2.5s budget and falls back to null.
-   * A null read was then rendered as `0 fixtures` with provider health
-   * "Feed unavailable" — stating as fact something the page had not managed to
-   * find out. On a cold serverless start the daily read takes ~14s, so a board
-   * holding 698 fixtures routinely told visitors there were none. A timeout is
-   * "not yet known", never "nothing there".
+   * The homepage races each read against a 2.5s budget and falls back to null,
+   * and a null read was rendered as a hard `0 prediction fixtures ready today`.
+   * On a cold serverless start that read takes ~14s, so a board holding ~698
+   * fixtures routinely told visitors there were none. A timeout is "not yet
+   * known", never "nothing there".
+   *
+   * This governs the count display only. When live-board fixtures are present
+   * the page still falls back to showing them and still reports the prediction
+   * feed as unavailable, which is accurate about the engine specifically.
    */
   dataState: "ready" | "pending";
   fixtureCount: number;
@@ -64,8 +67,7 @@ export function deriveHomepageMatchdayState(
 ): HomepageMatchdayState {
   const boardFixtures = preferredBoardFixtures(liveBoard);
   const engineFixtureCount = daily?.summary.fixturesFound ?? 0;
-  // Only claim the engine produced nothing when the read actually returned.
-  const usesLiveFallback = daily !== null && boardFixtures.length > 0 && engineFixtureCount === 0;
+  const usesLiveFallback = boardFixtures.length > 0 && engineFixtureCount === 0;
   const rawProviderState: ProviderRunStatus = daily?.slate.provider.status ?? "unavailable";
   const displayedFixtures = usesLiveFallback ? boardFixtures : [];
 
@@ -80,14 +82,12 @@ export function deriveHomepageMatchdayState(
     valuePickCount: daily?.summary.valuePicks ?? 0,
     watchlistCount: daily?.summary.watchlist ?? 0,
     providerState: rawProviderState,
-    providerLabel: daily === null ? "Checking feed" : PROVIDER_LABELS[rawProviderState] ?? rawProviderState,
+    providerLabel: PROVIDER_LABELS[rawProviderState] ?? rawProviderState,
     // Say which source the visitor is actually looking at. When the engine
     // returns nothing the page falls back to live-board fixtures, but the
     // label still read "Prediction engine" — crediting the engine for coverage
     // it did not produce, on a product whose whole pitch is transparency.
-    sourceLabel: daily === null
-      ? "Still reading today's board"
-      : usesLiveFallback ? "Live score board (engine produced no fixtures)" : "Prediction engine",
+    sourceLabel: usesLiveFallback ? "Live score board (engine produced no fixtures)" : "Prediction engine",
     lastUpdatedAt: daily?.slate.provider.lastRun?.finishedAt ?? null,
     usesLiveFallback,
     featuredFixture: usesLiveFallback ? boardFixtures[0] ?? null : null,

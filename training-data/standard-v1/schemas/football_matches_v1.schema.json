@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Football matches v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "match_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sport": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "season": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "competition_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "competition_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "country": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "match_date": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "kickoff_time_local": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "home_team": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "away_team": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "home_score": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "away_score": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "result_1x2": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_provider": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_url": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_row_number": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "source_checked_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "license_status": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "match_id",
+    "sport",
+    "season",
+    "competition_code",
+    "competition_name",
+    "country",
+    "match_date",
+    "home_team",
+    "away_team",
+    "home_score",
+    "away_score",
+    "result_1x2",
+    "status",
+    "source_provider",
+    "source_url",
+    "source_row_number",
+    "source_checked_at",
+    "license_status"
+  ]
+}
