@@ -22417,6 +22417,19 @@ describe("prediction utilities", () => {
   });
 
   it("builds shared historical promotion proof for route-level answer gates", async () => {
+    // This used to download ten seasons from football-data.co.uk, so it failed
+    // on network speed alone — and `npm run release:verify` gates releases on
+    // this suite. The proof now takes the same `fetchCsv` its dossier already
+    // accepted, so the assertions below test the proof rather than the internet.
+    const promotionSeasonCsv = [
+      "Div,Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR,B365H,B365D,B365A",
+      "E0,13/08/16,12:30,Hull,Leicester,2,1,H,4.50,3.50,1.91",
+      "E0,20/08/16,15:00,Leicester,Arsenal,0,0,D,2.70,3.40,2.80",
+      "E0,27/08/16,15:00,Arsenal,Hull,3,1,H,1.35,5.30,9.50",
+      "E0,10/09/16,15:00,Hull,Arsenal,1,3,A,8.50,5.00,1.38",
+      "E0,17/09/16,15:00,Arsenal,Leicester,4,3,H,1.55,4.40,6.25",
+      "E0,24/09/16,15:00,Leicester,Hull,1,1,D,1.80,3.70,4.80"
+    ].join("\n");
     const proof = await buildFootballDataHistoricalPromotionProof({
       baseUrl: "http://127.0.0.1:3025",
       env: { NODE_ENV: "test" },
@@ -22430,7 +22443,8 @@ describe("prediction utilities", () => {
       minTrainingSeasons: 3,
       includePublicHistory: true,
       includeBridge: true,
-      includeModelPromotion: true
+      includeModelPromotion: true,
+      fetchCsv: async () => promotionSeasonCsv
     });
 
     expect(proof.historicalLearningDossier?.mode).toBe("football-data-historical-learning-dossier");
@@ -22442,7 +22456,10 @@ describe("prediction utilities", () => {
     expect(proof.modelPromotionDecision?.proofUrls).toContain("/api/sports/decision/training/football-data-model-promotion-decision");
     expect(proof.modelPromotionDecision?.controls.canPromoteLiveProbabilities).toBe(false);
     expect(proof.modelPromotionDecision?.controls.canPublishPicks).toBe(false);
-  }, 30000);
+    // 60s, not 30s: the remaining cost is the walk-forward and threshold sweeps
+    // over ten seasons, which is real work rather than a hung request. The old
+    // 30s ceiling was tuned around a network fetch that no longer happens.
+  }, 60000);
 
   it("builds a provider corpus dry-run queue across fixture and odds providers without writes", async () => {
     const plan = buildMultiSportCorpusPlan({

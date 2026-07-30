@@ -425,13 +425,33 @@ export async function persistFixturesAndOdds({
     });
     const { data, error } = await client.from("op_odds_snapshots").insert(rows).select("id,market,selection,captured_at");
     if (error) throw new Error(`Odds persistence failed: ${error.message}`);
-    const ids = new Map((data ?? []).map((row) => [`${row.market}:${row.selection}:${row.captured_at}`, String(row.id)]));
+    // Key on the instant, not the text. Postgres returns `2026-07-29
+    // 14:25:26.47+00` where the snapshot carries `2026-07-29T14:25:26.470Z`;
+    // comparing those as strings never matched, so every decision was written
+    // with a null `odds_snapshot_id` and the price it was struck at could not be
+    // recovered afterwards. The old unit test hid this because its mock echoed
+    // the JS string straight back instead of a Postgres timestamp.
+    const ids = new Map((data ?? []).map((row) => [snapshotKey(row.market, row.selection, row.captured_at), String(row.id)]));
     persistedOdds.set(
       fixture.fixtureId,
-      snapshots.map((snapshot) => ({ ...snapshot, oddsSnapshotId: ids.get(`${snapshot.market}:${snapshot.selection}:${snapshot.capturedAt}`) ?? null }))
+      snapshots.map((snapshot) => ({
+        ...snapshot,
+        oddsSnapshotId: ids.get(snapshotKey(snapshot.market, snapshot.selection, snapshot.capturedAt)) ?? null
+      }))
     );
   }
   return { fixtureIds, oddsByFixture: persistedOdds };
+}
+
+/**
+ * Identity of a stored quote, independent of how a timestamp is spelled.
+ * Falls back to the raw text when a value will not parse, so an unexpected
+ * format degrades to the previous behaviour rather than collapsing every
+ * snapshot onto a single NaN key.
+ */
+function snapshotKey(market: unknown, selection: unknown, capturedAt: unknown): string {
+  const parsed = Date.parse(String(capturedAt ?? ""));
+  return `${String(market)}:${String(selection)}:${Number.isFinite(parsed) ? parsed : String(capturedAt ?? "")}`;
 }
 
 export async function persistMarketDecisions({
@@ -485,6 +505,8 @@ export async function persistMarketDecisions({
       superseded_by: null,
       settlement_status: decision.settlementStatus,
       is_preliminary: decision.isPreliminary,
+      market_prior_weight: decision.marketPriorWeight,
+      market_prior_applied: decision.marketPriorApplied,
       internal_only: true,
       public_decision_id: null,
       provider: decision.provider,
@@ -833,7 +855,7 @@ export async function readStoredSlate({
       ? client.rpc("op_latest_odds_for_fixtures", { p_fixture_ids: databaseFixtureIds })
       : Promise.resolve({ data: [], error: null }),
     databaseFixtureIds.length
-      ? readRowsInChunks(databaseFixtureIds, (idChunk) => client.from("op_market_decisions").select("id,fixture_id,fixture_external_id,market,selection,odds_snapshot_id,model_version,engine_version,model_probability,implied_probability,no_vig_probability,value_edge,expected_value,confidence,risk,data_quality,evidence_quality,decision_status,public_status,reason,generated_at,expires_at,superseded_by,settlement_status,is_preliminary,provider").in("fixture_id", idChunk).is("superseded_by", null).limit(10000))
+      ? readRowsInChunks(databaseFixtureIds, (idChunk) => client.from("op_market_decisions").select("id,fixture_id,fixture_external_id,market,selection,odds_snapshot_id,model_version,engine_version,model_probability,implied_probability,no_vig_probability,value_edge,expected_value,confidence,risk,data_quality,evidence_quality,decision_status,public_status,reason,generated_at,expires_at,superseded_by,settlement_status,is_preliminary,provider,market_prior_weight,market_prior_applied").in("fixture_id", idChunk).is("superseded_by", null).limit(10000))
       : Promise.resolve({ data: [], error: null }),
     databaseFixtureIds.length
       ? readRowsInChunks(databaseFixtureIds, (idChunk) => client.from("op_fixture_decision_summaries").select("fixture_id,fixture_external_id,best_published_pick,best_lean,best_watchlist_candidate,no_pick_reason,all_market_analyses,public_status,engine_status,data_quality,evidence_quality,confidence,risk,generated_at,expires_at,audit_summary").in("fixture_id", idChunk).is("superseded_by", null).order("generated_at", { ascending: false }).limit(1000))
@@ -879,7 +901,9 @@ export async function readStoredSlate({
       evidenceQuality: row.evidence_quality as CanonicalDecision["evidenceQuality"], decisionStatus: row.decision_status as CanonicalDecision["decisionStatus"],
       publicStatus: row.public_status as CanonicalDecision["publicStatus"], reason: String(row.reason), generatedAt: String(row.generated_at),
       expiresAt: text(row.expires_at), supersededBy: text(row.superseded_by), settlementStatus: row.settlement_status as CanonicalDecision["settlementStatus"],
-      isPreliminary: row.is_preliminary === true, provider: String(row.provider)
+      isPreliminary: row.is_preliminary === true, provider: String(row.provider),
+      marketPriorWeight: number(row.market_prior_weight),
+      marketPriorApplied: typeof row.market_prior_applied === "boolean" ? row.market_prior_applied : null
     };
     decisionsByFixture.set(fixtureId, [...(decisionsByFixture.get(fixtureId) ?? []), decision]);
   }

@@ -146,7 +146,9 @@ function decision(fixtureId: string, publicStatus: SlatePublicStatus, generatedA
     supersededBy: null,
     settlementStatus: "pending",
     isPreliminary: publicStatus === "preliminary",
-    provider: "api-football"
+    provider: "api-football",
+    marketPriorWeight: 0.4,
+    marketPriorApplied: true
   };
 }
 

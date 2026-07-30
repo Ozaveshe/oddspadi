@@ -280,4 +280,75 @@ describe("autonomous decision cycle", () => {
     expect(changedMemoryHash).not.toBe(firstHash);
     expect(changedEvidenceHash).not.toBe(firstHash);
   });
+
+  /**
+   * The cycle prices a bounded number of fixtures per date across a three-day
+   * window. Kickoff time used to be the last tiebreaker, so an imminent fixture
+   * lost its slot to a stronger one days out — and a fixture only gets one last
+   * chance at a closing price. That is why football's final pre-kickoff quote
+   * sat a median 266 minutes before kickoff and closing-line coverage stalled at
+   * 0.27 against a 0.80 promotion gate.
+   */
+  it("prices a fixture inside the closing window ahead of a stronger one days away", async () => {
+    const base = await row();
+    const now = new Date("2026-08-21T12:00:00.000Z");
+    const imminent: TestPredictionRow = {
+      ...base,
+      match: { ...base.match, id: "imminent-fixture", kickoffTime: new Date(now.getTime() + 30 * 60_000).toISOString() },
+      prediction: { ...base.prediction, decision: { ...base.prediction.decision, verdict: "avoid" } }
+    };
+    const distant: TestPredictionRow = {
+      ...base,
+      match: { ...base.match, id: "distant-fixture", kickoffTime: new Date(now.getTime() + 2 * 86_400_000).toISOString() },
+      prediction: { ...base.prediction, decision: { ...base.prediction.decision, verdict: "strong-value" } }
+    };
+
+    const mocks = dependenciesFor(imminent);
+    mocks.getPredictions.mockResolvedValue([distant, imminent]);
+
+    const cycle = await runDecisionAutonomousCycle({
+      date: "2026-08-21",
+      runRequested: true,
+      adminAuthorized: true,
+      fixtureLimit: 1,
+      aiReviewLimit: 0,
+      dependencies: mocks.dependencies,
+      now
+    });
+
+    expect(cycle.counts.selected).toBe(1);
+    expect(cycle.decisions[0].fixtureId).toBe("imminent-fixture");
+  });
+
+  // The reordering must not leak outside the closing window: everywhere else the
+  // value ranking decides, exactly as before.
+  it("keeps value ranking when neither fixture is near kickoff", async () => {
+    const base = await row();
+    const now = new Date("2026-08-21T12:00:00.000Z");
+    const weakerSooner: TestPredictionRow = {
+      ...base,
+      match: { ...base.match, id: "weaker-sooner", kickoffTime: new Date(now.getTime() + 6 * 3_600_000).toISOString() },
+      prediction: { ...base.prediction, decision: { ...base.prediction.decision, verdict: "avoid" } }
+    };
+    const strongerLater: TestPredictionRow = {
+      ...base,
+      match: { ...base.match, id: "stronger-later", kickoffTime: new Date(now.getTime() + 2 * 86_400_000).toISOString() },
+      prediction: { ...base.prediction, decision: { ...base.prediction.decision, verdict: "strong-value" } }
+    };
+
+    const mocks = dependenciesFor(strongerLater);
+    mocks.getPredictions.mockResolvedValue([weakerSooner, strongerLater]);
+
+    const cycle = await runDecisionAutonomousCycle({
+      date: "2026-08-21",
+      runRequested: true,
+      adminAuthorized: true,
+      fixtureLimit: 1,
+      aiReviewLimit: 0,
+      dependencies: mocks.dependencies,
+      now
+    });
+
+    expect(cycle.decisions[0].fixtureId).toBe("stronger-later");
+  });
 });

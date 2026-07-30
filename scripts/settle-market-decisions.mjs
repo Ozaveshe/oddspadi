@@ -34,17 +34,33 @@ const days = Number(arg("days", "90"));
 const client = createClient(url, key, { auth: { persistSession: false } });
 const since = new Date(Date.now() - days * 86_400_000).toISOString();
 
-const { data: fixtures, error: fixtureError } = await client
-  .from("op_fixtures")
-  .select("id,sport,status,home_score,away_score,kickoff_at")
-  .in("status", ["finished", "postponed", "cancelled"])
-  .gte("kickoff_at", since)
-  .limit(20_000);
-if (fixtureError) {
-  console.error(fixtureError.message);
-  process.exit(1);
+// Paginate by primary key. `.limit(20_000)` does not lift PostgREST's `max-rows`
+// ceiling (1000 here), so this silently settled only the first thousand fixtures
+// and reported that truncated count as if it were the whole range — leaving the
+// rest permanently ungraded with no error to notice.
+const fixtures = [];
+{
+  const pageSize = 1000;
+  let cursor = "00000000-0000-0000-0000-000000000000";
+  for (;;) {
+    const { data, error } = await client
+      .from("op_fixtures")
+      .select("id,sport,status,home_score,away_score,kickoff_at")
+      .in("status", ["finished", "postponed", "cancelled"])
+      .gte("kickoff_at", since)
+      .gt("id", cursor)
+      .order("id", { ascending: true })
+      .limit(pageSize);
+    if (error) {
+      console.error(error.message);
+      process.exit(1);
+    }
+    fixtures.push(...(data ?? []));
+    if (!data || data.length < pageSize) break;
+    cursor = data[data.length - 1].id;
+  }
 }
-if (!fixtures?.length) {
+if (!fixtures.length) {
   console.log("No finished fixtures in range.");
   process.exit(0);
 }

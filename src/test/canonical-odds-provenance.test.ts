@@ -88,6 +88,19 @@ function canonicalSummary(match: Match, snapshots: CanonicalOddsSnapshot[], edge
   );
 }
 
+/**
+ * Postgres does not hand back the ISO string it was given: `timestamptz` renders
+ * as `2026-07-19 11:57:00+00`, space-separated, no `Z`, trailing zeros trimmed.
+ * Echoing the input back — as this mock used to — made the persistence lookup
+ * look correct in tests while it silently failed against a real database.
+ */
+function asPostgresTimestamp(value: unknown): string {
+  return new Date(String(value))
+    .toISOString()
+    .replace("T", " ")
+    .replace(/\.?0*Z$/, "+00");
+}
+
 function persistenceClient(insertedOdds: Array<Record<string, unknown>>): SupabaseClient {
   return {
     from(table: string) {
@@ -114,7 +127,7 @@ function persistenceClient(insertedOdds: Array<Record<string, unknown>>): Supaba
                   id: `odds-${String(row.selection)}`,
                   market: row.market,
                   selection: row.selection,
-                  captured_at: row.captured_at
+                  captured_at: asPostgresTimestamp(row.captured_at)
                 })),
                 error: null
               })
