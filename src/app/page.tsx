@@ -9,6 +9,8 @@ import { deriveHomepageMatchdayState, getWeeklyEmptyState } from "@/lib/sports/h
 import { fetchLiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import {
   getCachedHomepageMatchdaySummary,
+  getCachedHomepageWeeklySummary,
+  getCachedHomepageModelRecordSummary,
   getCachedTodayTipsProduct,
   getCachedWeeklyTipsProduct,
   getCachedYesterdayResultsProduct
@@ -49,10 +51,12 @@ function weekdayLabel(date: string, firstDate: string): string {
 }
 
 export default async function HomePage() {
-  const [summary, daily, weekly, yesterday, liveBoard] = await Promise.all([
+  const [summary, weeklySummary, modelRecord, daily, weekly, yesterday, liveBoard] = await Promise.all([
     // Counts finish in milliseconds, so the card no longer depends on the full
     // product read completing inside the budget.
     withTimeout(getCachedHomepageMatchdaySummary(), 2_500, null),
+    withTimeout(getCachedHomepageWeeklySummary(), 2_500, null),
+    withTimeout(getCachedHomepageModelRecordSummary(), 2_500, null),
     withTimeout(getCachedTodayTipsProduct(), 2_500, null),
     withTimeout(getCachedWeeklyTipsProduct(), 2_500, null),
     withTimeout(getCachedYesterdayResultsProduct(), 2_500, null),
@@ -76,7 +80,9 @@ export default async function HomePage() {
         : "A match on today’s board";
   // A read that did not finish must not be rendered as a zero count.
   const pendingBoard = matchday.dataState === "pending" && !matchday.usesLiveFallback;
-  const weeklyEmpty = getWeeklyEmptyState(weekly?.slate.provider.status ?? null, Boolean(liveBoard?.fixtures.length), weekly === null);
+  const weeklyFallbackDays = (weeklySummary ?? []).filter((day) => day.fixtureCount > 0);
+  // Pending only when neither the product read nor the counts read arrived.
+  const weeklyEmpty = getWeeklyEmptyState(weekly?.slate.provider.status ?? null, Boolean(liveBoard?.fixtures.length), weekly === null && weeklySummary === null);
 
   return (
     <main id="main" className="container home-product">
@@ -139,13 +145,23 @@ export default async function HomePage() {
 
       <section className="section home-results-summary">
         <div className="section-title"><div><span className="section-kicker">Yesterday&apos;s Results</span><h2>Wins and losses stay visible</h2></div><Link className="button small-btn" href="/predictions/history">Open results</Link></div>
-        <div className="home-results-grid">
-          <div><strong>{yesterday?.summary.wins ?? 0}</strong><span>Wins</span></div>
-          <div><strong>{yesterday?.summary.losses ?? 0}</strong><span>Losses</span></div>
-          <div><strong>{yesterday?.summary.pending ?? 0}</strong><span>Pending</span></div>
-          <div><strong>{yesterday?.summary.manualReview ?? 0}</strong><span>Manual review</span></div>
-        </div>
-        <p className="muted small">{yesterday?.source === "unavailable" ? yesterday.reason : yesterday?.items.length ? `${yesterday.summary.settled} published picks settled yesterday.` : "No published picks settled yesterday. Internal model runs do not appear here."}</p>
+        {yesterday?.items.length ? <div className="home-results-grid">
+          <div><strong>{yesterday.summary.wins}</strong><span>Wins</span></div>
+          <div><strong>{yesterday.summary.losses}</strong><span>Losses</span></div>
+          <div><strong>{yesterday.summary.pending}</strong><span>Pending</span></div>
+          <div><strong>{yesterday.summary.manualReview}</strong><span>Manual review</span></div>
+        </div> : modelRecord && (modelRecord.won + modelRecord.lost > 0) ? <div className="home-results-grid">
+          <div><strong>{modelRecord.won}</strong><span>Model wins</span></div>
+          <div><strong>{modelRecord.lost}</strong><span>Model losses</span></div>
+          <div><strong>{modelRecord.pending}</strong><span>Pending</span></div>
+          <div><strong>{modelRecord.won + modelRecord.lost > 0 ? Math.round((modelRecord.won / (modelRecord.won + modelRecord.lost)) * 100) : 0}%</strong><span>Hit rate</span></div>
+        </div> : <div className="home-results-grid">
+          <div><strong>0</strong><span>Wins</span></div>
+          <div><strong>0</strong><span>Losses</span></div>
+          <div><strong>0</strong><span>Pending</span></div>
+          <div><strong>0</strong><span>Manual review</span></div>
+        </div>}
+        <p className="muted small">{yesterday?.source === "unavailable" ? yesterday.reason : yesterday?.items.length ? `${yesterday.summary.settled} published picks settled yesterday.` : modelRecord && (modelRecord.won + modelRecord.lost > 0) ? "Internal model record — decisions the engine graded against final scores yesterday. No picks are published until the model passes its promotion gates." : "No published picks settled yesterday, and the internal record has not been graded yet."}</p>
       </section>
 
       <section className="section home-weekly-radar">
@@ -153,6 +169,8 @@ export default async function HomePage() {
         <p>Weekly predictions start preliminary and get refreshed as odds, injuries, lineups, and results change.</p>
         {weekly && weeklyHasFixtures ? <div className="home-week-days">
           {weekly.days.map((day) => <Link href="/predictions/week" key={day.date}><span>{weekdayLabel(day.date, weekly.slate.range.from)}</span><strong>{day.fixtures.length}</strong><small>{day.counts.valuePick} value · {day.counts.ready} ready</small></Link>)}
+        </div> : weeklyFallbackDays.length ? <div className="home-week-days">
+          {weeklyFallbackDays.map((day, index, days) => <Link href="/predictions/week" key={day.date}><span>{weekdayLabel(day.date, days[0]?.date ?? day.date)}</span><strong>{day.fixtureCount}</strong><small>fixtures scheduled</small></Link>)}
         </div> : <div className="home-weekly-empty"><strong>{weeklyEmpty.title}</strong><span>{weeklyEmpty.detail}</span>{weeklyEmpty.showLiveLink ? <Link className="text-link" href="/live-scores">Follow live matches →</Link> : null}</div>}
       </section>
 

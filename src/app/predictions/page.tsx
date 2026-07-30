@@ -42,6 +42,7 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
         <div>
           <span className="section-kicker">The Matchday Desk · Today</span>
           <h1>{sportLabel ? <><span className="accent">{sportLabel}</span> decisions</> : <>Today&apos;s match <span className="accent">decisions</span></>}</h1>
+          <p className="muted small"><strong>Predictions</strong> are the model&apos;s probabilities for every market on a fixture. The <strong>tip</strong> is the one selection per fixture we would stake if forced — the same data, at two zoom levels.</p>
         </div>
         <p>Fixture-first model decisions with current prices, evidence quality and an explicit reason when OddsPadi abstains.</p>
       </header>

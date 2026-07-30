@@ -4032,3 +4032,51 @@ a.score-row:active,
 .model-market-selection-values {
   flex-shrink: 0;
 }
+
+/* Timezone picker: quiet control at the end of the primary nav. */
+.timezone-picker select {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  color: inherit;
+  max-width: 150px;
+}
+
+/* News: category chips and the engine-notes shelf. */
+.story-chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.story-chip-engine {
+  border-style: dashed;
+}
+.news-card-engine {
+  background: color-mix(in srgb, var(--surface) 92%, var(--border-strong));
+}
+
+/* Promotion gate board: status-page bars for the seven gates. */
+.gate-board-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 14px; }
+.gate-board-list li { display: grid; gap: 6px; }
+.gate-row-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.gate-label { font-weight: 600; }
+.gate-bar { position: relative; height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--border-strong) 45%, transparent); overflow: hidden; }
+.gate-bar-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width 300ms ease; }
+.gate-blocked .gate-bar-fill { background: color-mix(in srgb, var(--accent) 45%, var(--border-strong)); }
+.gate-pass .gate-state { color: var(--accent); }
+.gate-blocked .gate-state { color: inherit; opacity: 0.75; }
+.gate-board-summary { margin: 0; }
+
+/* Publication gates that are simply "not yet" are pending work, not failures:
+   neutral slate marker instead of alarm red. Red stays reserved for refresh
+   states where a shown price is actually out of date. */
+.decision-publication-gate[data-state="blocked"] > i {
+  background: var(--faint);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--faint) 14%, transparent);
+}

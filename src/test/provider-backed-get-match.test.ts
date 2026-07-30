@@ -107,6 +107,26 @@ describe("provider-backed match detail retrieval", () => {
       fetchImpl: async (input) => {
         const url = input.toString();
         calls.push(url);
+        if (url.includes("get_H2H")) {
+          return new Response(
+            JSON.stringify({
+              result: {
+                H2H: [
+                  {
+                    event_key: 650,
+                    event_date: "2026-05-20",
+                    event_time: "15:00",
+                    event_first_player: "Carlos Alcaraz",
+                    event_second_player: "Daniil Medvedev",
+                    event_final_result: "2 - 1",
+                    event_game_result: "6-4 3-6 7-5"
+                  }
+                ]
+              }
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
         return new Response(JSON.stringify({ result: [tennisEvent] }), {
           status: 200,
           headers: { "Content-Type": "application/json" }
@@ -119,8 +139,18 @@ describe("provider-backed match detail retrieval", () => {
 
     expect(first?.id).toBe("api-tennis:701");
     expect(first?.dataSource?.fixtureProvider).toBe("api-tennis");
+    // The match page previously said "no verified recent meetings" for every
+    // tennis fixture; the single-match path now spends exactly one extra call
+    // on the pair's head-to-head. List sweeps still never fetch H2H.
+    expect(first?.headToHead?.source).toBe("api-tennis-headtohead");
+    expect(first?.headToHead?.homeWins).toBe(1);
+    expect(first?.headToHead?.meetings[0]).toMatchObject({ homeScore: 2, awayScore: 1 });
     expect(second).toBe(first);
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4);
+    const h2hParams = new URL(calls[3]).searchParams;
+    expect(h2hParams.get("method")).toBe("get_H2H");
+    expect(h2hParams.get("first_player_key")).toBe("1");
+    expect(h2hParams.get("second_player_key")).toBe("2");
     const detailParams = new URL(calls[0]).searchParams;
     expect(detailParams.get("method")).toBe("get_fixtures");
     expect(detailParams.get("match_key")).toBe("701");

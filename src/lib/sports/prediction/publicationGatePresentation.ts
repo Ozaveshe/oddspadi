@@ -66,10 +66,13 @@ export function buildPublicationGatePresentation(
       shortLabel: "Watchlist"
     };
   }
+  // "Blocked" read as breakage. The state is the engine doing its job — a
+  // value claim that has not yet earned publication — so the copy says what is
+  // still owed rather than sounding an alarm.
   return {
     state: "blocked",
-    label: "No public value claim",
+    label: "Value claim not yet earned",
     detail: blocker,
-    shortLabel: "Blocked"
+    shortLabel: "Gates pending"
   };
 }

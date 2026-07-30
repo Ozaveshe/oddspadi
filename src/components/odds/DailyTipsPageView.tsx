@@ -22,6 +22,7 @@ export function DailyTipsPageView({ product, fallbackBoard = null }: { product: 
         <span className="section-kicker">The Matchday Desk · {isToday ? "Today" : "Tomorrow"}</span>
         <h1>{heading}</h1>
         <p>Every available match is scanned by the OddsPadi engine. We show value picks when the numbers clear our guardrails, leans when the model likes a side but price is tight, and no-pick reasons when the edge is not there.</p>
+        <p className="muted small"><strong>Tips vs predictions:</strong> a tip is the single selection per fixture we would stake if forced to choose. Predictions are the model&apos;s full probabilities for every market — open any match to see them all.</p>
         <nav className="intelligence-nav">
           {!isToday ? <Link className="button" href="/predictions/today">Today&apos;s tips</Link> : <Link className="button" href="/predictions/tomorrow">Tomorrow&apos;s tips</Link>}
           <Link className="button" href="/predictions/week">Weekly radar</Link>

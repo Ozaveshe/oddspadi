@@ -23,7 +23,7 @@ export function ValuePickCard({ match, prediction }: { match: MatchSummary; pred
             {match.homeTeam.name} vs {match.awayTeam.name}
           </strong>
           <div className="small muted">
-            {match.league.name} · <LocalTime iso={match.kickoffTime} />
+            {match.league.name} · <LocalTime iso={match.kickoffTime} variant="kickoff" />
           </div>
         </div>
         <Link

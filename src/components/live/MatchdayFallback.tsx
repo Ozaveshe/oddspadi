@@ -16,7 +16,7 @@ function sportLabel(fixture: LiveBoardFixture): string {
 function FixtureMoment({ fixture }: { fixture: LiveBoardFixture }) {
   if (fixture.phase === "live") return <>{fixture.statusLabel || "Live"}</>;
   if (fixture.phase === "finished") return <>{fixture.statusLabel || "Final"}</>;
-  return <LocalTime iso={fixture.kickoff} />;
+  return <LocalTime iso={fixture.kickoff} variant="kickoff" />;
 }
 
 function coverageLabel(fixture: LiveBoardFixture): string {

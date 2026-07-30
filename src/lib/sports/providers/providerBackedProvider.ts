@@ -999,14 +999,35 @@ function tennisSurfaceFromOddsEvent(sportKey: string, sportTitle: string): strin
   return tennisSurface(sportTitle);
 }
 
+/**
+ * Final tennis score as set counts, from the two fields API-Tennis actually
+ * sends.
+ *
+ * Two bugs lived here, and together they are why 2,064 finished tennis
+ * fixtures stored no score and tennis was ungradeable until a corpus backfill:
+ *
+ * 1. The provider writes `event_final_result` with spaces — `"2 - 1"` — and
+ *    the old regex only matched `\d+-\d+`, so it NEVER parsed a real payload.
+ *    Every finished fixture silently fell through to a null score.
+ * 2. `event_final_result` is already the SET COUNT. Feeding it to a per-set
+ *    accumulator would have scored "2 - 1" as one 2-1 "set", i.e. 1-0 — wrong
+ *    even when the regex someday matched.
+ *
+ * A single pair is therefore read as the final set count directly; a list of
+ * pairs (`event_game_result`, "6-4 3-6 7-5") is scored set by set.
+ */
 function parseTennisScore(value: string | undefined): { home: number | null; away: number | null } {
   const text = cleanText(value);
   if (!text) return { home: null, away: null };
-  const setScores = text.match(/\d+-\d+/g) ?? [];
+  const setScores = text.match(/\d+\s*-\s*\d+/g) ?? [];
   if (!setScores.length) return { home: null, away: null };
-  return setScores.reduce(
-    (score, setText) => {
-      const [home, away] = setText.split("-").map((part) => Number(part));
+  const pairs = setScores.map((pair) => pair.split(/\s*-\s*/).map((part) => Number(part)) as [number, number]);
+  if (pairs.length === 1) {
+    const [home, away] = pairs[0];
+    return Number.isFinite(home) && Number.isFinite(away) ? { home, away } : { home: null, away: null };
+  }
+  return pairs.reduce(
+    (score, [home, away]) => {
       if (!Number.isFinite(home) || !Number.isFinite(away) || home === away) return score;
       return home > away ? { ...score, home: score.home + 1 } : { ...score, away: score.away + 1 };
     },
@@ -3491,6 +3512,59 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     return mergedMatches.length ? mergedMatches : this.fallback.getFixtures(date, "tennis");
   }
 
+  private async getTennisHeadToHead(
+    apiKey: string,
+    firstPlayerKey: string,
+    secondPlayerKey: string,
+    match: Match
+  ): Promise<HeadToHeadSummary | null> {
+    const endpoint = new URL("https://api.api-tennis.com/tennis/");
+    endpoint.searchParams.set("method", "get_H2H");
+    endpoint.searchParams.set("first_player_key", firstPlayerKey);
+    endpoint.searchParams.set("second_player_key", secondPlayerKey);
+    endpoint.searchParams.set("APIkey", apiKey);
+    const data = (await this.limitedFetch(endpoint)) as { result?: { H2H?: ApiTennisEvent[] } } | null;
+    const meetingsRaw = Array.isArray(data?.result?.H2H) ? data.result.H2H : [];
+    if (!meetingsRaw.length) return null;
+
+    const meetings = meetingsRaw
+      .filter((meeting) => cleanText(meeting.event_final_result))
+      .slice(0, 8)
+      .flatMap((meeting) => {
+        const score = parseTennisScore(meeting.event_final_result || meeting.event_game_result);
+        if (score.home === null || score.away === null) return [];
+        return [{
+          id: safeId(meeting.event_key, `${firstPlayerKey}-${secondPlayerKey}-${cleanText(meeting.event_date)}`),
+          kickoffTime: tennisKickoff(meeting),
+          homeTeam: cleanText(meeting.event_first_player) || match.homeTeam.name,
+          awayTeam: cleanText(meeting.event_second_player) || match.awayTeam.name,
+          homeScore: score.home,
+          awayScore: score.away
+        }];
+      });
+    if (!meetings.length) return null;
+
+    // Sides in historic meetings are per-event; count wins for THIS fixture's
+    // players by name so the aggregate reads correctly whichever way each old
+    // match happened to list them.
+    let homeWins = 0;
+    let awayWins = 0;
+    for (const meeting of meetings) {
+      const winnerName = meeting.homeScore > meeting.awayScore ? meeting.homeTeam : meeting.awayTeam;
+      if (personNamesAlign(winnerName, match.homeTeam.name)) homeWins += 1;
+      else if (personNamesAlign(winnerName, match.awayTeam.name)) awayWins += 1;
+    }
+
+    return {
+      source: "api-tennis-headtohead",
+      meetings,
+      homeWins,
+      draws: 0,
+      awayWins,
+      fetchedAt: new Date().toISOString()
+    };
+  }
+
   async getMatch(matchId: string): Promise<Match | null> {
     const cached = this.matchCache.get(matchId);
     if (cached && cached.expiresAt > Date.now()) return cached.match;
@@ -3534,7 +3608,27 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       const event = events[0];
       if (!event) return null;
       const matches = await this.getFixtures(tennisKickoff(event).slice(0, 10), "tennis");
-      return matches.find((match) => match.id === matchId) ?? null;
+      const match = matches.find((candidate) => candidate.id === matchId) ?? null;
+      // The match page showed "no verified recent meetings" for every tennis
+      // fixture because head-to-head was only ever built for football.
+      // API-Tennis serves H2H per player pair; one bounded call on the single-
+      // match path only, never during list sweeps.
+      if (match && !match.headToHead && event.first_player_key && event.second_player_key) {
+        const h2h = await this.getTennisHeadToHead(apiKey, String(event.first_player_key), String(event.second_player_key), match);
+        if (h2h) {
+          const enriched = { ...match, headToHead: h2h };
+          // Replace the list-sweep entry so repeat visits reuse the enriched
+          // match instead of paying the H2H call again (and so identity
+          // caching still holds for callers that compare references).
+          const cachedEntry = this.matchCache.get(matchId);
+          setBoundedCache(this.matchCache, matchId, {
+            expiresAt: cachedEntry?.expiresAt ?? Date.now() + fixtureCacheTtlMs(this.env, tennisKickoff(event).slice(0, 10)),
+            match: enriched
+          });
+          return enriched;
+        }
+      }
+      return match;
     }
 
     if (matchId.startsWith("the-odds-api:")) {

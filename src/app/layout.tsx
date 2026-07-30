@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { Analytics } from "@/components/analytics/Analytics";
 import { BrandWord, LogoMark } from "@/components/site/Logo";
+import { TimezonePicker } from "@/components/odds/TimezonePicker";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { DesktopNavLinks, MobileTabBar } from "@/components/site/SiteNav";
 import "./globals.css";
@@ -163,6 +164,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 <BrandWord />
               </Link>
               <DesktopNavLinks />
+              <TimezonePicker />
             </nav>
           </header>
           {children}
