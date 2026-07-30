@@ -684,6 +684,57 @@ function tennisFormFromStrength(teamId: string, strength: HistoricalTennisStreng
   };
 }
 
+
+/**
+ * API-Sports "scoreboard" sports (handball, ice hockey) share one games shape:
+ * flat numeric scores, short/long status, ISO date. Both live on free plans —
+ * 100 requests a day — so their adapter carries a six-hour cache of its own on
+ * top of the provider-wide TTL, and no odds enrichment is attempted yet.
+ */
+type ApiScoreboardGame = {
+  id?: number | string;
+  date?: string;
+  time?: string;
+  timestamp?: number;
+  status?: { short?: string; long?: string } | string;
+  country?: { name?: string; flag?: string };
+  league?: { id?: number | string; name?: string; season?: number | string; logo?: string };
+  teams?: { home?: { id?: number | string; name?: string; logo?: string }; away?: { id?: number | string; name?: string; logo?: string } };
+  scores?: { home?: number | null; away?: number | null };
+};
+
+type ApiScoreboardResponse = { response?: ApiScoreboardGame[] };
+
+type ScoreboardSportConfig = {
+  sport: Extract<Sport, "handball" | "ice_hockey">;
+  host: string;
+  providerId: string;
+  envKeys: string[];
+  fallbackLeagueLabel: string;
+};
+
+function scoreboardStatus(status: ApiScoreboardGame["status"]): MatchStatus {
+  const text = typeof status === "string" ? status : `${status?.short ?? ""} ${status?.long ?? ""}`;
+  const normalized = text.toLowerCase();
+  if (["cancelled", "canceled", "abandoned"].some((term) => normalized.includes(term))) return "cancelled";
+  if (["postponed", "rescheduled"].some((term) => normalized.includes(term))) return "postponed";
+  if (["suspended", "interrupted"].some((term) => normalized.includes(term))) return "suspended";
+  // FT, AOT (after overtime) and AP (after penalties) are all final results.
+  if (/(?:ft|aot|ap)/.test(normalized) || ["finished", "ended", "game finished"].some((term) => normalized.includes(term))) return "finished";
+  // Period tokens as whole words, for the same reason basketball matches them
+  // that way: the "ot" inside "not started" must not read as live overtime.
+  if (/(?:p1|p2|p3|q1|q2|q3|q4|ot|bt|ht)/.test(normalized) || ["live", "in play", "halftime"].some((term) => normalized.includes(term))) return "live";
+  return "scheduled";
+}
+
+function scoreboardKickoff(game: ApiScoreboardGame): string {
+  if (typeof game.timestamp === "number" && Number.isFinite(game.timestamp)) return new Date(game.timestamp * 1000).toISOString();
+  const date = cleanText(game.date);
+  if (date.includes("T")) return date;
+  const time = cleanText(game.time) || "00:00";
+  return date ? `${date}T${time}:00.000Z` : new Date().toISOString();
+}
+
 function buildProviderForm(teamId: string, rating: number, offset: number): TeamForm {
   const seed = seedFromText(teamId) + offset;
   const recentResults: TeamForm["recentResults"] = [];
@@ -2001,7 +2052,11 @@ class RequestSemaphore {
 const PROVIDER_REQUESTS_PER_MINUTE: Record<string, number> = {
   "v3.football.api-sports.io": 360,
   "v1.basketball.api-sports.io": 360,
-  "v1.tennis.api-sports.io": 360
+  "v1.tennis.api-sports.io": 360,
+  // Free plans: 100 requests/day, 10/minute. The scoreboard adapter also holds
+  // its own six-hour fixture cache so page traffic cannot drain the day.
+  "v1.handball.api-sports.io": 10,
+  "v1.hockey.api-sports.io": 10
 };
 
 const PROVIDER_RATE_LIMIT_MAX_COOLDOWN_MS = 20_000;
@@ -2814,6 +2869,98 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   }
 
   /**
+   * Fixtures for the API-Sports scoreboard sports (handball, ice hockey).
+   *
+   * Both run on free plans capped at 100 requests a day, so this method keeps
+   * its own six-hour per-(sport, date) cache on top of the provider-wide TTL:
+   * even with the sport active in the catalogue, a day of page traffic costs at
+   * most four upstream reads per sport. No odds enrichment is attempted yet —
+   * these fixtures exist so scores flow, settlement can grade, and the model
+   * board can render honest probabilities while the v4 activation gates
+   * (results volume, closing odds) are being earned.
+   */
+  private scoreboardFixtureCache = new Map<string, { expiresAt: number; matches: Promise<Match[]> }>();
+
+  private async getScoreboardFixtures(date: string, config: ScoreboardSportConfig): Promise<Match[]> {
+    const apiKey = firstEnv(this.env, config.envKeys);
+    if (!apiKey) return this.fallback.getFixtures(date, config.sport);
+    const cacheKey = `${config.sport}:${date}`;
+    const cached = this.scoreboardFixtureCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.matches;
+
+    const endpoint = new URL(`https://${config.host}/games`);
+    endpoint.searchParams.set("date", date);
+    const matches = (this.limitedFetch(endpoint, { headers: { "x-apisports-key": apiKey } }) as Promise<ApiScoreboardResponse | null>).then((data) => {
+      const games = Array.isArray(data?.response) ? data.response : [];
+      return games.flatMap((game) => {
+        const homeName = cleanText(game.teams?.home?.name);
+        const awayName = cleanText(game.teams?.away?.name);
+        if (!homeName || !awayName) return [];
+        const country = cleanText(game.country?.name) || "World";
+        const leagueName = cleanText(game.league?.name) || config.fallbackLeagueLabel;
+        const strength = footballLeagueStrength(country, leagueName);
+        const kickoffTime = scoreboardKickoff(game);
+        const status = scoreboardStatus(game.status);
+        const homeScore = numberOrNull(game.scores?.home);
+        const awayScore = numberOrNull(game.scores?.away);
+        const homeId = `${config.providerId}:${safeId(game.teams?.home?.id, slug(homeName) || "home")}`;
+        const awayId = `${config.providerId}:${safeId(game.teams?.away?.id, slug(awayName) || "away")}`;
+        // No historical strength source exists for these sports yet, so both
+        // sides carry the league baseline and say so in the evidence.
+        const baselineRating = 74 + strength * 8;
+        const evidence = { source: `${config.providerId}-league-baseline`, sampleSize: 0 };
+
+        return [
+          {
+            id: `${config.providerId}:${safeId(game.id, `${slug(homeName)}-${slug(awayName)}-${date}`)}`,
+            sport: config.sport,
+            league: {
+              id: `${config.providerId}:${safeId(game.league?.id, slug(leagueName) || "league")}`,
+              name: leagueName,
+              country,
+              strength,
+              logo: cleanText(game.league?.logo) || null,
+              flag: cleanText(game.country?.flag) || null
+            },
+            kickoffTime,
+            homeTeam: { id: homeId, name: homeName, country, rating: baselineRating, ratingEvidence: evidence, logo: cleanText(game.teams?.home?.logo) || null },
+            awayTeam: { id: awayId, name: awayName, country, rating: baselineRating, ratingEvidence: evidence, logo: cleanText(game.teams?.away?.logo) || null },
+            status,
+            score:
+              status === "scheduled" || homeScore === null || awayScore === null
+                ? undefined
+                : { home: homeScore, away: awayScore },
+            oddsMarkets: [],
+            homeForm: buildProviderForm(homeId, baselineRating, 0),
+            awayForm: buildProviderForm(awayId, baselineRating, 1),
+            dataQualityScore: 0.6,
+            providerContextSignals: [],
+            dataSource: {
+              kind: "provider" as const,
+              fixtureProvider: config.providerId,
+              fixtureProviderId: String(game.id ?? "") || undefined,
+              season: String(game.league?.season ?? "") || undefined,
+              fetchedAt: new Date().toISOString(),
+              statusDetail: typeof game.status === "string" ? game.status : `${game.status?.short ?? ""} ${game.status?.long ?? ""}`.trim() || undefined,
+              notes: [
+                `Live ${config.sport.replace("_", " ")} fixtures are provider-backed.`,
+                "No bookmaker odds are attached yet, so the market anchor cannot apply and nothing publishes from this sport.",
+                "Team ratings are a league baseline until a historical strength source exists."
+              ]
+            }
+          } satisfies Match
+        ];
+      });
+    });
+    matches.catch(() => {
+      if (this.scoreboardFixtureCache.get(cacheKey)?.matches === matches) this.scoreboardFixtureCache.delete(cacheKey);
+    });
+    // Six hours: at most four upstream reads per sport per day.
+    setBoundedCache(this.scoreboardFixtureCache, cacheKey, { expiresAt: Date.now() + 6 * 60 * 60 * 1000, matches });
+    return matches;
+  }
+
+  /**
    * Settlement must not rediscover a tournament or league key from today's
    * catalogue. A completed competition can disappear from that catalogue
    * while its score is still inside The Odds API's three-day result window.
@@ -2846,6 +2993,24 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private async fetchFixtures(date: string, sport: Sport, storedEnrichment: boolean): Promise<Match[]> {
     if (sport === "basketball") return this.getBasketballFixtures(date, storedEnrichment);
     if (sport === "tennis") return this.getTennisFixtures(date, storedEnrichment);
+    if (sport === "handball") {
+      return this.getScoreboardFixtures(date, {
+        sport: "handball",
+        host: "v1.handball.api-sports.io",
+        providerId: "api-handball",
+        envKeys: ["API_HANDBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"],
+        fallbackLeagueLabel: "Handball"
+      });
+    }
+    if (sport === "ice_hockey") {
+      return this.getScoreboardFixtures(date, {
+        sport: "ice_hockey",
+        host: "v1.hockey.api-sports.io",
+        providerId: "api-hockey",
+        envKeys: ["API_HOCKEY_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"],
+        fallbackLeagueLabel: "Ice Hockey"
+      });
+    }
     if (sport !== "football") return this.fallback.getFixtures(date, sport);
     const apiKey = firstEnv(this.env, ["API_FOOTBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"]);
     if (!apiKey) {
