@@ -1,4 +1,4 @@
-export type Sport = "football" | "basketball" | "tennis" | "cricket" | "rugby" | "handball";
+export type Sport = "football" | "basketball" | "tennis" | "cricket" | "rugby" | "handball" | "ice_hockey";
 
 export type MatchStatus = "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "suspended";
 export type ConfidenceLevel = "low" | "medium" | "high";
@@ -128,6 +128,11 @@ export interface OddsMarket {
     | "clean_sheet_home"
     | "clean_sheet_away"
     | "correct_score"
+    | "over_under_505"
+    | "over_under_545"
+    | "over_under_585"
+    | "over_under_55"
+    | "over_under_65"
     | "both_teams_to_score"
     | "double_chance"
     | "draw_no_bet"

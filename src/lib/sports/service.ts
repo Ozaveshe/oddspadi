@@ -9,6 +9,7 @@ import { predictionSegmentKey } from "./prediction/predictionSegment";
 import { modelBasketballMatch } from "./prediction/basketballModel";
 import { modelFootballMatch } from "./prediction/footballModel";
 import { modelTennisMatch } from "./prediction/tennisModel";
+import { modelHandballMatch, modelIceHockeyMatch } from "./prediction/highScoringPoissonModel";
 import { explainPrediction } from "./prediction/explainer";
 import { confidenceRank } from "./prediction/format";
 import { buildPredictionAgentReport } from "./prediction/agent";
@@ -40,7 +41,8 @@ export const sports: Array<{ id: Sport; label: string; active: boolean }> = [
   { id: "tennis", label: "Tennis", active: true },
   { id: "cricket", label: "Cricket", active: false },
   { id: "rugby", label: "Rugby", active: false },
-  { id: "handball", label: "Handball", active: false }
+  { id: "handball", label: "Handball", active: false },
+  { id: "ice_hockey", label: "Ice Hockey", active: false }
 ];
 
 export const sportsProvider = providerBackedSportsDataProvider;
@@ -127,6 +129,10 @@ async function getLearningProfileForSport(sport: Sport): Promise<DecisionLearnin
 function modelMatch(match: Match, now: Date) {
   if (match.sport === "basketball") return modelBasketballMatch(match);
   if (match.sport === "tennis") return modelTennisMatch(match);
+  // Foundation sports: fixtures and scores flow, probabilities render on the
+  // model board, and nothing publishes until their v4 evidence gates are met.
+  if (match.sport === "handball") return modelHandballMatch(match);
+  if (match.sport === "ice_hockey") return modelIceHockeyMatch(match);
   return modelFootballMatch(match, { now });
 }
 
