@@ -1,7 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { finishProviderRun, startProviderRun } from "@/lib/sports/intelligence/repository";
-import { gradeMarketDecision, type MarketDecisionResult } from "@/lib/sports/results/marketDecisionSettlement";
+import {
+  gradeMarketDecision,
+  type MarketDecisionResult,
+  type SettleableFixtureResult
+} from "@/lib/sports/results/marketDecisionSettlement";
 
 /**
  * The scheduled outcome ledger: the four-step evidence chain that turns
@@ -42,7 +46,8 @@ export type OutcomeLedgerReport = {
 type LedgerFixture = {
   id: string;
   sport: string;
-  status: "finished" | "postponed" | "cancelled";
+  /** Full fixture-status union; the sweep's query narrows to terminal states. */
+  status: SettleableFixtureResult["status"];
   home_score: number | null;
   away_score: number | null;
 };
