@@ -26,27 +26,10 @@
 -- kickoff is the honest lower bound; it is not presented as the settlement
 -- instant anywhere that matters.
 --
--- Implausible prices are dropped to null rather than carried. Seven settled
--- football decisions were struck against feed sentinels — 1001.00, 1000.00,
--- 201.00 — and four of them alone dragged average closing-line value to +4.35,
--- a 435% edge, which would have satisfied the `averageCLV > 0` promotion gate
--- on nothing but garbage. The probability record is kept (Brier and ECE read
--- `model_probability`, not price) while `odds` goes null so closing-line value
--- ignores the row. `1 / 100` is the bound: a genuine 1X2 quote does not imply
--- under a 1% chance, and the repo enforces only `> 1` anywhere else.
-
--- A tradeable decimal price. Anything at or below evens, or implying under a
--- 1% chance, is a feed sentinel rather than a quote anyone could have taken.
-create or replace function public.nullif_implausible_odds(p_odds numeric)
-returns numeric
-language sql
-immutable
--- Pinned even though this touches no tables: an unset search_path trips the
--- Supabase security linter (0011_function_search_path_mutable).
-set search_path = ''
-as $$
-  select case when p_odds is null or p_odds <= 1 or p_odds > 100 then null else p_odds end;
-$$;
+-- Superseded twice, in the two migrations that follow: this version carries no
+-- price plausibility guard, which let feed sentinels through, and its closing
+-- median needs an explicit numeric cast. Both are corrected forward rather than
+-- edited here, so replaying this directory reproduces the recorded history.
 
 create or replace function public.op_backfill_prediction_outcomes(
   p_since timestamptz,
@@ -83,7 +66,7 @@ begin
   )
   select
     s.*,
-    nullif_implausible_odds(coalesce(
+    coalesce(
       (select o.decimal_odds from op_odds_snapshots o where o.id = s.odds_snapshot_id),
       (select o.decimal_odds from op_odds_snapshots o
         where o.fixture_id = s.fixture_id and o.market = s.market and o.selection = s.selection
@@ -91,27 +74,12 @@ begin
           and o.observed_at <= s.generated_at
         order by o.observed_at desc
         limit 1)
-    )) as odds,
-    case
-      when nullif_implausible_odds(coalesce(
-        (select o.decimal_odds from op_odds_snapshots o where o.id = s.odds_snapshot_id),
-        (select o.decimal_odds from op_odds_snapshots o
-          where o.fixture_id = s.fixture_id and o.market = s.market and o.selection = s.selection
-            and coalesce(o.is_live, false) = false and o.observed_at <= s.generated_at
-          order by o.observed_at desc limit 1)
-      )) is null then 'implausible-price-dropped'
-      when s.odds_snapshot_id is not null then 'decision-snapshot'
-      else 'reconstructed'
-    end as price_source,
-    -- percentile_cont returns double precision; cast so it resolves against the
-    -- numeric-typed plausibility guard.
-    nullif_implausible_odds(
-      (select percentile_cont(0.5) within group (order by o.decimal_odds)
-         from op_odds_snapshots o
-        where o.fixture_id = s.fixture_id and o.market = s.market and o.selection = s.selection
-          and o.is_closing
-          and nullif_implausible_odds(o.decimal_odds) is not null)::numeric
-    ) as closing_odds
+    ) as odds,
+    case when s.odds_snapshot_id is not null then 'decision-snapshot' else 'reconstructed' end as price_source,
+    (select percentile_cont(0.5) within group (order by o.decimal_odds)
+       from op_odds_snapshots o
+      where o.fixture_id = s.fixture_id and o.market = s.market and o.selection = s.selection
+        and o.is_closing) as closing_odds
   from settled s
   where not exists (
     select 1 from op_prediction_outcomes existing
@@ -138,10 +106,8 @@ begin
         'settledAtIsKickoff', true,
         'closingOddsMethod', 'median-of-closing-quotes'
       )
-    -- Every candidate is written, including one whose price was dropped: the
-    -- probability record is what Brier and ECE need, and discarding it because
-    -- the feed returned a sentinel would quietly shrink the settled sample.
-    from _outcome_candidates c;
+    from _outcome_candidates c
+    where c.odds is not null;
     get diagnostics v_inserted = row_count;
   end if;
 
@@ -151,7 +117,7 @@ begin
     count(*)::bigint,
     count(c.odds)::bigint,
     count(c.closing_odds)::bigint,
-    case when p_commit then count(*)::bigint else 0::bigint end
+    case when p_commit then count(c.odds)::bigint else 0::bigint end
   from _outcome_candidates c
   group by c.fx_sport
   order by c.fx_sport;
