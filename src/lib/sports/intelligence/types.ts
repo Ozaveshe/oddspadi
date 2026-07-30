@@ -106,6 +106,19 @@ export type CanonicalDecision = {
   settlementStatus: "pending" | "won" | "lost" | "push" | "void" | "needs_review";
   isPreliminary: boolean;
   provider: string;
+  /**
+   * How much of the priced market this probability actually holds, and whether
+   * the blend ran at all for this market.
+   *
+   * Without these, a decision records a `noVigProbability` whether or not the
+   * model ever saw it: the prediction is built from `match.oddsMarkets` while the
+   * market price is read from separately merged snapshots. Nothing stored
+   * distinguished "the model disagreed with the market" from "the model never saw
+   * the market", which is how tennis ran at corr(model, market) 0.078 while every
+   * decision looked market-aware.
+   */
+  marketPriorWeight: number | null;
+  marketPriorApplied: boolean | null;
 };
 
 export type ProviderRunStatus = "running" | "completed" | "partial" | "empty" | "failed" | "unavailable";

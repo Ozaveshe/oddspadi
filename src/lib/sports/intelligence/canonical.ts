@@ -216,8 +216,15 @@ export function buildCanonicalDecisions(
 ): CanonicalDecision[] {
   const summary = buildCanonicalDecisionForPrediction(match, prediction, snapshots, options.now ?? new Date());
   const snapshotBySelection = new Map(snapshots.map((snapshot) => [`${snapshot.market}:${snapshot.selection}`, snapshot]));
+  // Per market, not the run average: a fixture can have one market priced and
+  // another not, and the average would misreport both.
+  const priorWeightByMarket = new Map(
+    (prediction.marketPriorAdjustment?.markets ?? []).map((market) => [market.marketId, market.weight])
+  );
+  const priorRan = prediction.marketPriorAdjustment !== undefined;
   return summary.allMarketAnalyses.map((analysis) => {
     const snapshot = snapshotBySelection.get(`${analysis.marketId}:${analysis.selectionId}`) ?? null;
+    const priorWeight = priorWeightByMarket.get(analysis.marketId);
     return {
       decisionId: randomUUID(),
       fixtureId: match.id,
@@ -247,7 +254,12 @@ export function buildCanonicalDecisions(
       supersededBy: null,
       settlementStatus: match.status === "finished" ? "needs_review" : "pending",
       isPreliminary: options.preliminary ?? false,
-      provider: match.dataSource?.fixtureProvider ?? "unknown"
+      provider: match.dataSource?.fixtureProvider ?? "unknown",
+      // `null` means the pipeline reported nothing, which is different from a
+      // recorded weight of 0 — the latter says the blend ran and found no priced
+      // market to anchor to.
+      marketPriorWeight: priorRan ? priorWeight ?? 0 : null,
+      marketPriorApplied: priorRan ? priorWeight !== undefined : null
     };
   });
 }

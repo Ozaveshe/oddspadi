@@ -175,7 +175,7 @@ async function settledRows(sport) {
       // narrow anything and the football sweep died on `statement timeout`.
       // Verified safe across all 387,721 rows: `sport` is never null and never
       // disagrees with its fixture.
-      .select("id,fixture_id,market,selection,model_probability,no_vig_probability,implied_probability,settlement_status,generated_at")
+      .select("id,fixture_id,market,selection,model_probability,no_vig_probability,implied_probability,settlement_status,generated_at,market_prior_weight,market_prior_applied")
       .eq("sport", sport)
       .not("model_probability", "is", null)
       .in("settlement_status", ["won", "lost"])
@@ -196,6 +196,8 @@ async function settledRows(sport) {
       generatedAt: String(row.generated_at),
       p: Number(row.model_probability),
       market: Number(row.no_vig_probability ?? row.implied_probability),
+      priorWeight: row.market_prior_weight === null ? null : Number(row.market_prior_weight),
+      priorApplied: row.market_prior_applied,
       won: row.settlement_status === "won" ? 1 : 0
     }))
     .filter((row) => Number.isFinite(row.p) && row.p >= 0 && row.p <= 1);
@@ -258,6 +260,28 @@ for (const sport of sports) {
   console.log("  market anchoring:");
   console.log(`    corr(model, outcome)=${show(modelVsOutcome)}   corr(market, outcome)=${show(marketVsOutcome)}`);
   console.log(`    corr(model, market)=${show(modelVsMarket)}    model spread=${spread.toFixed(4)}`);
+  // Whether the anchor ran is recorded per decision, so a low correlation is
+  // attributable instead of needing a provider-level investigation to explain.
+  const anchored = unique.filter((row) => row.priorApplied === true);
+  const unanchored = unique.filter((row) => row.priorApplied === false);
+  const unknownAnchor = unique.filter((row) => row.priorApplied === null || row.priorApplied === undefined);
+  const weights = anchored.map((row) => row.priorWeight).filter((weight) => typeof weight === "number");
+  const meanWeight = weights.length ? weights.reduce((sum, weight) => sum + weight, 0) / weights.length : null;
+  console.log(
+    `    anchored=${anchored.length}  unanchored=${unanchored.length}  unrecorded=${unknownAnchor.length}` +
+      (meanWeight === null ? "" : `  mean market weight=${meanWeight.toFixed(4)}`)
+  );
+  if (unanchored.length) {
+    const unanchoredSummary = summarise(unanchored);
+    const anchoredSummary = anchored.length ? summarise(anchored) : null;
+    console.log(
+      `    skill when anchored=${anchoredSummary ? (anchoredSummary.brierSkill >= 0 ? "+" : "") + anchoredSummary.brierSkill.toFixed(4) : "n/a"}` +
+        `  when unanchored=${unanchoredSummary ? (unanchoredSummary.brierSkill >= 0 ? "+" : "") + unanchoredSummary.brierSkill.toFixed(4) : "n/a"}`
+    );
+  }
+  if (unknownAnchor.length === unique.length && unique.length) {
+    console.log("    anchor state unrecorded on every row — these predate market-prior provenance");
+  }
   if (modelVsMarket !== null && modelVsMarket < 0.5) {
     console.log("    corr(model, market) is low — this sport is not anchored to the price it is");
     console.log("    being judged against, so its skill number describes noise, not a view");
