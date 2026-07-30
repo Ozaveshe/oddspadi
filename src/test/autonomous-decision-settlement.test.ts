@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
 import { buildPrediction } from "@/lib/sports/service";
 import { buildAutonomousPendingOutcome } from "@/lib/sports/prediction/decisionAutonomousOutcome";
+import { gradeMarketDecision } from "@/lib/sports/results/marketDecisionSettlement";
 import {
   runDecisionAutonomousSettlement,
   type AutonomousPendingOutcomeRow
@@ -21,7 +22,7 @@ const noPendingShadowSettlement = async () => ({
 });
 
 describe("autonomous shadow outcomes", () => {
-  it("opens an auditable match-winner outcome even when the final action is avoid", async () => {
+  it("opens an auditable, gradeable outcome even when the final action is avoid", async () => {
     const { match, prediction } = await fixture();
     const outcome = buildAutonomousPendingOutcome({
       match,
@@ -35,10 +36,20 @@ describe("autonomous shadow outcomes", () => {
     expect(outcome).toMatchObject({
       decisionRunId: "run-1",
       fixtureExternalId: match.id,
-      market: "match_winner",
       result: "pending",
       source: "autonomous-shadow"
     });
+    // The ledger row follows the headline candidate, which the watchlist tier
+    // now ranks by model probability rather than claimed value — for this mock
+    // that is the over/under, not the match winner. Whatever it is, it must be
+    // a market the settlement grader can actually grade, or the shadow ledger
+    // fills with rows that never resolve.
+    const grade = gradeMarketDecision({
+      market: outcome!.market,
+      selection: outcome!.selection,
+      fixture: { status: "finished", homeScore: 2, awayScore: 1 }
+    });
+    expect(grade.result).not.toBe("needs_review");
     expect(outcome?.metadata).toMatchObject({ paperOnly: true, evidenceHash: "fnv1a-12345678" });
   });
 
