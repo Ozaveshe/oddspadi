@@ -48,3 +48,47 @@ export function teamNamesAlign(left: string, right: string): boolean {
   const [fewer, more] = leftTokens.length <= rightTokens.length ? [leftTokens, rightTokens] : [rightTokens, leftTokens];
   return fewer.every((token) => more.some((candidate) => teamNameTokenMatches(token, candidate)));
 }
+
+/** Single letters in a name, folded and lowercased: the initials it states. */
+function statedInitials(value: string): Set<string> {
+  return new Set(
+    value
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase()
+      .split(/[^a-z]+/)
+      .filter((token) => token.length === 1)
+  );
+}
+
+/**
+ * True when two names state initials that cannot be the same person.
+ *
+ * Compares sets rather than positions because both orders occur in the wild —
+ * the tennis corpus writes `Popyrin A.` while providers write `A. Popyrin`.
+ * Absent initials on either side are not evidence of conflict, so a bare
+ * surname never blocks a match.
+ */
+export function initialsConflict(left: string, right: string): boolean {
+  const leftInitials = statedInitials(left);
+  const rightInitials = statedInitials(right);
+  if (!leftInitials.size || !rightInitials.size) return false;
+  return ![...leftInitials].some((letter) => rightInitials.has(letter));
+}
+
+/**
+ * Name alignment for people rather than clubs.
+ *
+ * `teamNamesAlign` discards tokens under three characters, which is right for
+ * clubs and wrong for players: it makes initials invisible, so every `Zverev`
+ * aligns with every other `Zverev`, as does every `Williams`. For a corpus join
+ * that costs a row; for attaching bookmaker prices to a fixture it prices one
+ * match from another match's odds, which is the false positive the club matcher
+ * is explicitly built to avoid.
+ *
+ * Kept separate from `teamNamesAlign` rather than folded into it so football's
+ * behaviour is byte-for-byte unchanged.
+ */
+export function personNamesAlign(left: string, right: string): boolean {
+  return teamNamesAlign(left, right) && !initialsConflict(left, right);
+}

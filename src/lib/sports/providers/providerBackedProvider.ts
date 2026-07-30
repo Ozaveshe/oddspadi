@@ -1,5 +1,5 @@
 import { firstConfiguredEnv } from "@/lib/env";
-import { teamNamesAlign } from "@/lib/sports/providers/teamNameAlignment";
+import { personNamesAlign, teamNamesAlign } from "@/lib/sports/providers/teamNameAlignment";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
 import { fetchOpenMeteoForecast } from "@/lib/sports/providers/openMeteo";
 import {
@@ -1395,6 +1395,57 @@ function firstOddsMarketsForFixture(
   // same-team/same-day key.
   void oddsByEvent;
   return aligned ? oddsMarketsForEvent(aligned, "football") : [];
+}
+
+/**
+ * Odds markets for a tennis fixture: exact key first, then the same fuzzy
+ * alignment football has had all along.
+ *
+ * Tennis used a bare `oddsByEvent.get(eventKey(...))` with no fallback, and
+ * tennis names are exactly the ones that do not join exactly — `Popyrin A.`
+ * against `A. Popyrin`. So tennis fixtures routinely carried no odds at all,
+ * `applyMarketPriorAdjustmentToMarkets` had nothing to blend toward and returned
+ * the raw model, and the market anchor that is supposed to hold an unproven
+ * model at 80% market weight never applied. Measured consequence:
+ * corr(model, market) of 0.078 for tennis against 0.895 for football, with
+ * tennis decisions still recording a `no_vig_probability` they never used.
+ *
+ * Two deliberate narrowings against a false positive, which here would price one
+ * match from another match's odds rather than merely miss a row:
+ *
+ * 1. `personNamesAlign`, not `teamNamesAlign`. The club matcher discards tokens
+ *    under three characters, so initials vanish and every `Zverev` aligns with
+ *    every other. Tennis draws are full of siblings and namesakes.
+ * 2. Direct orientation only. Which player a feed calls "home" is arbitrary in
+ *    tennis, and `oddsMarketsForEvent` keys its selections from the event's own
+ *    order — so accepting a swapped match would attach inverted probabilities.
+ *    A swapped feed is skipped rather than corrected, because a missing price is
+ *    recoverable and an inverted one is not.
+ */
+export function tennisOddsEventAlignsWithFixture(
+  event: Pick<OddsApiEvent, "commence_time" | "home_team" | "away_team">,
+  homeName: string,
+  awayName: string,
+  kickoffTime: string
+): boolean {
+  return (
+    kickoffsAlign(cleanText(event.commence_time), kickoffTime) &&
+    personNamesAlign(cleanText(event.home_team), homeName) &&
+    personNamesAlign(cleanText(event.away_team), awayName)
+  );
+}
+
+function firstTennisOddsMarketsForFixture(
+  oddsByEvent: Map<string, OddsMarket[]>,
+  homeName: string,
+  awayName: string,
+  kickoffTime: string,
+  events: OddsApiEvent[] = []
+): OddsMarket[] {
+  const exact = oddsByEvent.get(eventKey(homeName, awayName, kickoffTime));
+  if (exact?.length) return exact;
+  const aligned = events.find((event) => tennisOddsEventAlignsWithFixture(event, homeName, awayName, kickoffTime));
+  return aligned ? oddsMarketsForEvent(aligned, "tennis") : [];
 }
 
 function firstOddsEventForFixture(events: OddsApiEvent[], homeName: string, awayName: string, kickoffTime: string): OddsApiEvent | null {
@@ -3199,7 +3250,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       const status = tennisStatus(event.event_status);
       const score = parseTennisScore(event.event_final_result || event.event_game_result);
       const kickoffTime = tennisKickoff(event);
-      const oddsMarkets = oddsByEvent.get(eventKey(homeName, awayName, kickoffTime)) ?? [];
+      const oddsMarkets = firstTennisOddsMarketsForFixture(oddsByEvent, homeName, awayName, kickoffTime, oddsEvents);
       const directOddsEvent = firstOddsEventForFixture(oddsEvents, homeName, awayName, kickoffTime);
       const directOddsProvider = cleanText(directOddsEvent?.sport_key) === "api-tennis" ? "api-tennis-odds" : "the-odds-api";
 

@@ -29,7 +29,7 @@
  */
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
-import { teamNamesAlign, teamNameTokens } from "../src/lib/sports/providers/teamNameAlignment.ts";
+import { personNamesAlign, teamNameTokens } from "../src/lib/sports/providers/teamNameAlignment.ts";
 
 function arg(name, fallback = null) {
   const index = process.argv.indexOf(`--${name}`);
@@ -146,32 +146,12 @@ function fixturesNear(date) {
   return out;
 }
 
-/**
- * The shared matcher ignores tokens shorter than three characters, so initials
- * are invisible to it and every "Zverev" collapses onto every other. Reject a
- * pair whose stated initials disagree; both name orders appear in the wild
- * ("Popyrin A." in the corpus, "A. Popyrin" from the provider), so compare the
- * sets of single letters rather than their position.
- */
-function initialsConflict(left, right) {
-  const initials = (value) =>
-    new Set(
-      value
-        .normalize("NFD")
-        .replace(/\p{M}/gu, "")
-        .toLowerCase()
-        .split(/[^a-z]+/)
-        .filter((token) => token.length === 1)
-    );
-  const leftInitials = initials(left);
-  const rightInitials = initials(right);
-  if (!leftInitials.size || !rightInitials.size) return false;
-  return ![...leftInitials].some((letter) => rightInitials.has(letter));
-}
-
-function playersAlign(corpusName, fixtureName) {
-  return teamNamesAlign(corpusName, fixtureName) && !initialsConflict(corpusName, fixtureName);
-}
+// `personNamesAlign` is the shared matcher plus the initials guard this script
+// originally carried its own copy of. It now lives in `teamNameAlignment`
+// because tennis odds attachment needs exactly the same protection: the club
+// matcher discards tokens under three characters, so every "Zverev" aligns with
+// every other one.
+const playersAlign = personNamesAlign;
 
 const candidates = [];
 const unmatched = [];
