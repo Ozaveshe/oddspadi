@@ -123,9 +123,9 @@ describe("provider odds market coherence", () => {
     expect(match.oddsMarkets.map((market) => market.bookmaker)).toEqual([undefined, undefined, undefined]);
     expect(match.oddsMarkets.every((market) => market.priceMethod === "best-price-per-selection-v1")).toBe(true);
     expect(match.oddsMarkets.map((market) => market.consensus?.method)).toEqual([
-      "median-no-vig-v1",
-      "median-no-vig-v1",
-      "median-no-vig-v1"
+      "median-shin-no-vig-v2",
+      "median-shin-no-vig-v2",
+      "median-shin-no-vig-v2"
     ]);
     expect(match.oddsMarkets.map((market) => market.consensus?.bookmakerCount)).toEqual([3, 2, 2]);
     for (const market of match.oddsMarkets) {

@@ -5,6 +5,8 @@ import { LocalTime } from "@/components/odds/LocalTime";
 import { ProviderRunStrip, SlateFixtureCard } from "@/components/odds/IntelligenceSlate";
 import { PromotionGateBoard } from "@/components/odds/PromotionGateBoard";
 import { readPromotionGateStatus } from "@/lib/sports/promotionGateStatus";
+import { AutomationHeartbeatBoard } from "@/components/odds/AutomationHeartbeatBoard";
+import { readAutomationHeartbeat } from "@/lib/sports/automationHeartbeat";
 import { getHistoricalEngineEvidence } from "@/lib/sports/performance/report";
 import { getDailyTipsProduct } from "@/lib/sports/tips/product";
 
@@ -66,6 +68,7 @@ export default async function DecisionEnginePage() {
         : `Engine status: ${lastRun?.status ?? slate.provider.status}`;
 
   const gateStatus = await readPromotionGateStatus("football").catch(() => null);
+  const heartbeat = await readAutomationHeartbeat().catch(() => null);
 
   return (
     <main id="main" className="container engine-page">
@@ -94,6 +97,12 @@ export default async function DecisionEnginePage() {
         <div className="section-title"><div><span className="section-kicker">Road to publication</span><h2 id="gate-board-heading">The seven promotion gates, live</h2></div></div>
         <p className="muted small">Football publishes real picks only after a calibration profile passes every gate below. These are the engine&apos;s own enforcement numbers, not a summary written for this page.</p>
         <PromotionGateBoard status={gateStatus} />
+      </section> : null}
+
+      {heartbeat ? <section className="section engine-heartbeat" aria-labelledby="heartbeat-heading">
+        <div className="section-title"><div><span className="section-kicker">No hands on the wheel</span><h2 id="heartbeat-heading">Scheduled automation, live</h2></div></div>
+        <p className="muted small">Every job below runs itself on a schedule — importing fixtures, refreshing odds, deciding, settling results against final scores and growing the calibration ledger. Freshness is measured against each job&apos;s own cadence from the same run ledger the jobs write.</p>
+        <AutomationHeartbeatBoard jobs={heartbeat} />
       </section> : null}
 
       <section className="section historical-evidence engine-authority" aria-labelledby="engine-authority-heading">

@@ -19,7 +19,7 @@ describe("bookmaker no-vig consensus", () => {
       quote("c", 1.2, 5)
     ]);
 
-    expect(consensus).toMatchObject({ method: "median-no-vig-v1", bookmakerCount: 3 });
+    expect(consensus).toMatchObject({ method: "median-shin-no-vig-v2", bookmakerCount: 3 });
     expect((consensus?.probabilities.home ?? 0) + (consensus?.probabilities.away ?? 0)).toBeCloseTo(1, 6);
     expect(consensus?.probabilities.home).toBeGreaterThan(0.5);
     expect(consensus?.probabilities.home).toBeLessThan(0.55);

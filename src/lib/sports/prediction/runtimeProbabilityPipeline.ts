@@ -20,6 +20,7 @@ import {
 } from "./learnedProbabilityCalibration";
 import { buildModelSkillAnchor } from "./modelSkillAnchor";
 import { footballMarketPriorEvidencePolicy } from "./marketPriorPolicy";
+import { applyMarketCoherencePass } from "./marketCoherentMatrix";
 import {
   applyMarketPriorAdjustmentToDiagnostics,
   applyMarketPriorAdjustmentToMarkets
@@ -89,13 +90,43 @@ export function applyRuntimeProbabilityPipeline({
     buildModelSkillAnchor(learningProfile)
   );
 
+  // The prior blend moves each priced market toward the book one market at a
+  // time, so unpriced markets still describe the raw model's match. Refit the
+  // score matrix to the anchored 1X2 and re-derive the unpriced markets from
+  // it, so the whole board is one match again. Live fixtures are skipped:
+  // their matrix is truncated at the current score and a from-zero Poisson
+  // refit would describe the wrong game.
+  const coherence =
+    match.sport === "football" && match.status !== "live" && marketPrior.adjustment.applied
+      ? applyMarketCoherencePass({
+          markets: marketPrior.markets,
+          pricedMarketIds: new Set(marketPrior.adjustment.markets.map((market) => market.marketId)),
+          rho: baseModel.diagnostics.dixonColesRho ?? -0.06,
+          initialLambdaHome: baseModel.diagnostics.expectedGoals.home,
+          initialLambdaAway: baseModel.diagnostics.expectedGoals.away
+        })
+      : null;
+
+  const finalMarkets = coherence?.applied ? coherence.markets : marketPrior.markets;
+  const priorDiagnostics = applyMarketPriorAdjustmentToDiagnostics(learnedCalibrationDiagnostics, marketPrior.adjustment);
+  const diagnostics = coherence?.applied && coherence.receipt
+    ? {
+        ...priorDiagnostics,
+        marketCoherence: coherence.receipt,
+        calibrationNotes: [
+          ...priorDiagnostics.calibrationNotes,
+          `After the market-prior blend, the score matrix was refit to the anchored probabilities (λ ${coherence.receipt.lambdaHome.toFixed(2)}-${coherence.receipt.lambdaAway.toFixed(2)}) and ${coherence.receipt.rebuiltMarkets.length} unpriced market(s) were re-derived from it, so priced and unpriced markets describe the same match.`
+        ]
+      }
+    : priorDiagnostics;
+
   return {
     version: RUNTIME_PROBABILITY_PIPELINE_VERSION,
     baseMarkets: baseModel.markets,
     contextMarkets,
     learnedCalibratedMarkets: learnedCalibration.markets,
-    markets: marketPrior.markets,
-    diagnostics: applyMarketPriorAdjustmentToDiagnostics(learnedCalibrationDiagnostics, marketPrior.adjustment),
+    markets: finalMarkets,
+    diagnostics,
     contextAdjustment,
     calibrationAdjustment: learnedCalibration.adjustment,
     marketPriorAdjustment: marketPrior.adjustment

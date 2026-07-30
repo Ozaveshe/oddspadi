@@ -40,6 +40,49 @@ export function removeBookmakerMargin(probabilities: number[]): number[] {
   return normalizeImpliedProbabilities(probabilities);
 }
 
+/**
+ * De-vig a single book's implied probabilities with Shin's (1992/1993) method.
+ *
+ * Proportional normalization charges the bookmaker margin evenly across
+ * selections, which systematically overstates longshots and understates
+ * favorites — the favorite-longshot bias. That bias flows straight into the
+ * market prior the model is anchored to, and it is worst exactly where the
+ * anchor matters most: three-way markets with a heavy favorite, and tennis
+ * markets priced by a single book.
+ *
+ * Shin instead models the margin as protection against informed money: solve
+ * for the insider proportion `z` such that the recovered probabilities sum to
+ * one. Falls back to proportional normalization whenever the inputs are
+ * degenerate (missing prices, sub-1 book sums, failed bracket), so it is
+ * always at least as safe as the old behavior.
+ */
+export function shinNoVigProbabilities(implied: number[]): number[] {
+  if (implied.length < 2 || implied.some((q) => !Number.isFinite(q) || q <= 0 || q >= 1)) {
+    return normalizeImpliedProbabilities(implied);
+  }
+  const bookSum = implied.reduce((sum, q) => sum + q, 0);
+  // No overround (or an arb) means there is no margin to reallocate.
+  if (bookSum <= 1) return normalizeImpliedProbabilities(implied);
+
+  const probabilitiesAt = (z: number) =>
+    implied.map((q) => (Math.sqrt(z * z + (4 * (1 - z) * q * q) / bookSum) - z) / (2 * (1 - z)));
+  const sumAt = (z: number) => probabilitiesAt(z).reduce((sum, p) => sum + p, 0);
+
+  // sum(0) = sqrt(bookSum) > 1; sum decreases as z grows. Bisect to sum = 1.
+  let low = 0;
+  let high = 0.5;
+  if (!(sumAt(low) >= 1) || !(sumAt(high) <= 1)) return normalizeImpliedProbabilities(implied);
+  for (let iteration = 0; iteration < 60; iteration += 1) {
+    const mid = (low + high) / 2;
+    if (sumAt(mid) > 1) low = mid;
+    else high = mid;
+  }
+  const solved = probabilitiesAt((low + high) / 2);
+  const total = solved.reduce((sum, p) => sum + p, 0);
+  if (!Number.isFinite(total) || total <= 0) return normalizeImpliedProbabilities(implied);
+  return solved.map((p) => clampProbability(p / total));
+}
+
 export function calculateValueEdge(modelProbability: number, impliedProbability: number): number {
   return clampProbability(modelProbability) - clampProbability(impliedProbability);
 }
@@ -349,7 +392,7 @@ function validatedMarketConsensus(market: OddsMarket): NonNullable<OddsMarket["c
   const selectionIds = market.selections.map((selection) => selection.id);
   const total = selectionIds.reduce((sum, id) => sum + (consensus?.probabilities[id] ?? 0), 0);
   const valid = Boolean(
-    consensus?.method === "median-no-vig-v1" &&
+    (consensus?.method === "median-no-vig-v1" || consensus?.method === "median-shin-no-vig-v2") &&
     Number.isInteger(consensus.bookmakerCount) &&
     consensus.bookmakerCount > 0 &&
     Number.isFinite(consensus.averageMargin) &&
@@ -380,7 +423,9 @@ export function applyMarketPriorAdjustmentToMarkets(
     if (!oddsMarket) return predictionMarket;
 
     const rawImpliedProbabilities = oddsMarket.selections.map((selection) => decimalOddsToImpliedProbability(selection.decimalOdds));
-    const noVigProbabilities = removeBookmakerMargin(rawImpliedProbabilities);
+    // Single-quote fallback path: Shin de-vig instead of proportional, because
+    // one book's margin is exactly where the favorite-longshot bias is worst.
+    const noVigProbabilities = shinNoVigProbabilities(rawImpliedProbabilities);
     const consensus = validatedMarketConsensus(oddsMarket);
     const validConsensus = consensus !== null;
     const matchedSelections = oddsMarket.selections
@@ -422,7 +467,7 @@ export function applyMarketPriorAdjustmentToMarkets(
       selectionCount: matchedSelections.length,
       bookmakerMargin: round(bookmakerMargin),
       weight,
-      priorMethod: validConsensus ? "median-no-vig-v1" : "selected-quote-no-vig",
+      priorMethod: validConsensus ? consensus.method : "selected-quote-shin-no-vig",
       bookmakerCount,
       maxProbabilitySpread: maxProbabilitySpread === null ? null : round(maxProbabilitySpread)
     });

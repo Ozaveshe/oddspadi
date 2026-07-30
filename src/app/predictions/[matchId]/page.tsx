@@ -372,9 +372,48 @@ export default async function MatchDetailPage({ params }: PageProps) {
             {match.headToHead ? <><p className="h2h-aggregate"><strong>{match.homeTeam.name}: {match.headToHead.homeWins}</strong><span>Draws: {match.headToHead.draws}</span><strong>{match.awayTeam.name}: {match.headToHead.awayWins}</strong></p><div className="h2h-list">{match.headToHead.meetings.map((meeting) => <div className="h2h-row" key={meeting.id}><span>{shortDate(meeting.kickoffTime)}</span><span>{meeting.homeTeam}</span><strong>{meeting.homeScore}–{meeting.awayScore}</strong><span>{meeting.awayTeam}</span></div>)}</div><p className="muted small">Last {match.headToHead.meetings.length} completed meetings from API-Football. H2H is context, not a guarantee.</p></> : <p className="muted">No verified recent meetings were available from the provider for this fixture.</p>}
           </div>
 
+          {match.sport === "football" ? <div className="panel">
+            <h2>Confirmed lineups</h2>
+            {(() => {
+              // Team sheets are a real-world timing constraint, not a data gap:
+              // confirmed XIs only exist ~1 hour before kickoff. The provider
+              // sweep polls for them automatically from 6 hours out, so the
+              // panel's job is to show them the moment they land — and to say
+              // when to expect them the rest of the time.
+              const starters = (match.providerContextSignals ?? [])
+                .filter((signal) => signal.category === "lineup")
+                .flatMap((signal) => signal.items ?? [])
+                .filter((item) => item.player && item.status.toLowerCase().includes("starter"));
+              if (starters.length) {
+                const columns = [match.homeTeam.name, match.awayTeam.name].map((team) => ({
+                  team,
+                  xi: starters.filter((item) => item.team === team)
+                }));
+                const matchedAny = columns.some((column) => column.xi.length > 0);
+                return <>
+                  <div className="lineup-columns">
+                    {(matchedAny ? columns : [{ team: "Confirmed starters", xi: starters }]).map((column) => (
+                      <div className="lineup-column" key={column.team}>
+                        <h3>{column.team}</h3>
+                        {column.xi.length ? <ol>{column.xi.slice(0, 11).map((item, index) => <li key={`${item.player}-${index}`}><strong>{item.player}</strong>{item.reason ? <span>{item.reason}</span> : null}</li>)}</ol> : <p className="muted small">This side&apos;s XI has not been confirmed yet.</p>}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="muted small">Straight from the official team sheets. The engine consumed these inside its bounded lineup signal before market comparison.</p>
+                </>;
+              }
+              const untilKickoffMs = Date.parse(match.kickoffTime) - Date.now();
+              return <p className="muted">
+                {Number.isFinite(untilKickoffMs) && untilKickoffMs > 6 * 60 * 60 * 1000
+                  ? "Team sheets do not exist yet — clubs publish them roughly an hour before kickoff. OddsPadi starts checking automatically six hours out, so the confirmed XI appears here the moment it is released."
+                  : "The lineup window is open and OddsPadi is checking the provider automatically. If nothing appears, the clubs have not released their team sheets yet."}
+              </p>;
+            })()}
+          </div> : null}
+
           <div className="panel">
             <h2>Team news</h2>
-            {(() => { const news = (match.providerContextSignals ?? []).filter((signal) => ["injury", "suspension", "lineup"].includes(signal.category)); const items = news.flatMap((signal) => (signal.items ?? []).map((item) => ({ ...item, category: signal.category }))); return items.length ? <div className="team-news-list">{items.slice(0, 28).map((item, index) => <div className="team-news-row" key={`${item.team}-${item.player}-${index}`}><span className={`team-news-kind ${item.category}`}>{item.status}</span><div><strong>{item.player || "Squad update"}</strong><span>{item.team}{item.reason ? ` · ${item.reason}` : ""}</span></div></div>)}</div> : news.length ? <><div className="team-news-signals">{news.map((signal) => <p key={signal.id}><strong>{signal.label}</strong><span>{signal.detail}</span></p>)}</div><p className="muted small">The enriched feed returned aggregate availability context but no player-level rows.</p></> : <p className="muted">This fixture has not entered the enriched context window yet, so there is no verified injury, suspension, or lineup report. OddsPadi will not invent team news.</p>; })()}
+            {(() => { const news = (match.providerContextSignals ?? []).filter((signal) => ["injury", "suspension"].includes(signal.category)); const items = news.flatMap((signal) => (signal.items ?? []).map((item) => ({ ...item, category: signal.category }))); return items.length ? <div className="team-news-list">{items.slice(0, 28).map((item, index) => <div className="team-news-row" key={`${item.team}-${item.player}-${index}`}><span className={`team-news-kind ${item.category}`}>{item.status}</span><div><strong>{item.player || "Squad update"}</strong><span>{item.team}{item.reason ? ` · ${item.reason}` : ""}</span></div></div>)}</div> : news.length ? <><div className="team-news-signals">{news.map((signal) => <p key={signal.id}><strong>{signal.label}</strong><span>{signal.detail}</span></p>)}</div><p className="muted small">The enriched feed returned aggregate availability context but no player-level rows.</p></> : <p className="muted">This fixture has not entered the enriched context window yet, so there is no verified injury or suspension report. OddsPadi will not invent team news.</p>; })()}
           </div>
 
           <div className="panel">

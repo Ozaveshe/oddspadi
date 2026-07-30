@@ -1,4 +1,5 @@
 import type { OddsMarketConsensus, OddsSelection } from "@/lib/sports/types";
+import { shinNoVigProbabilities } from "@/lib/sports/prediction/odds";
 
 export type ConsensusOddsQuote = {
   selections: OddsSelection[];
@@ -27,8 +28,12 @@ function normalizedQuote(quote: ConsensusOddsQuote, selectionIds: string[]): { p
   if (implied.some((probability) => probability <= 0)) return null;
   const total = implied.reduce((sum, probability) => sum + probability, 0);
   if (!Number.isFinite(total) || total <= 0) return null;
+  // Shin per book rather than proportional: proportional de-vig charges the
+  // margin evenly and so overstates every longshot; the median across books
+  // cannot wash that out because every book carries the same bias.
+  const deVigged = shinNoVigProbabilities(implied);
   return {
-    probabilities: Object.fromEntries(selectionIds.map((id, index) => [id, implied[index]! / total])),
+    probabilities: Object.fromEntries(selectionIds.map((id, index) => [id, deVigged[index] ?? 0])),
     margin: total - 1
   };
 }
@@ -77,7 +82,7 @@ export function buildNoVigBookmakerConsensus(quotes: ConsensusOddsQuote[]): Odds
   );
 
   return {
-    method: "median-no-vig-v1",
+    method: "median-shin-no-vig-v2",
     bookmakerCount: normalized.length,
     probabilities,
     averageMargin: round(normalized.reduce((sum, quote) => sum + quote.margin, 0) / normalized.length),

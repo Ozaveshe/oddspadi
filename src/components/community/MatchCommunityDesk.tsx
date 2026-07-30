@@ -228,7 +228,7 @@ export function MatchCommunityDesk({ fixtureId, sport, homeTeam, awayTeam, kicko
         <div>
           <span className="section-kicker">Community opinion</span>
           <h2 id="match-community-title">What the crowd sees</h2>
-          <p>Fan votes and accountable tips sit beside the model, never inside it.</p>
+          <p>Fan votes and accountable tips sit beside the model, never inside it. Voting takes one tap and no account; publishing a tip needs one, because tips are an immutable record.</p>
         </div>
         <span className="community-truth-chip">Separate truth lane</span>
       </div>

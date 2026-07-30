@@ -134,7 +134,7 @@ describe("API-Football odds adapter", () => {
     expect(fixture?.oddsMarkets[0]).toEqual(expect.objectContaining({
       id: "match_winner",
       priceMethod: "best-price-per-selection-v1",
-      consensus: expect.objectContaining({ method: "median-no-vig-v1", bookmakerCount: 2 })
+      consensus: expect.objectContaining({ method: "median-shin-no-vig-v2", bookmakerCount: 2 })
     }));
     expect(fixture?.oddsMarkets[0]?.bookmaker).toBeUndefined();
     expect(fixture?.oddsMarkets[0]?.selections).toEqual([

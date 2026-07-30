@@ -171,14 +171,17 @@ export function buildDecisionProbabilityTrace({
     probabilityStages?.finalModelProbability !== undefined &&
     Math.abs(finalModelProbability - bestPick.modelProbability) > 0.0000001;
   const selectedMarketPrior = marketPriorAdjustment?.markets.find((market) => market.marketId === bestPick.marketId);
+  // Both consensus generations (proportional v1 receipts and Shin v2) are
+  // multi-book medians; the confidence ladder cares about depth, not de-vig.
+  const medianPrior = selectedMarketPrior?.priorMethod.startsWith("median-") ?? false;
   const selectedMarketPriorConfidence = !selectedMarketPrior
     ? "low" as const
-    : selectedMarketPrior.priorMethod === "median-no-vig-v1" &&
+    : medianPrior &&
         selectedMarketPrior.bookmakerCount >= 3 &&
         selectedMarketPrior.maxProbabilitySpread !== null &&
         selectedMarketPrior.maxProbabilitySpread <= 0.06
       ? "high" as const
-      : selectedMarketPrior.priorMethod === "median-no-vig-v1"
+      : medianPrior
         ? "medium" as const
         : "low" as const;
 
@@ -219,7 +222,7 @@ export function buildDecisionProbabilityTrace({
     runtimeStep({
       id: "market-calibration",
       kind: "market-calibration",
-      label: selectedMarketPrior?.priorMethod === "median-no-vig-v1"
+      label: medianPrior
         ? "Multi-book no-vig prior blend"
         : "Single-quote no-vig prior blend",
       priorProbability: learnedCalibratedProbability,
@@ -227,7 +230,7 @@ export function buildDecisionProbabilityTrace({
       weight: selectedMarketPrior?.weight ?? 0,
       confidence: selectedMarketPriorConfidence,
       detail: selectedMarketPrior
-        ? selectedMarketPrior.priorMethod === "median-no-vig-v1"
+        ? medianPrior
           ? `Actual final runtime snapshot after a ${formatPercent(selectedMarketPrior.weight)} median no-vig blend across ${selectedMarketPrior.bookmakerCount} bookmaker${selectedMarketPrior.bookmakerCount === 1 ? "" : "s"}; widest probability disagreement ${formatPercent(selectedMarketPrior.maxProbabilitySpread ?? 0)}.`
           : `Actual final runtime snapshot after a ${formatPercent(selectedMarketPrior.weight)} one-book no-vig blend. No cross-book agreement is claimed.`
         : "No bookmaker-prior blend was applied."

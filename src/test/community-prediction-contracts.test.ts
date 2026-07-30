@@ -4,6 +4,8 @@ import { parseCommunityPollVote, parseCommunityTipDraft, parseCommunityTipRevisi
 
 const createSupabaseServerClientMock = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/supabase/serverAuthClient", () => ({ createSupabaseServerClient: createSupabaseServerClientMock }));
+const getSupabaseServerClientMock = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/supabase/server", () => ({ getSupabaseServerClient: getSupabaseServerClientMock }));
 
 import { POST as vote } from "@/app/api/community/polls/route";
 import { POST as publishTip } from "@/app/api/community/tips/route";
@@ -45,7 +47,11 @@ function client(userId: string | null = "user-1") {
   return { from, upsert, insert };
 }
 
-beforeEach(() => createSupabaseServerClientMock.mockReset());
+beforeEach(() => {
+  createSupabaseServerClientMock.mockReset();
+  getSupabaseServerClientMock.mockReset();
+  getSupabaseServerClientMock.mockReturnValue(null);
+});
 
 describe("community prediction contracts", () => {
   it("accepts a match-specific future tip and normalizes its immutable fields", () => {
@@ -83,11 +89,47 @@ describe("community prediction contracts", () => {
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ author_id: "user-1", fixture_id: "api-football:123", rationale: VALID_TIP.rationale }));
   });
 
-  it("rejects signed-out poll and tip writes before touching tables", async () => {
+  it("keeps community tips account-only", async () => {
     const { from } = client(null);
-    expect((await vote(request("/api/community/polls", { pollId: POLL_ID, choice: "home" }))).status).toBe(401);
     expect((await publishTip(request("/api/community/tips", VALID_TIP))).status).toBe(401);
     expect(from).not.toHaveBeenCalled();
+  });
+
+  it("lets a signed-out fan cast a one-tap guest vote under a server-minted device key", async () => {
+    client(null);
+    const rpc = vi.fn(async () => ({ data: [{ saved: true, reason: null }], error: null }));
+    getSupabaseServerClientMock.mockReturnValue({ rpc });
+    const response = await vote(request("/api/community/polls", { pollId: POLL_ID, choice: "home" }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, choice: "home", guest: true });
+    // The device key is server-minted, httpOnly, and passed to the throttled RPC.
+    const cookie = response.headers.get("set-cookie") ?? "";
+    expect(cookie).toContain("op_pulse_key=");
+    expect(cookie).toContain("HttpOnly");
+    expect(rpc).toHaveBeenCalledWith("op_cast_guest_poll_vote", expect.objectContaining({ p_poll_id: POLL_ID, p_choice: "home" }));
+    const voterKey = (rpc.mock.calls[0]?.[1] as { p_voter_key?: string } | undefined)?.p_voter_key ?? "";
+    expect(cookie).toContain(voterKey);
+  });
+
+  it("reuses the existing device key and surfaces the RPC throttle as 429", async () => {
+    client(null);
+    const rpc = vi.fn(async () => ({ data: [{ saved: false, reason: "rate-limited" }], error: null }));
+    getSupabaseServerClientMock.mockReturnValue({ rpc });
+    const existingKey = "123e4567-e89b-42d3-a456-426614174099";
+    const throttled = await vote(new Request("http://127.0.0.1:3010/api/community/polls", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: `op_pulse_key=${existingKey}` },
+      body: JSON.stringify({ pollId: POLL_ID, choice: "away" })
+    }));
+    expect(throttled.status).toBe(429);
+    expect(rpc).toHaveBeenCalledWith("op_cast_guest_poll_vote", expect.objectContaining({ p_voter_key: existingKey }));
+  });
+
+  it("keeps guest voting closed when service storage is not configured", async () => {
+    client(null);
+    getSupabaseServerClientMock.mockReturnValue(null);
+    const response = await vote(request("/api/community/polls", { pollId: POLL_ID, choice: "home" }));
+    expect(response.status).toBe(503);
   });
 
   it("keeps voter identity private and model performance separate in SQL", async () => {
