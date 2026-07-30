@@ -100,6 +100,36 @@ export function gradeMarketDecision({
     return decided(won ? "won" : "lost", `Total ${scored} against the ${total.line} line.`);
   }
 
+  // Team totals read one side of the score the way match totals read the sum.
+  const teamTotal = /^(home|away)_team_over_under_\d+$/.exec(market);
+  if (teamTotal) {
+    const total = totalGoalsSelection(selection);
+    if (!total) return decided("needs_review", `Unrecognised team-totals selection "${selection}".`);
+    const scored = teamTotal[1] === "home" ? home : away;
+    if (scored === total.line) return decided("push", `${teamTotal[1]} total ${scored} landed exactly on the ${total.line} line.`);
+    const wentOver = scored > total.line;
+    const won = total.side === "over" ? wentOver : !wentOver;
+    return decided(won ? "won" : "lost", `${teamTotal[1]} scored ${scored} against the ${total.line} line.`);
+  }
+
+  if (market === "clean_sheet_home" || market === "clean_sheet_away") {
+    if (selection !== "yes" && selection !== "no") {
+      return decided("needs_review", `Unrecognised clean-sheet selection "${selection}".`);
+    }
+    const conceded = market === "clean_sheet_home" ? away : home;
+    const kept = conceded === 0;
+    return decided((selection === "yes") === kept ? "won" : "lost", `Final score ${home}-${away}; clean sheet kept: ${kept}.`);
+  }
+
+  if (market === "correct_score") {
+    const exact = /^(\d+)_(\d+)$/.exec(selection);
+    // `other` aggregates every scoreline the model did not list individually;
+    // the decision row does not carry that list, so it cannot be graded.
+    if (!exact) return decided("needs_review", `Correct-score selection "${selection}" cannot be settled without the listed scorelines.`);
+    const won = Number(exact[1]) === home && Number(exact[2]) === away;
+    return decided(won ? "won" : "lost", `Final score ${home}-${away} against selection ${exact[1]}-${exact[2]}.`);
+  }
+
   // Handicaps and spreads need the line the price was struck at, which the
   // decision row does not carry. Guessing would corrupt the calibration curve.
   return decided("needs_review", `Market "${market}" cannot be settled from a final score alone.`);

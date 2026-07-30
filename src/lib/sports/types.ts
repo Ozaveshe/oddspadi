@@ -118,8 +118,16 @@ export interface OddsMarketConsensus {
 export interface OddsMarket {
   id:
     | "match_winner"
+    | "over_under_05"
     | "over_under_15"
     | "over_under_25"
+    | "over_under_35"
+    | "over_under_45"
+    | "home_team_over_under_15"
+    | "away_team_over_under_15"
+    | "clean_sheet_home"
+    | "clean_sheet_away"
+    | "correct_score"
     | "both_teams_to_score"
     | "double_chance"
     | "draw_no_bet"
