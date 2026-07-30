@@ -3985,3 +3985,50 @@ a.score-row:active,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Model market board: every market the model prices, priced or not. Grid of
+   compact groups; selections are label/value rows so long market lists stay
+   scannable on mobile. */
+.model-market-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+.model-market-group {
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.model-market-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.model-market-header h3 {
+  font-size: 0.95rem;
+  margin: 0;
+}
+.model-market-selections {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.model-market-selections li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.model-market-selection-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-market-selection-values {
+  flex-shrink: 0;
+}

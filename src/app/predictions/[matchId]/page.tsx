@@ -4,6 +4,7 @@ import { AgentReport, DecisionEnginePanel, ModelDiagnostics } from "@/components
 import { ConfidenceBadge, MatchStatusBadge, RiskBadge, ValueEdgeBadge } from "@/components/odds/Badges";
 import { FormGuide } from "@/components/odds/FormGuide";
 import { OddsTable } from "@/components/odds/OddsTable";
+import { ModelMarketBoard } from "@/components/odds/ModelMarketBoard";
 import { OddsMovementChart } from "@/components/odds/OddsMovementChart";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { PredictionExplanation } from "@/components/odds/PredictionExplanation";
@@ -316,6 +317,8 @@ export default async function MatchDetailPage({ params }: PageProps) {
             </p>
             <OddsTable match={match} prediction={displayPrediction} />
           </div>
+
+          <ModelMarketBoard match={match} prediction={displayPrediction} />
 
           <div className="panel odds-history-panel">
             <h2>Odds movement and freshness</h2>

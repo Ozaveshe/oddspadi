@@ -254,9 +254,29 @@ export function modelFootballMatch(
   const normalizedHome = clampProbability(home / hdaTotal);
   const normalizedDraw = clampProbability(draw / hdaTotal);
   const normalizedAway = clampProbability(away / hdaTotal);
-  const over15 = probabilityFromScoreMatrix(scoreMatrix, (cell) => cell.homeGoals + cell.awayGoals > 1.5);
-  const over25 = probabilityFromScoreMatrix(scoreMatrix, (cell) => cell.homeGoals + cell.awayGoals > 2.5);
+  // Every market below is a sum over the same Dixon-Coles score matrix — one
+  // model, many read-outs. The matrix spans 0-8 goals per side and is
+  // normalized, so tail lines like 4.5 lose nothing material.
+  const overLine = (line: number) => probabilityFromScoreMatrix(scoreMatrix, (cell) => cell.homeGoals + cell.awayGoals > line);
+  const over05 = overLine(0.5);
+  const over15 = overLine(1.5);
+  const over25 = overLine(2.5);
+  const over35 = overLine(3.5);
+  const over45 = overLine(4.5);
   const btts = probabilityFromScoreMatrix(scoreMatrix, (cell) => cell.homeGoals > 0 && cell.awayGoals > 0);
+  const homeOver15 = probabilityFromScoreMatrix(scoreMatrix, (cell) => cell.homeGoals > 1.5);
+  const awayOver15 = probabilityFromScoreMatrix(scoreMatrix, (cell) => cell.awayGoals > 1.5);
+  const homeCleanSheet = probabilityFromScoreMatrix(scoreMatrix, (cell) => cell.awayGoals === 0);
+  const awayCleanSheet = probabilityFromScoreMatrix(scoreMatrix, (cell) => cell.homeGoals === 0);
+  // Top scorelines become a market rather than a diagnostics-only curiosity.
+  // `other` absorbs the remainder so the market still sums to one.
+  const correctScoreLeaders = topScorelines(scoreMatrix, 6);
+  const correctScoreProbabilities: Record<string, number> = Object.fromEntries(
+    correctScoreLeaders.map((cell) => [`${cell.homeGoals}_${cell.awayGoals}`, clampProbability(cell.probability)])
+  );
+  correctScoreProbabilities.other = clampProbability(
+    1 - correctScoreLeaders.reduce((sum, cell) => sum + cell.probability, 0)
+  );
 
   const diagnostics: FootballModelDiagnostics = {
     modelVersion: runtimeModelKey("football"),
@@ -368,6 +388,13 @@ export function modelFootballMatch(
       }
     },
     {
+      marketId: "over_under_05",
+      probabilities: {
+        over_05: over05,
+        under_05: clampProbability(1 - over05)
+      }
+    },
+    {
       marketId: "over_under_15",
       probabilities: {
         over_15: over15,
@@ -380,6 +407,52 @@ export function modelFootballMatch(
         over_25: over25,
         under_25: clampProbability(1 - over25)
       }
+    },
+    {
+      marketId: "over_under_35",
+      probabilities: {
+        over_35: over35,
+        under_35: clampProbability(1 - over35)
+      }
+    },
+    {
+      marketId: "over_under_45",
+      probabilities: {
+        over_45: over45,
+        under_45: clampProbability(1 - over45)
+      }
+    },
+    {
+      marketId: "home_team_over_under_15",
+      probabilities: {
+        over_15: homeOver15,
+        under_15: clampProbability(1 - homeOver15)
+      }
+    },
+    {
+      marketId: "away_team_over_under_15",
+      probabilities: {
+        over_15: awayOver15,
+        under_15: clampProbability(1 - awayOver15)
+      }
+    },
+    {
+      marketId: "clean_sheet_home",
+      probabilities: {
+        yes: homeCleanSheet,
+        no: clampProbability(1 - homeCleanSheet)
+      }
+    },
+    {
+      marketId: "clean_sheet_away",
+      probabilities: {
+        yes: awayCleanSheet,
+        no: clampProbability(1 - awayCleanSheet)
+      }
+    },
+    {
+      marketId: "correct_score",
+      probabilities: correctScoreProbabilities
     },
     {
       marketId: "both_teams_to_score",
