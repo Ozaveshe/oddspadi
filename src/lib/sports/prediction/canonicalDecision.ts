@@ -196,6 +196,44 @@ const PROBABILITY_RANKED_STATUSES: ReadonlySet<DecisionMarketAnalysisStatus> = n
   "needs_data"
 ]);
 
+/**
+ * The candidate shown when nothing is publishable.
+ *
+ * The first version of this fix reordered the watchlist tier by probability —
+ * and production data showed it changed nothing (displayed tips averaged 0.280
+ * probability after deploy vs 0.303 before). The reason is tier membership:
+ * "watchlist" requires positive claimed edge, and the model's favorite usually
+ * has NEGATIVE edge against the market, so the favorite never entered the tier
+ * being reordered. Argmax over positive-edge selections is still argmax over
+ * model error, just filtered.
+ *
+ * The display candidate therefore ranks by model probability across every
+ * non-publishable status, including no_clear_value — the measured rule that
+ * hit 54.4% and +9.08 units against the old rule's 25.4% and -8.49 on the same
+ * 114 fixtures. Match-winner analyses take precedence so the headline answers
+ * "who wins", not "will there be a goal" (over 0.5 would otherwise outrank
+ * everything whenever it is priced). Value tiers and gates are untouched:
+ * publishing still requires passing them.
+ */
+const DISPLAY_CANDIDATE_STATUSES: ReadonlySet<DecisionMarketAnalysisStatus> = new Set([
+  "watchlist",
+  "stale",
+  "needs_data",
+  "no_clear_value"
+]);
+
+function bestDisplayCandidate(analyses: DecisionMarketAnalysis[]): DecisionMarketAnalysis | null {
+  const eligible = analyses.filter((analysis) => DISPLAY_CANDIDATE_STATUSES.has(analysis.analysisStatus));
+  if (!eligible.length) return null;
+  const matchWinner = eligible.filter((analysis) => analysis.marketId === "match_winner");
+  const pool = matchWinner.length ? matchWinner : eligible;
+  return pool.sort((left, right) => {
+    if (right.modelProbability !== left.modelProbability) return right.modelProbability - left.modelProbability;
+    if (right.edge !== left.edge) return right.edge - left.edge;
+    return left.odds - right.odds;
+  })[0] ?? null;
+}
+
 function best(analyses: DecisionMarketAnalysis[], status: DecisionMarketAnalysisStatus): DecisionMarketAnalysis | null {
   const inTier = analyses.filter((analysis) => analysis.analysisStatus === status);
   if (PROBABILITY_RANKED_STATUSES.has(status)) {
@@ -515,8 +553,7 @@ export function buildCanonicalDecision(
   const publicStatus = statusFromAnalyses({ analyses, providerBacked, fixtureSuspended });
   const bestPublishedPick = best(analyses, "published_value_pick");
   const bestLean = best(analyses, "lean");
-  const bestWatchlistCandidate =
-    best(analyses, "watchlist") ?? best(analyses, "stale") ?? best(analyses, "needs_data");
+  const bestWatchlistCandidate = bestDisplayCandidate(analyses);
   const primary = bestPublishedPick ?? bestLean ?? bestWatchlistCandidate ?? analyses[0] ?? null;
   const generatedAt = modelOutput.generatedAt ?? now.toISOString();
   const publicInvariantPassed =
@@ -594,7 +631,7 @@ export function refreshCanonicalDecision(summary: DecisionSummary, now = new Dat
   });
   const bestPublishedPick = best(analyses, "published_value_pick");
   const bestLean = best(analyses, "lean");
-  const bestWatchlistCandidate = best(analyses, "watchlist") ?? best(analyses, "stale") ?? best(analyses, "needs_data");
+  const bestWatchlistCandidate = bestDisplayCandidate(analyses);
   const primary = bestPublishedPick ?? bestLean ?? bestWatchlistCandidate ?? analyses[0] ?? null;
   const publicInvariantPassed =
     (publicStatus === "value_pick") === Boolean(bestPublishedPick) &&

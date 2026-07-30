@@ -511,4 +511,59 @@ describe("canonical DecisionSummary", () => {
     // The longshot is still analysed and visible — just not the headline tip.
     expect(decision.allMarketAnalyses.some((analysis) => analysis.selectionId === "yes")).toBe(true);
   });
+
+  /**
+   * The production regression the first fix missed: the watchlist tier only
+   * admits positive-edge selections, and the model's favorite usually has
+   * NEGATIVE edge against the market — so reordering the tier changed nothing
+   * (displayed tips averaged 0.280 probability after that deploy, 0.303
+   * before). The display candidate must reach the favorite even when its edge
+   * is negative and only the longshot cleared the tier.
+   */
+  it("fronts a negative-edge favorite over the only positive-edge longshot", async () => {
+    const negativeEdgeFavorite = bttsEdge({
+      marketId: "match_winner",
+      selectionId: "home",
+      label: "Home win",
+      modelProbability: 0.52,
+      rawImpliedProbability: 0.57,
+      noVigImpliedProbability: 0.55,
+      impliedProbability: 0.55,
+      edge: -0.03,
+      expectedValue: -0.05,
+      expectedRoi: -0.05,
+      odds: 1.75
+    });
+    const positiveEdgeLongshot = bttsEdge({
+      marketId: "match_winner",
+      selectionId: "away",
+      label: "Away win",
+      modelProbability: 0.21,
+      rawImpliedProbability: 0.15,
+      noVigImpliedProbability: 0.14,
+      impliedProbability: 0.14,
+      edge: 0.07,
+      expectedValue: 0.4,
+      expectedRoi: 0.4,
+      odds: 6.7
+    });
+    const match = await fixture({ dataQualityScore: 0.5 });
+    const decision = buildCanonicalDecision(
+      match,
+      oddsSnapshotsFromMatch(match, NOW),
+      {
+        valueEdges: [positiveEdgeLongshot, negativeEdgeFavorite],
+        diagnostics: { dataQualityScore: match.dataQualityScore },
+        generatedAt: NOW.toISOString()
+      },
+      [],
+      { now: NOW }
+    );
+
+    // The longshot sits in the watchlist tier; the favorite, with negative
+    // edge, sits in no_clear_value. The displayed candidate must still be the
+    // favorite.
+    expect(decision.bestWatchlistCandidate?.selectionId).toBe("home");
+    expect(decision.bestWatchlistCandidate?.modelProbability).toBeCloseTo(0.52, 5);
+  });
 });
