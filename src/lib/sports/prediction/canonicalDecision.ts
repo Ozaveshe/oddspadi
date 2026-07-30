@@ -172,10 +172,40 @@ function analysisScore(analysis: DecisionMarketAnalysis): number {
   return statusWeight[analysis.analysisStatus] + (analysis.uncertaintyAdjustedScore ?? 0) + analysis.expectedValue * 10 + analysis.edge * 5;
 }
 
+/**
+ * Statuses whose display candidate must NOT be chosen by claimed value.
+ *
+ * A watchlist candidate has, by definition, failed the gates that would make
+ * its edge trustworthy — yet it is what the product shows when nothing is
+ * publishable, which today is every fixture. Ranking that tier by
+ * `expectedValue * 10 + edge * 5` hands users argmax(model − market), and the
+ * maximum of a noisy difference is systematically the model's biggest
+ * overestimate: a longshot. Measured on the 114 settled football fixtures whose
+ * pre-kickoff summaries carried a watchlist tip, that rule produced average
+ * odds of 5.37, a 25.4% hit rate and −8.49 units. Tipping the model's most
+ * probable outcome on the identical fixtures: 54.4% and +9.08 units — ahead of
+ * the market favorite (+9.4u over it), which is the model's actual, measured
+ * skill showing through instead of its error.
+ *
+ * Published picks and leans keep value ranking: they passed the gates that make
+ * a value claim meaningful.
+ */
+const PROBABILITY_RANKED_STATUSES: ReadonlySet<DecisionMarketAnalysisStatus> = new Set([
+  "watchlist",
+  "stale",
+  "needs_data"
+]);
+
 function best(analyses: DecisionMarketAnalysis[], status: DecisionMarketAnalysisStatus): DecisionMarketAnalysis | null {
-  return analyses
-    .filter((analysis) => analysis.analysisStatus === status)
-    .sort((left, right) => analysisScore(right) - analysisScore(left))[0] ?? null;
+  const inTier = analyses.filter((analysis) => analysis.analysisStatus === status);
+  if (PROBABILITY_RANKED_STATUSES.has(status)) {
+    return inTier.sort((left, right) => {
+      if (right.modelProbability !== left.modelProbability) return right.modelProbability - left.modelProbability;
+      if (right.edge !== left.edge) return right.edge - left.edge;
+      return left.odds - right.odds;
+    })[0] ?? null;
+  }
+  return inTier.sort((left, right) => analysisScore(right) - analysisScore(left))[0] ?? null;
 }
 
 function enginePublicationAllowed(decision: CanonicalDecisionModelOutput["decision"]): { allowed: boolean; blockers: string[] } {

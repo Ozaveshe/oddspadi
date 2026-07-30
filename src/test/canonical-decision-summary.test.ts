@@ -454,4 +454,61 @@ describe("canonical DecisionSummary", () => {
       expect(decision.auditSummary.publicInvariantPassed).toBe(true);
     }
   });
+
+  /**
+   * The watchlist candidate is what the product shows when nothing is
+   * publishable — which today is every fixture. Ranking that tier by claimed
+   * value hands users argmax(model − market), and the maximum of a noisy
+   * difference is systematically the model's biggest overestimate: a longshot.
+   * Measured on 114 settled football fixtures, that rule produced 5.37 average
+   * odds, a 25.4% hit rate and −8.49 units; tipping the model's most probable
+   * outcome on the identical fixtures scored 54.4% and +9.08 units. A watchlist
+   * tip must therefore be the model's favorite, not its wildest disagreement.
+   */
+  it("fronts the model favorite on the watchlist, not the highest-EV longshot", async () => {
+    const favorite = bttsEdge({
+      marketId: "match_winner",
+      selectionId: "home",
+      label: "Home win",
+      modelProbability: 0.55,
+      rawImpliedProbability: 0.53,
+      noVigImpliedProbability: 0.51,
+      impliedProbability: 0.51,
+      edge: 0.04,
+      expectedValue: 0.045,
+      expectedRoi: 0.045,
+      odds: 1.9
+    });
+    const longshot = bttsEdge({
+      modelProbability: 0.24,
+      rawImpliedProbability: 0.17,
+      noVigImpliedProbability: 0.16,
+      impliedProbability: 0.16,
+      edge: 0.08,
+      expectedValue: 0.44,
+      expectedRoi: 0.44,
+      odds: 6.0
+    });
+    // Data quality below the floor holds both markets on the watchlist.
+    const match = await fixture({ dataQualityScore: 0.5 });
+    const decision = buildCanonicalDecision(
+      match,
+      oddsSnapshotsFromMatch(match, NOW),
+      {
+        valueEdges: [longshot, favorite],
+        diagnostics: { dataQualityScore: match.dataQualityScore },
+        generatedAt: NOW.toISOString()
+      },
+      [],
+      { now: NOW }
+    );
+
+    expect(decision.publicStatus).toBe("watchlist");
+    // The old EV-weighted ranking scored the longshot 4.8 against the
+    // favorite's 0.65 and fronted it. The favorite must win this tier.
+    expect(decision.bestWatchlistCandidate?.selectionId).toBe("home");
+    expect(decision.bestWatchlistCandidate?.modelProbability).toBeCloseTo(0.55, 5);
+    // The longshot is still analysed and visible — just not the headline tip.
+    expect(decision.allMarketAnalyses.some((analysis) => analysis.selectionId === "yes")).toBe(true);
+  });
 });

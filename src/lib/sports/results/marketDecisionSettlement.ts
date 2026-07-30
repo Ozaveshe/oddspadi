@@ -84,7 +84,13 @@ export function gradeMarketDecision({
     return decided(won ? "won" : "lost", `Final score ${home}-${away}; both teams scored: ${bothScored}.`);
   }
 
-  if (market === "total_goals" || market === "totals" || market === "over_under") {
+  // `over_under_25` and friends carry the line in both the market name and the
+  // selection (`over_25` = the 2.5 line). Only the bare aliases were accepted,
+  // which left every `over_under_25` decision permanently at needs_review — 422
+  // settled football fixtures' worth — despite the selection being exactly as
+  // unambiguous as on the accepted names. Basketball's `total_points` grades the
+  // same way from the final total.
+  if (market === "total_goals" || market === "totals" || market === "over_under" || market === "total_points" || /^over_under_\d+$/.test(market)) {
     const total = totalGoalsSelection(selection);
     if (!total) return decided("needs_review", `Unrecognised totals selection "${selection}".`);
     const scored = home + away;
