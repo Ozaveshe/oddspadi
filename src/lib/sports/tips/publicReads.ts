@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { readHomepageMatchdaySummary } from "@/lib/sports/homepageSummary";
+import { readHomepageMatchdaySummary, readHomepageModelRecordSummary, readHomepageWeeklySummary } from "@/lib/sports/homepageSummary";
 import {
   getDailyTipsProduct,
   getWeeklyTipsProduct,
@@ -51,4 +51,20 @@ export const getCachedHomepageMatchdaySummary = unstable_cache(
   () => readHomepageMatchdaySummary(),
   ["public-homepage-matchday-summary-v1"],
   { revalidate: 120 }
+);
+
+/**
+ * Per-day counts for the seven-day board — the same fast-path treatment the
+ * matchday card got, because the weekly card was losing the same 2.5s race.
+ */
+export const getCachedHomepageModelRecordSummary = unstable_cache(
+  () => readHomepageModelRecordSummary(),
+  ["public-homepage-model-record-v1"],
+  { revalidate: 300 }
+);
+
+export const getCachedHomepageWeeklySummary = unstable_cache(
+  () => readHomepageWeeklySummary(),
+  ["public-homepage-weekly-summary-v1"],
+  { revalidate: 300 }
 );

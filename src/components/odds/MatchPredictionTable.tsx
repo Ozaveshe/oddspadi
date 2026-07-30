@@ -41,7 +41,7 @@ export function MatchPredictionTable({ rows }: { rows: PredictionListRow[] }) {
             return (
               <tr key={match.id}>
                 <td>
-                  <LocalTime iso={match.kickoffTime} />
+                  <LocalTime iso={match.kickoffTime} variant="kickoff" />
                   <br />
                   <MatchStatusBadge status={match.status} />
                 </td>

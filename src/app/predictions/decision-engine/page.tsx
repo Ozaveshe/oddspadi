@@ -3,6 +3,8 @@ import Link from "next/link";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { LocalTime } from "@/components/odds/LocalTime";
 import { ProviderRunStrip, SlateFixtureCard } from "@/components/odds/IntelligenceSlate";
+import { PromotionGateBoard } from "@/components/odds/PromotionGateBoard";
+import { readPromotionGateStatus } from "@/lib/sports/promotionGateStatus";
 import { getHistoricalEngineEvidence } from "@/lib/sports/performance/report";
 import { getDailyTipsProduct } from "@/lib/sports/tips/product";
 
@@ -63,6 +65,8 @@ export default async function DecisionEnginePage() {
         ? "Partial provider coverage"
         : `Engine status: ${lastRun?.status ?? slate.provider.status}`;
 
+  const gateStatus = await readPromotionGateStatus("football").catch(() => null);
+
   return (
     <main id="main" className="container engine-page">
       <header className="page-heading engine-page-heading">
@@ -85,6 +89,12 @@ export default async function DecisionEnginePage() {
           <div className="metric"><span className="metric-label">Odds snapshots</span><span className="metric-value">{currentValue(product.summary.oddsSnapshotsUsed)}</span></div>
         </div>
       </section>
+
+      {gateStatus ? <section className="section engine-gate-board" aria-labelledby="gate-board-heading">
+        <div className="section-title"><div><span className="section-kicker">Road to publication</span><h2 id="gate-board-heading">The seven promotion gates, live</h2></div></div>
+        <p className="muted small">Football publishes real picks only after a calibration profile passes every gate below. These are the engine&apos;s own enforcement numbers, not a summary written for this page.</p>
+        <PromotionGateBoard status={gateStatus} />
+      </section> : null}
 
       <section className="section historical-evidence engine-authority" aria-labelledby="engine-authority-heading">
         <div className="section-title">

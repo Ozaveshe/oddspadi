@@ -201,7 +201,7 @@ export interface HeadToHeadMeeting {
 }
 
 export interface HeadToHeadSummary {
-  source: "api-football-headtohead";
+  source: "api-football-headtohead" | "api-tennis-headtohead";
   meetings: HeadToHeadMeeting[];
   homeWins: number;
   draws: number;

@@ -85,7 +85,7 @@ export function SlateFixtureCard({ row, compact = false, asOf }: { row: SlateFix
           <span className="intelligence-versus">vs</span>
           <span className="intelligence-team intelligence-team--away"><TeamCrest name={fixture.awayTeam.name} logo={fixture.awayTeam.logo} size={30} /><span className="intelligence-team-copy"><strong>{fixture.awayTeam.name}</strong><small><CountryFlag country={fixture.awayTeam.country} size={12} />{fixture.awayTeam.country ?? "Country pending"}</small></span></span>
         </Link>
-        <small><LocalTime iso={fixture.kickoffAt} /> · {fixture.provider}</small>
+        <small><LocalTime iso={fixture.kickoffAt} variant="kickoff" /> · {fixture.provider}</small>
       </div>
       {displayedDecision ? (
         <>
@@ -128,7 +128,7 @@ function NoPickFixtureCard({ row, asOf }: { row: SlateFixture; asOf: string }) {
   const presentation = buildPredictionPresentation(row, asOf);
   return (
     <article className="no-pick-card">
-      <div><span className={`badge ${badgeClass(row.publicStatus)}`}>{STATUS_LABELS[row.publicStatus]}</span><small><LocalTime iso={row.fixture.kickoffAt} /> · {row.fixture.league}</small></div>
+      <div><span className={`badge ${badgeClass(row.publicStatus)}`}>{STATUS_LABELS[row.publicStatus]}</span><small><LocalTime iso={row.fixture.kickoffAt} variant="kickoff" /> · {row.fixture.league}</small></div>
       <h3><Link href={`/predictions/${encodeURIComponent(row.fixture.fixtureId)}`}>{row.fixture.homeTeam.name} vs {row.fixture.awayTeam.name}</Link></h3>
       <dl><div><dt>Model lean</dt><dd>{strongestModelLean(row)}</dd></div><div><dt>Why no pick</dt><dd>{noPickExplanation(row)}</dd></div></dl>
       <span className={`badge ${presentation.freshness === "fresh" ? "positive" : presentation.freshness === "stale" ? "no-value" : "scheduled"}`}>{presentation.freshnessLabel}</span>

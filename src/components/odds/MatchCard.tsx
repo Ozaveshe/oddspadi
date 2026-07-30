@@ -58,7 +58,7 @@ export function MatchCard({ match, prediction }: { match: MatchSummary; predicti
           <div className="meta">
             {match.dataSource?.kind === "mock" ? <span className="badge scheduled">Preview</span> : null}
             <span>
-              <LocalTime iso={match.kickoffTime} />
+              <LocalTime iso={match.kickoffTime} variant="kickoff" />
             </span>
             <span className="league-tag">
               {match.league.logo ? <TeamCrest name={match.league.name} logo={match.league.logo} size={16} /> : null}

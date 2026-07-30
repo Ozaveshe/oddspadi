@@ -3,16 +3,33 @@ import { formatOdds, formatPercent, formatSignedPercent } from "@/lib/sports/pre
 import { bookmakerDisplayName } from "@/lib/affiliate/bookmakerLinks";
 import { AffiliateBookmakerLink } from "./AffiliateBookmakerLink";
 
+/**
+ * A quote this old is history, not a price. Odds tables were rendering
+ * day-old quotes indistinguishably from live ones, so a visitor could read a
+ * price no bookmaker still offers. Hidden rather than deleted: the count is
+ * shown so the absence is explained, and settlement/calibration continue to
+ * read the stored snapshots they need.
+ */
+const STALE_QUOTE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function quoteIsStale(observedAt: string | null | undefined): boolean {
+  if (!observedAt) return false;
+  const observed = Date.parse(observedAt);
+  return Number.isFinite(observed) && Date.now() - observed > STALE_QUOTE_MAX_AGE_MS;
+}
+
 export function OddsTable({ match, prediction }: { match: Match; prediction: Prediction }) {
   const oddsMarkets = match.oddsMarkets;
   const edgesBySelection = new Map(prediction.valueEdges.map((edge) => [`${edge.marketId}:${edge.selectionId}`, edge]));
-  const rows = oddsMarkets.flatMap((market) => market.selections.map((selection) => ({
+  const allRows = oddsMarkets.flatMap((market) => market.selections.map((selection) => ({
     id: `${market.id}-${selection.id}`,
     market,
     selection,
     bookmaker: selection.bookmaker ?? market.bookmaker,
     edge: edgesBySelection.get(`${market.id}:${selection.id}`)
   })));
+  const rows = allRows.filter((row) => !quoteIsStale(row.selection.observedAt));
+  const staleHidden = allRows.length - rows.length;
 
   return (
     <>
