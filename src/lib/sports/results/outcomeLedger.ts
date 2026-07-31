@@ -151,12 +151,16 @@ export async function runOutcomeLedgerSweep({
   days = 14,
   pruneOlderThanDays = 14,
   persist = false,
-  client = getSupabaseServerClient()
+  client = getSupabaseServerClient(),
+  maxAcquireAttempts = 5,
+  retryDelayMs = 30_000
 }: {
   days?: number;
   pruneOlderThanDays?: number;
   persist?: boolean;
   client?: SupabaseClient | null;
+  maxAcquireAttempts?: number;
+  retryDelayMs?: number;
 } = {}): Promise<OutcomeLedgerReport> {
   const sinceDays = Math.max(1, Math.min(60, Math.trunc(days)));
   if (!client) {
@@ -169,12 +173,22 @@ export async function runOutcomeLedgerSweep({
     };
   }
 
-  const startedAt = new Date().toISOString();
   const sinceIso = new Date(Date.now() - sinceDays * 86_400_000).toISOString();
-  const claim = await startProviderRun({ providerName: "oddspadi-engine", jobType: "outcome-ledger", startedAt, client });
+
+  // The provider-run lock is global and the pipeline holds it most minutes —
+  // decision cycles alone occupy ~4 minutes twice an hour, and the first
+  // scheduled ledger tick landed exactly inside one and skipped. No fixed
+  // schedule minute survives that, so acquisition retries instead: the gaps
+  // between pipeline jobs are one to seven minutes wide, and a few 30-second
+  // retries land in one while staying inside the route's execution budget.
+  let claim = await startProviderRun({ providerName: "oddspadi-engine", jobType: "outcome-ledger", startedAt: new Date().toISOString(), client });
+  for (let attempt = 1; !claim.acquired && attempt < Math.max(1, maxAcquireAttempts); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, retryDelayMs)));
+    claim = await startProviderRun({ providerName: "oddspadi-engine", jobType: "outcome-ledger", startedAt: new Date().toISOString(), client });
+  }
   if (!claim.acquired) {
-    // Another pipeline job owns the run lock right now. Every stage is
-    // idempotent, so waiting for the next scheduled pass loses nothing.
+    // Still busy after every retry. Every stage is idempotent, so waiting for
+    // the next scheduled pass loses nothing.
     return { status: "skipped", persist, sinceDays, note: claim.run.errors.at(-1) ?? "Pipeline is busy.", stages: [] };
   }
 

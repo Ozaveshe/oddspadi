@@ -79,6 +79,7 @@ const DECISIONS = [
 
 describe("runOutcomeLedgerSweep", () => {
   beforeEach(() => {
+    vi.mocked(startProviderRun).mockReset();
     vi.mocked(startProviderRun).mockResolvedValue({
       run: { runId: "run-1", providerName: "oddspadi-engine", jobType: "outcome-ledger", startedAt: "2026-07-31T00:00:00Z", finishedAt: null, status: "running", fixturesFound: 0, oddsFound: 0, predictionsGenerated: 0, valuePicksPublished: 0, errors: [] },
       acquired: true
@@ -92,15 +93,35 @@ describe("runOutcomeLedgerSweep", () => {
     expect(report.stages).toEqual([]);
   });
 
-  it("skips the cycle when another job owns the pipeline lock", async () => {
+  it("retries lock acquisition and skips only after every attempt is busy", async () => {
     vi.mocked(startProviderRun).mockResolvedValue({
       run: { runId: null, providerName: "oddspadi-engine", jobType: "outcome-ledger", startedAt: "2026-07-31T00:00:00Z", finishedAt: null, status: "running", fixturesFound: 0, oddsFound: 0, predictionsGenerated: 0, valuePicksPublished: 0, errors: ["Skipped outcome-ledger; active provider_sync receipt owns the sports pipeline."] },
       acquired: false
     });
     const { client, rpcCalls } = fakeClient({ fixtures: FIXTURES, decisions: DECISIONS });
-    const report = await runOutcomeLedgerSweep({ client, persist: true });
+    const report = await runOutcomeLedgerSweep({ client, persist: true, retryDelayMs: 0 });
     expect(report.status).toBe("skipped");
     expect(rpcCalls).toEqual([]);
+    // The pipeline holds the global lock most minutes; a single attempt would
+    // make the schedule a lottery, so acquisition retries before giving up.
+    expect(vi.mocked(startProviderRun)).toHaveBeenCalledTimes(5);
+  });
+
+  it("proceeds as soon as a retry wins the lock", async () => {
+    const busy = {
+      run: { runId: null, providerName: "oddspadi-engine", jobType: "outcome-ledger", startedAt: "2026-07-31T00:00:00Z", finishedAt: null, status: "running" as const, fixturesFound: 0, oddsFound: 0, predictionsGenerated: 0, valuePicksPublished: 0, errors: ["busy"] },
+      acquired: false
+    };
+    const won = {
+      run: { runId: "run-2", providerName: "oddspadi-engine", jobType: "outcome-ledger", startedAt: "2026-07-31T00:01:00Z", finishedAt: null, status: "running" as const, fixturesFound: 0, oddsFound: 0, predictionsGenerated: 0, valuePicksPublished: 0, errors: [] },
+      acquired: true
+    };
+    vi.mocked(startProviderRun).mockResolvedValueOnce(busy).mockResolvedValueOnce(busy).mockResolvedValueOnce(won);
+    const { client, rpcCalls } = fakeClient({ fixtures: FIXTURES, decisions: DECISIONS });
+    const report = await runOutcomeLedgerSweep({ client, persist: true, retryDelayMs: 0 });
+    expect(report.status).toBe("completed");
+    expect(vi.mocked(startProviderRun)).toHaveBeenCalledTimes(3);
+    expect(rpcCalls.map((call) => call.fn)).toContain("op_mark_closing_odds");
   });
 
   it("runs all four stages and writes only decided verdicts", async () => {
