@@ -94,7 +94,7 @@ export async function runEditorialGeneration({ scheduleToken, adminToken, supaba
   // Optional prose pass: keeps the deterministic facts, upgrades the writing.
   // Falls back to the deterministic text on any OpenAI failure.
   const published = changed.length ? await polishEditorialStories(changed, { apiKey: openaiKey, model: openaiModel }) : [];
-  const payload = published.map((story) => ({ slug: story.slug, generator: story.generator, title: story.title, excerpt: story.excerpt, category: story.category, sport: story.sport, body: story.body, sources: story.sources, revision: story.revision, source_as_of: story.sourceAsOf, published_at: story.publishedAt, updated_at: now.toISOString(), read_minutes: story.readMinutes, data_fingerprint: story.dataFingerprint }));
+  const payload = published.map((story) => ({ slug: story.slug, generator: story.generator, title: story.title, excerpt: story.excerpt, category: story.category, sport: story.sport, body: story.body, sources: story.sources, revision: story.revision, source_as_of: story.sourceAsOf, published_at: story.publishedAt, updated_at: now.toISOString(), read_minutes: story.readMinutes, data_fingerprint: story.dataFingerprint, claim: story.claim ?? null }));
   const { error: writeError } = payload.length ? await db.from("op_editorial_stories").upsert(payload, { onConflict: "slug" }) : { error: null };
   return writeError ? Response.json({ success: false, error: writeError.message }, { status: 500 }) : Response.json({ success: true, generated: changed.length, unchanged: drafts.length - changed.length, removed: removedSlugs.length, sourceRows: sourceRows.length, storedSlateRows: storedOutcomes.length, slugs: changed.map((story) => story.slug), removedSlugs });
 }

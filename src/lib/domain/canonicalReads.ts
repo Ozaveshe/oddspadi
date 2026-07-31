@@ -150,7 +150,7 @@ export async function readOfficialPublications({
     // The distinction that matters: we could not ask, so we do not know.
     return { availability: "unavailable", unavailableReason: error.message, items: [] };
   }
-  const items = (data ?? []).map((row) => rowToSummary(row as Record<string, unknown>));
+  const items = (data ?? []).map((row) => rowToSummary(row as unknown as Record<string, unknown>));
   return {
     availability: items.length ? "complete" : "confirmed_empty",
     unavailableReason: null,
@@ -181,7 +181,7 @@ export async function readPublicationsByIds(
   }
   const { data, error } = await client.from("op_publications").select(PUBLICATION_COLUMNS).in("id", ids.slice(0, 200));
   if (error) return { availability: "unavailable", unavailableReason: error.message, items: [] };
-  const items = (data ?? []).map((row) => rowToSummary(row as Record<string, unknown>));
+  const items = (data ?? []).map((row) => rowToSummary(row as unknown as Record<string, unknown>));
   return {
     availability: items.length ? (items.length === ids.length ? "complete" : "partial") : "confirmed_empty",
     unavailableReason: null,

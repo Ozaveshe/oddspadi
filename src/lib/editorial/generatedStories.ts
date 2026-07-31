@@ -1,3 +1,5 @@
+import type { EditorialClaim } from "@/lib/editorial/publicationClaims";
+
 export type EditorialOutcome = {
   id: string; fixture_external_id: string; sport: string; league: string | null; home_team: string | null; away_team: string | null;
   kickoff_at: string | null; market: string; selection: string; recommended_selection: string | null; model_probability: number | string;
@@ -8,6 +10,12 @@ export type GeneratedEditorialStory = {
   slug: string; generator: "daily-slate" | "weekend-preview" | "results-recap" | "value-picks-watch" | "model-vs-market"; title: string; excerpt: string;
   category: string; sport: string; body: string[]; sources: Array<{ label: string; url: string; checkedAt: string }>;
   revision: number; sourceAsOf: string; publishedAt: string; readMinutes: number; dataFingerprint: string;
+  /**
+   * The ledger rows behind any win/loss/ROI assertion in this story, so the
+   * claim can be re-checked at render time instead of being trusted forever.
+   * Absent on stories that make no record claim.
+   */
+  claim?: EditorialClaim;
 };
 
 const pct = (value: number) => `${Math.round(value * 100)}%`;
@@ -59,7 +67,11 @@ export function generateEditorialStories(rows: EditorialOutcome[], now = new Dat
   ], sport: "All sports" });
 
   const settled = rows.filter((row) => row.settled_at && ["won", "lost", "push", "void"].includes(row.result) && new Date(row.settled_at).getTime() >= now.getTime() - 7 * 86_400_000).sort((a, b) => new Date(b.settled_at!).getTime() - new Date(a.settled_at!).getTime());
-  if (settled.length) { const wins = settled.filter((row) => row.result === "won"); const losses = settled.filter((row) => row.result === "lost"); const decided = wins.length + losses.length; stories.push({ ...base("results-recap", date, settled, revisions["results-recap"] ?? 1, now), title: `Results recap: ${wins.length} wins, ${losses.length} losses`, excerpt: `${settled.length} recent picks graded with wins, losses, pushes and voids kept together in the public record.`, category: "Results recap", sport: "All sports", body: [
+  // A results recap makes the strongest claim the desk can make — a win/loss
+  // record — so it is the one story that must carry the ledger rows it counted.
+  // `claim` is re-resolved at render time; if the ledger has moved since, the
+  // article shows a correction notice instead of repeating a stale number.
+  if (settled.length) { const wins = settled.filter((row) => row.result === "won"); const losses = settled.filter((row) => row.result === "lost"); const decided = wins.length + losses.length; stories.push({ ...base("results-recap", date, settled, revisions["results-recap"] ?? 1, now), claim: { statedWins: wins.length, statedLosses: losses.length, statedGraded: decided, publicationIds: settled.map((row) => row.id) }, title: `Results recap: ${wins.length} wins, ${losses.length} losses`, excerpt: `${settled.length} recent picks graded with wins, losses, pushes and voids kept together in the public record.`, category: "Results recap", sport: "All sports", body: [
     `This recap uses every settled OddsPadi ledger row from the previous seven days as checked at ${now.toISOString()}; losses are not removed.`,
     `${settled.length} picks were graded: ${wins.length} wins, ${losses.length} losses, ${settled.filter((row) => row.result === "push").length} pushes and ${settled.filter((row) => row.result === "void").length} voids. Accuracy across decided wins and losses was ${decided ? pct(wins.length / decided) : "not available"}.`,
     ...settled.slice(0, 8).map((row) => `${matchName(row)} — ${pickName(row)} finished ${row.result} at recorded odds ${Number(row.odds).toFixed(2)}.`),

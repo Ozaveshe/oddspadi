@@ -1,4 +1,5 @@
 import { getSupabasePublicReadClient, publicReadAbortSignal } from "@/lib/supabase/publicReadClient";
+import type { EditorialClaim } from "@/lib/editorial/publicationClaims";
 
 export type NewsStory = {
   slug: string;
@@ -13,7 +14,30 @@ export type NewsStory = {
   readMinutes: number;
   body: string[];
   sources?: Array<{ label: string; url: string; checkedAt: string }>;
+  /** Ledger rows behind any record claim; re-verified when the story renders. */
+  claim?: EditorialClaim;
 };
+
+/**
+ * Claims arrive as free-form JSON from the store, so they are validated before
+ * a page is allowed to act on them. A malformed claim is dropped rather than
+ * partially trusted — a half-read claim would verify against the wrong set.
+ */
+function parseClaim(value: unknown): EditorialClaim | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Record<string, unknown>;
+  const ids = Array.isArray(candidate.publicationIds)
+    ? candidate.publicationIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+    : [];
+  const numbers = ["statedWins", "statedLosses", "statedGraded"] as const;
+  if (!ids.length || numbers.some((key) => typeof candidate[key] !== "number")) return undefined;
+  return {
+    statedWins: candidate.statedWins as number,
+    statedLosses: candidate.statedLosses as number,
+    statedGraded: candidate.statedGraded as number,
+    publicationIds: ids
+  };
+}
 
 export const newsStories: NewsStory[] = [
   {
@@ -122,7 +146,7 @@ export function getFallbackNewsStory(slug: string) {
   return newsStories.find((story) => story.slug === slug) ?? null;
 }
 
-type EditorialStoryRow = { slug: string; generator: string; data_fingerprint: string; title: string; excerpt: string; category: string; sport: string; published_at: string; updated_at: string; source_as_of: string; revision: number; read_minutes: number; body: unknown; sources: unknown };
+type EditorialStoryRow = { slug: string; generator: string; data_fingerprint: string; title: string; excerpt: string; category: string; sport: string; published_at: string; updated_at: string; source_as_of: string; revision: number; read_minutes: number; body: unknown; sources: unknown; claim: unknown };
 export function isSafeGeneratedEditorialFingerprint(value: string): boolean {
   return value.startsWith("canonical-v1-") || value.startsWith("fixture-desk-fnv1a-");
 }
@@ -130,13 +154,13 @@ function generatedStory(row: EditorialStoryRow): NewsStory | null {
   if (!isSafeGeneratedEditorialFingerprint(row.data_fingerprint)) return null;
   if (!Array.isArray(row.body) || !row.body.every((item) => typeof item === "string")) return null;
   const sources = Array.isArray(row.sources) ? row.sources.filter((item): item is { label: string; url: string; checkedAt: string } => Boolean(item) && typeof item === "object" && typeof (item as Record<string, unknown>).label === "string" && typeof (item as Record<string, unknown>).url === "string" && typeof (item as Record<string, unknown>).checkedAt === "string") : [];
-  return { slug: row.slug, title: row.title, excerpt: row.excerpt, category: row.category, sport: row.sport, publishedAt: row.published_at, updatedAt: row.updated_at, sourceAsOf: row.source_as_of, revision: row.revision, readMinutes: row.read_minutes, body: row.body, sources };
+  return { slug: row.slug, title: row.title, excerpt: row.excerpt, category: row.category, sport: row.sport, publishedAt: row.published_at, updatedAt: row.updated_at, sourceAsOf: row.source_as_of, revision: row.revision, readMinutes: row.read_minutes, body: row.body, sources, claim: parseClaim(row.claim) };
 }
 
 export async function getNewsStories(): Promise<NewsStory[]> {
   const db = getSupabasePublicReadClient();
   if (!db) return newsStories;
-  const { data, error } = await db.from("op_editorial_stories").select("slug,generator,data_fingerprint,title,excerpt,category,sport,published_at,updated_at,source_as_of,revision,read_minutes,body,sources").order("published_at", { ascending: false }).limit(100).abortSignal(publicReadAbortSignal());
+  const { data, error } = await db.from("op_editorial_stories").select("slug,generator,data_fingerprint,title,excerpt,category,sport,published_at,updated_at,source_as_of,revision,read_minutes,body,sources,claim").order("published_at", { ascending: false }).limit(100).abortSignal(publicReadAbortSignal());
   if (error) return newsStories;
   const generated = (data as EditorialStoryRow[] ?? []).map(generatedStory).filter((story): story is NewsStory => Boolean(story));
   const generatedSlugs = new Set(generated.map((story) => story.slug));

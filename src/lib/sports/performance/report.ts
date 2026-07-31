@@ -366,7 +366,12 @@ export async function getEnginePerformanceReport() {
       providers: daily.slate.provider.providers,
       fixturesAnalysed: daily.summary.fixturesAnalysed,
       decisionsGenerated: daily.slate.summary.predictionsGenerated,
-      publicPicksPublished: daily.summary.valuePicks,
+      // Today's value-pick count from the slate, NOT a published-pick count.
+      // This field was named publicPicksPublished while carrying a slate
+      // number, which is one of the ways the product reported picks it had
+      // never published. The official count comes from the ledger via
+      // readOfficialPerformance; this stays as what it actually is.
+      valuePicksOnTodaysSlate: daily.summary.valuePicks,
       staleDecisions: daily.slate.summary.staleDecisions,
       settlementBacklog: settlement.backlog,
       providerGaps: providerGapCount

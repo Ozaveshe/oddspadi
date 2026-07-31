@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { PerformanceRow } from "@/lib/sports/performance/analytics";
 import { getEnginePerformanceReport } from "@/lib/sports/performance/report";
+import { readOfficialPerformance } from "@/lib/domain/canonicalReads";
+import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 import { LocalTime, LocalTimeText } from "@/components/odds/LocalTime";
 
 export const revalidate = 300;
@@ -57,7 +59,16 @@ function PerformanceTable({ caption, rows }: { caption: string; rows: Performanc
 }
 
 export default async function EnginePerformancePage() {
-  const report = await getEnginePerformanceReport();
+  // The official count comes from the ledger, never from the slate: this page
+  // used to print a slate value-pick count under the label "Public picks".
+  const [report, ledger] = await Promise.all([
+    getEnginePerformanceReport(),
+    readOfficialPerformance().catch(() => null)
+  ]);
+  const officialPerformance = ledger ?? {
+    availability: "unavailable" as const,
+    totalPublished: 0
+  };
   const performance = report.publicPerformance;
   const evidence = report.historicalEvidence;
   const sourceUnavailable = report.source === "unavailable";
@@ -94,7 +105,8 @@ export default async function EnginePerformancePage() {
           <div><span>Latest provider attempt</span><strong>{report.engineHealth.latestRunTime ? <LocalTime iso={report.engineHealth.latestRunTime} variant="datetime" /> : "No recorded attempt"}</strong></div>
           <div><span>Fixtures analysed</span><strong>{report.engineHealth.fixturesAnalysed}</strong></div>
           <div><span>Decisions generated</span><strong>{report.engineHealth.decisionsGenerated}</strong></div>
-          <div><span>Public picks today</span><strong>{report.engineHealth.publicPicksPublished}</strong></div>
+          <div><span>Value picks on today&apos;s slate</span><strong>{report.engineHealth.valuePicksOnTodaysSlate}</strong></div>
+          <div><span>Official picks published</span><strong>{officialPerformance.availability === "unavailable" ? "—" : officialPerformance.totalPublished}</strong></div>
           <div><span>Stale decisions</span><strong>{report.engineHealth.staleDecisions}</strong></div>
           <div><span>Settlement backlog</span><strong>{report.engineHealth.settlementBacklog}</strong></div>
         </div>
@@ -276,6 +288,8 @@ export default async function EnginePerformancePage() {
         {report.warnings.length ? <div className="performance-warning-list">{report.warnings.map((warning) => <article className={`performance-warning severity-${warning.severity}`} key={warning.id}><span>{warning.severity}</span><div><h3>{warning.title}</h3><p>{warning.detail}</p></div></article>)}</div> : <div className="notice"><strong>No active dashboard warning.</strong> This is not a permanent quality claim; provider, calibration and result health continue to update.</div>}
         <details className="fold performance-methodology"><summary>How these numbers are counted</summary><div className="fold-body"><p>{report.methodology.accuracy}</p><p>{report.methodology.stake}</p><p>{report.methodology.brier}</p><strong>Always excluded</strong><ul>{report.methodology.exclusions.map((item) => <li key={item}>{item}</li>)}</ul></div></details>
       </section>
+
+      <section className="section"><ResponsibleUseNotice /></section>
     </main>
   );
 }
