@@ -97,7 +97,7 @@ describe("community prediction contracts", () => {
 
   it("lets a signed-out fan cast a one-tap guest vote under a server-minted device key", async () => {
     client(null);
-    const rpc = vi.fn(async () => ({ data: [{ saved: true, reason: null }], error: null }));
+    const rpc = vi.fn(async (_fn: string, _args: Record<string, unknown>) => ({ data: [{ saved: true, reason: null }], error: null }));
     getSupabaseServerClientMock.mockReturnValue({ rpc });
     const response = await vote(request("/api/community/polls", { pollId: POLL_ID, choice: "home" }));
     expect(response.status).toBe(200);
