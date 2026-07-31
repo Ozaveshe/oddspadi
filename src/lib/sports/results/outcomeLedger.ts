@@ -90,12 +90,19 @@ async function settleMarketDecisions(
   const fixtures = await pageFinishedFixtures(client, sinceIso);
   const totals: SettlementTotals = { won: 0, lost: 0, push: 0, void: 0, needs_review: 0, written: 0, decisionsSeen: 0 };
 
-  for (let index = 0; index < fixtures.length; index += 200) {
-    const batch = fixtures.slice(index, index + 200);
+  // Small fixture chunks and no ORDER BY: an `order by id` keyset over a
+  // 200-fixture IN-list pushed the planner onto the primary key and blew the
+  // 8s statement timeout in production. Unordered reads use the fixture index
+  // and return within the page cap; when a full page comes back, grading
+  // writes shrink the pending set, so re-reading the same chunk drains it —
+  // convergence by settlement rather than by cursor.
+  for (let index = 0; index < fixtures.length; index += 20) {
+    const batch = fixtures.slice(index, index + 20);
     const byId = new Map(batch.map((fixture) => [fixture.id, fixture]));
-    const idsByResult = new Map<MarketDecisionResult, string[]>();
+    // Ungradeable rows stay pending-shaped and reappear on drain passes;
+    // counting them once keeps the receipt honest.
+    const seen = new Set<string>();
 
-    let cursor = UUID_FLOOR;
     for (;;) {
       const { data: decisions, error } = await client
         .from("op_market_decisions")
@@ -103,14 +110,14 @@ async function settleMarketDecisions(
         .in("fixture_id", [...byId.keys()])
         .is("superseded_by", null)
         .in("settlement_status", ["pending", "needs_review"])
-        .gt("id", cursor)
-        .order("id", { ascending: true })
         .limit(PAGE_SIZE);
       if (error) throw new Error(`pending-decision read failed: ${error.message}`);
 
+      const idsByResult = new Map<MarketDecisionResult, string[]>();
       for (const decision of decisions ?? []) {
         const fixture = byId.get(String(decision.fixture_id));
-        if (!fixture) continue;
+        if (!fixture || seen.has(String(decision.id))) continue;
+        seen.add(String(decision.id));
         totals.decisionsSeen += 1;
         const grade = gradeMarketDecision({
           market: String(decision.market),
@@ -123,17 +130,22 @@ async function settleMarketDecisions(
         if (!persist || grade.result === "needs_review") continue;
         idsByResult.set(grade.result, [...(idsByResult.get(grade.result) ?? []), String(decision.id)]);
       }
-      if (!decisions || decisions.length < PAGE_SIZE) break;
-      cursor = String(decisions[decisions.length - 1]!.id);
-    }
 
-    for (const [result, ids] of idsByResult) {
-      for (let offset = 0; offset < ids.length; offset += 200) {
-        const chunk = ids.slice(offset, offset + 200);
-        const { error } = await client.from("op_market_decisions").update({ settlement_status: result }).in("id", chunk);
-        if (error) throw new Error(`settlement write failed: ${error.message}`);
-        totals.written += chunk.length;
+      let writtenThisPass = 0;
+      for (const [result, ids] of idsByResult) {
+        for (let offset = 0; offset < ids.length; offset += 200) {
+          const chunk = ids.slice(offset, offset + 200);
+          const { error: updateError } = await client.from("op_market_decisions").update({ settlement_status: result }).in("id", chunk);
+          if (updateError) throw new Error(`settlement write failed: ${updateError.message}`);
+          writtenThisPass += chunk.length;
+        }
       }
+      totals.written += writtenThisPass;
+
+      // Anything below a full page was the whole remaining set. A full page
+      // with zero writes cannot converge (dry run, or all rows ungradeable) —
+      // stop rather than loop; the counts are already representative.
+      if (!decisions || decisions.length < PAGE_SIZE || writtenThisPass === 0) break;
     }
   }
   return { totals, fixtures: fixtures.length };
@@ -206,8 +218,14 @@ export async function runOutcomeLedgerSweep({
     return data as unknown;
   };
 
+  // Closing marking gets a much narrower window than the rest of the chain:
+  // it only concerns fixtures whose kickoff passed since the previous pass,
+  // and the 14-day scan over ~1M odds rows blew the API role's 8s statement
+  // timeout on the first production tick. Two days re-covers several missed
+  // passes; the RPC's own not-exists guard keeps re-marking idempotent.
+  const closingSinceIso = new Date(Date.now() - Math.min(sinceDays, 2) * 86_400_000).toISOString();
   const closingRows = await rpcStage("closing-odds", "op_mark_closing_odds", {
-    p_since: sinceIso,
+    p_since: closingSinceIso,
     p_window_minutes: 90,
     p_commit: persist
   });
