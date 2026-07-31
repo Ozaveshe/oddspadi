@@ -50,6 +50,7 @@ type LedgerFixture = {
   status: SettleableFixtureResult["status"];
   home_score: number | null;
   away_score: number | null;
+  kickoff_at?: string | null;
 };
 
 const UUID_FLOOR = "00000000-0000-0000-0000-000000000000";
@@ -67,7 +68,7 @@ async function pageFinishedFixtures(client: SupabaseClient, sinceIso: string): P
   for (;;) {
     const { data, error } = await client
       .from("op_fixtures")
-      .select("id,sport,status,home_score,away_score")
+      .select("id,sport,status,home_score,away_score,kickoff_at")
       .in("status", ["finished", "postponed", "cancelled"])
       .gte("kickoff_at", sinceIso)
       .gt("id", cursor)
@@ -75,9 +76,12 @@ async function pageFinishedFixtures(client: SupabaseClient, sinceIso: string): P
       .limit(PAGE_SIZE);
     if (error) throw new Error(`finished-fixture read failed: ${error.message}`);
     fixtures.push(...((data ?? []) as LedgerFixture[]));
-    if (!data || data.length < PAGE_SIZE) return fixtures;
+    if (!data || data.length < PAGE_SIZE) break;
     cursor = String(data[data.length - 1]!.id);
   }
+  // Newest kickoffs first: under a time budget, fresh results must grade this
+  // pass; the older backlog can drain across later hourly passes.
+  return fixtures.sort((a, b) => String(b.kickoff_at ?? "").localeCompare(String(a.kickoff_at ?? "")));
 }
 
 type SettlementTotals = Record<MarketDecisionResult, number> & { written: number; decisionsSeen: number };
@@ -85,10 +89,14 @@ type SettlementTotals = Record<MarketDecisionResult, number> & { written: number
 async function settleMarketDecisions(
   client: SupabaseClient,
   sinceIso: string,
-  persist: boolean
-): Promise<{ totals: SettlementTotals; fixtures: number }> {
+  persist: boolean,
+  budgetMs: number
+): Promise<{ totals: SettlementTotals; fixtures: number; fixturesProcessed: number; budgetExhausted: boolean }> {
+  const startedAt = Date.now();
   const fixtures = await pageFinishedFixtures(client, sinceIso);
   const totals: SettlementTotals = { won: 0, lost: 0, push: 0, void: 0, needs_review: 0, written: 0, decisionsSeen: 0 };
+  let fixturesProcessed = 0;
+  let budgetExhausted = false;
 
   // Small fixture chunks and no ORDER BY: an `order by id` keyset over a
   // 200-fixture IN-list pushed the planner onto the primary key and blew the
@@ -97,6 +105,15 @@ async function settleMarketDecisions(
   // writes shrink the pending set, so re-reading the same chunk drains it —
   // convergence by settlement rather than by cursor.
   for (let index = 0; index < fixtures.length; index += 20) {
+    // The route runs under a hard platform execution limit; the first
+    // catch-up pass after a score backfill can hold tens of thousands of
+    // newly gradeable decisions. Bounded work per pass + newest-first order
+    // + hourly repetition converges; an unbounded pass just dies at the cap
+    // with its partial progress uncommitted for the tail.
+    if (Date.now() - startedAt > budgetMs) {
+      budgetExhausted = true;
+      break;
+    }
     const batch = fixtures.slice(index, index + 20);
     const byId = new Map(batch.map((fixture) => [fixture.id, fixture]));
     // Ungradeable rows stay pending-shaped and reappear on drain passes;
@@ -147,8 +164,9 @@ async function settleMarketDecisions(
       // stop rather than loop; the counts are already representative.
       if (!decisions || decisions.length < PAGE_SIZE || writtenThisPass === 0) break;
     }
+    fixturesProcessed = Math.min(index + 20, fixtures.length);
   }
-  return { totals, fixtures: fixtures.length };
+  return { totals, fixtures: fixtures.length, fixturesProcessed, budgetExhausted };
 }
 
 function sumColumn(rows: unknown, column: string): number {
@@ -165,7 +183,8 @@ export async function runOutcomeLedgerSweep({
   persist = false,
   client = getSupabaseServerClient(),
   maxAcquireAttempts = 5,
-  retryDelayMs = 30_000
+  retryDelayMs = 20_000,
+  settlementBudgetMs = 150_000
 }: {
   days?: number;
   pruneOlderThanDays?: number;
@@ -173,6 +192,7 @@ export async function runOutcomeLedgerSweep({
   client?: SupabaseClient | null;
   maxAcquireAttempts?: number;
   retryDelayMs?: number;
+  settlementBudgetMs?: number;
 } = {}): Promise<OutcomeLedgerReport> {
   const sinceDays = Math.max(1, Math.min(60, Math.trunc(days)));
   if (!client) {
@@ -233,10 +253,20 @@ export async function runOutcomeLedgerSweep({
   let settledFixtures = 0;
   let settlementTotals: SettlementTotals | null = null;
   try {
-    const settlement = await settleMarketDecisions(client, sinceIso, persist);
+    const settlement = await settleMarketDecisions(client, sinceIso, persist, settlementBudgetMs);
     settledFixtures = settlement.fixtures;
     settlementTotals = settlement.totals;
-    stages.push({ stage: "decision-settlement", status: "completed", detail: { fixtures: settlement.fixtures, ...settlement.totals }, error: null });
+    stages.push({
+      stage: "decision-settlement",
+      status: "completed",
+      detail: {
+        fixtures: settlement.fixtures,
+        fixturesProcessed: settlement.fixturesProcessed,
+        budgetExhausted: settlement.budgetExhausted,
+        ...settlement.totals
+      },
+      error: null
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Decision settlement failed.";
     errors.push(`decision-settlement: ${message}`);
