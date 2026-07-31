@@ -3,49 +3,81 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { BallIcon, HistoryIcon, HomeIcon, LiveIcon, MoreIcon } from "./NavIcons";
+import { AccountIcon, CompassIcon, HistoryIcon, HomeIcon, MoreIcon } from "./NavIcons";
 
+/**
+ * Four surfaces, not eighteen destinations. Everything else stays reachable —
+ * through the hubs (Explore/Track Record/My Padi) and the mobile More sheet —
+ * but the top level answers the four questions a visitor actually has:
+ * what's on today, where do I find a fixture, how honest is the model,
+ * and what's mine. See docs/product-architecture.md and docs/route-map.md.
+ */
 const desktopItems = [
-  { href: "/", label: "Home" },
-  { href: "/predictions/today", label: "Tips", prefetch: false },
-  { href: "/predictions", label: "Predictions", prefetch: false },
-  { href: "/live-scores", label: "Live Scores", live: true, prefetch: false },
-  { href: "/predictions/history", label: "Results" },
-  { href: "/news", label: "News" },
-  { href: "/predictions/decision-engine", label: "Engine", prefetch: false }
+  { href: "/", label: "Today" },
+  { href: "/explore", label: "Explore", prefetch: false },
+  { href: "/track-record", label: "Track Record", prefetch: false },
+  { href: "/my", label: "My Padi", prefetch: false }
 ];
 
 const tabItems = [
-  { href: "/", label: "Home", Icon: HomeIcon },
-  { href: "/predictions/today", label: "Tips", Icon: BallIcon, prefetch: false },
-  { href: "/live-scores", label: "Live", Icon: LiveIcon, prefetch: false },
-  { href: "/predictions/history", label: "Results", Icon: HistoryIcon }
+  { href: "/", label: "Today", Icon: HomeIcon },
+  { href: "/explore", label: "Explore", Icon: CompassIcon, prefetch: false },
+  { href: "/track-record", label: "Record", Icon: HistoryIcon, prefetch: false },
+  { href: "/my", label: "My Padi", Icon: AccountIcon, prefetch: false }
 ];
 
+/** Deep links stay one tap away on mobile; the hubs carry them on desktop. */
 const moreSheetItems = [
-  { href: "/predictions/week", label: "Weekly" },
-  { href: "/predictions/value-picks", label: "Value Picks" },
-  { href: "/predictions/league/premier-league/table", label: "Tables" },
-  { href: "/forums", label: "Forums" },
+  { href: "/live-scores", label: "Live Scores" },
+  { href: "/predictions/today", label: "Today's Tips" },
+  { href: "/predictions", label: "All Predictions" },
+  { href: "/predictions/week", label: "Weekly Radar" },
+  { href: "/predictions/league/premier-league/table", label: "League Tables" },
   { href: "/news", label: "News" },
-  { href: "/predictions/decision-engine", label: "Engine" },
-  { href: "/predictions/bet-slip", label: "Slip Check" }
+  { href: "/forums", label: "Forums" },
+  { href: "/predictions/decision-engine", label: "Engine Status" },
+  { href: "/predictions/bet-slip", label: "Bet Workspace" }
 ];
+
+/** Routes owned by each top-level surface, for aria-current highlighting. */
+const SURFACE_PREFIXES: Record<string, string[]> = {
+  "/": [],
+  "/explore": [
+    "/explore",
+    "/predictions",
+    "/live-scores",
+    "/news",
+    "/season-outlooks",
+    "/community",
+    "/forums",
+    "/tips"
+  ],
+  "/track-record": ["/track-record", "/engine/performance"],
+  "/my": ["/my", "/account"]
+};
+
+/** Explore owns /predictions/* except the routes Track Record claims. */
+const TRACK_RECORD_PREDICTION_ROUTES = [
+  "/predictions/history",
+  "/predictions/value-picks",
+  "/predictions/decision-engine"
+];
+const MY_PREDICTION_ROUTES = ["/predictions/bet-slip"];
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
-  if (href === "/predictions/today") return pathname === "/tips" || pathname.startsWith("/predictions/today") || pathname.startsWith("/predictions/tomorrow");
-  if (href === "/predictions") {
-    return (
-      pathname === "/predictions" ||
-      (pathname.startsWith("/predictions/") &&
-        !pathname.startsWith("/predictions/today") &&
-        !pathname.startsWith("/predictions/tomorrow") &&
-        !pathname.startsWith("/predictions/week") &&
-        !pathname.startsWith("/predictions/value-picks") &&
-        !pathname.startsWith("/predictions/history") &&
-        !pathname.startsWith("/predictions/decision-engine"))
-    );
+  if (href === "/track-record") {
+    return SURFACE_PREFIXES[href].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+      || TRACK_RECORD_PREDICTION_ROUTES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  }
+  if (href === "/my") {
+    return SURFACE_PREFIXES[href].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+      || MY_PREDICTION_ROUTES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  }
+  if (href === "/explore") {
+    if (TRACK_RECORD_PREDICTION_ROUTES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return false;
+    if (MY_PREDICTION_ROUTES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return false;
+    return SURFACE_PREFIXES[href].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
   }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -63,7 +95,6 @@ export function DesktopNavLinks() {
           aria-current={isActive(pathname, item.href) ? "page" : undefined}
         >
           {item.label}
-          {item.live ? <span className="nav-live-dot" aria-hidden="true" /> : null}
         </Link>
       ))}
     </div>

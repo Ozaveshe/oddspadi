@@ -4045,6 +4045,33 @@ a.score-row:active,
   max-width: 150px;
 }
 
+/* One-product surfaces: Explore tiles, My Padi shelves, nav slip chip. */
+.explore-tile-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 18px; }
+.explore-tile { display: grid; gap: 4px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 6px 20px 6px 6px; background: var(--surface); text-decoration: none; color: var(--text); transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
+.explore-tile:hover { border-color: var(--green-line); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.explore-tile strong { font: 750 20px/1.2 var(--font-display); letter-spacing: -.02em; }
+.explore-tile span { color: var(--muted); font-size: 12.5px; }
+.explore-competition-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-top: 18px; }
+.explore-competition { display: grid; gap: 2px; padding: 12px 15px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); text-decoration: none; color: var(--text); }
+.explore-competition:hover { border-color: var(--green-line); }
+.explore-competition span { color: var(--muted); font-size: 12px; }
+
+.my-shelves { display: grid; gap: 8px; }
+.shelf-fixture-list { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+.shelf-fixture-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.shelf-fixture-row a { display: grid; gap: 2px; min-width: 0; color: var(--text); text-decoration: none; }
+.shelf-fixture-row a strong { font-size: 14.5px; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shelf-fixture-row a small { color: var(--muted); font-size: 12px; }
+.shelf-fixture-row button { flex: 0 0 auto; min-height: 34px; padding: 5px 12px; border: 1px solid var(--border-strong); border-radius: 999px; background: transparent; color: var(--muted); font: 700 11.5px/1 var(--font-ui); cursor: pointer; }
+.shelf-fixture-row button:hover { color: var(--text); border-color: var(--text); }
+
+.save-fixture-button { min-height: 38px; padding: 7px 16px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); font: 750 13px/1 var(--font-ui); cursor: pointer; transition: border-color .16s ease, background-color .16s ease; }
+.save-fixture-button:hover { border-color: var(--green-strong); }
+.save-fixture-button.is-saved { background: var(--green-soft); border-color: var(--green-line); color: var(--green-strong); }
+
+.slip-nav-chip { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; padding: 7px 13px; border: 1px solid var(--green-line); border-radius: 999px; background: var(--green-soft); color: var(--green-strong); font: 800 12.5px/1 var(--font-ui); text-decoration: none; }
+.slip-nav-chip span { min-width: 19px; padding: 2px 5px; border-radius: 999px; background: var(--green); color: var(--green-ink); font: 800 11px/1.3 var(--font-mono); text-align: center; }
+
 /* News: category chips and the engine-notes shelf. */
 .story-chip {
   display: inline-block;

@@ -26,7 +26,10 @@ import Link from "next/link";
 import { buildEngineViewRows, presentBlockers } from "@/lib/sports/prediction/blockerPresentation";
 import { leagueSlugFromProviderId } from "@/lib/sports/leagueStandings";
 import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
-import { DECISION_STATUS_DESCRIPTIONS } from "@/lib/product/vocabulary";
+import { DECISION_STATUS_DESCRIPTIONS, decisionStatusLabel } from "@/lib/product/vocabulary";
+import { SaveFixtureButton } from "@/components/product/SaveFixtureButton";
+import { RecentFixtureRecorder } from "@/components/product/RecentFixtureRecorder";
+import { footballLeagueById } from "@/lib/sports/footballLeagues";
 import { MatchCommunityDesk } from "@/components/community/MatchCommunityDesk";
 import { marketPriorReceiptFor } from "@/lib/sports/prediction/marketPriorPresentation";
 
@@ -178,12 +181,34 @@ export default async function MatchDetailPage({ params }: PageProps) {
     <main id="main" className="container" data-analytics-match-id={match.id} data-analytics-sport={match.sport} data-analytics-league={match.league.name}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
 
+      <RecentFixtureRecorder
+        fixture={{
+          matchId: match.id,
+          matchLabel: `${match.homeTeam.name} vs ${match.awayTeam.name}`,
+          league: match.league.name,
+          sport: match.sport,
+          kickoffTime: match.kickoffTime
+        }}
+      />
       <div className="page-heading">
         <div className="meta">
           <MatchStatusBadge status={match.status} />
-          <span>{match.league.name}</span>
+          {footballLeagueById(match.league.id) ? (
+            <Link className="text-link" href={`/predictions/league/${footballLeagueById(match.league.id)!.slug}/table`}>{match.league.name} table</Link>
+          ) : (
+            <span>{match.league.name}</span>
+          )}
           <span className="country-inline"><CountryFlag country={match.league.country} flag={match.league.flag} size={16} />{match.league.country}</span>
           <LocalTime iso={match.kickoffTime} variant="datetime" />
+          <SaveFixtureButton
+            fixture={{
+              matchId: match.id,
+              matchLabel: `${match.homeTeam.name} vs ${match.awayTeam.name}`,
+              league: match.league.name,
+              sport: match.sport,
+              kickoffTime: match.kickoffTime
+            }}
+          />
         </div>
         <h1 className="match-title">
           <span className="team-inline">
@@ -210,7 +235,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
 
       <section className={`match-decision-hero status-${canonical.publicStatus}`} aria-labelledby="public-decision-title">
         <div>
-          <span className={`badge ${hasValue ? "positive" : canonical.publicStatus === "lean" ? "medium" : canonical.publicStatus === "watchlist" || canonical.publicStatus === "stale" ? "scheduled" : "no-value"}`}>{canonical.publicStatus.replaceAll("_", " ")}</span>
+          <span className={`badge ${hasValue ? "positive" : canonical.publicStatus === "lean" ? "medium" : canonical.publicStatus === "watchlist" || canonical.publicStatus === "stale" ? "scheduled" : "no-value"}`}>{decisionStatusLabel(canonical.publicStatus)}</span>
           <h2 id="public-decision-title">{publicDecisionLabel}</h2>
           {displayedDecision ? (
             <>

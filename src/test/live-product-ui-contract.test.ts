@@ -226,10 +226,18 @@ describe("live OddsPadi product UI contract", () => {
     expect(detail).not.toMatch(/<details[^>]*\sopen(?:=|\s|>)/);
   });
 
-  it("uses the requested desktop, mobile, and More navigation paths", () => {
+  it("keeps top-level navigation to the four product surfaces with deep links in the More sheet", () => {
     const navigation = source("src/components/site/SiteNav.tsx");
-    for (const label of ["Home", "Tips", "Predictions", "Live Scores", "Results", "News", "Engine"]) expect(navigation).toContain(`label: "${label}"`);
-    for (const label of ["Weekly", "Value Picks", "Tables", "Forums", "Slip Check"]) expect(navigation).toContain(`label: "${label}"`);
+    // The four surfaces — and nothing else — at the top level (v1.7 IA).
+    for (const label of ["Today", "Explore", "Track Record", "My Padi"]) expect(navigation).toContain(`label: "${label}"`);
+    // "News" survives only as a More-sheet deep link; the rest are gone entirely.
+    for (const banned of ['label: "Home"', 'label: "Tips"', 'label: "Predictions"', 'label: "Results"', 'label: "Engine"']) {
+      expect(navigation).not.toContain(banned);
+    }
+    // Every pre-consolidation destination stays one tap away in the More sheet.
+    for (const label of ["Live Scores", "Today's Tips", "All Predictions", "Weekly Radar", "League Tables", "News", "Forums", "Engine Status", "Bet Workspace"]) {
+      expect(navigation).toContain(`label: "${label}"`);
+    }
     expect(navigation).toContain('<span>More</span>');
     expect(navigation).toContain('aria-label="Quick navigation"');
   });
