@@ -16,7 +16,29 @@ const pickName = (row: EditorialOutcome) => row.recommended_selection ?? row.sel
 const isoDate = (value: Date) => value.toISOString().slice(0, 10);
 function fingerprint(rows: EditorialOutcome[]) { let hash = 2166136261; for (const char of rows.map((row) => `${row.id}:${row.result}:${row.model_probability}:${row.odds}`).join("|")) { hash ^= char.charCodeAt(0); hash = Math.imul(hash, 16777619); } return `fnv1a-${(hash >>> 0).toString(16)}`; }
 function distinctFixtures(rows: EditorialOutcome[]) { const seen = new Set<string>(); return rows.filter((row) => { if (seen.has(row.fixture_external_id)) return false; seen.add(row.fixture_external_id); return true; }); }
-function base(kind: GeneratedEditorialStory["generator"], date: string, rows: EditorialOutcome[], revision: number, now: Date) { const rowFingerprint = fingerprint(rows); return { slug: `${kind}-${date}`, generator: kind, revision, sourceAsOf: now.toISOString(), publishedAt: now.toISOString(), readMinutes: 3, dataFingerprint: kind === "model-vs-market" ? `canonical-v1-template-v2-${rowFingerprint}` : `canonical-v1-${rowFingerprint}`, sources: [{ label: "OddsPadi public prediction ledger", url: "/predictions/history", checkedAt: date }, { label: "OddsPadi current predictions", url: "/predictions", checkedAt: date }] }; }
+function base(kind: GeneratedEditorialStory["generator"], date: string, rows: EditorialOutcome[], revision: number, now: Date) {
+  const rowFingerprint = fingerprint(rows);
+  return {
+    slug: `${kind}-${date}`,
+    generator: kind,
+    revision,
+    sourceAsOf: now.toISOString(),
+    publishedAt: now.toISOString(),
+    readMinutes: 3,
+    dataFingerprint: kind === "model-vs-market" ? `canonical-v1-template-v2-${rowFingerprint}` : `canonical-v1-${rowFingerprint}`,
+    sources: [
+      { label: "OddsPadi public prediction ledger", url: "/predictions/history", checkedAt: date },
+      { label: "OddsPadi current predictions", url: "/predictions", checkedAt: date },
+      // Every fixture a story discusses links to its one canonical match page,
+      // so editorial is a doorway into the product spine rather than a dead end.
+      ...distinctFixtures(rows).slice(0, 8).map((row) => ({
+        label: `${matchName(row)} — match page`,
+        url: `/predictions/${encodeURIComponent(row.fixture_external_id)}`,
+        checkedAt: date
+      }))
+    ]
+  };
+}
 
 export function generateEditorialStories(rows: EditorialOutcome[], now = new Date(), revisions: Partial<Record<GeneratedEditorialStory["generator"], number>> = {}): GeneratedEditorialStory[] {
   const date = isoDate(now); const stories: GeneratedEditorialStory[] = [];

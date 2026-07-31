@@ -60,7 +60,7 @@ export default async function ExplorePage() {
         <div className="section-title"><div><span className="section-kicker">By sport</span><h2 id="explore-sports-heading">Sport boards</h2></div><Link className="button" href="/live-scores">Live scores</Link></div>
         <div className="explore-tile-row">
           {SPORTS.map((sport) => (
-            <Link className="explore-tile" href={`/predictions?sport=${sport.id}`} key={sport.id}>
+            <Link className="explore-tile" href={`/predictions?sport=${encodeURIComponent(sport.id)}`} key={sport.id}>
               <strong>{sport.label}</strong>
               <span>Fixtures &amp; model board</span>
             </Link>
@@ -73,7 +73,7 @@ export default async function ExplorePage() {
         <div className="section-title"><div><span className="section-kicker">By competition</span><h2 id="explore-competitions-heading">Tables &amp; season outlooks</h2></div><Link className="button" href="/season-outlooks">Season outlooks</Link></div>
         <div className="explore-competition-list">
           {tableLeagues.map((league) => (
-            <Link className="explore-competition" href={`/predictions/league/${league.slug}/table`} key={league.slug}>
+            <Link className="explore-competition" href={`/predictions/league/${encodeURIComponent(league.slug)}/table`} key={league.slug}>
               <strong>{league.name}</strong>
               <span>{league.country} · table</span>
             </Link>

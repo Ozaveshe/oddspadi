@@ -194,7 +194,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
         <div className="meta">
           <MatchStatusBadge status={match.status} />
           {footballLeagueById(match.league.id) ? (
-            <Link className="text-link" href={`/predictions/league/${footballLeagueById(match.league.id)!.slug}/table`}>{match.league.name} table</Link>
+            <Link className="text-link" href={`/predictions/league/${encodeURIComponent(footballLeagueById(match.league.id)!.slug)}/table`}>{match.league.name} table</Link>
           ) : (
             <span>{match.league.name}</span>
           )}
