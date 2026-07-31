@@ -28,7 +28,7 @@ export function buildMarketPriorPresentation(receipt: MarketPriorReceipt | null 
   }
 
   const influenceLabel = `${formatPercent(receipt.weight)} prior influence`;
-  if (receipt.priorMethod === "selected-quote-no-vig") {
+  if (receipt.priorMethod === "selected-quote-no-vig" || receipt.priorMethod === "selected-quote-shin-no-vig") {
     return {
       state: "single",
       label: "Single-book reference",

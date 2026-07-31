@@ -4033,12 +4033,13 @@ a.score-row:active,
   flex-shrink: 0;
 }
 
-/* Timezone picker: quiet control at the end of the primary nav. */
+/* Timezone picker: quiet control at the end of the primary nav. The nav and
+   its links are all pills, so anything squarer reads as a foreign object. */
 .timezone-picker select {
   background: transparent;
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 6px 10px;
+  border-radius: 999px;
+  padding: 6px 14px;
   font: inherit;
   color: inherit;
   max-width: 150px;
@@ -4072,6 +4073,32 @@ a.score-row:active,
 .gate-pass .gate-state { color: var(--accent); }
 .gate-blocked .gate-state { color: inherit; opacity: 0.75; }
 .gate-board-summary { margin: 0; }
+
+/* Automation heartbeat: one row per scheduled job, freshness against its own
+   cadence. Late is a quiet amber (a skipped pass self-heals); red is reserved
+   for a run that actually failed. */
+.heartbeat-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.heartbeat-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.heartbeat-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 999px; background: var(--border-strong); }
+.hb-ok .heartbeat-dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.hb-late .heartbeat-dot { background: #d99a2b; }
+.hb-failed .heartbeat-dot { background: #c4443f; }
+.heartbeat-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.heartbeat-label { font-weight: 600; }
+.heartbeat-cadence { color: var(--muted); font: 700 10px/1.4 var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; }
+.heartbeat-state { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; text-align: right; font-size: 13px; }
+.hb-ok .heartbeat-state strong { color: var(--accent); }
+.hb-late .heartbeat-state strong { color: #a06a10; }
+.hb-failed .heartbeat-state strong { color: #a3322e; }
+
+/* Confirmed lineups: two team columns straight from the official team sheets. */
+.lineup-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.lineup-column h3 { margin: 0 0 8px; font-size: 14px; }
+.lineup-column ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; counter-reset: shirt; }
+.lineup-column li { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.lineup-column li::before { counter-increment: shirt; content: counter(shirt); flex: 0 0 18px; color: var(--muted); font: 700 10px/1.6 var(--font-mono); text-align: right; }
+.lineup-column li span { color: var(--muted); font: 700 10px/1.6 var(--font-mono); text-transform: uppercase; }
+@media (max-width: 560px) { .lineup-columns { grid-template-columns: 1fr; } }
 
 /* Publication gates that are simply "not yet" are pending work, not failures:
    neutral slate marker instead of alarm red. Red stays reserved for refresh

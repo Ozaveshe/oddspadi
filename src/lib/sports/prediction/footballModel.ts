@@ -280,6 +280,7 @@ export function modelFootballMatch(
 
   const diagnostics: FootballModelDiagnostics = {
     modelVersion: runtimeModelKey("football"),
+    dixonColesRho,
     expectedScoreLabel: liveProjection
       ? `Live projection ${match.homeTeam.name} ${expectedGoals.home.toFixed(2)} - ${match.awayTeam.name} ${expectedGoals.away.toFixed(
           2

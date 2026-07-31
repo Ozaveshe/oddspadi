@@ -75,7 +75,7 @@ describe("thin-history football probability discipline", () => {
     const winnerAdjustment = prediction.marketPriorAdjustment.markets.find((market) => market.marketId === "match_winner");
 
     expect(winnerAdjustment).toMatchObject({
-      priorMethod: "selected-quote-no-vig",
+      priorMethod: "selected-quote-shin-no-vig",
       bookmakerCount: 1,
       maxProbabilitySpread: null
     });

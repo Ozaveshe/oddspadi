@@ -108,7 +108,14 @@ export interface OddsSelection {
 }
 
 export interface OddsMarketConsensus {
-  method: "median-no-vig-v1";
+  /**
+   * v1 medianed proportionally de-vigged per-book probabilities. v2 de-vigs
+   * each book with Shin's method first, which stops the bookmaker margin from
+   * being charged evenly across selections — proportional de-vig systematically
+   * overstates longshots, and a median across books preserves that bias
+   * because every book carries it. Stored v1 receipts stay valid.
+   */
+  method: "median-no-vig-v1" | "median-shin-no-vig-v2";
   bookmakerCount: number;
   probabilities: Record<string, number>;
   averageMargin: number;
@@ -242,6 +249,17 @@ export interface FootballModelDiagnostics {
     note: string;
   }>;
   calibrationNotes: string[];
+  /** Dixon-Coles low-score dependence parameter used to build the score matrix. */
+  dixonColesRho?: number;
+  /** Receipt from the post-anchor score-matrix coherence refit, when it ran. */
+  marketCoherence?: {
+    applied: boolean;
+    lambdaHome: number;
+    lambdaAway: number;
+    iterations: number;
+    maxResidual: number;
+    rebuiltMarkets: string[];
+  };
 }
 
 export interface MatchContextSignal {
@@ -285,7 +303,7 @@ export interface MarketPriorAdjustment {
     selectionCount: number;
     bookmakerMargin: number;
     weight: number;
-    priorMethod: "selected-quote-no-vig" | OddsMarketConsensus["method"];
+    priorMethod: "selected-quote-no-vig" | "selected-quote-shin-no-vig" | OddsMarketConsensus["method"];
     bookmakerCount: number;
     maxProbabilitySpread: number | null;
   }>;
