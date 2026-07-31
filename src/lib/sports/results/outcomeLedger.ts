@@ -184,7 +184,8 @@ export async function runOutcomeLedgerSweep({
   client = getSupabaseServerClient(),
   maxAcquireAttempts = 5,
   retryDelayMs = 20_000,
-  settlementBudgetMs = 150_000
+  settlementBudgetMs = 120_000,
+  deadlineAt = Date.now() + 240_000
 }: {
   days?: number;
   pruneOlderThanDays?: number;
@@ -193,6 +194,15 @@ export async function runOutcomeLedgerSweep({
   maxAcquireAttempts?: number;
   retryDelayMs?: number;
   settlementBudgetMs?: number;
+  /**
+   * Epoch ms by which the WHOLE run must have finished its bookkeeping. The
+   * route runs under a hard platform kill (maxDuration); a run that outlives
+   * it leaves its row "running" and stalls the pipeline until the stale-closer
+   * catches it — the 05:44Z tick did exactly that. Every stage checks this
+   * deadline and defers instead of starting work it cannot finish, so
+   * finishProviderRun always runs.
+   */
+  deadlineAt?: number;
 } = {}): Promise<OutcomeLedgerReport> {
   const sinceDays = Math.max(1, Math.min(60, Math.trunc(days)));
   if (!client) {
@@ -214,7 +224,13 @@ export async function runOutcomeLedgerSweep({
   // between pipeline jobs are one to seven minutes wide, and a few 30-second
   // retries land in one while staying inside the route's execution budget.
   let claim = await startProviderRun({ providerName: "oddspadi-engine", jobType: "outcome-ledger", startedAt: new Date().toISOString(), client });
-  for (let attempt = 1; !claim.acquired && attempt < Math.max(1, maxAcquireAttempts); attempt += 1) {
+  for (
+    let attempt = 1;
+    // Stop retrying while at least ~90s of deadline remains: acquiring a lock
+    // there is no time left to use just converts a skip into an overrun.
+    !claim.acquired && attempt < Math.max(1, maxAcquireAttempts) && Date.now() < deadlineAt - 90_000;
+    attempt += 1
+  ) {
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, retryDelayMs)));
     claim = await startProviderRun({ providerName: "oddspadi-engine", jobType: "outcome-ledger", startedAt: new Date().toISOString(), client });
   }
@@ -228,6 +244,12 @@ export async function runOutcomeLedgerSweep({
   const errors: string[] = [];
 
   const rpcStage = async (stage: OutcomeLedgerStageName, fn: string, args: Record<string, unknown>) => {
+    if (Date.now() > deadlineAt - 15_000) {
+      const message = "Deferred: out of time this pass; the next hourly run covers it.";
+      errors.push(`${stage}: ${message}`);
+      stages.push({ stage, status: "failed", detail: { deferred: true }, error: message });
+      return null;
+    }
     const { data, error } = await client.rpc(fn, args);
     if (error) {
       errors.push(`${stage}: ${error.message}`);
@@ -253,7 +275,11 @@ export async function runOutcomeLedgerSweep({
   let settledFixtures = 0;
   let settlementTotals: SettlementTotals | null = null;
   try {
-    const settlement = await settleMarketDecisions(client, sinceIso, persist, settlementBudgetMs);
+    // The settlement budget can never spend time the later stages need: cap
+    // it to what remains before the deadline, minus a reserve for the two
+    // remaining RPCs and the run-ledger write.
+    const remainingBudgetMs = Math.max(5_000, Math.min(settlementBudgetMs, deadlineAt - Date.now() - 60_000));
+    const settlement = await settleMarketDecisions(client, sinceIso, persist, remainingBudgetMs);
     settledFixtures = settlement.fixtures;
     settlementTotals = settlement.totals;
     stages.push({
