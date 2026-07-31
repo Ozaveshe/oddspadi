@@ -22,6 +22,33 @@ describe("cookie mutation origin security", () => {
     }
   });
 
+  it("matches Origin against the CDN-forwarded host, not the runtime-internal URL", () => {
+    // Behind Netlify's proxy request.url is an internal host; the visitor's
+    // browser addressed the forwarded host. This exact shape 403'd every
+    // legitimate production community write until 2026-07-31.
+    const proxied = (headers: HeadersInit) =>
+      new Request("https://internal-runtime.local/api/community/posts", { method: "POST", headers });
+    expect(
+      isTrustedMutationRequest(
+        proxied({ origin: "https://oddspadi.com", "x-forwarded-host": "oddspadi.com" }),
+        "production"
+      )
+    ).toBe(true);
+    expect(
+      isTrustedMutationRequest(
+        proxied({ origin: "https://evil.example", "x-forwarded-host": "oddspadi.com" }),
+        "production"
+      )
+    ).toBe(false);
+    // HSTS territory: a plain-http origin is an attack shape in production.
+    expect(
+      isTrustedMutationRequest(
+        proxied({ origin: "http://oddspadi.com", "x-forwarded-host": "oddspadi.com" }),
+        "production"
+      )
+    ).toBe(false);
+  });
+
   it("uses Fetch Metadata when Origin is unavailable", () => {
     expect(isTrustedMutationRequest(mutation({ "sec-fetch-site": "same-origin" }), "production")).toBe(true);
     expect(isTrustedMutationRequest(mutation({ "sec-fetch-site": "same-site" }), "production")).toBe(false);
