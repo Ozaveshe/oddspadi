@@ -26,6 +26,7 @@ import Link from "next/link";
 import { buildEngineViewRows, presentBlockers } from "@/lib/sports/prediction/blockerPresentation";
 import { leagueSlugFromProviderId } from "@/lib/sports/leagueStandings";
 import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
+import { DECISION_STATUS_DESCRIPTIONS } from "@/lib/product/vocabulary";
 import { MatchCommunityDesk } from "@/components/community/MatchCommunityDesk";
 import { marketPriorReceiptFor } from "@/lib/sports/prediction/marketPriorPresentation";
 
@@ -109,10 +110,10 @@ export default async function MatchDetailPage({ params }: PageProps) {
       : canonical.publicStatus === "watchlist" || canonical.publicStatus === "stale"
         ? publicWatchlistReason(canonical)
         : canonical.publicStatus === "needs_data"
-          ? "Needs data before publication."
+          ? DECISION_STATUS_DESCRIPTIONS.needs_data
           : canonical.publicStatus === "suspended"
-            ? "Suspended — no new pre-match decision."
-            : "No clear value found.";
+            ? DECISION_STATUS_DESCRIPTIONS.suspended
+            : DECISION_STATUS_DESCRIPTIONS.no_clear_value;
   // Engine blockers are internal vocabulary and often restate one another;
   // present them as distinct, readable reasons.
   // A fixture with no publishable decision still has a model read and live
@@ -237,7 +238,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
               {engineView.length ? (
                 <div className="match-engine-view">
                   <strong>What the model sees</strong>
-                  <p className="muted small">No pick cleared the publication bar, so these numbers are the model&apos;s read, not a recommendation.</p>
+                  <p className="muted small">The engine passed on every market here, so these numbers are the model&apos;s read, not a recommendation.</p>
                   <table>
                     <thead><tr><th>Selection</th><th>Model</th><th>Market</th><th>Best price</th></tr></thead>
                     <tbody>

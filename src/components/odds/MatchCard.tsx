@@ -11,6 +11,7 @@ import { CountryFlag } from "./CountryFlag";
 import { useFollowedTeams } from "@/components/account/FollowedTeamsProvider";
 import { AddToSlipButton } from "./AddToSlipButton";
 import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
+import { DECISION_STATUS_DESCRIPTIONS, decisionStatusLabel } from "@/lib/product/vocabulary";
 
 function mainOdds(match: MatchSummary) {
   return match.oddsMarkets.find((market) => market.id === "match_winner")?.selections ?? [];
@@ -133,7 +134,7 @@ export function MatchCard({ match, prediction }: { match: MatchSummary; predicti
         {displayedDecision ? (
           <>
             <span className={`badge ${hasValue ? "positive" : canonical.publicStatus === "lean" ? "medium" : "scheduled"}`}>
-              {hasValue ? `Value Pick — ${publishedPick.label}` : canonical.publicStatus === "lean" ? `Lean — ${displayedDecision.label}` : "Watchlist"}
+              {hasValue ? `Value Pick — ${publishedPick.label}` : canonical.publicStatus === "lean" ? `Lean — ${displayedDecision.label}` : decisionStatusLabel(canonical.publicStatus)}
             </span>
             <ConfidenceBadge level={canonical.confidence} />
             <RiskBadge level={canonical.risk} />
@@ -148,7 +149,7 @@ export function MatchCard({ match, prediction }: { match: MatchSummary; predicti
               Model leans {leanLabel} · {formatPercent(leanProb)}
             </span>
             <span className="muted small">
-              {canonical.publicStatus === "needs_data" ? "Needs data before publication." : "No clear value found."}
+              {canonical.publicStatus === "needs_data" ? DECISION_STATUS_DESCRIPTIONS.needs_data : DECISION_STATUS_DESCRIPTIONS.no_clear_value}
             </span>
           </>
         )}

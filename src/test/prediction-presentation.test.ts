@@ -95,14 +95,14 @@ function row(status: SlatePublicStatus, blockers: string[] = []): SlateFixture {
 describe("fixture-first prediction presentation", () => {
   it("presents a published selection without losing its model identity", () => {
     const result = buildPredictionPresentation(row("value_pick"), NOW);
-    expect(result).toMatchObject({ statusLabel: "Value pick", marketLabel: "Draw No Bet", isPublishedPick: true, modelVersion: "football-v4", engineVersion: "decision-v3", freshness: "fresh" });
+    expect(result).toMatchObject({ statusLabel: "Value Pick", marketLabel: "Draw No Bet", isPublishedPick: true, modelVersion: "football-v4", engineVersion: "decision-v3", freshness: "fresh" });
     expect(result.verdict).toContain("clears the current publication gates");
   });
 
   it("keeps a blocked positive edge on the watchlist", () => {
     const result = buildPredictionPresentation(row("watchlist", ["Lineup evidence is incomplete."]), NOW);
     expect(result.isPublishedPick).toBe(false);
-    expect(result.statusLabel).toBe("Watchlist");
+    expect(result.statusLabel).toBe("Watch");
     expect(result.verdict).toContain("still blocked");
     expect(result.primaryRisk).toContain("Lineup evidence");
   });

@@ -25,7 +25,7 @@ describe("publication gate presentation", () => {
       state: "watch",
       label: "Analysis only — publication blocked",
       detail: "Decimal odds are outside the publication range.",
-      shortLabel: "Watchlist"
+      shortLabel: "Watch"
     });
   });
 

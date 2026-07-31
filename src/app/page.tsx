@@ -123,7 +123,7 @@ export default async function HomePage() {
       <section className="home-engine-strip" aria-label="Latest engine status">
         <div><span>Prediction fixtures</span><strong>{pendingBoard ? "—" : matchday.fixtureCount}</strong></div>
         <div><span>Tips published</span><strong>{pendingBoard ? "—" : matchday.valuePickCount}</strong></div>
-        <div><span>Watchlist</span><strong>{pendingBoard ? "—" : matchday.watchlistCount}</strong></div>
+        <div><span>Watch</span><strong>{pendingBoard ? "—" : matchday.watchlistCount}</strong></div>
         <div><span>Last engine run</span><strong>{lastRun ? <LocalTime iso={lastRun} /> : pendingBoard ? "Checking" : "Waiting"}</strong></div>
         <div><span>Provider health</span><strong className={`engine-health status-${matchday.providerState}`}>{matchday.providerLabel}</strong><Link className="engine-audit-link" href="/engine/performance">Audit evidence →</Link></div>
       </section>

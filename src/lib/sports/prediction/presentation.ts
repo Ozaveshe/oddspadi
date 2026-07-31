@@ -22,19 +22,9 @@ export type PredictionPresentation = {
   communityHref: string;
 };
 
-const STATUS_LABELS: Record<SlatePublicStatus, string> = {
-  value_pick: "Value pick",
-  lean: "Model lean",
-  watchlist: "Watchlist",
-  no_clear_value: "No pick",
-  preliminary: "Preliminary",
-  ready: "Ready",
-  stale: "Price stale",
-  needs_data: "Needs data",
-  suspended: "Suspended",
-  settled: "Settled",
-  needs_review: "Needs review"
-};
+// One vocabulary across every surface — this file used to carry its own
+// variant ("No pick", "Price stale", "Needs data") of the same states.
+import { DECISION_STATUS_LABELS as STATUS_LABELS } from "@/lib/product/vocabulary";
 
 function readableMarket(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());

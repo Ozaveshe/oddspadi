@@ -118,7 +118,7 @@ export default async function PredictionHistoryPage({ searchParams }: PageProps)
         <div><span>Analysed</span><strong>{yesterdayAudit.summary.analysed}</strong></div>
         <div><span>Value picks</span><strong>{yesterdayAudit.summary.valuePicks}</strong></div>
         <div><span>Leans</span><strong>{yesterdayAudit.summary.leans}</strong></div>
-        <div><span>Watchlist</span><strong>{yesterdayAudit.summary.watchlist}</strong></div>
+        <div><span>Watch</span><strong>{yesterdayAudit.summary.watchlist}</strong></div>
         <div><span>Abstentions</span><strong>{yesterdayAudit.summary.abstentions}</strong></div>
       </div>
       {yesterdayAudit.source === "unavailable" ? <div className="empty-state compact"><h3>Yesterday&apos;s stored audit is unavailable</h3><p className="muted">{yesterdayAudit.reason}</p></div> : yesterdayAudit.rows.length ? (

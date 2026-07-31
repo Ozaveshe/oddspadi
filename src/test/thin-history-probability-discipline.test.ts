@@ -89,7 +89,7 @@ describe("thin-history football probability discipline", () => {
     expect(prediction.canonicalDecision.evidenceQuality).toBe("thin");
     expect(prediction.canonicalDecision.bestPublishedPick).toBeNull();
     expect(publicWatchlistReason(prediction.canonicalDecision)).toBe(
-      "Watchlist — historical and context evidence is too thin for publication."
+      "Watch — historical and context evidence is too thin for publication."
     );
   });
 });

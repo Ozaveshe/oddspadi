@@ -43,7 +43,7 @@ describe("live OddsPadi product UI contract", () => {
     expect(slate).toContain("Evidence Queue");
     expect(slate).toContain("waitingForEvidence");
     expect(slate).toContain("Safer Leans");
-    expect(slate).toContain("Watchlist");
+    expect(slate).toContain("Watch");
     expect(slate).toContain("Analysed Abstentions");
     expect(slate).toContain("if (!product.sections.schedule.length)");
     expect(slate).toContain("fallbackBoard?.fixtures.length");
