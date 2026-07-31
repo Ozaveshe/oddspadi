@@ -158,6 +158,15 @@ describe("runOutcomeLedgerSweep", () => {
     expect(update).toMatchObject({ status: "completed", fixturesFound: 2, oddsFound: 3, predictionsGenerated: 2 });
   });
 
+  it("runs only the requested stage when sliced", async () => {
+    const { client, rpcCalls, updates } = fakeClient({ fixtures: FIXTURES, decisions: DECISIONS });
+    const report = await runOutcomeLedgerSweep({ client, persist: true, stages: ["closing-odds"] });
+    expect(report.status).toBe("completed");
+    expect(report.stages.map((stage) => stage.stage)).toEqual(["closing-odds"]);
+    expect(rpcCalls.map((call) => call.fn)).toEqual(["op_mark_closing_odds"]);
+    expect(updates).toEqual([]);
+  });
+
   it("grades nothing into the database on a dry run", async () => {
     const { client, rpcCalls, updates } = fakeClient({ fixtures: FIXTURES, decisions: DECISIONS });
     const report = await runOutcomeLedgerSweep({ client, persist: false });
