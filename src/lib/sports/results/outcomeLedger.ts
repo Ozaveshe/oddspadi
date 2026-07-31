@@ -177,6 +177,13 @@ function sumColumn(rows: unknown, column: string): number {
   }, 0);
 }
 
+export const OUTCOME_LEDGER_STAGES: OutcomeLedgerStageName[] = [
+  "closing-odds",
+  "decision-settlement",
+  "outcome-backfill",
+  "odds-prune"
+];
+
 export async function runOutcomeLedgerSweep({
   days = 14,
   pruneOlderThanDays = 14,
@@ -184,8 +191,10 @@ export async function runOutcomeLedgerSweep({
   client = getSupabaseServerClient(),
   maxAcquireAttempts = 5,
   retryDelayMs = 20_000,
+  retryReserveMs = 90_000,
   settlementBudgetMs = 120_000,
-  deadlineAt = Date.now() + 240_000
+  deadlineAt = Date.now() + 240_000,
+  stages: requestedStages = OUTCOME_LEDGER_STAGES
 }: {
   days?: number;
   pruneOlderThanDays?: number;
@@ -193,17 +202,24 @@ export async function runOutcomeLedgerSweep({
   client?: SupabaseClient | null;
   maxAcquireAttempts?: number;
   retryDelayMs?: number;
+  /** Stop lock retries when less than this much deadline remains. */
+  retryReserveMs?: number;
   settlementBudgetMs?: number;
   /**
    * Epoch ms by which the WHOLE run must have finished its bookkeeping. The
-   * route runs under a hard platform kill (maxDuration); a run that outlives
-   * it leaves its row "running" and stalls the pipeline until the stale-closer
-   * catches it — the 05:44Z tick did exactly that. Every stage checks this
-   * deadline and defers instead of starting work it cannot finish, so
-   * finishProviderRun always runs.
+   * route's real platform kill proved far tighter than its declared
+   * maxDuration — runs that outlived it left their row "running" and held the
+   * pipeline lock for the stale-closer. Every stage checks this deadline and
+   * defers instead of starting work it cannot finish, so finishProviderRun
+   * always runs. The scheduled worker therefore requests one SMALL stage per
+   * route invocation and sequences the slices itself under its own, much
+   * larger, background budget.
    */
   deadlineAt?: number;
+  /** Which stages this invocation runs; defaults to the whole chain. */
+  stages?: OutcomeLedgerStageName[];
 } = {}): Promise<OutcomeLedgerReport> {
+  const wants = (stage: OutcomeLedgerStageName) => requestedStages.includes(stage);
   const sinceDays = Math.max(1, Math.min(60, Math.trunc(days)));
   if (!client) {
     return {
@@ -226,9 +242,9 @@ export async function runOutcomeLedgerSweep({
   let claim = await startProviderRun({ providerName: "oddspadi-engine", jobType: "outcome-ledger", startedAt: new Date().toISOString(), client });
   for (
     let attempt = 1;
-    // Stop retrying while at least ~90s of deadline remains: acquiring a lock
-    // there is no time left to use just converts a skip into an overrun.
-    !claim.acquired && attempt < Math.max(1, maxAcquireAttempts) && Date.now() < deadlineAt - 90_000;
+    // Stop retrying once too little deadline remains to use the lock:
+    // acquiring it there just converts a skip into an overrun.
+    !claim.acquired && attempt < Math.max(1, maxAcquireAttempts) && Date.now() < deadlineAt - retryReserveMs;
     attempt += 1
   ) {
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, retryDelayMs)));
@@ -266,48 +282,57 @@ export async function runOutcomeLedgerSweep({
   // timeout on the first production tick. Two days re-covers several missed
   // passes; the RPC's own not-exists guard keeps re-marking idempotent.
   const closingSinceIso = new Date(Date.now() - Math.min(sinceDays, 2) * 86_400_000).toISOString();
-  const closingRows = await rpcStage("closing-odds", "op_mark_closing_odds", {
-    p_since: closingSinceIso,
-    p_window_minutes: 90,
-    p_commit: persist
-  });
+  const closingRows = wants("closing-odds")
+    ? await rpcStage("closing-odds", "op_mark_closing_odds", {
+        p_since: closingSinceIso,
+        p_window_minutes: 90,
+        p_commit: persist
+      })
+    : null;
 
   let settledFixtures = 0;
   let settlementTotals: SettlementTotals | null = null;
-  try {
-    // The settlement budget can never spend time the later stages need: cap
-    // it to what remains before the deadline, minus a reserve for the two
-    // remaining RPCs and the run-ledger write.
-    const remainingBudgetMs = Math.max(5_000, Math.min(settlementBudgetMs, deadlineAt - Date.now() - 60_000));
-    const settlement = await settleMarketDecisions(client, sinceIso, persist, remainingBudgetMs);
-    settledFixtures = settlement.fixtures;
-    settlementTotals = settlement.totals;
-    stages.push({
-      stage: "decision-settlement",
-      status: "completed",
-      detail: {
-        fixtures: settlement.fixtures,
-        fixturesProcessed: settlement.fixturesProcessed,
-        budgetExhausted: settlement.budgetExhausted,
-        ...settlement.totals
-      },
-      error: null
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Decision settlement failed.";
-    errors.push(`decision-settlement: ${message}`);
-    stages.push({ stage: "decision-settlement", status: "failed", detail: {}, error: message });
+  if (wants("decision-settlement")) {
+    try {
+      // The settlement budget can never spend time the later stages need: cap
+      // it to what remains before the deadline, minus a reserve for whatever
+      // still runs in this invocation and the run-ledger write.
+      const tailReserveMs = wants("outcome-backfill") || wants("odds-prune") ? 60_000 : 6_000;
+      const remainingBudgetMs = Math.max(4_000, Math.min(settlementBudgetMs, deadlineAt - Date.now() - tailReserveMs));
+      const settlement = await settleMarketDecisions(client, sinceIso, persist, remainingBudgetMs);
+      settledFixtures = settlement.fixtures;
+      settlementTotals = settlement.totals;
+      stages.push({
+        stage: "decision-settlement",
+        status: "completed",
+        detail: {
+          fixtures: settlement.fixtures,
+          fixturesProcessed: settlement.fixturesProcessed,
+          budgetExhausted: settlement.budgetExhausted,
+          ...settlement.totals
+        },
+        error: null
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Decision settlement failed.";
+      errors.push(`decision-settlement: ${message}`);
+      stages.push({ stage: "decision-settlement", status: "failed", detail: {}, error: message });
+    }
   }
 
-  const outcomeRows = await rpcStage("outcome-backfill", "op_backfill_prediction_outcomes", {
-    p_since: sinceIso,
-    p_commit: persist
-  });
+  const outcomeRows = wants("outcome-backfill")
+    ? await rpcStage("outcome-backfill", "op_backfill_prediction_outcomes", {
+        p_since: sinceIso,
+        p_commit: persist
+      })
+    : null;
 
-  await rpcStage("odds-prune", "op_prune_stale_odds", {
-    p_older_than_days: Math.max(1, Math.min(120, Math.trunc(pruneOlderThanDays))),
-    p_commit: persist
-  });
+  if (wants("odds-prune")) {
+    await rpcStage("odds-prune", "op_prune_stale_odds", {
+      p_older_than_days: Math.max(1, Math.min(120, Math.trunc(pruneOlderThanDays))),
+      p_commit: persist
+    });
+  }
 
   const failed = stages.filter((stage) => stage.status === "failed").length;
   const status = failed === 0 ? "completed" : failed === stages.length ? "unavailable" : "partial";
