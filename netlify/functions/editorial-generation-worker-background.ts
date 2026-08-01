@@ -93,9 +93,49 @@ export async function runEditorialGeneration({ scheduleToken, adminToken, supaba
   }
   // Optional prose pass: keeps the deterministic facts, upgrades the writing.
   // Falls back to the deterministic text on any OpenAI failure.
-  const published = changed.length ? await polishEditorialStories(changed, { apiKey: openaiKey, model: openaiModel }) : [];
+  const polished = changed.length ? await polishEditorialStories(changed, { apiKey: openaiKey, model: openaiModel }) : [];
+
+  // Fail closed. A story that asserts a record must prove it against the
+  // ledger at publish time; if it cannot, it is dropped rather than published
+  // with a caveat. A missing article is a gap, a false one is the site lying
+  // on its own behalf.
+  const blocked: Array<{ slug: string; failures: string[] }> = [];
+  const published = [];
+  for (const story of polished) {
+    if (!story.claim) {
+      published.push(story);
+      continue;
+    }
+    const ledger = await db
+      .from("op_publications")
+      .select("id,publication_status,settlement_status,published_at")
+      .in("id", story.claim.publicationIds);
+    const rows = ledger.error ? null : ledger.data ?? [];
+    if (!rows) {
+      // The ledger could not be read, so the claim cannot be verified. That is
+      // not permission to publish it.
+      blocked.push({ slug: story.slug, failures: ["ledger-unreadable"] });
+      continue;
+    }
+    const wins = rows.filter((row) => row.publication_status !== "retracted" && row.settlement_status === "won").length;
+    const losses = rows.filter((row) => row.publication_status !== "retracted" && row.settlement_status === "lost").length;
+    const failures: string[] = [];
+    if (rows.length !== story.claim.publicationIds.length) failures.push("picks-are-official");
+    if (wins !== story.claim.statedWins || losses !== story.claim.statedLosses) failures.push("settlement-current");
+    if (rows.some((row) => row.publication_status === "retracted")) failures.push("no-retracted-picks");
+    if (rows.some((row) => !row.published_at)) failures.push("odds-timestamped");
+    if (failures.length) {
+      blocked.push({ slug: story.slug, failures });
+      continue;
+    }
+    published.push(story);
+  }
+  if (blocked.length) {
+    console.warn(JSON.stringify({ event: "oddspadi-editorial-validation-blocked", blocked }));
+  }
+
   const payload = published.map((story) => ({ slug: story.slug, generator: story.generator, title: story.title, excerpt: story.excerpt, category: story.category, sport: story.sport, body: story.body, sources: story.sources, revision: story.revision, source_as_of: story.sourceAsOf, published_at: story.publishedAt, updated_at: now.toISOString(), read_minutes: story.readMinutes, data_fingerprint: story.dataFingerprint, claim: story.claim ?? null }));
   const { error: writeError } = payload.length ? await db.from("op_editorial_stories").upsert(payload, { onConflict: "slug" }) : { error: null };
-  return writeError ? Response.json({ success: false, error: writeError.message }, { status: 500 }) : Response.json({ success: true, generated: changed.length, unchanged: drafts.length - changed.length, removed: removedSlugs.length, sourceRows: sourceRows.length, storedSlateRows: storedOutcomes.length, slugs: changed.map((story) => story.slug), removedSlugs });
+  return writeError ? Response.json({ success: false, error: writeError.message }, { status: 500 }) : Response.json({ success: true, generated: published.length, blocked, blockedCount: blocked.length, unchanged: drafts.length - changed.length, removed: removedSlugs.length, sourceRows: sourceRows.length, storedSlateRows: storedOutcomes.length, slugs: changed.map((story) => story.slug), removedSlugs });
 }
 export default async function handler(request: Request) { return runEditorialGeneration({ scheduleToken: request.headers.get("x-oddspadi-schedule-token"), adminToken: clean(Netlify.env.get("ODDSPADI_ADMIN_TOKEN")), supabaseUrl: clean(Netlify.env.get("SUPABASE_URL")), supabaseKey: clean(Netlify.env.get("SUPABASE_SECRET_KEY")) ?? clean(Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY")), openaiKey: clean(Netlify.env.get("OPENAI_API_KEY")), openaiModel: clean(Netlify.env.get("OPENAI_EDITORIAL_MODEL")) }); }
