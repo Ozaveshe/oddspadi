@@ -27,6 +27,19 @@ import { buildEngineViewRows, presentBlockers } from "@/lib/sports/prediction/bl
 import { leagueSlugFromProviderId } from "@/lib/sports/leagueStandings";
 import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
 import { DECISION_STATUS_DESCRIPTIONS, decisionStatusLabel } from "@/lib/product/vocabulary";
+import { buildMatchIntelligence } from "@/lib/match/matchIntelligence";
+import { toMatchIntelligenceInput } from "@/lib/match/matchIntelligenceAdapter";
+import { readPublicationForFixture } from "@/lib/match/publicationForFixture";
+import {
+  DecisionSection,
+  EvidenceSection,
+  FactorsSection,
+  MatchHeader,
+  MethodologySection,
+  ModelSection,
+  OddsSection,
+  TimelineSection
+} from "@/components/match/MatchIntelligenceSections";
 import { SaveFixtureButton } from "@/components/product/SaveFixtureButton";
 import { RecentFixtureRecorder } from "@/components/product/RecentFixtureRecorder";
 import { footballLeagueById } from "@/lib/sports/footballLeagues";
@@ -96,6 +109,11 @@ export default async function MatchDetailPage({ params }: PageProps) {
   }
 
   const { match, prediction, oddsHistory } = row;
+  // One resolution of the fixture for the whole page. Every section below
+  // renders a slice of this, so none of them can disagree about the score,
+  // the odds state, the model basis or the decision.
+  const publication = (await readPublicationForFixture(match.id).catch(() => null)) ?? null;
+  const intelligence = buildMatchIntelligence(toMatchIntelligenceInput({ match, prediction, publication }));
   const displayDecision = prediction.decision;
   const displayPrediction = prediction;
   const winner = prediction.markets.find((market) => market.marketId === "match_winner");
@@ -190,48 +208,31 @@ export default async function MatchDetailPage({ params }: PageProps) {
           kickoffTime: match.kickoffTime
         }}
       />
-      <div className="page-heading">
-        <div className="meta">
-          <MatchStatusBadge status={match.status} />
-          {footballLeagueById(match.league.id) ? (
-            <Link className="text-link" href={`/predictions/league/${encodeURIComponent(footballLeagueById(match.league.id)!.slug)}/table`}>{match.league.name} table</Link>
-          ) : (
-            <span>{match.league.name}</span>
-          )}
-          <span className="country-inline"><CountryFlag country={match.league.country} flag={match.league.flag} size={16} />{match.league.country}</span>
-          <LocalTime iso={match.kickoffTime} variant="datetime" />
-          <SaveFixtureButton
-            fixture={{
-              matchId: match.id,
-              matchLabel: `${match.homeTeam.name} vs ${match.awayTeam.name}`,
-              league: match.league.name,
-              sport: match.sport,
-              kickoffTime: match.kickoffTime
-            }}
-          />
-        </div>
-        <h1 className="match-title">
-          <span className="team-inline">
-            <TeamCrest name={match.homeTeam.name} logo={match.homeTeam.logo} size={34} />
-            <span>{match.homeTeam.name}<small className="team-country-line"><CountryFlag country={match.homeTeam.country} size={14} />{match.homeTeam.country ?? "Country pending"}</small></span>
-          </span>
-          <span className="accent">vs</span>
-          <span className="team-inline">
-            <TeamCrest name={match.awayTeam.name} logo={match.awayTeam.logo} size={34} />
-            <span>{match.awayTeam.name}<small className="team-country-line"><CountryFlag country={match.awayTeam.country} size={14} />{match.awayTeam.country ?? "Country pending"}</small></span>
-          </span>
-        </h1>
-        {match.score ? (
-          <p>
-            <strong>
-              Score: {match.score.home}-{match.score.away}
-              {match.score.minute ? ` (${match.score.minute}')` : ""}
-            </strong>
-          </p>
-        ) : (
-          <p>Here&apos;s everything the engine sees for this match — odds, probabilities, value, and risk.</p>
-        )}
+      <MatchHeader view={intelligence} />
+
+      <div className="match-hero-actions">
+        {footballLeagueById(match.league.id) ? (
+          <Link className="text-link" href={`/predictions/league/${encodeURIComponent(footballLeagueById(match.league.id)!.slug)}/table`}>
+            {match.league.name} table
+          </Link>
+        ) : null}
+        <SaveFixtureButton
+          fixture={{
+            matchId: match.id,
+            matchLabel: `${match.homeTeam.name} vs ${match.awayTeam.name}`,
+            league: match.league.name,
+            sport: match.sport,
+            kickoffTime: match.kickoffTime
+          }}
+        />
       </div>
+
+      <OddsSection view={intelligence} />
+      <ModelSection view={intelligence} />
+      <DecisionSection view={intelligence} />
+      <FactorsSection view={intelligence} />
+      <EvidenceSection view={intelligence} />
+      <TimelineSection view={intelligence} />
 
       <section className={`match-decision-hero status-${canonical.publicStatus}`} aria-labelledby="public-decision-title">
         <div>
@@ -357,18 +358,17 @@ export default async function MatchDetailPage({ params }: PageProps) {
 
           <PredictionExplanation explanation={prediction.explanation} />
 
-          <details className="fold">
-            <summary>Advanced engine audit</summary>
-            <div className="fold-body">
-              <p className="muted small" style={{ margin: 0 }}>
-                Audit-only detail cannot override the canonical public decision above. Candidate markets below show
-                the engine&apos;s working, including blocked opportunities, but only the canonical status is publishable.
-              </p>
-              <DecisionEnginePanel decision={displayDecision} />
-              <AgentReport report={prediction.agentReport} diagnostics={prediction.diagnostics} />
-              <ModelDiagnostics diagnostics={prediction.diagnostics} />
-            </div>
-          </details>
+          {/*
+            An engine-audit fold used to render the full agent report here:
+            deliberation, committee review, self-critique passes, reasoning
+            graphs and tool execution — 1,500 lines of operational machinery
+            presented as consumer transparency. Real transparency is
+            what the model concluded, from what evidence, at what time, and
+            whether it was published; that now lives in the sections above and
+            in the collapsed methodology block below. The audit views remain
+            available to operators through the engine surfaces.
+          */}
+          <MethodologySection view={intelligence} />
         </div>
 
         <aside className="match-list">

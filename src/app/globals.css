@@ -4045,6 +4045,76 @@ a.score-row:active,
   max-width: 150px;
 }
 
+/* Match Intelligence. Mobile is the primary context: the hero sticks so the
+   score and state stay visible while reading, and every wide element scrolls
+   inside its own container rather than the page. */
+.match-hero { position: sticky; top: 6px; z-index: 20; display: grid; gap: 10px; margin: 6px 0 18px; padding: 16px 18px; border: 1px solid var(--border-strong); border-radius: 8px 26px 8px 8px; background: rgba(255,255,255,.94); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); box-shadow: var(--shadow-sm); }
+.match-hero-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; color: var(--muted); font-size: 12.5px; }
+.match-phase-chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border-strong); font: 800 10.5px/1.5 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
+.match-phase-chip.phase-live { border-color: var(--live); color: var(--live); }
+.match-phase-chip.phase-finished { background: var(--surface-3); }
+.match-phase-chip.phase-void, .match-phase-chip.phase-postponed { border-style: dashed; }
+.match-hero-title { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: baseline; margin: 0; font: 750 clamp(21px, 5.2vw, 31px)/1.15 var(--font-display); letter-spacing: -.03em; }
+.match-hero-score { font-variant-numeric: tabular-nums; font-size: 1.15em; }
+.match-hero-score i { padding: 0 6px; font-style: normal; color: var(--muted); }
+.match-hero-versus { color: var(--muted); font-weight: 600; }
+.match-hero-times { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.match-hero-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 20px; }
+
+.match-section { scroll-margin-top: 120px; }
+.match-odds-note { margin: 0 0 12px; padding: 10px 13px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); color: var(--muted); font-size: 13px; }
+.match-odds-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; margin: 14px 0 10px; }
+.match-odds-cell { display: grid; gap: 2px; padding: 11px 13px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.match-odds-cell span { color: var(--muted); font-size: 12px; }
+.match-odds-cell strong { font: 750 19px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+
+.match-basis-note { margin: 0 0 14px; padding: 11px 14px; border: 1px solid var(--green-line); border-radius: var(--radius-sm); background: var(--green-soft); color: var(--green-strong); font-size: 13px; }
+.match-probability-rows { display: grid; gap: 10px; margin: 14px 0; }
+.match-probability-row { display: grid; grid-template-columns: minmax(80px, 1.1fr) minmax(0, 2fr) auto; gap: 12px; align-items: center; }
+.match-probability-label { font-size: 13.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match-probability-track { display: block; height: 9px; overflow: hidden; border-radius: 3px; background: var(--surface-3); }
+.match-probability-track i { display: block; height: 100%; border-radius: 3px; background: var(--green); }
+.match-probability-values { display: grid; justify-items: end; font-variant-numeric: tabular-nums; }
+.match-probability-values strong { font-size: 15px; }
+
+.match-decision-headline { margin: 6px 0 14px; font-size: 15.5px; line-height: 1.5; }
+.match-publication { display: grid; gap: 12px; padding: 15px 17px; border: 1px solid var(--green-line); border-radius: 6px 20px 6px 6px; background: var(--green-soft); }
+.match-publication dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 0; }
+.match-publication dt { color: var(--muted); font: 760 9.5px/1.4 var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.match-publication dd { margin: 3px 0 0; font-size: 14.5px; font-weight: 650; }
+
+.match-factor-list { display: grid; gap: 9px; margin: 14px 0 0; padding: 0; list-style: none; }
+.match-factor { display: grid; gap: 3px; padding: 11px 14px; border: 1px solid var(--border); border-left-width: 3px; border-radius: var(--radius-sm); background: var(--surface); font-size: 13.5px; line-height: 1.5; }
+.match-factor.supports { border-left-color: var(--green); }
+.match-factor.against { border-left-color: var(--border-strong); }
+.match-factor.neutral { border-left-color: var(--faint, var(--border)); }
+.match-factor-label { font: 760 10px/1.4 var(--font-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+
+.match-evidence-list { display: grid; gap: 12px; margin: 14px 0 0; padding: 0; list-style: none; }
+.match-evidence-row { display: grid; gap: 5px; }
+.match-evidence-top { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+.match-evidence-track { height: 7px; overflow: hidden; border-radius: 2px; background: var(--surface-3); }
+.match-evidence-track i { display: block; height: 100%; background: var(--green); }
+.match-evidence-row.band-thin .match-evidence-track i { background: var(--border-strong); }
+.match-evidence-row.band-unknown .match-evidence-track i { background: repeating-linear-gradient(90deg, var(--border) 0 4px, transparent 4px 8px); }
+
+.match-timeline { display: grid; gap: 10px; margin: 14px 0 0; padding: 0 0 0 16px; list-style: none; border-left: 2px solid var(--border); }
+.match-timeline-event { display: grid; gap: 2px; position: relative; font-size: 13px; }
+.match-timeline-event::before { content: ""; position: absolute; left: -21px; top: 6px; width: 8px; height: 8px; border-radius: 999px; background: var(--border-strong); }
+.match-timeline-event.kind-published::before, .match-timeline-event.kind-final-result::before { background: var(--green); }
+.match-timeline-event time { color: var(--muted); font: 700 11px/1.4 var(--font-mono); }
+.match-timeline-kind { font-weight: 700; }
+.match-methodology { margin-top: 26px; }
+.match-methodology dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.match-methodology dt { color: var(--muted); font: 760 9.5px/1.4 var(--font-mono); letter-spacing: .07em; text-transform: uppercase; }
+.match-methodology dd { margin: 3px 0 0; font-size: 14px; }
+
+@media (max-width: 640px) {
+  .match-hero { position: static; padding: 14px 15px; border-radius: 8px 20px 8px 8px; }
+  .match-probability-row { grid-template-columns: minmax(70px, 1fr) minmax(0, 1.6fr) auto; gap: 9px; }
+  .match-publication dl { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+}
+
 /* Public data-state notices. Tone carries meaning: an outage must not look
    like a quiet day, and a stale snapshot must not look like a failure. */
 .public-state-notice { display: grid; gap: 5px; margin: 16px 0; padding: 14px 17px; border: 1px solid var(--border); border-radius: 6px 18px 6px 6px; background: var(--surface-2); }

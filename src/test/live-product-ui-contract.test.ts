@@ -138,8 +138,10 @@ describe("live OddsPadi product UI contract", () => {
   it("uses the canonical public decision before any match audit detail", () => {
     const detail = source("src/app/predictions/[matchId]/page.tsx");
     expect(detail).toContain("const canonical = prediction.canonicalDecision");
-    expect(detail.indexOf("match-decision-hero")).toBeGreaterThan(-1);
-    expect(detail.indexOf("match-decision-hero")).toBeLessThan(detail.indexOf("Advanced engine audit"));
+    // v2.0: the resolved view leads the page and the decision section comes
+    // before any technical disclosure, which is now only the methodology fold.
+    expect(detail.indexOf("<MatchHeader")).toBeGreaterThan(-1);
+    expect(detail.indexOf("<DecisionSection")).toBeLessThan(detail.indexOf("<MethodologySection"));
     expect(detail).toContain("DecisionPriceSignal");
     expect(detail).toContain("ProbabilityDistribution");
     expect(detail).toContain("CalibrationReliabilityBand");
@@ -150,7 +152,9 @@ describe("live OddsPadi product UI contract", () => {
     expect(source("src/components/odds/DecisionPriceSignal.tsx")).toContain("decision-economic-confidence");
     expect(source("src/components/odds/DecisionPriceSignal.tsx")).toContain("decision-market-confidence");
     expect(detail).not.toContain("The short version");
-    expect(detail).toContain("Audit-only detail cannot override the canonical public decision above");
+    // The canonical decision is no longer defended by a disclaimer under an
+    // audit fold; it is the only decision the page renders.
+    expect(detail).toContain("<DecisionSection");
   });
 
   it("surfaces the deterministic probability path, factors, uncertainty, and calibration provenance", () => {
@@ -220,9 +224,18 @@ describe("live OddsPadi product UI contract", () => {
     expect(engine).not.toContain("AI Decision Engine");
   });
 
-  it("keeps the advanced engine audit collapsed by default", () => {
+  it("keeps operational machinery off the consumer match page", () => {
     const detail = source("src/app/predictions/[matchId]/page.tsx");
-    expect(detail).toMatch(/<details className="fold">\s*<summary>Advanced engine audit<\/summary>/);
+    // The audit fold used to render AgentReport: agent deliberation, decision
+    // committee, self-critique passes and reasoning graphs. Transparency is
+    // what the model concluded and when — not how the machine argued with
+    // itself — so the whole component is gone from this page.
+    expect(detail).not.toContain("<AgentReport");
+    expect(detail).not.toContain("Advanced engine audit");
+    // Technical disclosure survives, collapsed and small.
+    expect(detail).toContain("<MethodologySection");
+    const methodology = source("src/components/match/MatchIntelligenceSections.tsx");
+    expect(methodology).toContain("Methodology and technical details");
     expect(detail).not.toMatch(/<details[^>]*\sopen(?:=|\s|>)/);
   });
 
