@@ -4045,6 +4045,16 @@ a.score-row:active,
   max-width: 150px;
 }
 
+/* Public data-state notices. Tone carries meaning: an outage must not look
+   like a quiet day, and a stale snapshot must not look like a failure. */
+.public-state-notice { display: grid; gap: 5px; margin: 16px 0; padding: 14px 17px; border: 1px solid var(--border); border-radius: 6px 18px 6px 6px; background: var(--surface-2); }
+.public-state-notice strong { font-size: 14.5px; letter-spacing: -.01em; }
+.public-state-notice p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.public-state-notice.unavailable { border-color: var(--border-strong); background: var(--surface); }
+.public-state-notice.stale { border-style: dashed; }
+.public-state-notice.partial { border-color: var(--green-line); background: var(--green-soft); }
+.public-state-notice.empty { background: var(--surface); }
+
 /* One-product surfaces: Explore tiles, My Padi shelves, nav slip chip. */
 .explore-tile-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 18px; }
 .explore-tile { display: grid; gap: 4px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 6px 20px 6px 6px; background: var(--surface); text-decoration: none; color: var(--text); transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
