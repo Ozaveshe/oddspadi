@@ -2,7 +2,12 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { readProjection, readProjectionList, FRESHNESS_THRESHOLD_MS } from "@/lib/readmodel/publicProjection";
+import {
+  readProjection,
+  readProjectionList,
+  FRESHNESS_THRESHOLD_MS,
+  PROJECTION_REFRESH_INTERVAL_MS
+} from "@/lib/readmodel/publicProjection";
 import { toPublicStatus, type OperationalStatus } from "@/lib/readmodel/publicStatus";
 
 /**
@@ -134,6 +139,18 @@ describe("state semantics", () => {
       now: NOW
     });
     expect(read.availability).toBe("unavailable");
+  });
+
+  it("keeps every freshness threshold above the refresh cadence", () => {
+    // Found in production: the live board's 3-minute threshold sat below the
+    // 5-minute sweep, so it was over threshold most of the time and the public
+    // status read "delayed" almost permanently. A threshold below the cadence
+    // is not strict, it is broken — it reports a fault the system cannot avoid.
+    for (const [name, threshold] of Object.entries(FRESHNESS_THRESHOLD_MS)) {
+      expect(threshold, `${name} must tolerate at least one missed sweep`).toBeGreaterThan(
+        PROJECTION_REFRESH_INTERVAL_MS * 2
+      );
+    }
   });
 
   it("gives live scores a tighter freshness threshold than the ledger", () => {
