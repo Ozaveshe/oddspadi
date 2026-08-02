@@ -43,10 +43,11 @@ export default function TermsPage() {
           <p className="muted">
             OddsPadi content discusses bookmaker odds and is intended for adults (18+, or the legal age in your
             country if higher). If you choose to bet with a licensed operator, only stake what you can afford to lose.
-            If gambling stops being fun, seek help — for example through{" "}
-            <a className="inline-link" href="https://www.begambleaware.org" rel="noopener noreferrer" target="_blank">
-              BeGambleAware
-            </a>.
+            If gambling stops being fun, seek help. Our{" "}
+            <Link className="inline-link" href="/responsible-use">
+              responsible use centre
+            </Link>{" "}
+            lists support organisations in Nigeria, South Africa, the UK and internationally.
           </p>
         </section>
 

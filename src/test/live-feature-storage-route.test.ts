@@ -6,10 +6,22 @@ describe("football live feature storage route authorization", () => {
     delete process.env.ODDSPADI_ADMIN_TOKEN;
   });
 
-  it("keeps GET read-only even when write parameters are supplied", async () => {
+  it("refuses an anonymous read", async () => {
     const response = await GET(
       new Request(
-        "http://127.0.0.1:3025/api/sports/decision/training/football-provider-live-feature-storage-receipt?date=2026-08-21&run=1&dryRun=0"
+        "http://127.0.0.1:3025/api/sports/decision/training/football-provider-live-feature-storage-receipt?date=2026-08-21"
+      )
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it("keeps an authorised GET read-only even when write parameters are supplied", async () => {
+    process.env.ODDSPADI_ADMIN_TOKEN = "test-admin-token";
+    const response = await GET(
+      new Request(
+        "http://127.0.0.1:3025/api/sports/decision/training/football-provider-live-feature-storage-receipt?date=2026-08-21&run=1&dryRun=0",
+        { headers: { "x-oddspadi-admin-token": "test-admin-token" } }
       )
     );
 

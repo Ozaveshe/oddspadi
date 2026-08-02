@@ -8,14 +8,30 @@ vi.mock("@/lib/sports/prediction/championChallengerRepository", () => ({
   previewChampionChallengerComparison,
   runAndStoreChampionChallengerComparison
 }));
-vi.mock("@/lib/sports/training/adminAuth", () => ({ isTrainingAdminAuthorized }));
+vi.mock("@/lib/sports/training/adminAuth", () => ({
+  isTrainingAdminAuthorized,
+  trainingUnauthorized: () => Response.json({ success: false, data: null, error: "Unauthorized." }, { status: 401 }),
+  requireTrainingAdmin: (request: Request) =>
+    isTrainingAdminAuthorized(request)
+      ? null
+      : Response.json({ success: false, data: null, error: "Unauthorized." }, { status: 401 })
+}));
 
 import { GET, POST } from "@/app/api/sports/decision/training/champion-challenger/route";
 
 describe("champion challenger route", () => {
   beforeEach(() => vi.resetAllMocks());
 
+  it("refuses an anonymous preview", async () => {
+    isTrainingAdminAuthorized.mockReturnValue(false);
+    const response = await GET(new Request("http://localhost/api/sports/decision/training/champion-challenger?sport=football"));
+
+    expect(response.status).toBe(401);
+    expect(previewChampionChallengerComparison).not.toHaveBeenCalled();
+  });
+
   it("previews paired evidence without a write", async () => {
+    isTrainingAdminAuthorized.mockReturnValue(true);
     previewChampionChallengerComparison.mockResolvedValue({ status: "ready", receipt: { status: "warming" } });
     const response = await GET(new Request("http://localhost/api/sports/decision/training/champion-challenger?sport=football&challengerCandidateId=candidate-2"));
 

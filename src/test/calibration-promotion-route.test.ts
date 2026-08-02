@@ -6,7 +6,14 @@ const approveCalibrationCandidate = vi.hoisted(() => vi.fn());
 const revokeCalibrationPromotion = vi.hoisted(() => vi.fn());
 const readCalibrationDriftReceipt = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/sports/training/adminAuth", () => ({ isTrainingAdminAuthorized }));
+vi.mock("@/lib/sports/training/adminAuth", () => ({
+  isTrainingAdminAuthorized,
+  trainingUnauthorized: () => Response.json({ success: false, data: null, error: "Unauthorized." }, { status: 401 }),
+  requireTrainingAdmin: (request: Request) =>
+    isTrainingAdminAuthorized(request)
+      ? null
+      : Response.json({ success: false, data: null, error: "Unauthorized." }, { status: 401 })
+}));
 vi.mock("@/lib/sports/prediction/decisionCalibrationPromotion", () => ({
   readActiveCalibrationPromotion,
   approveCalibrationCandidate,
@@ -21,7 +28,14 @@ describe("calibration promotion route", () => {
     vi.resetAllMocks();
   });
 
+  it("refuses an anonymous read of the promotion state", async () => {
+    isTrainingAdminAuthorized.mockReturnValue(false);
+    const response = await GET(new Request("http://localhost/api/sports/decision/training/calibration-promotion?sport=football"));
+    expect(response.status).toBe(401);
+  });
+
   it("reads the active promotion without revealing credentials", async () => {
+    isTrainingAdminAuthorized.mockReturnValue(true);
     readActiveCalibrationPromotion.mockResolvedValue({ status: "not-found" });
 
     const response = await GET(new Request("http://localhost/api/sports/decision/training/calibration-promotion?sport=football"));
@@ -32,6 +46,7 @@ describe("calibration promotion route", () => {
   });
 
   it("returns the exact out-of-sample drift receipt with an active promotion", async () => {
+    isTrainingAdminAuthorized.mockReturnValue(true);
     const activePromotion = { id: "promotion-1", candidateId: "candidate-1", sport: "football", modelKey: "model-1", engineVersion: "engine-1" };
     const driftReceipt = { version: "live-calibration-drift-v1", status: "pass", eligibleForLive: true };
     readActiveCalibrationPromotion.mockResolvedValue({ status: "found", promotion: activePromotion });

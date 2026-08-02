@@ -1,6 +1,6 @@
 import { apiError, apiSuccess, parseSportsQuery } from "@/app/api/sports/_utils";
 import { runDecisionAutonomousCycle } from "@/lib/sports/prediction/decisionAutonomousCycle";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 600;
@@ -24,7 +24,13 @@ function options(request: Request) {
   };
 }
 
+/**
+ * Operator preview. Read-only, but it runs the whole decision cycle and
+ * returns the engine's internal deliberation — not a consumer surface.
+ */
 export async function GET(request: Request) {
+  const denied = requireTrainingAdmin(request);
+  if (denied) return denied;
   const query = parseSportsQuery(request);
   if ("error" in query) return apiError(query.error);
   const requested = options(request);
@@ -47,7 +53,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const query = parseSportsQuery(request);
   if ("error" in query) return apiError(query.error);
-  if (!isTrainingAdminAuthorized(request)) return apiError("Autonomous decision execution requires a valid x-oddspadi-admin-token.", 401);
+  if (!isTrainingAdminAuthorized(request)) return trainingUnauthorized();
   try {
     const cycle = await runDecisionAutonomousCycle({
       date: query.date,

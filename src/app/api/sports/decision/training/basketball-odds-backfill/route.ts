@@ -1,5 +1,5 @@
 import { apiError, apiSuccess, withApiHandler } from "@/app/api/sports/_utils";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 import {
   runBasketballOddsBackfill,
   type BasketballOddsBackfillRequest,
@@ -39,7 +39,7 @@ function responseStatus(result: BasketballOddsBackfillResult): number {
 
 export const POST = withApiHandler(async (request: Request) => {
   if (!isTrainingAdminAuthorized(request)) {
-    return apiError("Basketball odds backfill requires a valid x-oddspadi-admin-token.", 401);
+    return trainingUnauthorized();
   }
   const url = new URL(request.url);
   const body = (await request.json().catch(() => null)) as BackfillBody | null;

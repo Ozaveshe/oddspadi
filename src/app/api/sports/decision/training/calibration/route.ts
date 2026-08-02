@@ -1,7 +1,7 @@
 import { apiError, apiSuccess, withApiHandler } from "@/app/api/sports/_utils";
 import { getCalibrationSnapshot, runAndStoreCalibration } from "@/lib/sports/prediction/decisionCalibration";
 import { isSupportedSport } from "@/lib/sports/service";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -12,13 +12,15 @@ function parseSport(request: Request) {
 }
 
 export const GET = withApiHandler(async (request: Request) => {
+  const denied = requireTrainingAdmin(request);
+  if (denied) return denied;
   const sport = parseSport(request);
   if (!sport) return apiError("Invalid sport.");
   return apiSuccess(await getCalibrationSnapshot(sport));
 });
 
 export const POST = withApiHandler(async (request: Request) => {
-  if (!isTrainingAdminAuthorized(request)) return apiError("Calibration runs require a valid x-oddspadi-admin-token.", 401);
+  if (!isTrainingAdminAuthorized(request)) return trainingUnauthorized();
   const sport = parseSport(request);
   if (!sport) return apiError("Invalid sport.");
   const result = await runAndStoreCalibration(sport);

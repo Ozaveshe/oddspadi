@@ -17,11 +17,19 @@ describe("provider capacity route", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps GET as a no-network configuration preview", async () => {
+  it("refuses an anonymous read", async () => {
+    // The anonymous response named every provider and the env var holding its
+    // key, which is a map of both the suppliers and the secrets.
+    const response = await GET(new Request(endpoint));
+    expect(response.status).toBe(401);
+    expect(JSON.stringify(await response.json())).not.toContain("API_FOOTBALL_KEY");
+  });
+
+  it("keeps an authorised GET a no-network configuration preview", async () => {
     const fetchMock = vi.fn<typeof fetch>();
     vi.stubGlobal("fetch", fetchMock);
 
-    const response = await GET(new Request(endpoint));
+    const response = await GET(new Request(endpoint, { headers: { "x-oddspadi-admin-token": "admin-token" } }));
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -32,7 +40,12 @@ describe("provider capacity route", () => {
   });
 
   it("requires both explicit execution intent and the timing-safe admin credential", async () => {
-    expect((await POST(new Request(endpoint, { method: "POST" }))).status).toBe(400);
+    // Unauthorised first: a 400 about a missing `run=1` would confirm the
+    // route and teach its interface to a caller holding nothing.
+    expect((await POST(new Request(endpoint, { method: "POST" }))).status).toBe(401);
+    expect(
+      (await POST(new Request(endpoint, { method: "POST", headers: { "x-oddspadi-admin-token": "admin-token" } }))).status
+    ).toBe(400);
     expect(
       (
         await POST(

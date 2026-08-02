@@ -1,5 +1,5 @@
 import { apiError, apiSuccess, withApiHandler } from "@/app/api/sports/_utils";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 import {
   syncHistoricalFootballProvider,
   type ProviderName,
@@ -46,7 +46,7 @@ function statusFor(result: ProviderSyncResult): number {
 }
 
 export const POST = withApiHandler(async (request: Request) => {
-  if (!isTrainingAdminAuthorized(request)) return apiError("Provider sync requires a valid x-oddspadi-admin-token.", 401);
+  if (!isTrainingAdminAuthorized(request)) return trainingUnauthorized();
   const url = new URL(request.url);
   const body = (await request.json().catch(() => null)) as SyncBody | null;
   const provider = parseProvider(url.searchParams.get("provider") ?? body?.provider);

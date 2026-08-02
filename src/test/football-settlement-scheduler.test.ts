@@ -1,9 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET, POST } from "@/app/api/sports/decision/training/football-provider-live-settlement-label-receipt/route";
 import { runFootballSettlementSweep } from "../../netlify/functions/football-settlement-sweep";
 import { runFootballSettlementWorker } from "../../netlify/functions/football-settlement-worker-background";
 
 describe("football settlement scheduler", () => {
+  beforeEach(() => { process.env.ODDSPADI_ADMIN_TOKEN = "test-admin-token"; });
+  afterEach(() => { delete process.env.ODDSPADI_ADMIN_TOKEN; });
+
   it("requires server-only scheduler configuration", async () => {
     const fetchImpl = vi.fn();
     const response = await runFootballSettlementSweep({ siteUrl: null, adminToken: null, fetchImpl });
@@ -77,9 +80,18 @@ describe("football settlement scheduler", () => {
   });
 
   it("keeps GET read-only and requires admin authorization for POST writes", async () => {
+    // Anonymous first: the preview reaches the live provider, so it is an
+    // operator surface even though it writes nothing.
+    expect(
+      (await GET(
+        new Request("http://127.0.0.1:3025/api/sports/decision/training/football-provider-live-settlement-label-receipt")
+      )).status
+    ).toBe(401);
+
     const getResponse = await GET(
       new Request(
-        "http://127.0.0.1:3025/api/sports/decision/training/football-provider-live-settlement-label-receipt?run=1&dryRun=0"
+        "http://127.0.0.1:3025/api/sports/decision/training/football-provider-live-settlement-label-receipt?run=1&dryRun=0",
+        { headers: { "x-oddspadi-admin-token": "test-admin-token" } }
       )
     );
     expect(getResponse.status).toBe(405);

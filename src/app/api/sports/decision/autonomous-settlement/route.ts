@@ -3,7 +3,7 @@ import {
   runDecisionAutonomousSettlement,
   type AutonomousSettlementSport
 } from "@/lib/sports/prediction/decisionAutonomousSettlement";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 600;
@@ -19,6 +19,8 @@ function sportFrom(request: Request): AutonomousSettlementSport | null {
 }
 
 export async function GET(request: Request) {
+  const denied = requireTrainingAdmin(request);
+  if (denied) return denied;
   const sport = sportFrom(request);
   if (!sport) return apiError("sport must be football, basketball, or tennis.", 400);
   try {
@@ -29,7 +31,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!isTrainingAdminAuthorized(request)) return apiError("Autonomous settlement requires a valid x-oddspadi-admin-token.", 401);
+  if (!isTrainingAdminAuthorized(request)) return trainingUnauthorized();
   const sport = sportFrom(request);
   if (!sport) return apiError("sport must be football, basketball, or tennis.", 400);
   try {

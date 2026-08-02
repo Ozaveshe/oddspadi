@@ -19,8 +19,18 @@ describe("autonomous settlement route", () => {
     vi.clearAllMocks();
   });
 
-  it("keeps GET preview read-only", async () => {
+  it("refuses an anonymous preview", async () => {
     const response = await GET(new Request("http://127.0.0.1:3025/api/sports/decision/autonomous-settlement?limit=10"));
+    expect(response.status).toBe(401);
+    expect(runDecisionAutonomousSettlementMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps an authorised GET preview read-only", async () => {
+    const response = await GET(
+      new Request("http://127.0.0.1:3025/api/sports/decision/autonomous-settlement?limit=10", {
+        headers: { "x-oddspadi-admin-token": "admin-token" }
+      })
+    );
     expect(response.status).toBe(200);
     expect(runDecisionAutonomousSettlementMock).toHaveBeenCalledWith({ limit: 10, sport: "football" });
   });
@@ -50,7 +60,11 @@ describe("autonomous settlement route", () => {
   });
 
   it("routes basketball settlement independently", async () => {
-    const response = await GET(new Request("http://127.0.0.1:3025/api/sports/decision/autonomous-settlement?sport=basketball&limit=12"));
+    const response = await GET(
+      new Request("http://127.0.0.1:3025/api/sports/decision/autonomous-settlement?sport=basketball&limit=12", {
+        headers: { "x-oddspadi-admin-token": "admin-token" }
+      })
+    );
     expect(response.status).toBe(200);
     expect(runDecisionAutonomousSettlementMock).toHaveBeenCalledWith({ limit: 12, sport: "basketball" });
   });

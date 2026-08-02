@@ -1,5 +1,5 @@
 import { apiError, apiSuccess } from "@/app/api/sports/_utils";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 import type { LiveTrainingSport } from "@/lib/sports/training/multiSportLiveFeatureMaterializer";
 import { buildMultiSportLiveSettlementLabelReceipt } from "@/lib/sports/training/multiSportLiveSettlementLabelReceipt";
 
@@ -15,6 +15,8 @@ function options(request: Request): { sport: LiveTrainingSport | null; limit: nu
 }
 
 export async function GET(request: Request) {
+  const denied = requireTrainingAdmin(request);
+  if (denied) return denied;
   const { sport, limit } = options(request);
   if (!sport) return apiError("sport must be basketball or tennis.", 400);
   try {
@@ -25,9 +27,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!isTrainingAdminAuthorized(request)) return trainingUnauthorized();
   const { sport, limit } = options(request);
   if (!sport) return apiError("sport must be basketball or tennis.", 400);
-  if (!isTrainingAdminAuthorized(request)) return apiError("Settlement label writes require x-oddspadi-admin-token.", 401);
   try {
     const receipt = await buildMultiSportLiveSettlementLabelReceipt({ sport, limit, runRequested: true, adminAuthorized: true });
     return apiSuccess(receipt, { status: receipt.status === "failed" ? 502 : 200 });

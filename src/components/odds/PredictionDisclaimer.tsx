@@ -1,4 +1,5 @@
 import * as React from "react";
+import Link from "next/link";
 
 export function PredictionDisclaimer({ sport = "sport" }: { sport?: string }) {
   return (
@@ -14,7 +15,13 @@ export function ResponsibleUseNotice() {
     <div className="notice">
       <strong>Play it smart, padi:</strong> good analysis helps you decide better, but no analysis removes risk.
       OddsPadi presents probabilities rather than certainty, doesn&apos;t take bets, and doesn&apos;t hold your money. If you
-      bet, keep it fun — only stake what you can afford to lose.
+      bet, keep it fun — only stake what you can afford to lose.{" "}
+      {/* Every prediction surface renders this notice, so this is the one link
+          that reliably reaches support from wherever someone is reading. */}
+      <Link className="inline-link" href="/responsible-use">
+        Limits and support near you
+      </Link>
+      .
     </div>
   );
 }

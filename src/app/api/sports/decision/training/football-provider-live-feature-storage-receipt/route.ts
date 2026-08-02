@@ -5,7 +5,7 @@ import {
   footballProviderLiveRuntimeRequestFromUrl,
   getFootballProviderLiveRuntimeSnapshot
 } from "@/lib/sports/training/footballProviderLiveRuntime";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 600;
@@ -60,9 +60,13 @@ async function buildReceipt(request: Request, runRequested: boolean, adminAuthor
 }
 
 export async function GET(request: Request) {
+  // Read-only, but it exercises the live provider and returns the internal
+  // feature-storage receipt. Operator surface, not a public one.
+  const denied = requireTrainingAdmin(request);
+  if (denied) return denied;
   const url = new URL(request.url);
   if (isEnabled(url.searchParams.get("run")) || isWriteMode(url.searchParams.get("dryRun"))) {
-    return apiError("Live feature writes require POST with dryRun=0, run=1, and x-oddspadi-admin-token. GET is read-only preview.", 405);
+    return apiError("Live feature writes require POST with dryRun=0 and run=1. GET is read-only preview.", 405);
   }
   return buildReceipt(request, false, false);
 }
@@ -71,11 +75,9 @@ export async function POST(request: Request) {
   const url = new URL(request.url);
   const runRequested = isEnabled(url.searchParams.get("run"));
   const writeMode = isWriteMode(url.searchParams.get("dryRun"));
+  if (!isTrainingAdminAuthorized(request)) return trainingUnauthorized();
   if (!runRequested || !writeMode) {
     return apiError("Live feature writes require POST with dryRun=0 and run=1.", 400);
-  }
-  if (!isTrainingAdminAuthorized(request)) {
-    return apiError("Live feature writes require ODDSPADI_ADMIN_TOKEN and x-oddspadi-admin-token.", 401);
   }
   return buildReceipt(request, true, true);
 }

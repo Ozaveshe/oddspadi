@@ -52,7 +52,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteUrl}/season-outlooks`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
     { url: `${siteUrl}/privacy`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
     { url: `${siteUrl}/about`, lastModified: now, changeFrequency: "monthly", priority: 0.3 },
-    { url: `${siteUrl}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.2 }
+    { url: `${siteUrl}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${siteUrl}/responsible-use`, lastModified: now, changeFrequency: "yearly", priority: 0.3 }
   ];
 
   // Surface today's and tomorrow's fixtures so match pages are discoverable

@@ -1,9 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET, POST } from "@/app/api/sports/decision/training/multi-sport-live-settlement-label-receipt/route";
 import { runMultiSportSettlementSweep } from "../../netlify/functions/multi-sport-settlement-sweep";
 import { runMultiSportSettlementWorker } from "../../netlify/functions/multi-sport-settlement-worker-background";
 
 describe("multi-sport settlement scheduler", () => {
+  beforeEach(() => { process.env.ODDSPADI_ADMIN_TOKEN = "test-admin-token"; });
+  afterEach(() => { delete process.env.ODDSPADI_ADMIN_TOKEN; });
+
   it("queues the authenticated background worker", async () => {
     const fetchImpl = vi.fn(async (input: string | URL, init?: RequestInit) => {
       expect(new URL(String(input)).pathname).toBe("/.netlify/functions/multi-sport-settlement-worker-background");
@@ -53,9 +56,16 @@ describe("multi-sport settlement scheduler", () => {
   });
 
   it("keeps invalid sports out of previews and requires admin authorization for settlement writes", async () => {
+    expect(
+      (await GET(
+        new Request("http://127.0.0.1:3025/api/sports/decision/training/multi-sport-live-settlement-label-receipt?sport=basketball")
+      )).status
+    ).toBe(401);
+
     const getResponse = await GET(
       new Request(
-        "http://127.0.0.1:3025/api/sports/decision/training/multi-sport-live-settlement-label-receipt?sport=football"
+        "http://127.0.0.1:3025/api/sports/decision/training/multi-sport-live-settlement-label-receipt?sport=football",
+        { headers: { "x-oddspadi-admin-token": "test-admin-token" } }
       )
     );
     expect(getResponse.status).toBe(400);

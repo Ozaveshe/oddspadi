@@ -19,8 +19,21 @@ describe("autonomous decision cycle route", () => {
     delete process.env.ODDSPADI_ADMIN_TOKEN;
   });
 
-  it("keeps GET in preview mode", async () => {
-    const response = await GET(new Request("http://127.0.0.1:3025/api/sports/decision/autonomous-cycle?date=2026-08-21&limit=4"));
+  it("refuses an anonymous preview", async () => {
+    // The preview runs the whole cycle and returns the engine's internal
+    // deliberation. Read-only is not the same as public.
+    const response = await GET(new Request("http://127.0.0.1:3025/api/sports/decision/autonomous-cycle?date=2026-08-21"));
+
+    expect(response.status).toBe(401);
+    expect(runDecisionAutonomousCycleMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps an authorised GET in preview mode", async () => {
+    const response = await GET(
+      new Request("http://127.0.0.1:3025/api/sports/decision/autonomous-cycle?date=2026-08-21&limit=4", {
+        headers: { "x-oddspadi-admin-token": "test-admin-token" }
+      })
+    );
 
     expect(response.status).toBe(200);
     expect(runDecisionAutonomousCycleMock).toHaveBeenCalledWith(

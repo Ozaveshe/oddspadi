@@ -99,6 +99,18 @@ that. The product already enforces some of this in code:
   "winning slip" language in leg notes, and no staking-recommendation API.
 - Forecast and selection metrics are labelled as answering different questions.
 
-**Not yet audited:** every remaining user-visible string across the site for
-certainty language. That sweep is outstanding and is the largest open item from
-the responsible-language brief.
+- `src/test/consumer-copy-integrity.test.ts` bans ten classes of certainty
+  claim ("guaranteed win", "sure odds", "100% accurate", "risk-free", "can't
+  lose", "fixed match" and similar) across `src/app`, `src/components`,
+  `src/lib/editorial` and `src/lib/sports/tips`, skipping negated forms so
+  "not guaranteed" and "never promise sure odds" still read correctly.
+
+**Sweep result:** every user-visible string was checked. The product was
+already clean — the only two matches were a model prompt instructing against
+promising wins, and a disclaimer stating readings are *not* guaranteed. The
+ban test now holds that state.
+
+**Deliberately not banned:** *odds*, *stake*, *bet*, *accumulator*, *value*.
+These name real markets, and a product that cannot name what it analyses
+cannot explain it. The test asserts they remain present, so the ban cannot be
+widened into sanitising the product.
