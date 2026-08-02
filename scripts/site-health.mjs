@@ -254,17 +254,25 @@ await checkJson("/api/cron/enrich-fixture-identities?view=coverage", (payload) =
 }, "stored future-season identity and artwork coverage");
 await checkLatestRun("/api/cron/run-model-learning", 30 * 60 * 60_000, "serialized model learning receipt", ["completed"]);
 
-for (const sport of ["football", "basketball", "tennis"]) {
+// Operator-only reads. These endpoints used to answer anonymously, which is
+// how the shadow model's key and full unpublished evaluation were public.
+const operatorRead = adminToken ? { headers: { "x-oddspadi-admin-token": adminToken } } : null;
+if (!operatorRead) {
+  console.log("SKIP  governed learning receipts — set ODDSPADI_ADMIN_TOKEN to check them");
+}
+
+for (const sport of operatorRead ? ["football", "basketball", "tennis"] : []) {
   await checkJson(`/api/sports/decision/training/calibration?sport=${sport}`, (payload) => {
     if (!payload?.success || payload?.data?.status !== "ready") return "calibration snapshot is unavailable";
     const createdAt = Date.parse(payload.data.latestRun?.createdAt ?? "");
     if (!Number.isFinite(createdAt)) return "no stored calibration run";
     const ageMs = Date.now() - createdAt;
     return ageMs > 48 * 60 * 60_000 ? `latest calibration is ${(ageMs / 3_600_000).toFixed(1)}h old` : null;
-  }, `governed ${sport} learning receipt`);
+  }, `governed ${sport} learning receipt`, operatorRead);
 }
 
 await checkJson("/api/sports/decision/training/multi-sport-backtest-run?sport=all&minSample=30&limit=50000", (payload) => {
+  if (!operatorRead) return null;
   if (!payload?.success || !Array.isArray(payload?.data?.jobs)) return "runtime backtest preview is unavailable";
   const jobs = payload.data.jobs;
   const problems = [];
@@ -288,7 +296,7 @@ await checkJson("/api/sports/decision/training/multi-sport-backtest-run?sport=al
     if (backtest.sampleSize < 30) problems.push(`${sport}: runtime replay sample is ${backtest.sampleSize}`);
   }
   return problems.length ? problems.join("; ") : null;
-}, "weekly exact-runtime model evidence");
+}, "weekly exact-runtime model evidence", operatorRead ?? {});
 
 await checkJson(
   "/api/health",

@@ -1,5 +1,5 @@
 import { apiError, apiSuccess, withApiHandler } from "@/app/api/sports/_utils";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 import {
   previewStoredFootballRuntimeReplay,
   runAndStoreFootballRuntimeReplay,
@@ -97,8 +97,10 @@ function replaySummary(replay: FootballRuntimeReplayResult, stored?: { id: strin
 }
 
 export const GET = withApiHandler(async (request: Request) => {
+  const denied = requireTrainingAdmin(request);
+  if (denied) return denied;
   if (!isTrainingAdminAuthorized(request)) {
-    return apiError("Runtime replay execution requires a valid x-oddspadi-admin-token.", 401);
+    return trainingUnauthorized();
   }
   const input = options(request);
   const replay = await previewStoredFootballRuntimeReplay(input);
@@ -108,7 +110,7 @@ export const GET = withApiHandler(async (request: Request) => {
 
 export const POST = withApiHandler(async (request: Request) => {
   if (!isTrainingAdminAuthorized(request)) {
-    return apiError("Runtime replay storage requires a valid x-oddspadi-admin-token.", 401);
+    return trainingUnauthorized();
   }
   const input = options(request);
   const stored: BacktestRunStoreResult = await runAndStoreFootballRuntimeReplay(input);

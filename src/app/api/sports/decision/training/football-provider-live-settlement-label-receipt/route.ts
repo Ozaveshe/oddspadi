@@ -1,5 +1,5 @@
 import { apiError, apiSuccess } from "@/app/api/sports/_utils";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 import { buildFootballProviderLiveSettlementLabelReceipt } from "@/lib/sports/training/footballProviderLiveSettlementLabelReceipt";
 
 export const dynamic = "force-dynamic";
@@ -57,9 +57,11 @@ async function buildReceipt(request: Request, runRequested: boolean, adminAuthor
 }
 
 export async function GET(request: Request) {
+  const denied = requireTrainingAdmin(request);
+  if (denied) return denied;
   const url = new URL(request.url);
   if (isEnabled(url.searchParams.get("run")) || isWriteMode(url.searchParams.get("dryRun"))) {
-    return apiError("Settlement label writes require POST with dryRun=0, run=1, and x-oddspadi-admin-token. GET is read-only preview.", 405);
+    return apiError("Settlement label writes require POST with dryRun=0 and run=1. GET is read-only preview.", 405);
   }
 
   const receipt = await buildReceipt(request, false, false);
@@ -70,11 +72,9 @@ export async function POST(request: Request) {
   const url = new URL(request.url);
   const runRequested = isEnabled(url.searchParams.get("run"));
   const writeMode = isWriteMode(url.searchParams.get("dryRun"));
+  if (!isTrainingAdminAuthorized(request)) return trainingUnauthorized();
   if (!runRequested || !writeMode) {
     return apiError("Settlement label writes require POST with dryRun=0 and run=1.", 400);
-  }
-  if (!isTrainingAdminAuthorized(request)) {
-    return apiError("Settlement label writes require ODDSPADI_ADMIN_TOKEN and x-oddspadi-admin-token.", 401);
   }
 
   const receipt = await buildReceipt(request, true, true);

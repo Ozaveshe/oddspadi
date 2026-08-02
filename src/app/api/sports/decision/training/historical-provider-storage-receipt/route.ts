@@ -1,5 +1,5 @@
 import { apiError, apiSuccess, withApiHandler } from "@/app/api/sports/_utils";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 import type { HistoricalProviderBackfillRequest } from "@/lib/sports/training/historicalBackfill";
 import { observeHistoricalProviderStorageReceipt } from "@/lib/sports/training/historicalProviderStorageReceipt";
 import type { ProviderName } from "@/lib/sports/training/providerSync";
@@ -43,16 +43,18 @@ function statusCode(status: string): number {
 }
 
 export const GET = withApiHandler(async (request: Request) => {
+  const denied = requireTrainingAdmin(request);
+  if (denied) return denied;
   const url = new URL(request.url);
   const runRequested = enabled(url.searchParams.get("run"));
   const dryRun = bool(url.searchParams.get("dryRun"), true);
-  if (runRequested || !dryRun) return apiError("GET is preview-only. Use POST with a valid x-oddspadi-admin-token to execute provider work.", 405);
+  if (runRequested || !dryRun) return apiError("GET is preview-only. Use POST to execute provider work.", 405);
   const receipt = await observeHistoricalProviderStorageReceipt({ request: requestFromUrl(url), runRequested: false, adminAuthorized: false, env: process.env, origin: url.origin });
   return apiSuccess(receipt, { status: statusCode(receipt.status) });
 });
 
 export const POST = withApiHandler(async (request: Request) => {
-  if (!isTrainingAdminAuthorized(request)) return apiError("Execution requires a valid x-oddspadi-admin-token.", 401);
+  if (!isTrainingAdminAuthorized(request)) return trainingUnauthorized();
   const url = new URL(request.url);
   const receipt = await observeHistoricalProviderStorageReceipt({ request: requestFromUrl(url), runRequested: true, adminAuthorized: true, env: process.env, origin: url.origin });
   return apiSuccess(receipt, { status: statusCode(receipt.status) });

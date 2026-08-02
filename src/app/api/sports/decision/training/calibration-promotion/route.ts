@@ -5,7 +5,7 @@ import {
   revokeCalibrationPromotion
 } from "@/lib/sports/prediction/decisionCalibrationPromotion";
 import type { Sport } from "@/lib/sports/types";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 import { readCalibrationDriftReceipt } from "@/lib/sports/prediction/calibrationDriftGuard";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +24,8 @@ function boundedText(value: unknown, maximum: number): string | null {
 }
 
 export const GET = withApiHandler(async (request: Request) => {
+  const denied = requireTrainingAdmin(request);
+  if (denied) return denied;
   const sport = parseSport(new URL(request.url).searchParams.get("sport"));
   if (!sport) return apiError("Invalid sport.");
   const result = await readActiveCalibrationPromotion(sport);
@@ -33,7 +35,7 @@ export const GET = withApiHandler(async (request: Request) => {
 });
 
 export const POST = withApiHandler(async (request: Request) => {
-  if (!isTrainingAdminAuthorized(request)) return apiError("Calibration promotion requires a valid x-oddspadi-admin-token.", 401);
+  if (!isTrainingAdminAuthorized(request)) return trainingUnauthorized();
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return apiError("Calibration promotion body must be a JSON object.");
   const action = boundedText(body.action, 20);

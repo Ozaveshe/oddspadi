@@ -5,7 +5,14 @@ import { runPublicResultsBackfill } from "@/lib/sports/results/backfill";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-export const GET = withApiHandler(async () => apiSuccess(await runPublicResultsBackfill({ execute: false })));
+/**
+ * Unlike the other cron GETs this is not a status receipt — it dry-runs the
+ * whole backfill and returns what it would write. Operator-only.
+ */
+export const GET = withApiHandler(async (request: Request) => {
+  if (!isCronAuthorized(request)) return apiError("Unauthorized.", 401);
+  return apiSuccess(await runPublicResultsBackfill({ execute: false }));
+});
 
 export const POST = withApiHandler(async (request: Request) => {
   if (!isCronAuthorized(request)) return apiError("Cron authorization failed.", 401);

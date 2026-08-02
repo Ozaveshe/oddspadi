@@ -1,5 +1,5 @@
 import { apiError, apiSuccess, withApiHandler } from "@/app/api/sports/_utils";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 import { buildMultiSportBacktestRun, type MultiSportBacktestRun } from "@/lib/sports/training/multiSportBacktestRun";
 import { buildMultiSportCorpusPlan, type TrainingCorpusSport } from "@/lib/sports/training/multiSportCorpusPlan";
 import { getTrainingDataSnapshot } from "@/lib/sports/training/trainingRepository";
@@ -64,15 +64,17 @@ async function buildFromRequest(request: Request, runRequested: boolean, adminAu
 }
 
 export const GET = withApiHandler(async (request: Request) => {
+  const denied = requireTrainingAdmin(request);
+  if (denied) return denied;
   const runRequested = enabled(new URL(request.url).searchParams.get("run"));
-  if (runRequested) return apiError("GET is read-only. Use POST with a valid x-oddspadi-admin-token to execute a backtest.", 405);
+  if (runRequested) return apiError("GET is read-only. Use POST to execute a backtest.", 405);
   const built = await buildFromRequest(request, false, false);
   if (!built.ok) return apiError(built.error, 400);
   return apiSuccess(built.result, { status: statusCodeFor(built.result.status) });
 });
 
 export const POST = withApiHandler(async (request: Request) => {
-  if (!isTrainingAdminAuthorized(request)) return apiError("Backtest execution requires a valid x-oddspadi-admin-token.", 401);
+  if (!isTrainingAdminAuthorized(request)) return trainingUnauthorized();
   const built = await buildFromRequest(request, true, true);
   if (!built.ok) return apiError(built.error, 400);
   return apiSuccess(built.result, { status: statusCodeFor(built.result.status) });

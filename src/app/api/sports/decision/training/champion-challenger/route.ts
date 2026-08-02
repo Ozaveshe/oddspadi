@@ -3,7 +3,7 @@ import {
   previewChampionChallengerComparison,
   runAndStoreChampionChallengerComparison
 } from "@/lib/sports/prediction/championChallengerRepository";
-import { isTrainingAdminAuthorized } from "@/lib/sports/training/adminAuth";
+import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -21,6 +21,8 @@ function boundedText(value: unknown, maximum = 80): string | null {
 }
 
 export const GET = withApiHandler(async (request: Request) => {
+  const denied = requireTrainingAdmin(request);
+  if (denied) return denied;
   const url = new URL(request.url);
   const requestedSport = sport(url.searchParams.get("sport") ?? "football");
   const challengerCandidateId = boundedText(url.searchParams.get("challengerCandidateId"));
@@ -31,7 +33,7 @@ export const GET = withApiHandler(async (request: Request) => {
 });
 
 export const POST = withApiHandler(async (request: Request) => {
-  if (!isTrainingAdminAuthorized(request)) return apiError("Champion-challenger storage requires a valid x-oddspadi-admin-token.", 401);
+  if (!isTrainingAdminAuthorized(request)) return trainingUnauthorized();
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   if (!body) return apiError("Champion-challenger body must be a JSON object.");
   const requestedSport = sport(body.sport ?? "football");
