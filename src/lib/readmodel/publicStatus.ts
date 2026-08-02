@@ -29,8 +29,23 @@ export type OperationalProjectionHealth = {
   buildDurationMs: number | null;
   lastAttemptAt: string | null;
   lastError: string | null;
+  /** A past-dated scope the refresh no longer rebuilds. Age is expected. */
+  archived: boolean;
   overThreshold: boolean;
 };
+
+/**
+ * Date-scoped projections for past days are archives.
+ *
+ * The refresh builds today and tomorrow; anything earlier is a finished record
+ * that will only get older. Judging it against a live freshness threshold is a
+ * category error.
+ */
+function isArchivedScope(scope: string, now: number): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(scope)) return false;
+  const today = new Date(now).toISOString().slice(0, 10);
+  return scope < today;
+}
 
 export type OperationalStatus = {
   readable: boolean;
@@ -60,9 +75,10 @@ export async function readOperationalStatus(now = Date.now()): Promise<Operation
     const builtAt = row.built_at ? String(row.built_at) : null;
     const ageMs = builtAt ? Math.max(0, now - Date.parse(builtAt)) : null;
     const threshold = FRESHNESS_THRESHOLD_MS[row.name as ProjectionName] ?? 30 * 60_000;
+    const scope = String(row.scope ?? "");
     return {
       name: String(row.name),
-      scope: String(row.scope ?? ""),
+      scope,
       status: String(row.status),
       rowCount: Number(row.row_count) || 0,
       builtAt,
@@ -71,7 +87,12 @@ export async function readOperationalStatus(now = Date.now()): Promise<Operation
       buildDurationMs: row.build_duration_ms === null ? null : Number(row.build_duration_ms),
       lastAttemptAt: row.last_attempt_at ? String(row.last_attempt_at) : null,
       lastError: row.last_error ? String(row.last_error) : null,
-      overThreshold: ageMs !== null && ageMs > threshold
+      archived: isArchivedScope(scope, now),
+      // An archived scope is finished, not stale. Yesterday's slate is 36 hours
+      // old by lunchtime and always will be; letting that trip the freshness
+      // rule pinned the public status to "delayed" permanently, which is the
+      // fastest way to make a status signal worthless.
+      overThreshold: !isArchivedScope(scope, now) && ageMs !== null && ageMs > threshold
     };
   });
 
@@ -99,9 +120,12 @@ export function toPublicStatus(operational: OperationalStatus): PublicStatusPayl
     .sort();
   const lastUpdatedAt = built.length ? built[built.length - 1]! : null;
 
-  const anyFailing = operational.projections.some((projection) => projection.status === "refresh_failed");
-  const anyPartial = operational.projections.some((projection) => projection.status === "partial");
-  const anyStale = operational.projections.some((projection) => projection.overThreshold);
+  // Only live surfaces contribute to the status. An archived scope that ended
+  // its life mid-refresh is history, not an outage.
+  const live = operational.projections.filter((projection) => !projection.archived);
+  const anyFailing = live.some((projection) => projection.status === "refresh_failed");
+  const anyPartial = live.some((projection) => projection.status === "partial");
+  const anyStale = live.some((projection) => projection.overThreshold);
 
   // Ordered worst-first: a failing refresh is the strongest signal even when
   // most surfaces are fine, because it means one of them is silently ageing.

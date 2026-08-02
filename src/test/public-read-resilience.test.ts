@@ -154,6 +154,7 @@ describe("public status sanitisation", () => {
     buildDurationMs: 79,
     lastAttemptAt: "2026-08-01T11:55:00.000Z",
     lastError: null,
+    archived: false,
     overThreshold: false,
     ...overrides
   });
@@ -180,6 +181,50 @@ describe("public status sanitisation", () => {
       expect(serialised.toLowerCase()).not.toContain(secret.toLowerCase());
     }
     expect(payload.status).toBe("delayed");
+  });
+
+  it("does not let yesterday's archived slate pin the status to delayed", () => {
+    // Found in production: the status read "delayed" permanently because
+    // daily_fixture_slate/<yesterday> was 36 hours old. A past-dated scope is
+    // an archive the refresh no longer rebuilds, so its age is expected and
+    // must not describe the health of the live site.
+    const payload = toPublicStatus({
+      readable: true,
+      projections: [
+        projection({ scope: "2026-08-01", ageMs: 36 * 60 * 60_000, archived: true, overThreshold: false }),
+        projection({ scope: "2026-08-02", ageMs: 3 * 60_000 })
+      ],
+      jobs: {}
+    });
+    expect(payload.status).toBe("operational");
+  });
+
+  it("still reports a genuinely stale live surface", () => {
+    const payload = toPublicStatus({
+      readable: true,
+      projections: [projection({ scope: "2026-08-02", ageMs: 90 * 60_000, overThreshold: true })],
+      jobs: {}
+    });
+    expect(payload.status).toBe("delayed");
+  });
+
+  it("ignores a failed refresh on an archived scope but not on a live one", () => {
+    const archivedFailure = toPublicStatus({
+      readable: true,
+      projections: [
+        projection({ scope: "2026-08-01", status: "refresh_failed", archived: true }),
+        projection({ scope: "2026-08-02" })
+      ],
+      jobs: {}
+    });
+    expect(archivedFailure.status).toBe("operational");
+
+    const liveFailure = toPublicStatus({
+      readable: true,
+      projections: [projection({ scope: "2026-08-02", status: "refresh_failed" })],
+      jobs: {}
+    });
+    expect(liveFailure.status).toBe("delayed");
   });
 
   it("reports unavailable when operational data cannot be read", () => {
