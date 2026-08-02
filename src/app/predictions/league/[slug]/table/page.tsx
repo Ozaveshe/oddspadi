@@ -5,6 +5,8 @@ import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { LocalTimeText } from "@/components/odds/LocalTime";
 import { pageMetadata, siteUrl } from "@/lib/seo/pageMetadata";
+import { getCachedFootballLeagueTable } from "@/lib/sports/cachedLeagueTable";
+import { buildOfficialTable } from "@/lib/discovery/tableState";
 import {
   featuredFootballLeagueTables,
   currentFootballSeason,
@@ -12,7 +14,6 @@ import {
   resolveVerifiedLeagueTable,
   storedLeagueTable,
 } from "@/lib/sports/leagueStandings";
-import { sportsProvider } from "@/lib/sports/service";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 
 export const dynamic = "force-dynamic";
@@ -60,12 +61,29 @@ export default async function LeagueTablePage({ params }: Props) {
   const { table, displaySeason, historicalFallback } = await resolveVerifiedLeagueTable(
     slug,
     requestedSeason,
-    (leagueSlug, season) => sportsProvider.getFootballLeagueTable(leagueSlug, season),
+    (leagueSlug, season) => getCachedFootballLeagueTable(leagueSlug, season),
     storedLeagueTable,
     isFeaturedLeague
-      ? (leagueSlug, season) => sportsProvider.getFootballLeagueTable(leagueSlug, season)
+      ? (leagueSlug, season) => getCachedFootballLeagueTable(leagueSlug, season)
       : undefined,
   );
+  // A table where nobody has played is not a ranking. buildOfficialTable
+  // returns rows without positions in that case, so the page cannot print a
+  // 1st and a 20th derived purely from the sort order.
+  const officialTable = buildOfficialTable(
+    table ? table.rows.map((row) => ({
+      teamId: row.teamId,
+      teamName: row.teamName,
+      played: row.played,
+      won: row.wins,
+      drawn: row.draws,
+      lost: row.losses,
+      goalsFor: row.goalsFor,
+      goalsAgainst: row.goalsAgainst,
+      points: row.points
+    })) : null
+  );
+  const seasonNotStarted = officialTable.state === "season-not-started";
   const url = `${siteUrl}/predictions/league/${slug}/table`;
   const jsonLd = {
     "@context": "https://schema.org",
@@ -142,11 +160,11 @@ export default async function LeagueTablePage({ params }: Props) {
                 {table.rows.map((row) => (
                   <tr
                     key={row.teamId}
-                    className={row.position <= 4 ? "zone-top" : row.position > table.rows.length - 3 ? "zone-bottom" : undefined}
+                    className={seasonNotStarted ? undefined : row.position <= 4 ? "zone-top" : row.position > table.rows.length - 3 ? "zone-bottom" : undefined}
                   >
                     <td>
                       <span className="position-cell">
-                        {row.position}
+                        {seasonNotStarted ? "—" : row.position}
                         {row.movement ? (
                           <small className={row.movement > 0 ? "up" : "down"}>
                             {row.movement > 0 ? "▲" : "▼"}

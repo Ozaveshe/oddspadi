@@ -4,8 +4,7 @@ import Link from "next/link";
 import { CommunityFeed, type CommunityPost } from "@/components/community/CommunityFeed";
 import { FeedComposer, type ComposerMatch } from "@/components/community/FeedComposer";
 import { TipsterLeaderboard, type TipsterLeaderboardRow } from "@/components/community/TipsterLeaderboard";
-import { getCachedPredictionsPageData } from "@/lib/sports/prediction/cachedPublicReads";
-import { todayIsoDate } from "@/lib/sports/service";
+import { readProjectionList, todayScope } from "@/lib/readmodel/publicProjection";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 
@@ -39,11 +38,19 @@ export default async function CommunityPage({ searchParams }: PageProps) {
     const rows = (data as CommunityPost[] | null) ?? []; posts = rows.slice(0, 20); nextCursor = rows.length > 20 ? rows[19]?.created_at ?? null : null;
     leaderboard = (leaderboardData as TipsterLeaderboardRow[] | null) ?? [];
   }
-  let matches: ComposerMatch[] = [];
-  try {
-    const { rows } = await getCachedPredictionsPageData(todayIsoDate(), "football");
-    matches = rows.slice(0, 30).map(({ match }) => ({ id: match.id, label: `${match.homeTeam.name} vs ${match.awayTeam.name}`, kickoff: match.kickoffTime }));
-  } catch { matches = []; }
+  // The composer needs 30 fixture labels for a <select>. It used to get them
+  // from getCachedPredictionsPageData, which fans out to live providers on a
+  // cache miss — a multi-second third-party round trip on a page that is not
+  // about fixtures at all. The prepared daily slate is one indexed row.
+  const slate = await readProjectionList<{ fixtureId: string; homeTeam: string; awayTeam: string; kickoffAt: string }>(
+    "daily_fixture_slate",
+    todayScope()
+  ).catch(() => null);
+  const matches: ComposerMatch[] = (slate?.data ?? []).slice(0, 30).map((fixture) => ({
+    id: fixture.fixtureId,
+    label: `${fixture.homeTeam} vs ${fixture.awayTeam}`,
+    kickoff: fixture.kickoffAt
+  }));
 
   return <main id="main" className="container">
     <div className="page-heading"><span className="section-kicker">Community</span><h1>The <span className="accent">padi</span> feed</h1><p>Fan takes and matchday talk. These are community opinions — not OddsPadi analysis.</p></div>

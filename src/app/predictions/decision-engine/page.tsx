@@ -86,9 +86,9 @@ export default async function DecisionEnginePage() {
         <div className="metrics-grid engine-run-metrics">
           <div className="metric"><span className="metric-label">Fixtures analysed</span><span className="metric-value">{currentValue(product.summary.fixturesAnalysed)}</span></div>
           <div className="metric"><span className="metric-label">Value picks</span><span className="metric-value">{currentValue(product.summary.valuePicks)}</span></div>
-          <div className="metric"><span className="metric-label">Watchlist</span><span className="metric-value">{currentValue(product.summary.watchlist)}</span></div>
+          <div className="metric"><span className="metric-label">Watch</span><span className="metric-value">{currentValue(product.summary.watchlist)}</span></div>
           <div className="metric"><span className="metric-label">Stale decisions</span><span className="metric-value">{currentValue(stale)}</span></div>
-          <div className="metric"><span className="metric-label">Provider gaps</span><span className="metric-value">{currentValue(providerGaps)}</span></div>
+          <div className="metric"><span className="metric-label">Withheld / Unavailable</span><span className="metric-value">{currentValue(providerGaps)}</span></div>
           <div className="metric"><span className="metric-label">Odds snapshots</span><span className="metric-value">{currentValue(product.summary.oddsSnapshotsUsed)}</span></div>
         </div>
       </section>

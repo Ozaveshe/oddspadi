@@ -823,14 +823,45 @@ export async function readStoredSlate({
   includeSuspended?: boolean;
 }): Promise<SportsSlate | null> {
   if (!client) return null;
-  const { data, error } = await client
-    .from("op_fixtures")
-    .select("id,sport,provider,external_id,provider_fixture_id,league_external_id,league_name,season,kickoff_at,status,home_team_external_id,away_team_external_id,home_team_name,away_team_name,home_score,away_score,country,data_quality,last_synced_at,metadata")
-    .gte("kickoff_at", from)
-    .lt("kickoff_at", toExclusive)
-    .order("kickoff_at", { ascending: true })
-    .limit(1000);
-  if (error) throw new Error(`Stored fixture read failed: ${error.message}`);
+  // Keyset pagination, not a bare limit. A weekly window covers roughly 700
+  // fixtures a day, so `.limit(1000)` silently returned day one and part of
+  // day two and reported it as the whole week — no error, no warning, days
+  // three to seven simply absent. PostgREST caps each response at max-rows
+  // regardless of the limit, so the only correct read is page-by-page.
+  const STORED_FIXTURE_PAGE_SIZE = 1000;
+  const STORED_FIXTURE_MAX_PAGES = 12;
+  const collected: FixtureRow[] = [];
+  let cursor = from;
+  let truncated = false;
+  for (let page = 0; page < STORED_FIXTURE_MAX_PAGES; page += 1) {
+    const { data: pageRows, error: pageError } = await client
+      .from("op_fixtures")
+      .select("id,sport,provider,external_id,provider_fixture_id,league_external_id,league_name,season,kickoff_at,status,home_team_external_id,away_team_external_id,home_team_name,away_team_name,home_score,away_score,country,data_quality,last_synced_at,metadata")
+      .gte("kickoff_at", cursor)
+      .lt("kickoff_at", toExclusive)
+      .order("kickoff_at", { ascending: true })
+      .limit(STORED_FIXTURE_PAGE_SIZE);
+    if (pageError) throw new Error(`Stored fixture read failed: ${pageError.message}`);
+    const rows = (pageRows ?? []) as FixtureRow[];
+    // Kickoffs are not unique, so advancing the cursor to the last kickoff
+    // would re-read its whole group forever. De-duplicate by id instead.
+    const seen = new Set(collected.map((row) => row.id));
+    collected.push(...rows.filter((row) => !seen.has(row.id)));
+    if (rows.length < STORED_FIXTURE_PAGE_SIZE) break;
+    const nextCursor = text(rows[rows.length - 1]?.kickoff_at);
+    if (!nextCursor || nextCursor === cursor) {
+      // A full page sharing one kickoff cannot be paged past; stop and say so
+      // rather than loop.
+      truncated = true;
+      break;
+    }
+    cursor = nextCursor;
+    if (page === STORED_FIXTURE_MAX_PAGES - 1) truncated = true;
+  }
+  if (truncated) {
+    console.warn(`[sports-intelligence] stored fixture read hit its page ceiling for ${from}..${toExclusive}; the window may be incomplete.`);
+  }
+  const data = collected;
   const providerRows = ((data ?? []) as FixtureRow[]).filter((row) => {
     const metadata = record(row.metadata);
     return !String(row.provider).toLowerCase().includes("mock") && metadata.sourceKind !== "demo" && metadata.sourceKind !== "mock";

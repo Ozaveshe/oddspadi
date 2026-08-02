@@ -72,6 +72,15 @@ export function AccountIcon({ size = 22 }: IconProps) {
   return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base}><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.7-4 3-6 7-6s6.3 2 7 6"/></svg>;
 }
 
+export function CompassIcon({ size = 22 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m15.5 8.5-2.2 5-4.8 2 2.2-5 4.8-2Z" />
+    </svg>
+  );
+}
+
 export function MoreIcon({ size = 22 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...base}>

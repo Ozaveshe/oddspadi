@@ -25,7 +25,9 @@ export const metadata: Metadata = {
   }
 };
 
-type WeeklyRecap = { week_start: string; week_end: string; graded_count: number; wins: number; losses: number; pushes: number; voids: number; accuracy: number | string; roi: number | string; best_call: string | null };
+// accuracy/roi are nullable: a week with no decided official picks has no
+// accuracy, and rendering 0% would be a claim the ledger does not support.
+type WeeklyRecap = { week_start: string; week_end: string; graded_count: number; wins: number; losses: number; pushes: number; voids: number; accuracy: number | string | null; roi: number | string | null; best_call: string | null };
 async function weeklyRecaps(): Promise<WeeklyRecap[]> { const db = getSupabasePublicReadClient(); if (!db) return []; const { data, error } = await db.from("op_weekly_prediction_recaps").select("week_start,week_end,graded_count,wins,losses,pushes,voids,accuracy,roi,best_call").order("week_start", { ascending: false }).limit(6).abortSignal(publicReadAbortSignal()); return error ? [] : (data ?? []) as WeeklyRecap[]; }
 
 /**
@@ -61,7 +63,7 @@ export default async function NewsPage() {
           <Link className="text-link" href={`/news/${encodeURIComponent(lead.slug)}`}>Read the briefing →</Link>
         </article>
       </section>
-      <section className="section" aria-labelledby="weekly-recaps"><div className="section-title"><div><span className="section-kicker">No cherry-picking</span><h2 id="weekly-recaps">Weeks in review</h2></div></div>{recaps.length ? <div className="news-grid">{recaps.map((recap) => <article className="news-card" key={recap.week_start}><div className="story-meta"><span>Public record</span><time>{recap.week_start} – {recap.week_end}</time></div><h3>{recap.wins} hits, {recap.losses} misses</h3><p>{recap.graded_count} picks graded · {Math.round(Number(recap.accuracy) * 100)}% accuracy · {recap.pushes} pushes · {recap.voids} voids.</p>{recap.best_call ? <p className="small"><strong>Best call:</strong> {recap.best_call}</p> : null}<Link className="text-link" href="/predictions/history">Inspect every result →</Link></article>)}</div> : <div className="empty-state compact"><h3>First weekly recap is still forming</h3><p className="muted">We publish the complete week after settlement. No sample wins are substituted while the ledger is empty.</p></div>}</section>
+      <section className="section" aria-labelledby="weekly-recaps"><div className="section-title"><div><span className="section-kicker">No cherry-picking</span><h2 id="weekly-recaps">Weeks in review</h2></div></div>{recaps.length ? <div className="news-grid">{recaps.map((recap) => <article className="news-card" key={recap.week_start}><div className="story-meta"><span>Public record</span><time>{recap.week_start} – {recap.week_end}</time></div><h3>{recap.wins} hits, {recap.losses} misses</h3><p>{recap.graded_count} official picks graded · {recap.accuracy === null || recap.accuracy === undefined ? "no decided picks yet" : `${Math.round(Number(recap.accuracy) * 100)}% accuracy`} · {recap.pushes} pushes · {recap.voids} voids.</p>{recap.best_call ? <p className="small"><strong>Best call:</strong> {recap.best_call}</p> : null}<Link className="text-link" href="/predictions/history">Inspect every result →</Link></article>)}</div> : <div className="empty-state compact"><h3>First weekly recap is still forming</h3><p className="muted">We publish the complete week after settlement. No sample wins are substituted while the ledger is empty.</p></div>}</section>
       <section className="section" aria-labelledby="sports-desk">
         <div className="section-title"><div><span className="section-kicker">Sports Desk</span><h2 id="sports-desk">Previews, briefings and outlooks</h2></div></div>
         <div className="news-grid">

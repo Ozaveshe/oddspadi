@@ -43,7 +43,7 @@ describe("live OddsPadi product UI contract", () => {
     expect(slate).toContain("Evidence Queue");
     expect(slate).toContain("waitingForEvidence");
     expect(slate).toContain("Safer Leans");
-    expect(slate).toContain("Watchlist");
+    expect(slate).toContain("Watch");
     expect(slate).toContain("Analysed Abstentions");
     expect(slate).toContain("if (!product.sections.schedule.length)");
     expect(slate).toContain("fallbackBoard?.fixtures.length");
@@ -138,8 +138,10 @@ describe("live OddsPadi product UI contract", () => {
   it("uses the canonical public decision before any match audit detail", () => {
     const detail = source("src/app/predictions/[matchId]/page.tsx");
     expect(detail).toContain("const canonical = prediction.canonicalDecision");
-    expect(detail.indexOf("match-decision-hero")).toBeGreaterThan(-1);
-    expect(detail.indexOf("match-decision-hero")).toBeLessThan(detail.indexOf("Advanced engine audit"));
+    // v2.0: the resolved view leads the page and the decision section comes
+    // before any technical disclosure, which is now only the methodology fold.
+    expect(detail.indexOf("<MatchHeader")).toBeGreaterThan(-1);
+    expect(detail.indexOf("<DecisionSection")).toBeLessThan(detail.indexOf("<MethodologySection"));
     expect(detail).toContain("DecisionPriceSignal");
     expect(detail).toContain("ProbabilityDistribution");
     expect(detail).toContain("CalibrationReliabilityBand");
@@ -150,7 +152,9 @@ describe("live OddsPadi product UI contract", () => {
     expect(source("src/components/odds/DecisionPriceSignal.tsx")).toContain("decision-economic-confidence");
     expect(source("src/components/odds/DecisionPriceSignal.tsx")).toContain("decision-market-confidence");
     expect(detail).not.toContain("The short version");
-    expect(detail).toContain("Audit-only detail cannot override the canonical public decision above");
+    // The canonical decision is no longer defended by a disclaimer under an
+    // audit fold; it is the only decision the page renders.
+    expect(detail).toContain("<DecisionSection");
   });
 
   it("surfaces the deterministic probability path, factors, uncertainty, and calibration provenance", () => {
@@ -220,16 +224,33 @@ describe("live OddsPadi product UI contract", () => {
     expect(engine).not.toContain("AI Decision Engine");
   });
 
-  it("keeps the advanced engine audit collapsed by default", () => {
+  it("keeps operational machinery off the consumer match page", () => {
     const detail = source("src/app/predictions/[matchId]/page.tsx");
-    expect(detail).toMatch(/<details className="fold">\s*<summary>Advanced engine audit<\/summary>/);
+    // The audit fold used to render AgentReport: agent deliberation, decision
+    // committee, self-critique passes and reasoning graphs. Transparency is
+    // what the model concluded and when — not how the machine argued with
+    // itself — so the whole component is gone from this page.
+    expect(detail).not.toContain("<AgentReport");
+    expect(detail).not.toContain("Advanced engine audit");
+    // Technical disclosure survives, collapsed and small.
+    expect(detail).toContain("<MethodologySection");
+    const methodology = source("src/components/match/MatchIntelligenceSections.tsx");
+    expect(methodology).toContain("Methodology and technical details");
     expect(detail).not.toMatch(/<details[^>]*\sopen(?:=|\s|>)/);
   });
 
-  it("uses the requested desktop, mobile, and More navigation paths", () => {
+  it("keeps top-level navigation to the four product surfaces with deep links in the More sheet", () => {
     const navigation = source("src/components/site/SiteNav.tsx");
-    for (const label of ["Home", "Tips", "Predictions", "Live Scores", "Results", "News", "Engine"]) expect(navigation).toContain(`label: "${label}"`);
-    for (const label of ["Weekly", "Value Picks", "Tables", "Forums", "Slip Check"]) expect(navigation).toContain(`label: "${label}"`);
+    // The four surfaces — and nothing else — at the top level (v1.7 IA).
+    for (const label of ["Today", "Explore", "Track Record", "My Padi"]) expect(navigation).toContain(`label: "${label}"`);
+    // "News" survives only as a More-sheet deep link; the rest are gone entirely.
+    for (const banned of ['label: "Home"', 'label: "Tips"', 'label: "Predictions"', 'label: "Results"', 'label: "Engine"']) {
+      expect(navigation).not.toContain(banned);
+    }
+    // Every pre-consolidation destination stays one tap away in the More sheet.
+    for (const label of ["Live Scores", "Today's Tips", "All Predictions", "Weekly Radar", "League Tables", "News", "Forums", "Engine Status", "Bet Workspace"]) {
+      expect(navigation).toContain(`label: "${label}"`);
+    }
     expect(navigation).toContain('<span>More</span>');
     expect(navigation).toContain('aria-label="Quick navigation"');
   });

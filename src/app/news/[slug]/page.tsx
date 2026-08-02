@@ -6,6 +6,7 @@ import { LocalTime } from "@/components/odds/LocalTime";
 import { ShareBar } from "@/components/share/ShareBar";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 import { absoluteUrl, pageMetadata } from "@/lib/seo/pageMetadata";
+import { verifyEditorialClaim } from "@/lib/editorial/publicationClaims";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function StoryPage({ params }: { params: Promise<{ slug: string }> }) {
   const story = await getNewsStory((await params).slug);
   if (!story) notFound();
+  // Any record claim in this story is re-checked against the ledger now, not
+  // trusted from when the story was generated. A pick corrected or retracted
+  // since then produces a visible notice instead of a silently stale number.
+  const claimVerification = await verifyEditorialClaim(story.claim ?? null).catch(() => null);
   // URLs are derived from NEXT_PUBLIC_SITE_URL rather than hardcoded, so preview
   // and staging deploys do not publish structured data pointing at production.
   const storyUrl = absoluteUrl(`/news/${story.slug}`);
@@ -64,6 +69,13 @@ export default async function StoryPage({ params }: { params: Promise<{ slug: st
       <div className="story-meta"><span>{story.category}</span><span>{story.sport}</span><time dateTime={story.publishedAt}>{story.publishedAt.slice(0, 10)}</time><span>{story.readMinutes} min read</span>{story.revision ? <span>Revision {story.revision}</span> : null}</div>
       <h1>{story.title}</h1><p className="story-dek">{story.excerpt}</p>
       {story.sourceAsOf ? <p className="small muted">Engine evidence checked <LocalTime iso={story.sourceAsOf} variant="datetime" />.</p> : null}
+      {claimVerification?.notice ? (
+        <aside className={`story-correction ${claimVerification.status}`} role="note">
+          <strong>{claimVerification.status === "unverifiable" ? "Figures unverified" : "Correction notice"}</strong>
+          <p>{claimVerification.notice}</p>
+          <Link className="text-link" href="/track-record">Check the current record →</Link>
+        </aside>
+      ) : null}
       {story.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
       <ShareBar
         compact

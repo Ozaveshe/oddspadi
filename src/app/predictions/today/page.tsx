@@ -16,7 +16,26 @@ export const metadata: Metadata = {
   }
 };
 
+/**
+ * The live board is a fallback here, not the substance of the page, so it must
+ * never hold the render. `fetchLiveScoreBoard` fans out to three providers and
+ * can take ~6s on a cold cache; unguarded, that became this page's floor. The
+ * view already handles a null board.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise.catch(() => fallback),
+    new Promise<T>((resolve) => {
+      const timer = setTimeout(() => resolve(fallback), ms);
+      if (typeof timer === "object" && "unref" in timer) timer.unref();
+    })
+  ]);
+}
+
 export default async function DailyTipsPage() {
-  const [product, liveBoard] = await Promise.all([getCachedTodayTipsProduct(), fetchLiveScoreBoard()]);
+  const [product, liveBoard] = await Promise.all([
+    getCachedTodayTipsProduct(),
+    withTimeout(fetchLiveScoreBoard(), 2_500, null)
+  ]);
   return <DailyTipsPageView product={product} fallbackBoard={liveBoard} />;
 }

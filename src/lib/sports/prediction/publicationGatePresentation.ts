@@ -63,7 +63,7 @@ export function buildPublicationGatePresentation(
       state: "watch",
       label: "Analysis only — publication blocked",
       detail: blocker,
-      shortLabel: "Watchlist"
+      shortLabel: "Watch"
     };
   }
   // "Blocked" read as breakage. The state is the engine doing its job — a

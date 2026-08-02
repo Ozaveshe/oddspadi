@@ -32,7 +32,9 @@
     "ops:closing-lines": "node --env-file-if-exists=.env.local scripts/mark-closing-odds.mjs",
     "ops:outcomes": "node --env-file-if-exists=.env.local scripts/backfill-prediction-outcomes.mjs",
     "training:football-corpus": "vite-node --config scripts/vite-node.config.ts scripts/football-corpus-training.ts",
-    "ops:prune-odds": "node --env-file-if-exists=.env.local scripts/prune-stale-odds.mjs"
+    "ops:prune-odds": "node --env-file-if-exists=.env.local scripts/prune-stale-odds.mjs",
+    "ops:reconcile-ledger": "node --env-file-if-exists=.env.local scripts/reconcile-publication-ledger.mjs",
+    "ops:loadtest": "node --env-file-if-exists=.env.local scripts/load-test-public-reads.mjs"
   },
   "engines": {
     "node": "22.x"

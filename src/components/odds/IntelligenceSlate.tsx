@@ -11,31 +11,10 @@ import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { DecisionPriceSignal } from "@/components/odds/DecisionPriceSignal";
 import { marketPriorReceiptFor } from "@/lib/sports/prediction/marketPriorPresentation";
-
-const STATUS_LABELS: Record<SlatePublicStatus, string> = {
-  value_pick: "Value Pick",
-  lean: "Lean",
-  watchlist: "Watchlist",
-  no_clear_value: "No Pick",
-  preliminary: "Preliminary",
-  ready: "Ready",
-  stale: "Stale",
-  needs_data: "Needs data",
-  suspended: "Suspended",
-  settled: "Settled",
-  needs_review: "Needs review"
-};
+import { decisionStatusBadgeClass as badgeClass, DECISION_STATUS_LABELS as STATUS_LABELS } from "@/lib/product/vocabulary";
 
 const DAILY_DECISION_RENDER_LIMIT = 36;
 const DAILY_QUEUE_RENDER_LIMIT = 12;
-
-function badgeClass(status: SlatePublicStatus): string {
-  if (status === "value_pick") return "positive";
-  if (status === "lean" || status === "ready") return "medium";
-  if (status === "watchlist" || status === "preliminary") return "scheduled";
-  if (status === "settled") return "finished";
-  return "no-value";
-}
 
 function strongestModelLean(row: SlateFixture): string {
   const candidate = row.decisionSummary.bestLean
@@ -61,7 +40,7 @@ export function ProviderRunStrip({ slate }: { slate: SportsSlate }) {
         <div><dt>Odds used</dt><dd>{value(slate.summary.oddsSnapshotsUsed)}</dd></div>
         <div><dt>Value picks</dt><dd>{value(slate.summary.valuePicksPublished)}</dd></div>
         <div><dt>Leans</dt><dd>{value(slate.summary.leansPublished)}</dd></div>
-        <div><dt>Watchlist</dt><dd>{value(slate.summary.watchlist)}</dd></div>
+        <div><dt>Watch</dt><dd>{value(slate.summary.watchlist)}</dd></div>
         <div><dt>Last run</dt><dd>{lastRun?.finishedAt ? <LocalTime iso={lastRun.finishedAt} /> : readable ? "Not completed" : "Not read"}</dd></div>
       </dl>
       {slate.provider.errors.length ? <details><summary>{slate.provider.errors.length} provider or pipeline issue{slate.provider.errors.length === 1 ? "" : "s"}</summary><ul>{slate.provider.errors.map((error) => <li key={error}>{error}</li>)}</ul></details> : null}
@@ -185,7 +164,7 @@ export function DailyDecisionOverview({ product }: { product: DailyTipsProduct }
       </div>
       <nav className="daily-decision-jumps" aria-label={`Jump to ${product.day}'s decision groups`}>
         <a href="#daily-published"><strong>{published.length}</strong><span>Published</span></a>
-        <a href="#daily-watchlist"><strong>{product.sections.watchlist.length}</strong><span>Watchlist</span></a>
+        <a href="#daily-watchlist"><strong>{product.sections.watchlist.length}</strong><span>Watch</span></a>
         <a href="#daily-abstentions"><strong>{abstentions.length}</strong><span>Abstained</span></a>
         <a href="#daily-queue"><strong>{waitingForEvidence.length}</strong><span>Waiting</span></a>
       </nav>
@@ -252,7 +231,7 @@ export function DailyTipsSections({ product, fallbackBoard = null }: { product: 
     <>
       {product.sections.valuePicks.length ? <SlateSection id="daily-published" title="Top Value Picks" eyebrow="Positive edge, fully cleared" rows={product.sections.valuePicks} empty="No value pick clears every gate" asOf={product.generatedAt} /> : null}
       {product.sections.leans.length ? <SlateSection id={product.sections.valuePicks.length ? "daily-leans" : "daily-published"} title="Safer Leans" eyebrow="Model preference, not a value claim" rows={product.sections.leans} empty="No safer lean is ready" asOf={product.generatedAt} /> : null}
-      <SlateSection id="daily-watchlist" title="Watchlist" eyebrow="Possible value, still blocked" rows={product.sections.watchlist} empty="Nothing is waiting on a price or evidence refresh" asOf={product.generatedAt} />
+      <SlateSection id="daily-watchlist" title="Watch" eyebrow="Possible value, still blocked" rows={product.sections.watchlist} empty="Nothing is waiting on a price or evidence refresh" asOf={product.generatedAt} />
       {!published.length ? <section className="daily-no-publish" id="daily-published"><span className="badge scheduled">0 published</span><div><h2>No public pick was forced for {product.day}</h2><p>The engine reviewed {product.sections.allAnalysed.length} fixture{product.sections.allAnalysed.length === 1 ? "" : "s"}, but none cleared every value, confidence and risk gate. Watchlist readings remain analysis, not tips.</p></div></section> : null}
       <section className="section intelligence-section" id="daily-abstentions">
         <div className="section-title"><div><span className="section-kicker">Reviewed and withheld</span><h2>Analysed Abstentions</h2></div><span className="badge scheduled">{abstentions.length}</span></div>
@@ -323,7 +302,7 @@ export function WeeklyDecisionOverview({ product }: { product: WeeklyTipsProduct
       <dl className="weekly-decision-metrics">
         <div><dt>Reviewed</dt><dd>{reviewed.length}</dd></div>
         <div><dt>Published</dt><dd>{published.length}</dd></div>
-        <div><dt>Watchlist</dt><dd>{watchlist.length}</dd></div>
+        <div><dt>Watch</dt><dd>{watchlist.length}</dd></div>
         <div><dt>Waiting</dt><dd>{waiting}</dd></div>
       </dl>
     </section>
@@ -414,7 +393,7 @@ export function HomepageIntelligencePanels({ daily, weekly, yesterday }: { daily
         <div className="intelligence-home-metrics">
           <div><span>Best value</span><strong>{best?.decisionSummary.bestPublishedPick?.label ?? "No value published"}</strong></div>
           <div><span>Safer lean</span><strong>{lean?.decisionSummary.bestLean?.label ?? "No lean ready"}</strong></div>
-          <div><span>Watchlist</span><strong>{watch?.decisionSummary.bestWatchlistCandidate?.label ?? "Nothing held"}</strong></div>
+          <div><span>Watch</span><strong>{watch?.decisionSummary.bestWatchlistCandidate?.label ?? "Nothing held"}</strong></div>
           <div><span>Analysed</span><strong>{daily?.summary.fixturesAnalysed ?? 0} / {daily?.summary.fixturesFound ?? 0}</strong></div>
         </div>
       </article>
