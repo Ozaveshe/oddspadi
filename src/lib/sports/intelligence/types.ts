@@ -1,6 +1,22 @@
 import type { ConfidenceLevel, DecisionSummary, EvidenceQuality, OddsMarket, RiskLevel, Sport } from "@/lib/sports/types";
 
-export type CanonicalFixtureStatus = "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "suspended";
+/**
+ * `abandoned` is distinct from both `finished` and `cancelled`.
+ *
+ * Provider status ABD used to resolve three different ways: the live board
+ * counted it as finished, the canonical pipeline as cancelled. So an abandoned
+ * match read "FT" on one surface and "Cancelled" on the others — and since a
+ * finished match settles won/lost while an abandoned one voids, the two
+ * readings implied different money.
+ */
+export type CanonicalFixtureStatus =
+  | "scheduled"
+  | "live"
+  | "finished"
+  | "postponed"
+  | "cancelled"
+  | "abandoned"
+  | "suspended";
 
 export type CanonicalFixture = {
   fixtureId: string;

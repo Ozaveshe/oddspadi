@@ -9,7 +9,7 @@ type IngestSourceKind = "real" | "demo";
 // status silently defaulted to "finished", a suspended fixture entered the
 // training corpus as a completed match carrying the scoreline from the moment
 // play stopped.
-type FixtureStatus = "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "suspended";
+type FixtureStatus = "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "abandoned" | "suspended";
 type WinnerSelection = "home" | "draw" | "away";
 type NewsSignalType = "injury" | "lineup" | "weather" | "transfer" | "sentiment" | "tactical" | "other";
 type AvailabilityStatus = "available" | "doubtful" | "injured" | "suspended" | "unknown";

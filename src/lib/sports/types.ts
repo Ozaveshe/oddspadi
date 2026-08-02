@@ -1,6 +1,14 @@
 export type Sport = "football" | "basketball" | "tennis" | "cricket" | "rugby" | "handball" | "ice_hockey";
 
-export type MatchStatus = "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "suspended";
+/** Abandoned is terminal but not a result: it voids rather than grading. */
+export type MatchStatus =
+  | "scheduled"
+  | "live"
+  | "finished"
+  | "postponed"
+  | "cancelled"
+  | "abandoned"
+  | "suspended";
 export type ConfidenceLevel = "low" | "medium" | "high";
 export type RiskLevel = "low" | "medium" | "high";
 export type PredictionResult = "pending" | "won" | "lost" | "push" | "void";

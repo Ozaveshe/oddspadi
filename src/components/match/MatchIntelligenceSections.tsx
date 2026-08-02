@@ -3,6 +3,9 @@ import { LocalTime } from "@/components/odds/LocalTime";
 import { decisionStatusLabel } from "@/lib/product/vocabulary";
 import { settlementLabel } from "@/lib/product/vocabulary";
 import type { EvidenceDimension, MatchIntelligence } from "@/lib/match/matchIntelligence";
+import { SurfaceClaimMarker } from "@/components/system/SurfaceClaimMarker";
+import { claimFromMatchIntelligence } from "@/lib/domain/claimAdapters";
+import type { DataAvailability } from "@/lib/domain/states";
 
 /**
  * The consumer-facing sections of the match page.
@@ -16,7 +19,15 @@ const percent = (value: number | null | undefined) =>
   value === null || value === undefined || !Number.isFinite(value) ? "—" : `${Math.round(value * 100)}%`;
 const odds = (value: number) => value.toFixed(2);
 
-export function MatchHeader({ view }: { view: MatchIntelligence }) {
+export function MatchHeader({
+  view,
+  fixtureId,
+  availability
+}: {
+  view: MatchIntelligence;
+  fixtureId: string;
+  availability: DataAvailability;
+}) {
   const { header, phase } = view;
   return (
     <header className={`match-hero phase-${phase}`}>
@@ -47,6 +58,9 @@ export function MatchHeader({ view }: { view: MatchIntelligence }) {
           </span>
         ) : null}
       </div>
+      {/* The match page is the surface every other one links to, so its claim
+          is the one most worth being able to compare against the rest. */}
+      <SurfaceClaimMarker claim={claimFromMatchIntelligence(view, { fixtureId, availability })} />
     </header>
   );
 }
