@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { Config, Context } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 
@@ -6,6 +7,13 @@ declare const Netlify: { env: { get(name: string): string | undefined } };
 function clean(value: string | null | undefined): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+/** Constant-time compare: a length-or-content oracle is still an oracle. */
+function tokenMatches(expected: string, supplied: string): boolean {
+  const left = Buffer.from(expected);
+  const right = Buffer.from(supplied);
+  return left.length === right.length && timingSafeEqual(left, right);
 }
 
 /**
@@ -20,7 +28,20 @@ function clean(value: string | null | undefined): string | null {
  * read operational tables and write their own projection rows, so a
  * concurrent run is redundant rather than harmful.
  */
-export default async function projectionRefreshSweep(_request: Request, _context: Context): Promise<Response> {
+export default async function projectionRefreshSweep(request: Request, _context: Context): Promise<Response> {
+  // Netlify currently refuses external invocation of scheduled functions, but
+  // that is platform configuration, not a property of this code: convert the
+  // function to a non-scheduled one, or change hosts, and an anonymous caller
+  // could drive unbounded database work. Every other job in this directory
+  // checks the shared schedule token, and so does this one.
+  const scheduleToken = clean(Netlify.env.get("ODDSPADI_ADMIN_TOKEN"));
+  const supplied = clean(request.headers.get("x-oddspadi-schedule-token"));
+  if (!scheduleToken || !supplied || !tokenMatches(scheduleToken, supplied)) {
+    // Deliberately terse: an unauthenticated caller learns nothing about what
+    // this endpoint does, which job it drives, or why it refused.
+    return Response.json({ success: false }, { status: 401 });
+  }
+
   const url = clean(Netlify.env.get("SUPABASE_URL"));
   const key = clean(Netlify.env.get("SUPABASE_SECRET_KEY")) ?? clean(Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY"));
   if (!url || !key) {

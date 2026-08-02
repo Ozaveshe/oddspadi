@@ -2,11 +2,12 @@ import { apiError, apiSuccess, withApiHandler } from "@/app/api/sports/_utils";
 import { isCronAuthorized, parseRequestedSports } from "@/lib/sports/intelligence/auth";
 import { importFixtures } from "@/lib/sports/intelligence/pipeline";
 import { readLatestProviderRun } from "@/lib/sports/intelligence/repository";
+import { toPublicRunReceipt } from "@/lib/sports/intelligence/publicRunReceipt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-export const GET = withApiHandler(async () => apiSuccess(await readLatestProviderRun(["import-fixtures"])));
+export const GET = withApiHandler(async () => apiSuccess(toPublicRunReceipt(await readLatestProviderRun(["import-fixtures"]))));
 
 export const POST = withApiHandler(async (request: Request) => {
   if (!isCronAuthorized(request)) return apiError("Cron authorization failed.", 401);

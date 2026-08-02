@@ -1,12 +1,13 @@
 import { apiError, apiSuccess, withApiHandler } from "@/app/api/sports/_utils";
 import { isCronAuthorized } from "@/lib/sports/intelligence/auth";
 import { readLatestProviderRun } from "@/lib/sports/intelligence/repository";
+import { toPublicRunReceipt } from "@/lib/sports/intelligence/publicRunReceipt";
 import { OUTCOME_LEDGER_STAGES, runOutcomeLedgerSweep, type OutcomeLedgerStageName } from "@/lib/sports/results/outcomeLedger";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-export const GET = withApiHandler(async () => apiSuccess(await readLatestProviderRun(["outcome-ledger"])));
+export const GET = withApiHandler(async () => apiSuccess(toPublicRunReceipt(await readLatestProviderRun(["outcome-ledger"]))));
 
 /**
  * One SMALL slice per invocation when `stage` is given. Production proved the
