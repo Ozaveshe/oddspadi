@@ -77,9 +77,10 @@ export function SiteFooter() {
               Predictions are informed opinions and outcomes remain uncertain. Only stake what you can afford to lose.
             </span>
             <span className="muted">OddsPadi does not take bets or hold money.</span>
-            <a href="https://www.begambleaware.org" rel="noopener noreferrer" target="_blank">
-              Need help? BeGambleAware
-            </a>
+            {/* Was a single BeGambleAware link — a Great Britain service on a
+                product whose first audience is West Africa. The centre lists
+                support by region instead. */}
+            <Link href="/responsible-use">Need help? Responsible use &amp; support</Link>
             <Link href="/terms">Terms of use</Link>
             <Link href="/privacy">Privacy</Link>
             <AnalyticsPreferencesButton />
