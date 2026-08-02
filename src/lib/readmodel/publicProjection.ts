@@ -23,12 +23,30 @@ export type ProjectionName =
   | "performance_summary"
   | "latest_engine_status";
 
-/** How old a projection may be before the page must disclose its age. */
+/**
+ * How often the scheduled sweep rebuilds every projection.
+ *
+ * Every freshness threshold must exceed this. A threshold tighter than the
+ * cadence is guaranteed to fire between rebuilds, which is exactly what
+ * happened in production: the live board carried a 3-minute threshold against
+ * a 5-minute sweep, so /api/status reported "delayed" most of the time and the
+ * signal stopped meaning anything.
+ */
+export const PROJECTION_REFRESH_INTERVAL_MS = 5 * 60_000;
+
+/**
+ * How old a projection may be before the page must disclose its age.
+ *
+ * Each value allows at least one missed sweep on top of the cadence — Netlify
+ * schedules are approximate, and a single late tick is not a fault worth
+ * telling users about.
+ */
 export const FRESHNESS_THRESHOLD_MS: Record<ProjectionName, number> = {
   // Kickoffs and prices move; a slate older than 30 minutes is worth flagging.
   daily_fixture_slate: 30 * 60_000,
-  // In-play scores are the most time-sensitive thing on the site.
-  live_fixture_board: 3 * 60_000,
+  // The most time-sensitive surface, so the tightest threshold the cadence
+  // can actually support: two sweeps plus a margin.
+  live_fixture_board: 12 * 60_000,
   // The ledger changes only when a pick settles.
   performance_summary: 6 * 60 * 60_000,
   latest_engine_status: 30 * 60_000
