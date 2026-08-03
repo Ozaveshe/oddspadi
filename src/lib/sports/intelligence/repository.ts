@@ -866,7 +866,17 @@ export async function readStoredSlate({
     const metadata = record(row.metadata);
     return !String(row.provider).toLowerCase().includes("mock") && metadata.sourceKind !== "demo" && metadata.sourceKind !== "mock";
   });
-  const eligibleRows = includeSuspended ? providerRows : providerRows.filter((row) => row.status !== "suspended");
+  // `abandoned` belongs with `suspended` here, not on the board.
+  //
+  // Marking a fixture abandoned in the database was only half the job: the
+  // slate read still returned it, so a match that kicked off at 01:30 and was
+  // written off hours later kept rendering as a decision card with a live
+  // price all day. That is the thing the expiry sweep exists to stop.
+  //
+  // An abandoned fixture has no result to show and no kickoff to wait for. It
+  // settles as void and belongs in the record, not on a board of what is on.
+  const NON_BOARD_STATUSES = new Set(["suspended", "abandoned"]);
+  const eligibleRows = includeSuspended ? providerRows : providerRows.filter((row) => !NON_BOARD_STATUSES.has(String(row.status)));
   const staleRows = eligibleRows.filter((row) => !isStoredFixtureFresh(text(row.last_synced_at), now, maxFixtureAgeMs));
   const identityMaxAgeMs = Math.max(maxFixtureAgeMs, DEFAULT_STORED_FIXTURE_IDENTITY_MAX_AGE_MS);
   const expiredIdentityRows = eligibleRows.filter((row) => !isStoredFixtureFresh(text(row.last_synced_at), now, identityMaxAgeMs));

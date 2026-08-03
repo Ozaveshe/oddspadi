@@ -66,11 +66,16 @@ describe("live OddsPadi product UI contract", () => {
     expect(slate).toContain("DAILY_QUEUE_RENDER_LIMIT = 12");
   });
 
-  it("keeps anonymous tips routes read-only and shared-cache backed", () => {
+  it("keeps anonymous tips routes read-only and behind a cache", () => {
     const reads = source("src/lib/sports/tips/publicReads.ts");
-    expect(reads).toContain("getDailyTipsProduct({ day: \"today\", ensure: false })");
-    expect(reads).toContain("getDailyTipsProduct({ day: \"tomorrow\", ensure: false })");
-    expect(reads).toContain("getWeeklyTipsProduct({ ensure: false })");
+    // `ensure: false` is the invariant that matters: a public page read must
+    // never invoke live providers. The tips reads now cache the slate and
+    // rebuild the product, so these assert the slate calls rather than the
+    // product ones — the whole product was 36.6MB for a day and 62.5MB for a
+    // week, over Next's 2MB data-cache ceiling, and was therefore never cached.
+    expect(reads).toContain("getDailySlate({ ensure: false, dayOffset: 0 })");
+    expect(reads).toContain("getDailySlate({ ensure: false, dayOffset: 1 })");
+    expect(reads).toContain("getWeeklySlate({ ensure: false })");
     for (const path of [
       "src/app/predictions/page.tsx",
       "src/app/predictions/today/page.tsx",
