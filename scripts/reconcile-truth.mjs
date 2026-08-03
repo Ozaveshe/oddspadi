@@ -204,8 +204,15 @@ async function main() {
   const REFRESH_INTERVAL_MS = 5 * 60_000;
   const STALE_MULTIPLE = 3;
   const projections = await tryReadAll("op_public_projections", "name,scope,built_at,status,row_count,builder_version", { order: "name" });
+  // The orchestrator rebuilds today and tomorrow only, so a slate scoped to a
+  // past date is finished, not stale. Warning about it would fire every day
+  // forever, and a monitor that cries wolf daily gets muted — which is how the
+  // real staleness below went unnoticed in the first place.
+  const todayUtc = new Date(now).toISOString().slice(0, 10);
   for (const projection of projections ?? []) {
-    if (String(projection.scope).startsWith("archive")) continue;
+    const scope = String(projection.scope);
+    if (scope.startsWith("archive")) continue;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(scope) && scope < todayUtc) continue;
     const age = projection.built_at ? now - Date.parse(projection.built_at) : Number.POSITIVE_INFINITY;
     if (age > REFRESH_INTERVAL_MS * STALE_MULTIPLE) {
       report("stale-projection", "warning", `${projection.name}/${projection.scope}`, `Projection is ${Math.round(age / 60_000)} minutes old.`);

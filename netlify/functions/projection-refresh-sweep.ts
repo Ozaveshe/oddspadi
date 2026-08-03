@@ -1,6 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
 import type { Config, Context } from "@netlify/functions";
-import { createClient } from "@supabase/supabase-js";
 
 declare const Netlify: { env: { get(name: string): string | undefined } };
 
@@ -9,62 +7,48 @@ function clean(value: string | null | undefined): string | null {
   return normalized ? normalized : null;
 }
 
-/** Constant-time compare: a length-or-content oracle is still an oracle. */
-function tokenMatches(expected: string, supplied: string): boolean {
-  const left = Buffer.from(expected);
-  const right = Buffer.from(supplied);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
-
 /**
- * Rebuild every public projection on a schedule.
+ * The scheduled entrypoint. It holds no privileged logic and reaches nothing.
  *
- * This is the job that keeps expensive work off the request path. It calls one
- * database function that sequences the builders; each builder owns its own
- * error handling, so a single failing projection cannot stop the others and
- * cannot replace a good payload with an empty one.
+ * A previous version of this file did the refresh itself *and* required an
+ * inbound `x-oddspadi-schedule-token`. Netlify's scheduler invokes a scheduled
+ * function with no such header — there is no caller to set one — so every tick
+ * returned 401 before touching the database. Production stopped refreshing its
+ * projections at the minute that check deployed and stayed frozen for eight and
+ * a half hours, serving payloads built just before the deploy while the pages
+ * reading them had no way to know.
  *
- * Unlike the outcome ledger this needs no pipeline lock: the builders only
- * read operational tables and write their own projection rows, so a
- * concurrent run is redundant rather than harmful.
+ * The security intent behind that check was right and is kept: the work is
+ * authenticated in code, not merely shielded by the platform refusing external
+ * invocation. It just belongs on the worker, which has a real caller to
+ * authenticate. This half only forwards, exactly like the other ten sweeps.
  */
-export default async function projectionRefreshSweep(request: Request, _context: Context): Promise<Response> {
-  // Netlify currently refuses external invocation of scheduled functions, but
-  // that is platform configuration, not a property of this code: convert the
-  // function to a non-scheduled one, or change hosts, and an anonymous caller
-  // could drive unbounded database work. Every other job in this directory
-  // checks the shared schedule token, and so does this one.
-  const scheduleToken = clean(Netlify.env.get("ODDSPADI_ADMIN_TOKEN"));
-  const supplied = clean(request.headers.get("x-oddspadi-schedule-token"));
-  if (!scheduleToken || !supplied || !tokenMatches(scheduleToken, supplied)) {
-    // Deliberately terse: an unauthenticated caller learns nothing about what
-    // this endpoint does, which job it drives, or why it refused.
-    return Response.json({ success: false }, { status: 401 });
+export default async function projectionRefreshSweep(_request: Request, context: Context): Promise<Response> {
+  const siteUrl = clean(Netlify.env.get("ODDSPADI_SITE_URL")) ?? clean(context.site.url) ?? clean(Netlify.env.get("URL"));
+  const token = clean(Netlify.env.get("ODDSPADI_ADMIN_TOKEN"));
+  if (!siteUrl || !token) {
+    return Response.json(
+      { success: false, error: "Projection refresh scheduling needs the site URL and admin token." },
+      { status: 503 }
+    );
   }
 
-  const url = clean(Netlify.env.get("SUPABASE_URL"));
-  const key = clean(Netlify.env.get("SUPABASE_SECRET_KEY")) ?? clean(Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY"));
-  if (!url || !key) {
-    return Response.json({ success: false, error: "Projection refresh configuration is incomplete." }, { status: 503 });
+  try {
+    const response = await fetch(new URL("/.netlify/functions/projection-refresh-worker-background", siteUrl), {
+      method: "POST",
+      headers: { accept: "application/json", "x-oddspadi-schedule-token": token },
+      signal: AbortSignal.timeout(10_000)
+    });
+    return new Response(await response.text(), {
+      status: response.status,
+      headers: { "content-type": response.headers.get("content-type") ?? "application/json" }
+    });
+  } catch (error) {
+    return Response.json(
+      { success: false, error: error instanceof Error ? error.message : "Projection refresh worker request failed." },
+      { status: 504 }
+    );
   }
-  const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-  const startedAt = Date.now();
-  const { data, error } = await client.rpc("op_refresh_public_projections");
-  if (error) {
-    console.error(JSON.stringify({ event: "oddspadi-projection-refresh", success: false, error: error.message }));
-    return Response.json({ success: false, error: error.message }, { status: 502 });
-  }
-  const rows = (data ?? []) as Array<{ name: string; scope: string; status: string; row_count: number; build_duration_ms: number }>;
-  const failed = rows.filter((row) => row.status === "refresh_failed");
-  // Structured so the projection health of every surface is greppable in logs
-  // without opening a dashboard.
-  console.info(JSON.stringify({
-    event: "oddspadi-projection-refresh",
-    success: failed.length === 0,
-    totalMs: Date.now() - startedAt,
-    projections: rows.map((row) => ({ name: row.name, scope: row.scope, status: row.status, rows: row.row_count, ms: row.build_duration_ms }))
-  }));
-  return Response.json({ success: failed.length === 0, projections: rows }, { status: failed.length ? 207 : 200 });
 }
 
 // Every 5 minutes: fast enough that the live board stays inside its 3-minute

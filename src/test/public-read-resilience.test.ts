@@ -285,9 +285,21 @@ describe("architecture guarantees", () => {
   });
 
   it("refreshes projections on a schedule rather than during a request", async () => {
+    // The chain is sweep -> worker: the sweep carries the schedule and cannot
+    // authenticate (the platform scheduler sends no headers), the worker does
+    // the rebuild and verifies the token the sweep forwards. Asserting both
+    // halves rather than one file, because a sweep that no longer reaches its
+    // worker is exactly how production froze for eight and a half hours.
     const sweep = await readFile(join(process.cwd(), "netlify", "functions", "projection-refresh-sweep.ts"), "utf8");
-    expect(sweep).toContain("op_refresh_public_projections");
     expect(sweep).toMatch(/schedule:\s*"\*\/5 \* \* \* \*"/);
+    expect(sweep).toContain("projection-refresh-worker-background");
+    expect(sweep).toContain('"x-oddspadi-schedule-token": token');
+
+    const worker = await readFile(
+      join(process.cwd(), "netlify", "functions", "projection-refresh-worker-background.ts"),
+      "utf8"
+    );
+    expect(worker).toContain("op_refresh_public_projections");
   });
 });
 
