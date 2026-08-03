@@ -1,0 +1,381 @@
+Div,Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR,B365H,B365D,B365A
+E0,10/08/2018,,Man United,Leicester,2,1,H,1.57,3.9,7.5
+E0,11/08/2018,,Bournemouth,Cardiff,2,0,H,1.9,3.6,4.5
+E0,11/08/2018,,Fulham,Crystal Palace,0,2,A,2.5,3.4,3
+E0,11/08/2018,,Huddersfield,Chelsea,0,3,A,6.5,4,1.61
+E0,11/08/2018,,Newcastle,Tottenham,1,2,A,3.9,3.5,2.04
+E0,11/08/2018,,Watford,Brighton,2,0,H,2.37,3.2,3.4
+E0,11/08/2018,,Wolves,Everton,2,2,D,2.37,3.3,3.3
+E0,12/08/2018,,Arsenal,Man City,0,2,A,4,3.8,1.95
+E0,12/08/2018,,Liverpool,West Ham,4,0,H,1.25,6.5,14
+E0,12/08/2018,,Southampton,Burnley,0,0,D,1.85,3.5,5
+E0,18/08/2018,,Cardiff,Newcastle,0,0,D,3.25,3.1,2.54
+E0,18/08/2018,,Chelsea,Arsenal,3,2,H,1.8,4,4.5
+E0,18/08/2018,,Everton,Southampton,2,1,H,1.9,3.5,4.75
+E0,18/08/2018,,Leicester,Wolves,2,0,H,2.04,3.5,3.9
+E0,18/08/2018,,Tottenham,Fulham,3,1,H,1.28,6,12
+E0,18/08/2018,,West Ham,Bournemouth,1,2,A,2.1,3.6,3.7
+E0,19/08/2018,,Brighton,Man United,3,2,H,5.5,3.6,1.75
+E0,19/08/2018,,Burnley,Watford,1,3,A,2.45,3.1,3.4
+E0,19/08/2018,,Man City,Huddersfield,6,1,H,1.1,13,26
+E0,20/08/2018,,Crystal Palace,Liverpool,0,2,A,7,5,1.44
+E0,25/08/2018,,Arsenal,West Ham,3,1,H,1.36,5.5,9
+E0,25/08/2018,,Bournemouth,Everton,2,2,D,2.62,3.6,2.75
+E0,25/08/2018,,Huddersfield,Cardiff,0,0,D,2.37,3,3.7
+E0,25/08/2018,,Liverpool,Brighton,1,0,H,1.16,8.5,19
+E0,25/08/2018,,Southampton,Leicester,1,2,A,2.45,3.2,3.25
+E0,25/08/2018,,Wolves,Man City,1,1,D,11,6.5,1.28
+E0,26/08/2018,,Fulham,Burnley,4,2,H,2,3.4,4.33
+E0,26/08/2018,,Newcastle,Chelsea,1,2,A,5.75,4,1.66
+E0,26/08/2018,,Watford,Crystal Palace,2,1,H,2.6,3.25,3
+E0,27/08/2018,,Man United,Tottenham,0,3,A,2.62,3.3,2.9
+E0,01/09/2018,,Brighton,Fulham,2,2,D,2.3,3.4,3.4
+E0,01/09/2018,,Chelsea,Bournemouth,2,0,H,1.3,6,11
+E0,01/09/2018,,Crystal Palace,Southampton,0,2,A,2,3.5,4.2
+E0,01/09/2018,,Everton,Huddersfield,1,1,D,1.53,4.2,7.5
+E0,01/09/2018,,Leicester,Liverpool,1,2,A,7.5,5,1.44
+E0,01/09/2018,,Man City,Newcastle,2,1,H,1.11,11,26
+E0,01/09/2018,,West Ham,Wolves,0,1,A,2.6,3.4,2.87
+E0,02/09/2018,,Burnley,Man United,0,2,A,6,3.75,1.7
+E0,02/09/2018,,Cardiff,Arsenal,2,3,A,6.5,4.33,1.57
+E0,02/09/2018,,Watford,Tottenham,2,1,H,5.5,4.2,1.64
+E0,15/09/2018,,Bournemouth,Leicester,4,2,H,2.45,3.5,3
+E0,15/09/2018,,Chelsea,Cardiff,4,1,H,1.18,8,19
+E0,15/09/2018,,Huddersfield,Crystal Palace,0,1,A,3.3,3.1,2.5
+E0,15/09/2018,,Man City,Fulham,3,0,H,1.12,10,26
+E0,15/09/2018,,Newcastle,Arsenal,1,2,A,4.2,3.8,1.9
+E0,15/09/2018,,Tottenham,Liverpool,1,2,A,3,3.6,2.4
+E0,15/09/2018,,Watford,Man United,1,2,A,4.33,3.6,1.95
+E0,16/09/2018,,Everton,West Ham,1,3,A,2,3.75,3.9
+E0,16/09/2018,,Wolves,Burnley,1,0,H,1.75,3.6,5.75
+E0,17/09/2018,,Southampton,Brighton,2,2,D,2.1,3.4,3.9
+E0,22/09/2018,,Brighton,Tottenham,1,2,A,5,4,1.75
+E0,22/09/2018,,Burnley,Bournemouth,4,0,H,3,3.4,2.5
+E0,22/09/2018,,Cardiff,Man City,0,5,A,23,8,1.16
+E0,22/09/2018,,Crystal Palace,Newcastle,0,0,D,2.14,3.4,3.75
+E0,22/09/2018,,Fulham,Watford,1,1,D,2.54,3.5,2.9
+E0,22/09/2018,,Leicester,Huddersfield,3,1,H,1.61,4,6.5
+E0,22/09/2018,,Liverpool,Southampton,3,0,H,1.2,7.5,17
+E0,22/09/2018,,Man United,Wolves,1,1,D,1.57,4.33,6.5
+E0,23/09/2018,,Arsenal,Everton,2,0,H,1.44,5,7.5
+E0,23/09/2018,,West Ham,Chelsea,0,0,D,6,4.5,1.57
+E0,29/09/2018,,Arsenal,Watford,2,0,H,1.44,5.1,7
+E0,29/09/2018,,Chelsea,Liverpool,1,1,D,2.8,3.6,2.54
+E0,29/09/2018,,Everton,Fulham,3,0,H,1.75,4.2,4.75
+E0,29/09/2018,,Huddersfield,Tottenham,0,2,A,8.5,4.5,1.44
+E0,29/09/2018,,Man City,Brighton,2,0,H,1.1,12,34
+E0,29/09/2018,,Newcastle,Leicester,0,2,A,2.6,3.3,3
+E0,29/09/2018,,West Ham,Man United,3,1,H,4.5,3.8,1.85
+E0,29/09/2018,,Wolves,Southampton,2,0,H,1.8,3.6,5.25
+E0,30/09/2018,,Cardiff,Burnley,1,2,A,2.62,3,3.2
+E0,01/10/2018,,Bournemouth,Crystal Palace,2,1,H,2.25,3.5,3.4
+E0,05/10/2018,,Brighton,West Ham,1,0,H,2.7,3.3,2.87
+E0,06/10/2018,,Burnley,Huddersfield,1,1,D,2.14,3.1,4.2
+E0,06/10/2018,,Crystal Palace,Wolves,0,1,A,3,3.2,2.62
+E0,06/10/2018,,Leicester,Everton,1,2,A,2.2,3.4,3.6
+E0,06/10/2018,,Man United,Newcastle,3,2,H,1.44,4.5,9
+E0,06/10/2018,,Tottenham,Cardiff,1,0,H,1.22,7,15
+E0,06/10/2018,,Watford,Bournemouth,0,4,A,2.14,3.6,3.5
+E0,07/10/2018,,Fulham,Arsenal,1,5,A,5.25,4.33,1.66
+E0,07/10/2018,,Liverpool,Man City,0,0,D,2.54,3.6,2.8
+E0,07/10/2018,,Southampton,Chelsea,0,3,A,6,4.1,1.61
+E0,20/10/2018,,Bournemouth,Southampton,0,0,D,2.04,3.7,3.75
+E0,20/10/2018,,Cardiff,Fulham,4,2,H,2.5,3.5,2.95
+E0,20/10/2018,,Chelsea,Man United,2,2,D,1.75,3.8,5.25
+E0,20/10/2018,,Huddersfield,Liverpool,0,1,A,11,5.5,1.33
+E0,20/10/2018,,Man City,Burnley,5,0,H,1.08,13,34
+E0,20/10/2018,,Newcastle,Brighton,0,1,A,2.2,3.25,3.8
+E0,20/10/2018,,West Ham,Tottenham,0,1,A,4.1,3.9,1.9
+E0,20/10/2018,,Wolves,Watford,0,2,A,1.75,3.75,5.25
+E0,21/10/2018,,Everton,Crystal Palace,2,0,H,1.85,3.6,4.75
+E0,22/10/2018,,Arsenal,Leicester,3,1,H,1.53,4.5,6.5
+E0,27/10/2018,,Brighton,Wolves,1,0,H,3.2,3.2,2.5
+E0,27/10/2018,,Fulham,Bournemouth,0,3,A,2.9,3.75,2.4
+E0,27/10/2018,,Leicester,West Ham,1,1,D,2.1,3.5,3.8
+E0,27/10/2018,,Liverpool,Cardiff,4,1,H,1.11,11,26
+E0,27/10/2018,,Southampton,Newcastle,0,0,D,2.1,3.4,3.9
+E0,27/10/2018,,Watford,Huddersfield,3,0,H,1.75,3.75,5.25
+E0,28/10/2018,,Burnley,Chelsea,0,4,A,11,5,1.36
+E0,28/10/2018,,Crystal Palace,Arsenal,2,2,D,4.75,4.1,1.75
+E0,28/10/2018,,Man United,Everton,2,1,H,1.72,3.9,5.25
+E0,29/10/2018,,Tottenham,Man City,0,1,A,4.75,4.1,1.75
+E0,03/11/2018,,Arsenal,Liverpool,1,1,D,3.9,3.9,1.95
+E0,03/11/2018,,Bournemouth,Man United,1,2,A,3.6,3.7,2.1
+E0,03/11/2018,,Cardiff,Leicester,0,1,A,3.8,3.4,2.14
+E0,03/11/2018,,Everton,Brighton,3,1,H,1.61,4,6.5
+E0,03/11/2018,,Newcastle,Watford,1,0,H,2.75,3.25,2.8
+E0,03/11/2018,,West Ham,Burnley,4,2,H,1.75,3.75,5.25
+E0,03/11/2018,,Wolves,Tottenham,2,3,A,3.1,3.4,2.45
+E0,04/11/2018,,Chelsea,Crystal Palace,3,1,H,1.25,6.75,13
+E0,04/11/2018,,Man City,Southampton,6,1,H,1.11,11,29
+E0,05/11/2018,,Huddersfield,Fulham,1,0,H,2.3,3.5,3.3
+E0,10/11/2018,,Cardiff,Brighton,2,1,H,2.6,3.1,3.1
+E0,10/11/2018,,Crystal Palace,Tottenham,0,1,A,4.5,3.75,1.85
+E0,10/11/2018,,Huddersfield,West Ham,1,1,D,3.4,3.25,2.35
+E0,10/11/2018,,Leicester,Burnley,0,0,D,1.5,4.33,8
+E0,10/11/2018,,Newcastle,Bournemouth,2,1,H,2.9,3.4,2.6
+E0,10/11/2018,,Southampton,Watford,1,1,D,2.5,3.3,3.1
+E0,11/11/2018,,Arsenal,Wolves,1,1,D,1.66,4.2,5.25
+E0,11/11/2018,,Chelsea,Everton,0,0,D,1.4,5.25,8.5
+E0,11/11/2018,,Liverpool,Fulham,2,0,H,1.11,11,26
+E0,11/11/2018,,Man City,Man United,3,1,H,1.4,5.25,8.5
+E0,24/11/2018,,Brighton,Leicester,1,1,D,2.9,3.4,2.6
+E0,24/11/2018,,Everton,Cardiff,1,0,H,1.4,5,9
+E0,24/11/2018,,Fulham,Southampton,3,2,H,2.62,3.5,2.8
+E0,24/11/2018,,Man United,Crystal Palace,0,0,D,1.4,5.25,8
+E0,24/11/2018,,Tottenham,Chelsea,3,1,H,2.8,3.5,2.6
+E0,24/11/2018,,Watford,Liverpool,0,3,A,6.5,4.33,1.55
+E0,24/11/2018,,West Ham,Man City,0,4,A,13,6.5,1.25
+E0,25/11/2018,,Bournemouth,Arsenal,1,2,A,3.5,3.75,1.95
+E0,25/11/2018,,Wolves,Huddersfield,0,2,A,1.5,4.33,8
+E0,26/11/2018,,Burnley,Newcastle,1,2,A,2.9,3.2,2.75
+E0,30/11/2018,,Cardiff,Wolves,2,1,H,3.8,3.25,2.2
+E0,01/12/2018,,Crystal Palace,Burnley,2,0,H,1.61,3.9,6.5
+E0,01/12/2018,,Huddersfield,Brighton,1,2,A,2.5,3,3.4
+E0,01/12/2018,,Leicester,Watford,2,0,H,2.25,3.3,3.6
+E0,01/12/2018,,Man City,Bournemouth,3,1,H,1.11,11,26
+E0,01/12/2018,,Newcastle,West Ham,0,3,A,2.5,3.3,3.1
+E0,01/12/2018,,Southampton,Man United,2,2,D,4.33,3.6,1.95
+E0,02/12/2018,,Arsenal,Tottenham,4,2,H,2.62,3.6,2.75
+E0,02/12/2018,,Chelsea,Fulham,2,0,H,1.18,8,17
+E0,02/12/2018,,Liverpool,Everton,1,0,H,1.4,5,9
+E0,04/12/2018,,Bournemouth,Huddersfield,2,1,H,1.66,3.8,6
+E0,04/12/2018,,Brighton,Crystal Palace,3,1,H,3,3.1,2.7
+E0,04/12/2018,,Watford,Man City,1,2,A,11,6,1.3
+E0,04/12/2018,,West Ham,Cardiff,3,1,H,1.66,4,5.75
+E0,05/12/2018,,Burnley,Liverpool,1,3,A,14,5.75,1.28
+E0,05/12/2018,,Everton,Newcastle,1,1,D,1.6,4,6.5
+E0,05/12/2018,,Fulham,Leicester,1,1,D,3,3.5,2.45
+E0,05/12/2018,,Man United,Arsenal,2,2,D,2.45,3.5,3
+E0,05/12/2018,,Tottenham,Southampton,3,1,H,1.36,5.25,9.5
+E0,05/12/2018,,Wolves,Chelsea,2,1,H,5,3.75,1.8
+E0,08/12/2018,,Arsenal,Huddersfield,1,0,H,1.28,6,12
+E0,08/12/2018,,Bournemouth,Liverpool,0,4,A,5.75,4.5,1.6
+E0,08/12/2018,,Burnley,Brighton,1,0,H,2.9,3.2,2.75
+E0,08/12/2018,,Cardiff,Southampton,1,0,H,2.9,3.25,2.7
+E0,08/12/2018,,Chelsea,Man City,2,0,H,4,3.8,1.95
+E0,08/12/2018,,Leicester,Tottenham,0,2,A,3.8,3.75,2
+E0,08/12/2018,,Man United,Fulham,4,1,H,1.33,5.75,10
+E0,08/12/2018,,West Ham,Crystal Palace,3,2,H,2.3,3.4,3.4
+E0,09/12/2018,,Newcastle,Wolves,1,2,A,2.9,3.2,2.7
+E0,10/12/2018,,Everton,Watford,2,2,D,1.8,3.75,5
+E0,15/12/2018,,Crystal Palace,Leicester,1,0,H,2.62,3.2,3
+E0,15/12/2018,,Fulham,West Ham,0,2,A,2.9,3.6,2.5
+E0,15/12/2018,,Huddersfield,Newcastle,0,1,A,2.6,3.1,3.1
+E0,15/12/2018,,Man City,Everton,3,1,H,1.22,7.5,13
+E0,15/12/2018,,Tottenham,Burnley,1,0,H,1.18,8,19
+E0,15/12/2018,,Watford,Cardiff,3,2,H,1.64,3.9,6
+E0,15/12/2018,,Wolves,Bournemouth,2,0,H,1.95,3.6,4.33
+E0,16/12/2018,,Brighton,Chelsea,1,2,A,7.5,4.5,1.5
+E0,16/12/2018,,Liverpool,Man United,3,1,H,1.57,4.5,6
+E0,16/12/2018,,Southampton,Arsenal,3,2,H,4.1,3.9,1.9
+E0,21/12/2018,,Wolves,Liverpool,0,2,A,7,4,1.57
+E0,22/12/2018,,Arsenal,Burnley,3,1,H,1.25,6.5,15
+E0,22/12/2018,,Bournemouth,Brighton,2,0,H,1.9,3.7,4.33
+E0,22/12/2018,,Cardiff,Man United,1,5,A,6.5,4.2,1.57
+E0,22/12/2018,,Chelsea,Leicester,0,1,A,1.33,5.5,11
+E0,22/12/2018,,Huddersfield,Southampton,1,3,A,3.1,3.1,2.6
+E0,22/12/2018,,Man City,Crystal Palace,2,3,A,1.14,10,21
+E0,22/12/2018,,Newcastle,Fulham,0,0,D,2,3.6,4
+E0,22/12/2018,,West Ham,Watford,0,2,A,2.37,3.5,3.1
+E0,23/12/2018,,Everton,Tottenham,2,6,A,3.25,3.5,2.3
+E0,26/12/2018,,Brighton,Arsenal,1,1,D,5.25,3.9,1.72
+E0,26/12/2018,,Burnley,Everton,1,5,A,4.33,3.5,1.95
+E0,26/12/2018,,Crystal Palace,Cardiff,0,0,D,1.66,4,5.75
+E0,26/12/2018,,Fulham,Wolves,1,1,D,3.25,3.4,2.37
+E0,26/12/2018,,Leicester,Man City,2,1,H,9.5,5.25,1.36
+E0,26/12/2018,,Liverpool,Newcastle,4,0,H,1.16,8.5,19
+E0,26/12/2018,,Man United,Huddersfield,3,1,H,1.25,6.5,15
+E0,26/12/2018,,Tottenham,Bournemouth,5,0,H,1.36,5.5,9
+E0,26/12/2018,,Watford,Chelsea,1,2,A,5.25,3.8,1.75
+E0,27/12/2018,,Southampton,West Ham,1,2,A,2.3,3.5,3.3
+E0,29/12/2018,,Brighton,Everton,1,0,H,3.25,3.4,2.14
+E0,29/12/2018,,Fulham,Huddersfield,1,0,H,2,3.4,3.75
+E0,29/12/2018,,Leicester,Cardiff,0,1,A,1.55,4,6
+E0,29/12/2018,,Liverpool,Arsenal,5,1,H,1.5,4.5,5.75
+E0,29/12/2018,,Tottenham,Wolves,1,3,A,1.33,5,8.5
+E0,29/12/2018,,Watford,Newcastle,1,1,D,1.85,3.6,4
+E0,30/12/2018,,Burnley,West Ham,2,0,H,3.3,3.2,2.25
+E0,30/12/2018,,Crystal Palace,Chelsea,0,1,A,4.75,4,1.66
+E0,30/12/2018,,Man United,Bournemouth,4,1,H,1.33,4.75,10
+E0,30/12/2018,,Southampton,Man City,1,3,A,10,5.25,1.3
+E0,01/01/2019,,Arsenal,Fulham,4,1,H,1.33,5.75,9.5
+E0,01/01/2019,,Cardiff,Tottenham,0,3,A,7.5,4.5,1.5
+E0,01/01/2019,,Everton,Leicester,0,1,A,2,3.5,4.2
+E0,02/01/2019,,Bournemouth,Watford,3,3,D,2.6,3.6,2.75
+E0,02/01/2019,,Chelsea,Southampton,0,0,D,1.28,6.5,11
+E0,02/01/2019,,Huddersfield,Burnley,1,2,A,2.14,3.1,4.2
+E0,02/01/2019,,Newcastle,Man United,0,2,A,6,4.2,1.61
+E0,02/01/2019,,West Ham,Brighton,2,2,D,1.95,3.75,4
+E0,02/01/2019,,Wolves,Crystal Palace,0,2,A,2,3.4,4.33
+E0,03/01/2019,,Man City,Liverpool,2,1,H,2.04,3.8,3.6
+E0,12/01/2019,,Brighton,Liverpool,0,1,A,11,6,1.3
+E0,12/01/2019,,Burnley,Fulham,2,1,H,2.4,3.3,3.25
+E0,12/01/2019,,Cardiff,Huddersfield,0,0,D,2.25,3.25,3.6
+E0,12/01/2019,,Chelsea,Newcastle,2,1,H,1.22,7,15
+E0,12/01/2019,,Crystal Palace,Watford,1,2,A,2.25,3.4,3.5
+E0,12/01/2019,,Leicester,Southampton,1,2,A,1.95,3.5,4.33
+E0,12/01/2019,,West Ham,Arsenal,1,0,H,3.5,4,2.05
+E0,13/01/2019,,Everton,Bournemouth,2,0,H,1.75,4,4.8
+E0,13/01/2019,,Tottenham,Man United,0,1,A,2.05,3.7,3.75
+E0,14/01/2019,,Man City,Wolves,3,0,H,1.18,8,17
+E0,19/01/2019,,Arsenal,Chelsea,2,0,H,3.1,3.6,2.37
+E0,19/01/2019,,Bournemouth,West Ham,2,0,H,2.37,3.7,3
+E0,19/01/2019,,Liverpool,Crystal Palace,4,3,H,1.2,7.5,17
+E0,19/01/2019,,Man United,Brighton,2,1,H,1.3,5.75,12
+E0,19/01/2019,,Newcastle,Cardiff,3,0,H,1.95,3.4,4.5
+E0,19/01/2019,,Southampton,Everton,2,1,H,2.75,3.4,2.7
+E0,19/01/2019,,Watford,Burnley,0,0,D,1.65,4,5.75
+E0,19/01/2019,,Wolves,Leicester,4,3,H,2.37,3.2,3.4
+E0,20/01/2019,,Fulham,Tottenham,1,2,A,5.25,3.8,1.75
+E0,20/01/2019,,Huddersfield,Man City,0,3,A,21,8.5,1.16
+E0,29/01/2019,,Arsenal,Cardiff,2,1,H,1.22,7,15
+E0,29/01/2019,,Fulham,Brighton,4,2,H,2.37,3.3,3.3
+E0,29/01/2019,,Huddersfield,Everton,0,1,A,4,3.3,2.1
+E0,29/01/2019,,Man United,Burnley,2,2,D,1.28,6,12
+E0,29/01/2019,,Newcastle,Man City,2,1,H,19,8,1.18
+E0,29/01/2019,,Wolves,West Ham,3,0,H,2.1,3.5,3.75
+E0,30/01/2019,,Bournemouth,Chelsea,4,0,H,5.25,4.2,1.66
+E0,30/01/2019,,Liverpool,Leicester,1,1,D,1.22,7,15
+E0,30/01/2019,,Southampton,Crystal Palace,1,1,D,2.4,3.4,3.2
+E0,30/01/2019,,Tottenham,Watford,2,1,H,1.66,4,5.75
+E0,02/02/2019,,Brighton,Watford,0,0,D,2.55,3.3,3
+E0,02/02/2019,,Burnley,Southampton,1,1,D,2.55,3.5,2.87
+E0,02/02/2019,,Cardiff,Bournemouth,2,0,H,3.25,3.5,2.3
+E0,02/02/2019,,Chelsea,Huddersfield,5,0,H,1.2,7.5,19
+E0,02/02/2019,,Crystal Palace,Fulham,2,0,H,2.05,3.5,4
+E0,02/02/2019,,Everton,Wolves,1,3,A,2.37,3.4,3.25
+E0,02/02/2019,,Tottenham,Newcastle,1,0,H,1.44,4.5,9
+E0,03/02/2019,,Leicester,Man United,0,1,A,3.6,3.5,2.15
+E0,03/02/2019,,Man City,Arsenal,3,1,H,1.33,6,9
+E0,04/02/2019,,West Ham,Liverpool,1,1,D,8,5.25,1.4
+E0,06/02/2019,,Everton,Man City,0,2,A,10,6.25,1.3
+E0,09/02/2019,,Brighton,Burnley,1,3,A,2.05,3.3,4.2
+E0,09/02/2019,,Crystal Palace,West Ham,1,1,D,2.1,3.5,3.75
+E0,09/02/2019,,Fulham,Man United,0,3,A,5.5,4.4,1.61
+E0,09/02/2019,,Huddersfield,Arsenal,1,2,A,5.75,4.4,1.6
+E0,09/02/2019,,Liverpool,Bournemouth,3,0,H,1.22,7.5,14
+E0,09/02/2019,,Southampton,Cardiff,1,2,A,1.75,3.9,5
+E0,09/02/2019,,Watford,Everton,1,0,H,2.35,3.5,3.2
+E0,10/02/2019,,Man City,Chelsea,6,0,H,1.5,4.75,7
+E0,10/02/2019,,Tottenham,Leicester,3,1,H,1.7,3.9,5.5
+E0,11/02/2019,,Wolves,Newcastle,1,1,D,1.7,3.75,5.75
+E0,22/02/2019,,Cardiff,Watford,1,5,A,3.1,3.4,2.45
+E0,22/02/2019,,West Ham,Fulham,3,1,H,1.95,3.8,4
+E0,23/02/2019,,Bournemouth,Wolves,1,1,D,2.87,3.4,2.62
+E0,23/02/2019,,Burnley,Tottenham,2,1,H,5.75,3.8,1.7
+E0,23/02/2019,,Leicester,Crystal Palace,1,4,A,2.25,3.4,3.5
+E0,23/02/2019,,Newcastle,Huddersfield,2,0,H,1.83,3.5,5.25
+E0,24/02/2019,,Arsenal,Southampton,2,0,H,1.5,4.75,7
+E0,24/02/2019,,Man United,Liverpool,0,0,D,3.1,3.5,2.37
+E0,26/02/2019,,Cardiff,Everton,0,3,A,3.75,3.4,2.15
+E0,26/02/2019,,Huddersfield,Wolves,1,0,H,5,3.5,1.85
+E0,26/02/2019,,Leicester,Brighton,2,1,H,1.9,3.5,4.6
+E0,26/02/2019,,Newcastle,Burnley,2,0,H,2.15,3.3,3.9
+E0,27/02/2019,,Arsenal,Bournemouth,5,1,H,1.44,5,7.5
+E0,27/02/2019,,Chelsea,Tottenham,2,0,H,2.3,3.5,3.25
+E0,27/02/2019,,Crystal Palace,Man United,1,3,A,3.25,3.5,2.3
+E0,27/02/2019,,Liverpool,Watford,5,0,H,1.28,6,12
+E0,27/02/2019,,Man City,West Ham,1,0,H,1.16,9,19
+E0,27/02/2019,,Southampton,Fulham,2,0,H,1.9,3.7,4.33
+E0,02/03/2019,,Bournemouth,Man City,0,1,A,13,7.5,1.22
+E0,02/03/2019,,Brighton,Huddersfield,1,0,H,1.85,3.4,5.25
+E0,02/03/2019,,Burnley,Crystal Palace,1,3,A,2.8,3.3,2.75
+E0,02/03/2019,,Man United,Southampton,3,2,H,1.45,4.5,8.5
+E0,02/03/2019,,Tottenham,Arsenal,1,1,D,2.05,3.7,3.75
+E0,02/03/2019,,West Ham,Newcastle,2,0,H,2.15,3.5,3.6
+E0,02/03/2019,,Wolves,Cardiff,2,0,H,1.5,4.33,8
+E0,03/03/2019,,Everton,Liverpool,0,0,D,6,4.2,1.61
+E0,03/03/2019,,Fulham,Chelsea,1,2,A,6.5,4.5,1.53
+E0,03/03/2019,,Watford,Leicester,2,1,H,2.55,3.3,3
+E0,09/03/2019,,Cardiff,West Ham,2,0,H,3.6,3.5,2.15
+E0,09/03/2019,,Crystal Palace,Brighton,1,2,A,1.83,3.6,5
+E0,09/03/2019,,Huddersfield,Bournemouth,0,2,A,3.4,3.3,2.35
+E0,09/03/2019,,Leicester,Fulham,3,1,H,1.57,4.5,6
+E0,09/03/2019,,Man City,Watford,3,1,H,1.16,9,19
+E0,09/03/2019,,Newcastle,Everton,3,2,H,2.8,3.25,2.8
+E0,09/03/2019,,Southampton,Tottenham,2,1,H,4.5,3.8,1.85
+E0,10/03/2019,,Arsenal,Man United,2,0,H,2.4,3.6,3
+E0,10/03/2019,,Chelsea,Wolves,1,1,D,1.55,4.2,7
+E0,10/03/2019,,Liverpool,Burnley,4,2,H,1.16,8.5,21
+E0,16/03/2019,,Bournemouth,Newcastle,2,2,D,2.05,3.6,3.8
+E0,16/03/2019,,Burnley,Leicester,1,2,A,3.1,3.4,2.45
+E0,16/03/2019,,West Ham,Huddersfield,4,3,H,1.55,4.2,7
+E0,17/03/2019,,Everton,Chelsea,2,0,H,4,3.8,1.95
+E0,17/03/2019,,Fulham,Liverpool,1,2,A,12,7,1.25
+E0,30/03/2019,,Brighton,Southampton,0,1,A,2.55,3.2,3.1
+E0,30/03/2019,,Burnley,Wolves,2,0,H,3.2,3.25,2.45
+E0,30/03/2019,,Crystal Palace,Huddersfield,2,0,H,1.45,4.4,9
+E0,30/03/2019,,Fulham,Man City,0,2,A,21,11,1.12
+E0,30/03/2019,,Leicester,Bournemouth,2,0,H,1.85,3.8,4.5
+E0,30/03/2019,,Man United,Watford,2,1,H,1.44,4.75,8
+E0,30/03/2019,,West Ham,Everton,0,2,A,2.55,3.5,2.9
+E0,31/03/2019,,Cardiff,Chelsea,1,2,A,9,4.5,1.44
+E0,31/03/2019,,Liverpool,Tottenham,2,1,H,1.61,4.2,6
+E0,01/04/2019,,Arsenal,Newcastle,2,0,H,1.36,5.25,9.5
+E0,02/04/2019,,Watford,Fulham,4,1,H,1.72,4,5
+E0,02/04/2019,,Wolves,Man United,2,1,H,4,3.6,2
+E0,03/04/2019,,Chelsea,Brighton,3,0,H,1.25,6.5,15
+E0,03/04/2019,,Man City,Cardiff,2,0,H,1.06,17,34
+E0,03/04/2019,,Tottenham,Crystal Palace,2,0,H,1.45,5,7.5
+E0,05/04/2019,,Southampton,Liverpool,1,3,A,9,5,1.4
+E0,06/04/2019,,Bournemouth,Burnley,1,3,A,2.1,3.6,3.75
+E0,06/04/2019,,Huddersfield,Leicester,1,4,A,5,4,1.72
+E0,06/04/2019,,Newcastle,Crystal Palace,0,1,A,2.6,3.25,3
+E0,07/04/2019,,Everton,Arsenal,1,0,H,3,3.75,2.35
+E0,08/04/2019,,Chelsea,West Ham,2,0,H,1.33,5.75,9.5
+E0,12/04/2019,,Leicester,Newcastle,0,1,A,1.66,4,5.75
+E0,13/04/2019,,Brighton,Bournemouth,0,5,A,2.3,3.4,3.4
+E0,13/04/2019,,Burnley,Cardiff,2,0,H,1.9,3.6,4.5
+E0,13/04/2019,,Fulham,Everton,2,0,H,5,4,1.75
+E0,13/04/2019,,Man United,West Ham,2,1,H,1.4,5.25,8.5
+E0,13/04/2019,,Southampton,Wolves,3,1,H,2.6,3.25,3
+E0,13/04/2019,,Tottenham,Huddersfield,4,0,H,1.22,7,15
+E0,14/04/2019,,Crystal Palace,Man City,1,3,A,11,6,1.3
+E0,14/04/2019,,Liverpool,Chelsea,2,0,H,1.66,4.2,5.25
+E0,15/04/2019,,Watford,Arsenal,0,1,A,3.2,3.75,2.25
+E0,16/04/2019,,Brighton,Cardiff,0,2,A,2,3.3,4.5
+E0,20/04/2019,,Bournemouth,Fulham,0,1,A,1.65,4.4,5.25
+E0,20/04/2019,,Huddersfield,Watford,1,2,A,4.4,3.9,1.85
+E0,20/04/2019,,Man City,Tottenham,1,0,H,1.3,6,11
+E0,20/04/2019,,Newcastle,Southampton,3,1,H,2.55,3.2,3.1
+E0,20/04/2019,,West Ham,Leicester,2,2,D,3.3,3.5,2.3
+E0,20/04/2019,,Wolves,Brighton,0,0,D,1.75,3.5,6
+E0,21/04/2019,,Arsenal,Crystal Palace,2,3,A,1.53,4.6,6.5
+E0,21/04/2019,,Cardiff,Liverpool,0,2,A,17,7.5,1.2
+E0,21/04/2019,,Everton,Man United,4,0,H,3.25,3.5,2.3
+E0,22/04/2019,,Chelsea,Burnley,2,2,D,1.25,6.25,15
+E0,23/04/2019,,Tottenham,Brighton,1,0,H,1.28,6,13
+E0,23/04/2019,,Watford,Southampton,1,1,D,2.25,3.5,3.4
+E0,24/04/2019,,Man United,Man City,0,2,A,7.5,5,1.44
+E0,24/04/2019,,Wolves,Arsenal,3,1,H,2.9,3.5,2.55
+E0,26/04/2019,,Liverpool,Huddersfield,5,0,H,1.07,15,41
+E0,27/04/2019,,Brighton,Newcastle,1,1,D,2.3,3.2,3.6
+E0,27/04/2019,,Crystal Palace,Everton,0,0,D,2.62,3.5,2.8
+E0,27/04/2019,,Fulham,Cardiff,1,0,H,2.4,3.6,3
+E0,27/04/2019,,Southampton,Bournemouth,3,3,D,1.9,3.9,4.1
+E0,27/04/2019,,Tottenham,West Ham,0,1,A,1.4,5.5,7.5
+E0,27/04/2019,,Watford,Wolves,1,2,A,2.62,3.3,2.9
+E0,28/04/2019,,Burnley,Man City,0,1,A,23,9,1.14
+E0,28/04/2019,,Leicester,Arsenal,3,0,H,2.75,3.6,2.6
+E0,28/04/2019,,Man United,Chelsea,1,1,D,2.7,3.5,2.7
+E0,03/05/2019,,Everton,Burnley,2,0,H,1.66,4,5.75
+E0,04/05/2019,,Bournemouth,Tottenham,1,0,H,4,4,1.9
+E0,04/05/2019,,Cardiff,Crystal Palace,2,3,A,2.6,3.75,2.7
+E0,04/05/2019,,Newcastle,Liverpool,2,3,A,9.5,5.25,1.36
+E0,04/05/2019,,West Ham,Southampton,3,0,H,2.3,3.75,3.1
+E0,04/05/2019,,Wolves,Fulham,1,0,H,1.53,4.2,7.5
+E0,05/05/2019,,Arsenal,Brighton,1,1,D,1.4,5,9
+E0,05/05/2019,,Chelsea,Watford,3,0,H,1.4,5.25,8
+E0,05/05/2019,,Huddersfield,Man United,1,1,D,11,6,1.3
+E0,06/05/2019,,Man City,Leicester,1,0,H,1.12,8.5,17
+E0,12/05/2019,,Brighton,Man City,1,4,A,19,8.5,1.16
+E0,12/05/2019,,Burnley,Arsenal,1,3,A,3.25,3.8,2.2
+E0,12/05/2019,,Crystal Palace,Bournemouth,5,3,H,1.9,4.2,3.8
+E0,12/05/2019,,Fulham,Newcastle,0,4,A,2.5,3.6,2.9
+E0,12/05/2019,,Leicester,Chelsea,0,0,D,2.4,3.75,2.9
+E0,12/05/2019,,Liverpool,Wolves,2,0,H,1.3,6,11
+E0,12/05/2019,,Man United,Cardiff,0,2,A,1.28,6.5,11
+E0,12/05/2019,,Southampton,Huddersfield,1,1,D,1.44,4.75,8.5
+E0,12/05/2019,,Tottenham,Everton,2,2,D,2.2,3.5,3.5
+E0,12/05/2019,,Watford,West Ham,1,4,A,2.25,3.75,3.2
