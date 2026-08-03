@@ -160,6 +160,15 @@ export default async function DailyDoublePage() {
                     {profile.approvedForLiveInfluence
                       ? "This profile is approved."
                       : `This profile is ${profile.readiness.replace(/-/g, " ")} and has not been approved for live influence.`}
+                    {profile.valueClaimSupported ? null : (
+                      <>
+                        {" "}
+                        <em>
+                          Closing-line evidence is insufficient for this sport, so the edge shown is a model estimate
+                          and not a demonstrated advantage over the closing price.
+                        </em>
+                      </>
+                    )}
                   </li>
                 ))}
               </ul>

@@ -51,11 +51,20 @@ export type ProbabilityCalibrationBucket = CalibrationBucket & {
 };
 
 export type CalibrationPromotionReadiness = {
+  /** Calibration readiness only: can this model's probabilities be trusted? */
   status: "waiting-sample" | "waiting-quality" | "ready-shadow-review";
   minimumSettledSize: 30;
   eligibleForShadowReview: boolean;
   canInfluenceLive: false;
+  /** Reasons the probabilities are not yet trustworthy. */
   blockers: string[];
+  /**
+   * Whether closing-line evidence supports a *value* claim. Separate from
+   * calibration on purpose: a model can be well calibrated and still have no
+   * usable closing-line coverage, and neither fact should mask the other.
+   */
+  valueClaimSupported: boolean;
+  valueClaimBlockers: string[];
 };
 
 export type DecisionCalibrationMetrics = {
@@ -230,6 +239,34 @@ function brierSkillScore(brierScore: number | null, wins: number, settledSize: n
   return 1 - brierScore / referenceBrier;
 }
 
+/**
+ * Two questions, kept apart.
+ *
+ * "Is this model's 60% actually 60%?" is answered by sample size, Brier, skill,
+ * log loss and calibration error. "Do picks from this model beat the closing
+ * price?" is answered by closing-line value and the coverage behind it. They
+ * are different claims resting on different evidence, and the product already
+ * separates them everywhere else — the track record reports forecast metrics
+ * apart from selection metrics precisely so neither borrows the other's
+ * credibility.
+ *
+ * This gate merged them, and closing-line coverage below 0.80 blocked the whole
+ * profile. Football measured Brier 0.181, skill +0.179 and calibration error
+ * 0.031 on 481 settled outcomes — better than tennis on every calibration
+ * axis — and was held at `waiting-quality` by one line: coverage 0.319.
+ *
+ * That coverage figure is real and is not going to move on our side. The odds
+ * feed simply stops pricing several competitions near kickoff: UEFA Champions
+ * League fixtures carry a last quote a median of 37 hours before kick-off,
+ * Serie A 12 hours, Allsvenskan 9 — while Liga MX and MLS come in at 4 minutes.
+ * Widening the closing window to rescue the number would be the dishonest fix,
+ * because a price from 37 hours out is not a closing line whatever we label it.
+ *
+ * So the split: calibration readiness is decided on calibration evidence, and
+ * the value claim is reported separately and refused where the evidence is
+ * thin. A profile may be trusted to say how likely something is while still
+ * being unable to say it is good value.
+ */
 function promotionReadiness({
   settledSize,
   brierScore,
@@ -252,12 +289,21 @@ function promotionReadiness({
     brierScore === null ? "Brier score unavailable." : brierScore > 0.25 ? `Brier score ${brierScore} exceeds 0.25.` : "",
     brierSkill === null ? "Brier skill versus base rate unavailable." : brierSkill <= 0 ? `Brier skill ${brierSkill} does not beat the base rate.` : "",
     logLoss === null ? "Log loss unavailable." : logLoss > Math.log(2) ? `Log loss ${logLoss} is worse than an uninformed 0.5 forecast.` : "",
-    calibrationError === null ? "Expected calibration error unavailable." : calibrationError > 0.1 ? `Expected calibration error ${calibrationError} exceeds 0.10.` : "",
-    closingLineCoverage === null || closingLineCoverage < 0.8
-      ? `Closing-line coverage ${closingLineCoverage === null ? "unavailable" : closingLineCoverage} is below 0.80.`
-      : "",
-    averageClosingLineValue === null ? "Average closing-line value unavailable." : averageClosingLineValue <= 0 ? `Average CLV ${averageClosingLineValue} is not positive.` : ""
+    calibrationError === null ? "Expected calibration error unavailable." : calibrationError > 0.1 ? `Expected calibration error ${calibrationError} exceeds 0.10.` : ""
   ].filter(Boolean);
+
+  // Value evidence, judged on its own terms and never folded into the above.
+  const valueClaimBlockers = [
+    closingLineCoverage === null || closingLineCoverage < 0.8
+      ? `Closing-line coverage ${closingLineCoverage === null ? "unavailable" : closingLineCoverage} is below 0.80, so closing-line value cannot be assessed for this sport.`
+      : "",
+    averageClosingLineValue === null
+      ? "Average closing-line value unavailable."
+      : averageClosingLineValue <= 0
+        ? `Average CLV ${averageClosingLineValue} is not positive.`
+        : ""
+  ].filter(Boolean);
+
   const status: CalibrationPromotionReadiness["status"] = settledSize < 30
     ? "waiting-sample"
     : blockers.length
@@ -268,7 +314,9 @@ function promotionReadiness({
     minimumSettledSize: 30,
     eligibleForShadowReview: status === "ready-shadow-review",
     canInfluenceLive: false,
-    blockers
+    blockers,
+    valueClaimSupported: valueClaimBlockers.length === 0,
+    valueClaimBlockers
   };
 }
 
@@ -382,7 +430,17 @@ function readDiagnosticsEnvelope(value: unknown, base: {
           canInfluenceLive: false,
           blockers: Array.isArray(readinessRecord.blockers)
             ? readinessRecord.blockers.filter((item): item is string => typeof item === "string")
-            : fallbackReadiness.blockers
+            : fallbackReadiness.blockers,
+          // Rows stored before the split carry no value-claim fields. Recompute
+          // rather than defaulting to `true`: an old row must not be read as
+          // having demonstrated value it was never assessed for.
+          valueClaimSupported:
+            typeof readinessRecord.valueClaimSupported === "boolean"
+              ? readinessRecord.valueClaimSupported
+              : fallbackReadiness.valueClaimSupported,
+          valueClaimBlockers: Array.isArray(readinessRecord.valueClaimBlockers)
+            ? readinessRecord.valueClaimBlockers.filter((item): item is string => typeof item === "string")
+            : fallbackReadiness.valueClaimBlockers
         }
       : fallbackReadiness;
   return {

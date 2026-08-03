@@ -94,6 +94,15 @@ export type ProfileProvenance = {
   settledSize: number;
   /** True only when a profile has actually been promoted for live influence. */
   approvedForLiveInfluence: boolean;
+  /**
+   * Whether closing-line evidence supports a value claim for this sport.
+   *
+   * Separate from calibration: football is well calibrated and has 32% closing
+   * coverage, so it can say how likely an outcome is and cannot say the price
+   * is good. The page must not let the first imply the second.
+   */
+  valueClaimSupported: boolean;
+  valueClaimBlockers: string[];
 };
 
 export type CalibrationContext = {
@@ -181,7 +190,9 @@ export const getCachedCalibrationBands = unstable_cache(
         // `canInfluenceLive` is typed `false` throughout the calibration
         // module: nothing has ever been promoted. Reading it rather than
         // hardcoding keeps this honest if that ever changes.
-        approvedForLiveInfluence: profile.promotionReadiness.canInfluenceLive
+        approvedForLiveInfluence: profile.promotionReadiness.canInfluenceLive,
+        valueClaimSupported: profile.promotionReadiness.valueClaimSupported,
+        valueClaimBlockers: profile.promotionReadiness.valueClaimBlockers
       });
     }
     return { bandsBySport, provenance };
