@@ -38,7 +38,8 @@
     "ops:reconcile-truth": "node --env-file-if-exists=.env.local scripts/reconcile-truth.mjs",
     "docs:state-matrix": "vite-node --config scripts/vite-node.config.ts scripts/generate-state-matrix-doc.ts",
     "gate:release": "node scripts/release-gate.mjs",
-    "ops:publish": "node --env-file-if-exists=.env.local scripts/publish-picks.mjs"
+    "ops:publish": "node --env-file-if-exists=.env.local scripts/publish-picks.mjs",
+    "ops:run-publisher": "node --env-file-if-exists=.env.local scripts/run-publisher.mjs"
   },
   "engines": {
     "node": "22.x"
