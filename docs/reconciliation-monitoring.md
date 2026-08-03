@@ -44,23 +44,49 @@ it exists to catch.
 | `stale-projection` | warning | Older than 3× the refresh interval. |
 | `orphaned-community-fixture` | warning | A member tip against a fixture that does not exist. |
 
-## Measured state, 2026-08-02
+## Measured state, 2026-08-03
 
 Run against production. These are results, not targets.
 
 ```
-scope: 0 publications, 28,158 fixtures, 16 stories, 6 projections, 0 community tips
-6 findings, 0 critical — all stale-projection
+scope: 0 publications, 28,214 fixtures, 16 stories, 7 projections, 0 community tips
+no findings
 ```
-
-**Every projection was stale.** Five at 168 minutes, one at 2,431 minutes
-(≈40 hours), against a 5-minute refresh interval. The refresh sweep is not
-completing. This is a live operational finding, not a threshold artefact.
 
 **The official ledger holds zero publications.** Every ledger check therefore
 passed vacuously, and the job says so in as many words rather than printing a
 clean report. An empty finding list against an empty ledger is not evidence of
 correctness.
+
+### Incident: projections frozen for 8.5 hours
+
+The first run of this job, on 2026-08-02, reported every projection stale —
+five at 168 minutes and one at 2,431, against a 5-minute refresh interval. That
+was a real outage, found by this job on the day it was written.
+
+**Cause.** `projection-refresh-sweep` had been given an inbound
+`x-oddspadi-schedule-token` check so the job would be authenticated in code
+rather than merely shielded by the platform refusing external invocation. The
+intent was right; the placement was not. Netlify invokes a scheduled function
+with no headers — there is no caller to set one — so every tick returned 401
+before touching the database. Public projections stopped rebuilding at
+**15:16 UTC**, the minute that check deployed, and stayed frozen until the fix
+shipped at 00:14 UTC.
+
+**Fix.** Split into `projection-refresh-sweep` (schedule, forwards the token)
+and `projection-refresh-worker-background` (verifies it, runs the RPC) — the
+shape the other ten sweeps already used. Recovery confirmed within two refresh
+cycles: stale count 4 → 0.
+
+**Guards.** Two rules in `src/test/job-endpoint-security.test.ts`, either of
+which would have failed the original commit: a scheduled function may not gate
+on an inbound token, and may not reach the database.
+
+**One correction to this job itself.** It initially warned about a past-dated
+slate scope. The orchestrator rebuilds today and tomorrow only, so those rows
+are finished rather than stale. Left in, the warning would have fired every day
+forever — and a monitor that cries wolf daily is precisely how the real
+staleness went unnoticed in the first place.
 
 ## Acceptance targets vs measured reality
 
