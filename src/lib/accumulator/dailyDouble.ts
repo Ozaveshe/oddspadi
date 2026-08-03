@@ -156,10 +156,17 @@ export function buildDailyDouble(
     }
     for (let index = start; index < pool.length; index += 1) {
       const leg = pool[index];
-      // One leg per fixture and per competition before correlation analysis
-      // even runs: two selections from the same match are the same bet twice.
+      // One leg per fixture: two selections from the same match are the same
+      // bet twice, and no correlation model rescues that.
+      //
+      // Deliberately *not* one leg per competition. That rule sounded prudent
+      // and was quietly fatal: a tennis "competition" is a single tournament,
+      // so a whole day's slate sits under two or three of them and every pair
+      // was rejected before it could be scored — 76 eligible legs, zero slips.
+      // Two different matches in one tournament share no player and no result;
+      // the real risk is a shared participant, which is what
+      // `detectCorrelations` below exists to find.
       if (chosen.some((existing) => existing.fixtureId === leg.fixtureId)) continue;
-      if (chosen.some((existing) => existing.competition === leg.competition)) continue;
       walk(index + 1, [...chosen, leg]);
     }
   };

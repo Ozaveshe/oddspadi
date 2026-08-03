@@ -191,3 +191,28 @@ describe("the daily double", () => {
     expect(slip.notes[0]).toContain("No selection cleared");
   });
 });
+
+describe("legs may share a competition", () => {
+  it("pairs two matches from the same tournament", () => {
+    // The rule that looked prudent and was fatal. A tennis "competition" is one
+    // tournament, so a whole day's slate sits under two or three of them; a
+    // one-leg-per-competition cap rejected every pair before it was scored —
+    // 76 eligible legs in production, zero slips. Different matches in one
+    // tournament share no player and no result.
+    const sameTournament = [
+      candidate({ fixtureId: "m1", competition: "Montreal ATP", modelProbability: 0.72, decimalOdds: 1.5, noVigProbability: 0.64 }),
+      candidate({ fixtureId: "m2", competition: "Montreal ATP", modelProbability: 0.68, decimalOdds: 1.55, noVigProbability: 0.61 })
+    ];
+    const slip = buildDailyDouble(sameTournament, REAL_BANDS);
+    expect(slip.status).toBe("built");
+    expect(slip.legs).toHaveLength(2);
+  });
+
+  it("still refuses two legs from the same match", () => {
+    const sameMatch = [
+      candidate({ fixtureId: "x", competition: "Montreal ATP", selection: "home", modelProbability: 0.72, decimalOdds: 1.5, noVigProbability: 0.64 }),
+      candidate({ fixtureId: "x", competition: "Montreal ATP", selection: "over", market: "over_under_25", modelProbability: 0.7, decimalOdds: 1.5, noVigProbability: 0.63 })
+    ];
+    expect(buildDailyDouble(sameMatch, REAL_BANDS).status).toBe("insufficient-candidates");
+  });
+});
