@@ -4227,3 +4227,21 @@ a.score-row:active,
 .responsible-use-region li { display: grid; gap: 3px; }
 .responsible-use-region li a { font-weight: 700; color: var(--green-strong); text-decoration: underline; text-underline-offset: 4px; }
 .responsible-use-region li span { font-size: 12px; line-height: 1.55; }
+
+/* Daily double. Legs read as a list of claims, and the arithmetic block gives
+   the compounded margin the same visual weight as the price — it is the number
+   most likely to be skipped and the one that costs the most. */
+.daily-double-legs { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.daily-double-legs > li { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px 18px; background: var(--surface); display: grid; gap: 10px; }
+.daily-double-leg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.daily-double-leg-head strong { font: 800 20px/1 var(--font-ui); }
+.daily-double-legs dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 0; }
+.daily-double-legs dl div { display: grid; gap: 2px; }
+.daily-double-legs dt { font: 700 10px/1.6 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.daily-double-legs dd { margin: 0; font-weight: 700; }
+.daily-double-maths { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 4px 0 16px; }
+.daily-double-maths div { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.daily-double-maths span { font: 700 10px/1.6 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.daily-double-maths strong { font: 800 22px/1 var(--font-ui); }
+.daily-double-notes { display: grid; gap: 8px; padding-left: 20px; margin: 0; }
+.daily-double-notes li { line-height: 1.6; }

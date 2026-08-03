@@ -1,3 +1,4 @@
+import { assessBand, bandFor, consensusEdgePremium, type BandEvidence } from "@/lib/accumulator/calibratedBands";
 import type {
   BestPickResult,
   ConfidenceLevel,
@@ -111,6 +112,17 @@ export type BuildCanonicalDecisionOptions = {
   now?: Date;
   thresholds?: Partial<DecisionThresholdConfig>;
   allowMockFixtures?: boolean;
+  /**
+   * Measured accuracy per probability band, from the promoted calibration
+   * profile.
+   *
+   * When supplied, the publishable price range and the bookmaker-panel
+   * requirement are derived from it rather than from the fixed
+   * minimumOdds/maximumOdds/minimumConsensusBookmakers constants. When absent
+   * the old constants still apply, so a runtime with no profile keeps the
+   * conservative behaviour instead of silently opening up.
+   */
+  calibrationBands?: BandEvidence[];
 };
 
 function supportedSport(sport: Sport): Extract<Sport, "football" | "basketball" | "tennis"> {
@@ -280,7 +292,8 @@ function classifyAnalysis({
   now,
   engineAllowed,
   engineBlockers,
-  evidenceQuality: analysisEvidenceQuality
+  evidenceQuality: analysisEvidenceQuality,
+  calibrationBands
 }: {
   edge: ValueEdge;
   snapshot: DecisionOddsSnapshot | null;
@@ -293,6 +306,7 @@ function classifyAnalysis({
   engineAllowed: boolean;
   engineBlockers: string[];
   evidenceQuality: EvidenceQuality;
+  calibrationBands?: BandEvidence[];
 }): DecisionMarketAnalysis {
   const blockers: string[] = [];
   const capturedMs = finiteMs(snapshot?.capturedAt);
@@ -308,7 +322,22 @@ function classifyAnalysis({
   const expiresAt = effectiveExpiryMs === null ? null : new Date(effectiveExpiryMs).toISOString();
   const positiveEdge = edge.edge > 0;
   const confidencePasses = confidenceRank(edge.confidence) >= confidenceRank(thresholds.minimumConfidenceForValuePick);
-  const pricePasses = edge.odds >= thresholds.minimumOdds && edge.odds <= thresholds.maximumOdds;
+  /**
+   * The publishable price range, derived from measured accuracy when a
+   * calibration profile exists.
+   *
+   * A fixed 1.20-5.00 window asks the wrong question: what limits a claim is
+   * whether the model has been measured at that probability, not what the
+   * price happens to be. With bands present the bound moves on its own as a
+   * band earns sample, and closes again if one starts drifting. Without them
+   * the fixed window still applies, so an uncalibrated runtime stays
+   * conservative rather than opening up by default.
+   */
+  const band = calibrationBands?.length ? bandFor(edge.modelProbability, calibrationBands) : null;
+  const bandVerdict = band ? assessBand(band) : null;
+  const pricePasses = bandVerdict
+    ? bandVerdict.supported
+    : edge.odds >= thresholds.minimumOdds && edge.odds <= thresholds.maximumOdds;
   const leadPasses = kickoffLeadMinutes === null || kickoffLeadMinutes >= thresholds.minimumKickoffLeadMinutes;
   const bestPriceIntegrityRequired = edge.priceMethod === "best-price-per-selection-v1";
   const edgeBookmakerId = edge.bookmaker?.id?.trim() ?? "";
@@ -327,9 +356,21 @@ function classifyAnalysis({
     edgePriceMs === capturedMs &&
     edgePriceMs <= now.getTime() + 5 * MINUTE_MS
   );
+  /**
+   * A thin bookmaker panel raises the bar instead of closing the door.
+   *
+   * One book is less certain than five, and uncertainty is what an edge
+   * requirement is denominated in — so the panel prices the claim rather than
+   * refusing it. The hard floor of three books rejected 13.9% of decisions
+   * that were otherwise good enough to publish. A panel of zero still fails:
+   * with no price there is nothing to claim an edge against.
+   */
+  const bookmakerCount = Number.isInteger(edge.consensusBookmakerCount) ? edge.consensusBookmakerCount ?? 0 : 0;
+  const panelPremium = calibrationBands?.length ? consensusEdgePremium(bookmakerCount) : Number.NaN;
   const consensusDepthPasses = !bestPriceIntegrityRequired || (
-    Number.isInteger(edge.consensusBookmakerCount) &&
-    (edge.consensusBookmakerCount ?? 0) >= thresholds.minimumConsensusBookmakers
+    calibrationBands?.length
+      ? Number.isFinite(panelPremium) && edge.edge >= thresholds.minimumValueEdge + panelPremium
+      : Number.isInteger(edge.consensusBookmakerCount) && bookmakerCount >= thresholds.minimumConsensusBookmakers
   );
   const consensusDisagreementPasses = !bestPriceIntegrityRequired || (
     typeof edge.consensusMaxProbabilitySpread === "number" &&
@@ -379,9 +420,23 @@ function classifyAnalysis({
   if (!priceMethodPasses) blockers.push("best-price method is missing or mismatched on the canonical odds snapshot");
   if (!sourcePasses) blockers.push("best-price source does not match the canonical bookmaker snapshot");
   if (!timestampPasses) blockers.push("best-price timestamp is missing, mismatched, or ahead of the decision clock");
-  if (!consensusDepthPasses) blockers.push(`best-price comparison needs at least ${thresholds.minimumConsensusBookmakers} independent bookmakers`);
+  if (!consensusDepthPasses) {
+    blockers.push(
+      calibrationBands?.length
+        ? bookmakerCount === 0
+          ? "no bookmaker price supports this selection"
+          : `a ${bookmakerCount}-bookmaker panel needs ${Math.round((thresholds.minimumValueEdge + panelPremium) * 100)}% edge; this selection shows ${Math.round(edge.edge * 100)}%`
+        : `best-price comparison needs at least ${thresholds.minimumConsensusBookmakers} independent bookmakers`
+    );
+  }
   if (!consensusDisagreementPasses) blockers.push(`cross-book probability disagreement exceeds ${Math.round(thresholds.maximumConsensusProbabilitySpread * 100)}%`);
-  if (!pricePasses) blockers.push("decimal odds are outside the publication range");
+  if (!pricePasses) {
+    blockers.push(
+      bandVerdict
+        ? `this probability band is not publishable yet: ${bandVerdict.reason}`
+        : "decimal odds are outside the publication range"
+    );
+  }
   if (economicConfidenceUnavailable && uncalibratedEdgeImplausible) {
     blockers.push(
       `raw edge ${Math.round(edge.edge * 100)}% exceeds the ${Math.round(thresholds.uncalibratedMaximumValueEdge * 100)}% plausibility ceiling for an uncalibrated runtime; treated as a model fault, not value`
@@ -545,7 +600,8 @@ export function buildCanonicalDecision(
         now,
         engineAllowed: engineGate.allowed,
         engineBlockers: engineGate.blockers,
-        evidenceQuality: analysisEvidenceQuality
+        evidenceQuality: analysisEvidenceQuality,
+        calibrationBands: options.calibrationBands
       })
     ),
     thresholds.maxMarketsPerFixture

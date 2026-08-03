@@ -8,6 +8,7 @@ const exploreLinks = [
   { href: "/live-scores", label: "Live scores" },
   { href: "/predictions", label: "Today's predictions" },
   { href: "/predictions/value-picks", label: "Value picks" },
+  { href: "/daily-double", label: "The daily double" },
   { href: "/predictions/history", label: "Results & accuracy" },
   { href: "/predictions/league/premier-league/table", label: "League tables" },
   { href: "/season-outlooks", label: "Season outlooks" },
