@@ -36,7 +36,7 @@ export type SettleablePublicPick = {
 export type SettlementFixture = {
   fixtureId: string;
   providerBacked: boolean;
-  status: "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "suspended";
+  status: "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "abandoned" | "suspended";
   homeScore: number | null;
   awayScore: number | null;
   statusDetail: string | null;
@@ -117,6 +117,26 @@ export function resolvePublicPickSettlement(
       ? manualReview(pick, "Provider result is still missing more than 24 hours after kickoff.")
       : pending(pick, "provider_missing", "Provider fixture/result is temporarily unavailable.");
   }
+  // Abandoned settles the same way as cancelled — void, stake returned — but
+  // it reaches here as its own status now rather than being folded into
+  // "cancelled" upstream, so it must be graded explicitly. Without this branch
+  // an abandoned match would fall through to the finished-score path and grade
+  // a partial scoreline as a result.
+  if (fixture.status === "abandoned") {
+    return {
+      status: "void",
+      settlementStatus: "void",
+      result: "void",
+      settlementReason: "Provider marked the match abandoned; the public pick is void.",
+      settledAt: now.toISOString(),
+      finalStatusObservedAt: pick.finalStatusObservedAt ?? fixture.observedAt,
+      // An abandoned match has a partial scoreline. Recording it as the final
+      // score would present an incomplete game as a completed one.
+      finalScore: null,
+      closingLineValue: null
+    };
+  }
+
   if (fixture.status === "cancelled") {
     return {
       status: "void",

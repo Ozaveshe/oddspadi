@@ -186,7 +186,13 @@ describe("governed model learning schedule", () => {
           reason: "No active tennis champion exists; the first promotion is a bootstrap decision."
         }]
       })),
-      runtimeReplayDue: vi.fn(async () => false)
+      runtimeReplayDue: vi.fn(async () => false),
+      // Pinned, like every other case in this file. Without it the cycle reads
+      // the real clock, and `weeklyRuntimeReplay` is `now.getUTCDay() === 1` —
+      // so on Mondays this took the weekly-replay branch, called the unmocked
+      // runtime replay, and returned 502. A test that fails one day in seven
+      // is worse than one that fails always: it gets re-run until it passes.
+      now: new Date("2026-07-17T04:45:00.000Z")
     });
 
     expect(response.status).toBe(200);

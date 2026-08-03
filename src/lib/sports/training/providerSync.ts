@@ -479,7 +479,8 @@ function providerErrorSummary(errors: unknown): string | null {
 function apiFootballStatus(shortStatus: string | undefined): HistoricalFootballFixtureInput["status"] {
   if (["FT", "AET", "PEN"].includes(shortStatus ?? "")) return "finished";
   if (["1H", "HT", "2H", "ET", "BT", "P", "LIVE", "INT"].includes(shortStatus ?? "")) return "live";
-  if (["PST", "CANC", "ABD", "AWD", "WO"].includes(shortStatus ?? "")) return shortStatus === "PST" ? "postponed" : "cancelled";
+  if (shortStatus === "ABD") return "abandoned";
+  if (["PST", "CANC", "AWD", "WO"].includes(shortStatus ?? "")) return shortStatus === "PST" ? "postponed" : "cancelled";
   return "scheduled";
 }
 
@@ -488,7 +489,8 @@ function apiBasketballStatus(status: ApiBasketballGameResponse["status"]): Histo
   const value = raw.toUpperCase();
   if (["FT", "AOT", "AP", "F", "FINISHED"].includes(value)) return "finished";
   if (["Q1", "Q2", "Q3", "Q4", "OT", "HT", "LIVE", "IN PLAY"].includes(value)) return "live";
-  if (["POSTPONED", "PST", "CANCELLED", "CANCELED", "CAN", "ABD"].includes(value)) return value.includes("POST") || value === "PST" ? "postponed" : "cancelled";
+  if (value === "ABD" || value === "ABANDONED") return "abandoned";
+  if (["POSTPONED", "PST", "CANCELLED", "CANCELED", "CAN"].includes(value)) return value.includes("POST") || value === "PST" ? "postponed" : "cancelled";
   return "scheduled";
 }
 

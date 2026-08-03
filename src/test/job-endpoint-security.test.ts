@@ -54,13 +54,54 @@ describe("scheduled jobs cannot be triggered anonymously", () => {
   });
 
   it("keeps the unauthenticated response non-revealing", async () => {
-    const source = await readFile(join(FUNCTIONS_DIR, "projection-refresh-sweep.ts"), "utf8");
+    // The check lives on the worker: the sweep is the platform's scheduled
+    // entrypoint and has no caller to authenticate.
+    const source = await readFile(join(FUNCTIONS_DIR, "projection-refresh-worker-background.ts"), "utf8");
     const rejection = source.slice(source.indexOf("if (!scheduleToken"), source.indexOf("const url ="));
     // A 401 body should not name the job, the database, or the reason.
     for (const leak of ["projection", "supabase", "Supabase", "rpc", "op_refresh"]) {
       expect(rejection, `401 body must not mention ${leak}`).not.toContain(leak);
     }
     expect(rejection).toContain("401");
+  });
+});
+
+describe("a scheduled entrypoint cannot demand a header the scheduler never sends", () => {
+  it("keeps inbound token checks out of scheduled functions", async () => {
+    // The regression this exists to prevent, precisely:
+    //
+    // `projection-refresh-sweep` was given an inbound token check. Netlify's
+    // scheduler invokes a scheduled function with no `x-oddspadi-schedule-token`
+    // header, because there is no caller to set one — so every tick returned
+    // 401 before touching the database. Production stopped refreshing its
+    // projections at the minute that check deployed and did not resume; eight
+    // and a half hours later every public projection was still serving the
+    // payload built just before the deploy.
+    //
+    // The distinction the earlier check missed: a *worker* is called by our own
+    // code and must verify. A *scheduled entrypoint* is called by the platform
+    // and must not, because it cannot. Its protection is to hold no privileged
+    // logic of its own — it forwards to a worker that does verify.
+    const offenders: string[] = [];
+    for (const file of await functionFiles()) {
+      const source = await readFile(join(FUNCTIONS_DIR, file), "utf8");
+      if (!/export const config[^=]*=\s*\{[^}]*schedule/.test(source)) continue;
+      const readsInboundToken = /request\.headers\.get\(\s*"x-oddspadi-schedule-token"\s*\)/.test(source);
+      if (readsInboundToken) offenders.push(file);
+    }
+    expect(offenders, "a scheduled function must not gate on an inbound token").toEqual([]);
+  });
+
+  it("still keeps scheduled functions away from the database", async () => {
+    // The other half of the rule. A scheduled entrypoint that cannot
+    // authenticate must also not be the thing holding the service-role key.
+    const offenders: string[] = [];
+    for (const file of await functionFiles()) {
+      const source = await readFile(join(FUNCTIONS_DIR, file), "utf8");
+      if (!/export const config[^=]*=\s*\{[^}]*schedule/.test(source)) continue;
+      if (source.includes("createClient(")) offenders.push(file);
+    }
+    expect(offenders, "scheduled entrypoints forward to a worker; they do not reach the database").toEqual([]);
   });
 });
 

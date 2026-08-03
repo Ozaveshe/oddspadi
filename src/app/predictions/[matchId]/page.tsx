@@ -27,7 +27,7 @@ import { buildEngineViewRows, presentBlockers } from "@/lib/sports/prediction/bl
 import { leagueSlugFromProviderId } from "@/lib/sports/leagueStandings";
 import { publicWatchlistReason } from "@/lib/sports/prediction/publicDecisionCopy";
 import { DECISION_STATUS_DESCRIPTIONS, decisionStatusLabel } from "@/lib/product/vocabulary";
-import { buildMatchIntelligence } from "@/lib/match/matchIntelligence";
+import { buildMatchIntelligence, matchDataAvailability } from "@/lib/match/matchIntelligence";
 import { toMatchIntelligenceInput } from "@/lib/match/matchIntelligenceAdapter";
 import { readPublicationForFixture } from "@/lib/match/publicationForFixture";
 import {
@@ -208,7 +208,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
           kickoffTime: match.kickoffTime
         }}
       />
-      <MatchHeader view={intelligence} />
+      <MatchHeader view={intelligence} fixtureId={match.id} availability={matchDataAvailability(intelligence)} />
 
       <div className="match-hero-actions">
         {footballLeagueById(match.league.id) ? (

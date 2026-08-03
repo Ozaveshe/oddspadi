@@ -12,6 +12,9 @@ import { TeamCrest } from "@/components/odds/TeamCrest";
 import { DecisionPriceSignal } from "@/components/odds/DecisionPriceSignal";
 import { marketPriorReceiptFor } from "@/lib/sports/prediction/marketPriorPresentation";
 import { decisionStatusBadgeClass as badgeClass, DECISION_STATUS_LABELS as STATUS_LABELS } from "@/lib/product/vocabulary";
+import { SurfaceClaimMarker } from "@/components/system/SurfaceClaimMarker";
+import { claimFromSlateFixture } from "@/lib/domain/claimAdapters";
+import type { PublicSurface } from "@/lib/domain/surfaceClaim";
 
 const DAILY_DECISION_RENDER_LIMIT = 36;
 const DAILY_QUEUE_RENDER_LIMIT = 12;
@@ -48,7 +51,7 @@ export function ProviderRunStrip({ slate }: { slate: SportsSlate }) {
   );
 }
 
-export function SlateFixtureCard({ row, compact = false, asOf }: { row: SlateFixture; compact?: boolean; asOf?: string }) {
+export function SlateFixtureCard({ row, compact = false, asOf, surface = "prediction-list" }: { row: SlateFixture; compact?: boolean; asOf?: string; surface?: PublicSurface }) {
   const { fixture, decisionSummary } = row;
   const presentation = buildPredictionPresentation(row, asOf ?? decisionSummary.generatedAt);
   const displayedDecision = displayedSlateDecision(row);
@@ -99,11 +102,12 @@ export function SlateFixtureCard({ row, compact = false, asOf }: { row: SlateFix
         <Link className="text-link intelligence-community-link" href={presentation.communityHref}>Community pulse</Link>
       </div>
       <p className="community-boundary-note">Community opinions never change the OddsPadi model decision.</p>
+      <SurfaceClaimMarker claim={claimFromSlateFixture(surface, row, { asOf })} />
     </article>
   );
 }
 
-function NoPickFixtureCard({ row, asOf }: { row: SlateFixture; asOf: string }) {
+function NoPickFixtureCard({ row, asOf, surface = "prediction-list" }: { row: SlateFixture; asOf: string; surface?: PublicSurface }) {
   const presentation = buildPredictionPresentation(row, asOf);
   return (
     <article className="no-pick-card">
@@ -111,6 +115,9 @@ function NoPickFixtureCard({ row, asOf }: { row: SlateFixture; asOf: string }) {
       <h3><Link href={`/predictions/${encodeURIComponent(row.fixture.fixtureId)}`}>{row.fixture.homeTeam.name} vs {row.fixture.awayTeam.name}</Link></h3>
       <dl><div><dt>Model lean</dt><dd>{strongestModelLean(row)}</dd></div><div><dt>Why no pick</dt><dd>{noPickExplanation(row)}</dd></div></dl>
       <span className={`badge ${presentation.freshness === "fresh" ? "positive" : presentation.freshness === "stale" ? "no-value" : "scheduled"}`}>{presentation.freshnessLabel}</span>
+      {/* A no-pick row is still a claim about the fixture, and one of the
+          easiest places for a stale status to survive unnoticed. */}
+      <SurfaceClaimMarker claim={claimFromSlateFixture(surface, row, { asOf })} />
     </article>
   );
 }

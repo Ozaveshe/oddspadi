@@ -757,8 +757,11 @@ function matchStatus(shortStatus: string | undefined): MatchStatus {
   // Concluded — full time, extra time, penalties, plus technical outcomes
   // (awarded, walkover, abandoned) which are all done, not upcoming.
   if (["FT", "AET", "PEN", "AWD", "WO"].includes(status)) return "finished";
-  // In play — including suspended/interrupted matches that are still active.
-  if (["CANC", "ABD"].includes(status)) return "cancelled";
+  // Abandoned is neither: the match started and stopped, so it carries a
+  // partial score a cancelled fixture never has, and it voids rather than
+  // grading a result.
+  if (status === "ABD") return "abandoned";
+  if (status === "CANC") return "cancelled";
   if (status === "PST") return "postponed";
   if (status === "SUSP") return "suspended";
   if (["1H", "HT", "2H", "ET", "BT", "P", "LIVE", "INT"].includes(status)) return "live";
