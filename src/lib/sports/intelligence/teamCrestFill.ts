@@ -28,6 +28,47 @@ export type TeamCrestFill = {
   errors: string[];
 };
 
+/**
+ * Flag fixture rows that duplicate another provider's row for the same match.
+ *
+ * The Odds API and API-Sports both write a row for the same real match under
+ * different names, so the board showed it twice — and only API-Sports has a
+ * results endpoint, so the duplicate could never be graded. Measured
+ * 2026-08-03: 84 pairs, 47 of which disagreed on status, always the same way.
+ *
+ * Runs alongside identity enrichment because both are name-matching passes over
+ * the same window, and both are safe to repeat.
+ */
+export type DuplicateFixtureFlagRun = {
+  status: "completed" | "preview" | "unavailable";
+  flagged: number;
+  bySport: { sport: string; flagged: number }[];
+  errors: string[];
+};
+
+export async function flagDuplicateFixtures({
+  commit = true,
+  client = getSupabaseServerClient()
+}: { commit?: boolean; client?: SupabaseClient | null } = {}): Promise<DuplicateFixtureFlagRun> {
+  if (!client) {
+    return { status: "unavailable", flagged: 0, bySport: [], errors: ["OddsPadi Supabase server storage is not configured."] };
+  }
+  const { data, error } = await client.rpc("op_flag_duplicate_fixtures", { p_commit: commit });
+  if (error) {
+    return { status: "unavailable", flagged: 0, bySport: [], errors: [error.message] };
+  }
+  const bySport = ((data ?? []) as { sport: string; flagged: number }[]).map((row) => ({
+    sport: String(row.sport),
+    flagged: Number(row.flagged) || 0
+  }));
+  return {
+    status: commit ? "completed" : "preview",
+    flagged: bySport.reduce((sum, row) => sum + row.flagged, 0),
+    bySport,
+    errors: []
+  };
+}
+
 export async function fillTeamLogosFromSiblings({
   commit = true,
   client = getSupabaseServerClient()
