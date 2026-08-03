@@ -559,8 +559,14 @@ async function readCalibrationInputs(sport = "football") {
 
   const outcomesResult = await client
     .from("op_prediction_outcomes")
+    // model_key/engine_version are the cohort key. Omitting them left
+    // `directIdentity` undefined for every row, so an outcome could only be
+    // attributed by joining `decision_run_id` — which 93% of football and 100%
+    // of tennis outcomes do not carry. The cohort builder then dropped them,
+    // no cohort ever reached the 30-outcome minimum, and "empirical 95% value
+    // floor is unavailable" became the largest single publication blocker.
     .select(
-      "id, decision_run_id, fixture_external_id, sport, model_probability, implied_probability, value_edge, odds, closing_odds, result, settled_at, created_at"
+      "id, decision_run_id, fixture_external_id, sport, market, selection, model_key, engine_version, model_probability, implied_probability, value_edge, odds, closing_odds, result, settled_at, created_at"
     )
     .eq("sport", sport)
     .neq("result", "pending")

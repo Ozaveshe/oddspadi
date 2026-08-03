@@ -1,5 +1,7 @@
 import { getSupabaseRuntimeStatus, getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Sport } from "@/lib/sports/types";
+import { isDecisionModelSport, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
+import { DECISION_ENGINE_VERSION } from "@/lib/sports/prediction/decisionEngine";
 
 export type PredictionOutcomeResult = "pending" | "won" | "lost" | "push" | "void";
 
@@ -18,6 +20,9 @@ export type PredictionOutcomeInput = {
   settledAt?: string | null;
   source?: string;
   metadata?: Record<string, unknown>;
+  /** Cohort key for calibration. Defaults to the runtime model for the sport. */
+  modelKey?: string | null;
+  engineVersion?: string | null;
 };
 
 export type PredictionOutcomeWriteResult = {
@@ -117,6 +122,16 @@ export function parsePredictionOutcomeInput(value: unknown): PredictionOutcomeIn
   };
 }
 
+/**
+ * The model that produced a prediction for this sport, when the caller did not
+ * name one. Returns null rather than a placeholder for sports with no decision
+ * model: an unattributable outcome must stay unattributed so calibration keeps
+ * excluding it.
+ */
+function defaultModelKey(sport: Sport): string | null {
+  return isDecisionModelSport(sport) ? runtimeModelKey(sport) : null;
+}
+
 export async function storePredictionOutcome(input: PredictionOutcomeInput): Promise<PredictionOutcomeWriteResult> {
   const runtime = getSupabaseRuntimeStatus();
   if (!runtime.serverWriteReady) {
@@ -153,6 +168,13 @@ export async function storePredictionOutcome(input: PredictionOutcomeInput): Pro
     settled_at: input.settledAt ?? null,
     source: input.source ?? "manual",
     metadata: input.metadata ?? {},
+    // The cohort key calibration groups on. Without it an outcome is evidence
+    // nobody can attribute, and the cohort builder discards it — which is how
+    // 1,412 settled tennis outcomes produced a calibration sample of zero.
+    // Falls back to the runtime identity for the sport, because that is what
+    // produced the prediction when no explicit key was threaded through.
+    model_key: input.modelKey ?? defaultModelKey(input.sport),
+    engine_version: input.engineVersion ?? DECISION_ENGINE_VERSION,
     updated_at: new Date().toISOString()
   };
 
