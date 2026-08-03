@@ -5,6 +5,7 @@ import {
   decisionThresholdsForSport,
   refreshCanonicalDecision,
 } from "@/lib/sports/prediction/canonicalDecision";
+import type { BandEvidence } from "@/lib/accumulator/calibratedBands";
 import type {
   CanonicalDecision,
   CanonicalFixture,
@@ -189,7 +190,8 @@ export function buildCanonicalDecisionForPrediction(
   match: Match,
   prediction: Prediction,
   snapshots: CanonicalOddsSnapshot[],
-  now = new Date()
+  now = new Date(),
+  calibrationBands?: BandEvidence[]
 ): DecisionSummary {
   return buildCanonicalDecision(
     match,
@@ -204,7 +206,7 @@ export function buildCanonicalDecisionForPrediction(
       engineVersion: prediction.decision.engineVersion
     },
     match.providerContextSignals ?? [],
-    { now, allowMockFixtures: !isProductionRuntime() }
+    { now, allowMockFixtures: !isProductionRuntime(), calibrationBands }
   );
 }
 
@@ -212,9 +214,15 @@ export function buildCanonicalDecisions(
   match: Match,
   prediction: Prediction,
   snapshots: CanonicalOddsSnapshot[],
-  options: { now?: Date; preliminary?: boolean } = {}
+  options: { now?: Date; preliminary?: boolean; calibrationBands?: BandEvidence[] } = {}
 ): CanonicalDecision[] {
-  const summary = buildCanonicalDecisionForPrediction(match, prediction, snapshots, options.now ?? new Date());
+  const summary = buildCanonicalDecisionForPrediction(
+    match,
+    prediction,
+    snapshots,
+    options.now ?? new Date(),
+    options.calibrationBands
+  );
   const snapshotBySelection = new Map(snapshots.map((snapshot) => [`${snapshot.market}:${snapshot.selection}`, snapshot]));
   // Per market, not the run average: a fixture can have one market priced and
   // another not, and the average would misreport both.
