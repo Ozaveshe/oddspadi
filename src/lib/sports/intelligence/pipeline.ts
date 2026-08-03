@@ -531,6 +531,56 @@ export async function refreshOdds({
   });
 }
 
+/**
+ * Re-read days that have already happened.
+ *
+ * Every other job in this file walks forward: `utcDateWindow` starts at today's
+ * UTC midnight and `offsetDays` is always 0. So a fixture is written once while
+ * it is still upcoming and then never looked at again. When it kicks off,
+ * finishes and gets a scoreline, nothing asks the provider for it — the row
+ * keeps whatever status it had when it was in the future.
+ *
+ * Measured 2026-08-03: 1,929 fixtures sat at `scheduled` with a kickoff already
+ * past, the oldest by 22 days. They were not stuck; they were never revisited.
+ *
+ * This walks the window backwards so the final status and score land. It runs
+ * with `generateDecisions: false`, which takes the fixtures endpoint rather
+ * than predictions and reads odds off the same payload — one provider call per
+ * (day, sport), no extra odds quota. Nothing is predicted for a match that has
+ * already been played.
+ */
+export async function refreshResults({
+  now = new Date(),
+  lookbackDays = 3,
+  sports,
+  persist = true,
+  env = process.env,
+  dependencies = defaultDependencies
+}: {
+  now?: Date;
+  lookbackDays?: number;
+  sports?: Sport[];
+  persist?: boolean;
+  env?: Record<string, string | undefined>;
+  dependencies?: IntelligencePipelineDependencies;
+} = {}): Promise<PipelineRunResult> {
+  const bounded = Math.floor(Math.max(1, Math.min(30, lookbackDays)));
+  // Ends yesterday, not today: the daily engine already re-reads today every
+  // half hour, so including it would spend calls on days already covered.
+  return executePipeline({
+    jobType: "refresh-results",
+    dates: utcDateWindow(now, bounded, -bounded),
+    scope: "daily",
+    sports: sports ?? configuredSports(env),
+    generateDecisions: false,
+    preliminary: true,
+    persist,
+    now,
+    env,
+    dependencies
+  });
+}
+
 export async function generateWeeklyPredictions({
   now = new Date(),
   sports,
