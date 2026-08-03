@@ -3,15 +3,11 @@ import Link from "next/link";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 import { LocalTime } from "@/components/odds/LocalTime";
-import { bandsFromBuckets, buildDailyDoubleView, type BandsBySport } from "@/lib/accumulator/dailyDoubleReads";
+import { buildDailyDoubleView, getCachedCalibrationBands } from "@/lib/accumulator/dailyDoubleReads";
 import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
-import { buildCurrentCalibrationMetrics } from "@/lib/sports/prediction/decisionCalibration";
 import { formatOdds } from "@/lib/sports/prediction/format";
 
 export const dynamic = "force-dynamic";
-
-/** Sports with a decision model, and therefore a calibration profile. */
-const CALIBRATED_SPORTS = ["football", "tennis", "basketball"] as const;
 
 export const metadata: Metadata = pageMetadata({
   title: "The Daily Double — Two Legs, Around Evens",
@@ -22,38 +18,11 @@ export const metadata: Metadata = pageMetadata({
   socialDescription: "Two legs, around evens, built only where the model has been measured."
 });
 
-/**
- * Never let a slow dependency hold the page.
- *
- * The calibration read is a single row, but a page that blocks on it would
- * still be a page that can hang. A missing profile renders an honest empty
- * state, which is the correct answer anyway.
- */
-function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
-  return Promise.race([
-    promise.catch(() => fallback),
-    new Promise<T>((resolve) => {
-      const timer = setTimeout(() => resolve(fallback), ms);
-      if (typeof timer === "object" && "unref" in timer) timer.unref();
-    })
-  ]);
-}
-
 export default async function DailyDoublePage() {
-  // One profile per sport: a tennis selection judged against football's
-  // measured accuracy is two different models sharing one error profile.
-  const [product, ...profiles] = await Promise.all([
+  const [product, bandsBySport] = await Promise.all([
     getCachedTodayTipsProduct().catch(() => null),
-    ...CALIBRATED_SPORTS.map((sport) => withTimeout(buildCurrentCalibrationMetrics(sport), 2_500, null))
+    getCachedCalibrationBands().catch(() => ({}))
   ]);
-
-  const bandsBySport: BandsBySport = {};
-  CALIBRATED_SPORTS.forEach((sport, index) => {
-    const profile = profiles[index];
-    if (!profile || "error" in profile) return;
-    const bands = bandsFromBuckets(profile.probabilityBuckets);
-    if (bands.length) bandsBySport[sport] = bands;
-  });
 
   const view = buildDailyDoubleView({
     rows: product?.sections.allAnalysed ?? null,

@@ -1,4 +1,6 @@
+import { unstable_cache } from "next/cache";
 import { buildDailyDouble, eligibleLegs, type DailyDouble, type DoubleCandidate } from "@/lib/accumulator/dailyDouble";
+import { buildCurrentCalibrationMetrics } from "@/lib/sports/prediction/decisionCalibration";
 import type { BandEvidence } from "@/lib/accumulator/calibratedBands";
 import type { ProbabilityCalibrationBucket } from "@/lib/sports/prediction/decisionCalibration";
 import type { SlateFixture } from "@/lib/sports/intelligence/types";
@@ -116,3 +118,35 @@ export function buildDailyDoubleView({
   const passthrough: BandEvidence[] = [{ lowerBound: 0, upperBound: 1, settledSize: Number.MAX_SAFE_INTEGER, calibrationGap: 0 }];
   return { state: "ready", slip: buildDailyDouble(eligible, passthrough) };
 }
+
+/** Sports with a decision model, and therefore a calibration profile. */
+export const CALIBRATED_SPORTS = ["football", "tennis", "basketball"] as const;
+
+/**
+ * Calibration bands for every sport, cached.
+ *
+ * Three uncached profile reads behind a 2.5s race meant a cold invocation
+ * sometimes timed out on one or all of them, and the page answered "no
+ * calibration profile is available" on one request and "78 selections cleared"
+ * on the next. Two different truths seconds apart is precisely the
+ * contradiction class the rest of the product exists to prevent, and it is
+ * worse than a slow page would have been.
+ *
+ * A profile only changes when a calibration run stores one — daily at most —
+ * so a fifteen-minute cache costs nothing in freshness and makes the answer
+ * stable.
+ */
+export const getCachedCalibrationBands = unstable_cache(
+  async (): Promise<BandsBySport> => {
+    const bands: BandsBySport = {};
+    for (const sport of CALIBRATED_SPORTS) {
+      const profile = await buildCurrentCalibrationMetrics(sport).catch(() => null);
+      if (!profile || "error" in profile) continue;
+      const mapped = bandsFromBuckets(profile.probabilityBuckets);
+      if (mapped.length) bands[sport] = mapped;
+    }
+    return bands;
+  },
+  ["daily-double-calibration-bands-v1"],
+  { revalidate: 900 }
+);
