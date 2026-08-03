@@ -3,7 +3,9 @@ import Link from "next/link";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 import { LocalTime } from "@/components/odds/LocalTime";
-import { buildDailyDoubleView, getCachedCalibrationBands } from "@/lib/accumulator/dailyDoubleReads";
+import { buildDailyDoubleView, getCachedCalibrationBands, type ProfileProvenance } from "@/lib/accumulator/dailyDoubleReads";
+import { SurfaceClaimMarker } from "@/components/system/SurfaceClaimMarker";
+import { normaliseScore } from "@/lib/domain/surfaceClaim";
 import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
 import { formatOdds } from "@/lib/sports/prediction/format";
 
@@ -19,15 +21,23 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default async function DailyDoublePage() {
-  const [product, bandsBySport] = await Promise.all([
+  const [product, calibration] = await Promise.all([
     getCachedTodayTipsProduct().catch(() => null),
-    getCachedCalibrationBands().catch(() => ({}))
+    getCachedCalibrationBands().catch(() => ({ bandsBySport: {}, provenance: [] as ProfileProvenance[] }))
   ]);
 
   const view = buildDailyDoubleView({
     rows: product?.sections.allAnalysed ?? null,
-    bandsBySport
+    bandsBySport: calibration.bandsBySport
   });
+
+  // Sports actually represented on today's slip, so the provenance block
+  // describes the models in use rather than every model that exists.
+  const usedSports = view.state === "ready" && view.slip.status === "built"
+    ? new Set(view.slip.legs.map((leg) => leg.sport))
+    : new Set<string>();
+  const usedProfiles = calibration.provenance.filter((profile) => usedSports.has(profile.sport));
+  const unapproved = usedProfiles.filter((profile) => !profile.approvedForLiveInfluence);
 
   return (
     <main id="main" className="container daily-double">
@@ -131,6 +141,64 @@ export default async function DailyDoublePage() {
               ))}
             </ul>
           </section>
+
+          <section className="section" aria-labelledby="dd-provenance">
+            <div className="section-title">
+              <div>
+                <span className="section-kicker">Where these numbers come from</span>
+                <h2 id="dd-provenance">The model behind the percentages</h2>
+              </div>
+            </div>
+            {usedProfiles.length === 0 ? (
+              <p className="muted">No calibration profile is recorded for the sports on this slip.</p>
+            ) : (
+              <ul className="muted daily-double-notes">
+                {usedProfiles.map((profile) => (
+                  <li key={profile.sport}>
+                    <strong>{profile.sport}</strong> — {profile.modelKey ?? "unnamed model"}, measured against{" "}
+                    {profile.settledSize.toLocaleString()} settled outcome{profile.settledSize === 1 ? "" : "s"}.{" "}
+                    {profile.approvedForLiveInfluence
+                      ? "This profile is approved."
+                      : `This profile is ${profile.readiness.replace(/-/g, " ")} and has not been approved for live influence.`}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {unapproved.length > 0 ? (
+              <div className="notice">
+                <strong>Not an official pick.</strong> The percentages above come from a calibration profile that has
+                passed its statistical checks but has not been approved. They are shown so the arithmetic can be
+                inspected, and they do not enter the{" "}
+                <Link className="inline-link" href="/track-record">public track record</Link>, which only ever counts
+                picks published before kick-off under an approved model.
+              </div>
+            ) : null}
+          </section>
+
+          {/* Claims, so the cross-surface suite can see this page at all. A
+              surface that renders a fixture without stamping one is invisible
+              to the consistency check and free to drift. */}
+          {view.slip.legs.map((leg) => (
+            <SurfaceClaimMarker
+              key={`claim:${leg.fixtureId}:${leg.market}:${leg.selection}`}
+              claim={{
+                surface: "daily-double",
+                fixtureId: leg.fixtureId,
+                fixtureStatus: "scheduled",
+                score: normaliseScore(null, null),
+                market: leg.market,
+                selection: leg.selection,
+                decision: "lean",
+                publicationId: null,
+                publicationStatus: null,
+                publishedAt: null,
+                settlement: null,
+                oddsAvailable: true,
+                dataAvailability: "complete",
+                asOf: product?.generatedAt ?? null
+              }}
+            />
+          ))}
         </>
       )}
 

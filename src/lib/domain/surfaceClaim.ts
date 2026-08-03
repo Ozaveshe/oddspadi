@@ -35,7 +35,8 @@ export const PUBLIC_SURFACES = [
   "news",
   "competition",
   "community",
-  "workspace"
+  "workspace",
+  "daily-double"
 ] as const;
 export type PublicSurface = (typeof PUBLIC_SURFACES)[number];
 

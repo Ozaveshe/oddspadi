@@ -74,6 +74,33 @@ export function candidatesFromSlate(rows: SlateFixture[]): DoubleCandidate[] {
  */
 export type BandsBySport = Record<string, BandEvidence[]>;
 
+/**
+ * Where each sport's bands came from, and whether that profile is approved.
+ *
+ * The page was presenting "Model chance 73.9%" from a tennis profile sitting in
+ * shadow review, with nothing on the page saying so. That is a claim whose
+ * provenance is invisible — the same defect the publication ledger exists to
+ * prevent, reintroduced one layer up because the accumulator reads calibration
+ * directly rather than through the ledger.
+ *
+ * A profile in shadow review is legitimate input for arithmetic the reader can
+ * inspect. It is not legitimate as an unqualified probability, so the state
+ * travels with the bands and the page has to render it.
+ */
+export type ProfileProvenance = {
+  sport: string;
+  modelKey: string | null;
+  readiness: "waiting-sample" | "waiting-quality" | "ready-shadow-review";
+  settledSize: number;
+  /** True only when a profile has actually been promoted for live influence. */
+  approvedForLiveInfluence: boolean;
+};
+
+export type CalibrationContext = {
+  bandsBySport: BandsBySport;
+  provenance: ProfileProvenance[];
+};
+
 export type DailyDoubleView =
   | { state: "unavailable"; note: string }
   | { state: "no-bands"; note: string }
@@ -137,16 +164,28 @@ export const CALIBRATED_SPORTS = ["football", "tennis", "basketball"] as const;
  * stable.
  */
 export const getCachedCalibrationBands = unstable_cache(
-  async (): Promise<BandsBySport> => {
-    const bands: BandsBySport = {};
+  async (): Promise<CalibrationContext> => {
+    const bandsBySport: BandsBySport = {};
+    const provenance: ProfileProvenance[] = [];
     for (const sport of CALIBRATED_SPORTS) {
       const profile = await buildCurrentCalibrationMetrics(sport).catch(() => null);
       if (!profile || "error" in profile) continue;
       const mapped = bandsFromBuckets(profile.probabilityBuckets);
-      if (mapped.length) bands[sport] = mapped;
+      if (!mapped.length) continue;
+      bandsBySport[sport] = mapped;
+      provenance.push({
+        sport,
+        modelKey: profile.modelKey,
+        readiness: profile.promotionReadiness.status,
+        settledSize: profile.settledSize,
+        // `canInfluenceLive` is typed `false` throughout the calibration
+        // module: nothing has ever been promoted. Reading it rather than
+        // hardcoding keeps this honest if that ever changes.
+        approvedForLiveInfluence: profile.promotionReadiness.canInfluenceLive
+      });
     }
-    return bands;
+    return { bandsBySport, provenance };
   },
-  ["daily-double-calibration-bands-v1"],
+  ["daily-double-calibration-bands-v2"],
   { revalidate: 900 }
 );

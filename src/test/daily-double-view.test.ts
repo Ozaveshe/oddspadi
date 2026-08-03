@@ -135,3 +135,35 @@ describe("bands are matched to the candidate's own sport", () => {
     expect(tennisBands.slip.status).toBe("built");
   });
 });
+
+describe("profile provenance travels with the bands", () => {
+  it("marks a shadow-review profile as not approved", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile("src/lib/accumulator/dailyDoubleReads.ts", "utf8");
+    // Read from the profile rather than hardcoded: if a profile is ever
+    // promoted, the page must start saying so without another edit.
+    expect(source).toContain("approvedForLiveInfluence: profile.promotionReadiness.canInfluenceLive");
+    expect(source).toContain("readiness: profile.promotionReadiness.status");
+  });
+});
+
+describe("the daily double page discloses and is observable", () => {
+  it("says the profile is unapproved and keeps the slip out of the record", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const page = await readFile("src/app/daily-double/page.tsx", "utf8");
+    // Presenting a probability from an unpromoted profile without saying so is
+    // a claim with invisible provenance — the defect the ledger exists to stop.
+    expect(page).toContain("has not been approved for live influence");
+    expect(page).toContain("Not an official pick");
+    expect(page).toContain("/track-record");
+  });
+
+  it("stamps surface claims so the consistency suite can see it", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const page = await readFile("src/app/daily-double/page.tsx", "utf8");
+    // A surface that renders a fixture without a claim is invisible to the
+    // cross-surface check and free to drift away from every other page.
+    expect(page).toContain("SurfaceClaimMarker");
+    expect(page).toContain('surface: "daily-double"');
+  });
+});
