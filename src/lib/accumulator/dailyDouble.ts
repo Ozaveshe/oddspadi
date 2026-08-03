@@ -195,7 +195,10 @@ export function buildDailyDouble(
   // Margin the slip carries as a whole: what the price implies minus the
   // margin-free probability the same legs imply.
   const fairCombined = winner.legs.reduce((product, leg) => product * (leg.noVigProbability ?? 0), 1);
-  const combinedMargin = fairCombined > 0 ? combinedImplied - fairCombined : 0;
+  // Overround as a ratio: an absolute difference shrinks as legs are added,
+  // because both probabilities approach zero, and so understates the very cost
+  // that compounding creates.
+  const combinedMargin = fairCombined > 0 ? combinedImplied / fairCombined - 1 : 0;
 
   const notes = [
     `Combining ${winner.legs.length} legs multiplies the bookmaker's margin: this slip carries about ${(combinedMargin * 100).toFixed(1)}% against ${(((combinedImplied / (fairCombined || 1)) ** (1 / winner.legs.length) - 1) * 100).toFixed(1)}% per leg.`,

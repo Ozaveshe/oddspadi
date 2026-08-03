@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { buildDailyDouble, eligibleLegs, type DailyDouble, type DoubleCandidate } from "@/lib/accumulator/dailyDouble";
+import { buildTicketBoard, type TicketBoard } from "@/lib/accumulator/ticketBoard";
 import { buildCurrentCalibrationMetrics } from "@/lib/sports/prediction/decisionCalibration";
 import type { BandEvidence } from "@/lib/accumulator/calibratedBands";
 import type { ProbabilityCalibrationBucket } from "@/lib/sports/prediction/decisionCalibration";
@@ -200,3 +201,38 @@ export const getCachedCalibrationBands = unstable_cache(
   ["daily-double-calibration-bands-v2"],
   { revalidate: 900 }
 );
+
+/**
+ * The day's ticket board, built per sport against that sport's own bands.
+ *
+ * Same discipline as the single double: candidates are filtered by the bands
+ * belonging to their sport, and only the survivors compete for a place on a
+ * ticket.
+ */
+export function buildTicketBoardView({
+  rows,
+  bandsBySport,
+  maxTickets
+}: {
+  rows: SlateFixture[] | null;
+  bandsBySport: BandsBySport | null;
+  maxTickets?: number;
+}): { state: "unavailable" | "no-bands"; note: string } | { state: "ready"; board: TicketBoard } {
+  if (!rows) {
+    return { state: "unavailable", note: "Today's slate could not be read, so no tickets are shown. This is not the same as there being nothing to show." };
+  }
+  const sportsWithBands = Object.entries(bandsBySport ?? {}).filter(([, bands]) => bands.length);
+  if (!sportsWithBands.length) {
+    return {
+      state: "no-bands",
+      note: "No calibration profile is available yet, so there is no measured accuracy to build tickets from. Tickets assembled without it would be guesses wearing probabilities."
+    };
+  }
+
+  const candidates = candidatesFromSlate(rows);
+  const eligible = sportsWithBands.flatMap(([sport, bands]) =>
+    eligibleLegs(candidates.filter((candidate) => candidate.sport === sport), bands)
+  );
+  const passthrough: BandEvidence[] = [{ lowerBound: 0, upperBound: 1, settledSize: Number.MAX_SAFE_INTEGER, calibrationGap: 0 }];
+  return { state: "ready", board: buildTicketBoard(eligible, passthrough, { maxTickets }) };
+}

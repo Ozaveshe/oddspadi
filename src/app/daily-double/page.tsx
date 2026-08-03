@@ -3,7 +3,12 @@ import Link from "next/link";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 import { LocalTime } from "@/components/odds/LocalTime";
-import { buildDailyDoubleView, getCachedCalibrationBands, type ProfileProvenance } from "@/lib/accumulator/dailyDoubleReads";
+import {
+  buildDailyDoubleView,
+  buildTicketBoardView,
+  getCachedCalibrationBands,
+  type ProfileProvenance
+} from "@/lib/accumulator/dailyDoubleReads";
 import { SurfaceClaimMarker } from "@/components/system/SurfaceClaimMarker";
 import { normaliseScore } from "@/lib/domain/surfaceClaim";
 import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
@@ -26,10 +31,9 @@ export default async function DailyDoublePage() {
     getCachedCalibrationBands().catch(() => ({ bandsBySport: {}, provenance: [] as ProfileProvenance[] }))
   ]);
 
-  const view = buildDailyDoubleView({
-    rows: product?.sections.allAnalysed ?? null,
-    bandsBySport: calibration.bandsBySport
-  });
+  const rows = product?.sections.allAnalysed ?? null;
+  const view = buildDailyDoubleView({ rows, bandsBySport: calibration.bandsBySport });
+  const boardView = buildTicketBoardView({ rows, bandsBySport: calibration.bandsBySport });
 
   // Sports actually represented on today's slip, so the provenance block
   // describes the models in use rather than every model that exists.
@@ -210,6 +214,66 @@ export default async function DailyDoublePage() {
           ))}
         </>
       )}
+
+      {boardView.state === "ready" && boardView.board.tickets.length ? (
+        <section className="section" aria-labelledby="dd-board">
+          <div className="section-title">
+            <div>
+              <span className="section-kicker">The ticket board</span>
+              <h2 id="dd-board">
+                {boardView.board.tickets.length} tickets across {boardView.board.fixturesCovered} games
+              </h2>
+            </div>
+          </div>
+          <p className="muted">
+            Longer tickets pay more and land less. Both columns below are true at the same time, and the second is the
+            one most slips are decided by.
+          </p>
+
+          <div className="ticket-board">
+            {boardView.board.tickets.map((ticket, index) => (
+              <article className="ticket" key={`${ticket.tierId}-${index}`}>
+                <header>
+                  <span className="ticket-tier">{ticket.tierLabel}</span>
+                  <strong className="ticket-odds">{formatOdds(ticket.combinedOdds)}</strong>
+                </header>
+                <dl className="ticket-maths">
+                  <div>
+                    <dt>Chance of landing</dt>
+                    <dd>{(ticket.combinedProbability * 100).toFixed(1)}% &middot; about 1 in {ticket.oneInN}</dd>
+                  </div>
+                  <div>
+                    <dt>Expected value</dt>
+                    <dd className={ticket.expectedValue > 0 ? "positive" : "negative"}>
+                      {ticket.expectedValue > 0 ? "+" : ""}{(ticket.expectedValue * 100).toFixed(1)}%
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Compounded margin</dt>
+                    <dd>{(ticket.combinedMargin * 100).toFixed(1)}%</dd>
+                  </div>
+                </dl>
+                <ol className="ticket-legs">
+                  {ticket.legs.map((leg) => (
+                    <li key={`${leg.fixtureId}:${leg.market}:${leg.selection}`}>
+                      <Link className="text-link" href={`/predictions/${encodeURIComponent(leg.fixtureId)}`}>
+                        {leg.selectionLabel}
+                      </Link>
+                      <span>{formatOdds(leg.decimalOdds)}</span>
+                    </li>
+                  ))}
+                </ol>
+              </article>
+            ))}
+          </div>
+
+          <ul className="muted daily-double-notes">
+            {boardView.board.notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="section"><ResponsibleUseNotice /></section>
     </main>
