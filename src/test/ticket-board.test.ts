@@ -155,3 +155,16 @@ describe("quality gates carry through to tickets", () => {
     expect(board.fixturesCovered).toBe(0);
   });
 });
+
+describe("the page never hides an empty board", () => {
+  it("explains an empty board instead of rendering nothing", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const page = await readFile("src/app/daily-double/page.tsx", "utf8");
+    // The first version guarded the whole section on tickets.length, so an
+    // empty board vanished. An absent section is indistinguishable from a
+    // broken one, which is the defect this codebase keeps removing.
+    expect(page).toContain("No tickets right now");
+    expect(page).toContain("Nothing to combine yet");
+    expect(page).toContain("Tickets appear once the next slate is priced");
+  });
+});

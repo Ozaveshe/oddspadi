@@ -215,7 +215,25 @@ export default async function DailyDoublePage() {
         </>
       )}
 
-      {boardView.state === "ready" && boardView.board.tickets.length ? (
+      {boardView.state !== "ready" || !boardView.board.tickets.length ? (
+        <section className="section" aria-labelledby="dd-board-empty">
+          <div className="section-title">
+            <div>
+              <span className="section-kicker">The ticket board</span>
+              <h2 id="dd-board-empty">No tickets right now</h2>
+            </div>
+          </div>
+          {/* An empty board must explain itself. Rendering nothing at all was
+              the first version, and an absent section is indistinguishable from
+              a broken one — the same defect this codebase keeps removing. */}
+          <div className="notice">
+            <strong>Nothing to combine yet.</strong>{" "}
+            {boardView.state !== "ready"
+              ? boardView.note
+              : "No selection currently clears its sport's calibrated band with a real edge. Tickets appear once the next slate is priced — typically a few hours before the first kick-off."}
+          </div>
+        </section>
+      ) : (
         <section className="section" aria-labelledby="dd-board">
           <div className="section-title">
             <div>
@@ -273,7 +291,7 @@ export default async function DailyDoublePage() {
             ))}
           </ul>
         </section>
-      ) : null}
+      )}
 
       <section className="section"><ResponsibleUseNotice /></section>
     </main>
