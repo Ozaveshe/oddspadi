@@ -1,4 +1,4 @@
-import { buildDailyDouble, type DailyDouble, type DoubleCandidate } from "@/lib/accumulator/dailyDouble";
+import { buildDailyDouble, eligibleLegs, type DailyDouble, type DoubleCandidate } from "@/lib/accumulator/dailyDouble";
 import type { BandEvidence } from "@/lib/accumulator/calibratedBands";
 import type { ProbabilityCalibrationBucket } from "@/lib/sports/prediction/decisionCalibration";
 import type { SlateFixture } from "@/lib/sports/intelligence/types";
@@ -60,6 +60,18 @@ export function candidatesFromSlate(rows: SlateFixture[]): DoubleCandidate[] {
   return candidates;
 }
 
+/**
+ * Bands are per sport, and a candidate must be judged against its own.
+ *
+ * The first version read one sport's profile and applied it to the whole
+ * slate. On a slate that is 78% tennis that means tennis selections were being
+ * scored against football's measured accuracy — two different models, two
+ * different error profiles, one set of bands. The bands are keyed by sport now
+ * and a candidate whose sport has no profile is excluded rather than borrowing
+ * another sport's.
+ */
+export type BandsBySport = Record<string, BandEvidence[]>;
+
 export type DailyDoubleView =
   | { state: "unavailable"; note: string }
   | { state: "no-bands"; note: string }
@@ -76,19 +88,31 @@ export type DailyDoubleView =
  */
 export function buildDailyDoubleView({
   rows,
-  buckets
+  bandsBySport
 }: {
   rows: SlateFixture[] | null;
-  buckets: ProbabilityCalibrationBucket[] | null;
+  bandsBySport: BandsBySport | null;
 }): DailyDoubleView {
   if (!rows) {
     return { state: "unavailable", note: "Today's slate could not be read, so no slip is shown. This is not the same as there being nothing to show." };
   }
-  if (!buckets?.length) {
+  const sportsWithBands = Object.entries(bandsBySport ?? {}).filter(([, bands]) => bands.length);
+  if (!sportsWithBands.length) {
     return {
       state: "no-bands",
       note: "No calibration profile is available yet, so there is no measured accuracy to build a slip from. A slip assembled without it would be a guess wearing a probability."
     };
   }
-  return { state: "ready", slip: buildDailyDouble(candidatesFromSlate(rows), bandsFromBuckets(buckets)) };
+
+  // Each sport's candidates are filtered by that sport's own bands, then the
+  // survivors compete for the slip together.
+  const candidates = candidatesFromSlate(rows);
+  const eligible = sportsWithBands.flatMap(([sport, bands]) =>
+    eligibleLegs(candidates.filter((candidate) => candidate.sport === sport), bands)
+  );
+
+  // The legs are already band-filtered, so the builder is handed a permissive
+  // band set rather than being asked to filter twice against the wrong sport.
+  const passthrough: BandEvidence[] = [{ lowerBound: 0, upperBound: 1, settledSize: Number.MAX_SAFE_INTEGER, calibrationGap: 0 }];
+  return { state: "ready", slip: buildDailyDouble(eligible, passthrough) };
 }

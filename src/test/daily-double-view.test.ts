@@ -70,21 +70,21 @@ function slateRow(id: string, probability: number, odds: number, noVig: number, 
 
 describe("the daily double view keeps its empty states apart", () => {
   it("says the slate could not be read, not that there is nothing", () => {
-    const view = buildDailyDoubleView({ rows: null, buckets: GOOD_BUCKETS });
+    const view = buildDailyDoubleView({ rows: null, bandsBySport: { tennis: bandsFromBuckets(GOOD_BUCKETS) } });
     expect(view.state).toBe("unavailable");
     if (view.state !== "unavailable") return;
     expect(view.note).toContain("not the same as there being nothing");
   });
 
   it("says the capability is missing when no profile exists", () => {
-    const view = buildDailyDoubleView({ rows: [], buckets: null });
+    const view = buildDailyDoubleView({ rows: [], bandsBySport: null });
     expect(view.state).toBe("no-bands");
     if (view.state !== "no-bands") return;
     expect(view.note).toContain("no measured accuracy");
   });
 
   it("reports a genuine nothing-qualified as a built result, not an error", () => {
-    const view = buildDailyDoubleView({ rows: [], buckets: GOOD_BUCKETS });
+    const view = buildDailyDoubleView({ rows: [], bandsBySport: { tennis: bandsFromBuckets(GOOD_BUCKETS) } });
     expect(view.state).toBe("ready");
     if (view.state !== "ready") return;
     expect(view.slip.status).toBe("insufficient-candidates");
@@ -92,7 +92,7 @@ describe("the daily double view keeps its empty states apart", () => {
 
   it("builds a slip when the slate supports one", () => {
     const rows = [slateRow("a", 0.72, 1.5, 0.64), slateRow("b", 0.68, 1.55, 0.6)];
-    const view = buildDailyDoubleView({ rows, buckets: GOOD_BUCKETS });
+    const view = buildDailyDoubleView({ rows, bandsBySport: { tennis: bandsFromBuckets(GOOD_BUCKETS) } });
     expect(view.state).toBe("ready");
     if (view.state !== "ready") return;
     expect(view.slip.status).toBe("built");
@@ -114,5 +114,24 @@ describe("candidate extraction", () => {
     const bands = bandsFromBuckets(GOOD_BUCKETS);
     expect(bands).toHaveLength(4);
     expect(bands[0]).toMatchObject({ lowerBound: 0.4, settledSize: 217, calibrationGap: 0.007 });
+  });
+});
+
+describe("bands are matched to the candidate's own sport", () => {
+  it("excludes a sport with no profile rather than borrowing another's", () => {
+    // The bug this catches: reading football's profile and applying it to a
+    // slate that is mostly tennis. Two models, two error profiles, one set of
+    // bands — and the tennis selections were being scored against the wrong one.
+    const rows = [slateRow("t1", 0.72, 1.5, 0.64), slateRow("t2", 0.68, 1.55, 0.6)];
+    const footballOnly = buildDailyDoubleView({ rows, bandsBySport: { football: bandsFromBuckets(GOOD_BUCKETS) } });
+    expect(footballOnly.state).toBe("ready");
+    if (footballOnly.state !== "ready") return;
+    // These rows are tennis; football bands must not qualify them.
+    expect(footballOnly.slip.status).toBe("insufficient-candidates");
+
+    const tennisBands = buildDailyDoubleView({ rows, bandsBySport: { tennis: bandsFromBuckets(GOOD_BUCKETS) } });
+    expect(tennisBands.state).toBe("ready");
+    if (tennisBands.state !== "ready") return;
+    expect(tennisBands.slip.status).toBe("built");
   });
 });

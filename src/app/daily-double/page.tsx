@@ -3,12 +3,15 @@ import Link from "next/link";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
 import { LocalTime } from "@/components/odds/LocalTime";
-import { buildDailyDoubleView } from "@/lib/accumulator/dailyDoubleReads";
+import { bandsFromBuckets, buildDailyDoubleView, type BandsBySport } from "@/lib/accumulator/dailyDoubleReads";
 import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
 import { buildCurrentCalibrationMetrics } from "@/lib/sports/prediction/decisionCalibration";
 import { formatOdds } from "@/lib/sports/prediction/format";
 
 export const dynamic = "force-dynamic";
+
+/** Sports with a decision model, and therefore a calibration profile. */
+const CALIBRATED_SPORTS = ["football", "tennis", "basketball"] as const;
 
 export const metadata: Metadata = pageMetadata({
   title: "The Daily Double — Two Legs, Around Evens",
@@ -37,15 +40,24 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 }
 
 export default async function DailyDoublePage() {
-  const [product, calibration] = await Promise.all([
+  // One profile per sport: a tennis selection judged against football's
+  // measured accuracy is two different models sharing one error profile.
+  const [product, ...profiles] = await Promise.all([
     getCachedTodayTipsProduct().catch(() => null),
-    withTimeout(buildCurrentCalibrationMetrics("football"), 2_500, null)
+    ...CALIBRATED_SPORTS.map((sport) => withTimeout(buildCurrentCalibrationMetrics(sport), 2_500, null))
   ]);
 
-  const buckets = calibration && !("error" in calibration) ? calibration.probabilityBuckets : null;
+  const bandsBySport: BandsBySport = {};
+  CALIBRATED_SPORTS.forEach((sport, index) => {
+    const profile = profiles[index];
+    if (!profile || "error" in profile) return;
+    const bands = bandsFromBuckets(profile.probabilityBuckets);
+    if (bands.length) bandsBySport[sport] = bands;
+  });
+
   const view = buildDailyDoubleView({
     rows: product?.sections.allAnalysed ?? null,
-    buckets
+    bandsBySport
   });
 
   return (
