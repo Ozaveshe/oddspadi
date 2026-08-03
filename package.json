@@ -37,7 +37,8 @@
     "ops:loadtest": "node --env-file-if-exists=.env.local scripts/load-test-public-reads.mjs",
     "ops:reconcile-truth": "node --env-file-if-exists=.env.local scripts/reconcile-truth.mjs",
     "docs:state-matrix": "vite-node --config scripts/vite-node.config.ts scripts/generate-state-matrix-doc.ts",
-    "gate:release": "node scripts/release-gate.mjs"
+    "gate:release": "node scripts/release-gate.mjs",
+    "ops:publish": "node --env-file-if-exists=.env.local scripts/publish-picks.mjs"
   },
   "engines": {
     "node": "22.x"
