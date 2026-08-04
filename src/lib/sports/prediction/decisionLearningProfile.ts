@@ -5,6 +5,39 @@ import { historicalModelCompatibility, isDecisionModelSport } from "./modelIdent
 import { inspectRuntimeBacktestEvidence, type RuntimeBacktestEvidence } from "@/lib/sports/training/runtimeBacktestEvidence";
 import { readCalibrationDriftReceipt } from "./calibrationDriftGuard";
 import { isGovernedRuntimeThresholdSelection } from "@/lib/sports/training/runtimeThresholdSelection";
+import { MIN_EMPIRICAL_SAMPLE } from "./decisionCalibrationInterval";
+
+/** The calibration curve is ten probability deciles. */
+const CALIBRATION_DECILES = 10;
+
+/**
+ * Settled predictions a promoted cohort needs before it displaces the
+ * historical backtest curve.
+ *
+ * This used to compare against `snapshot.readiness.minimumRecommendedFixtures`,
+ * which is `MINIMUM_RECOMMENDED_FINISHED_FIXTURES` — 1,000 — a training-corpus
+ * constant answering "are there enough finished fixtures to have trained a
+ * model at all". Reusing it here compared a count of settled *predictions*
+ * against a count of *fixtures* needed for training: different quantities,
+ * different units, and a threshold never derived for this purpose.
+ *
+ * Measured 2026-08-03, it was the single reason no selection anywhere on the
+ * site could show an empirical value floor. Tennis held 932 settled outcomes
+ * against a 1,000 bar and football 482 — both fell back to the backtest curve,
+ * so `calibrationBucketSource` was never `promoted-cohort` and every economic
+ * confidence receipt read "Empirical value floor unavailable".
+ *
+ * Derived instead from the gate that does the real work: a bucket needs
+ * MIN_EMPIRICAL_SAMPLE settled outcomes for a Wilson interval, and the curve
+ * has ten deciles, so below 10 x 30 a cohort cannot populate the curve even in
+ * principle and can only beat the fallback in isolated buckets.
+ *
+ * This loosens nothing per claim. Every individual selection is still gated on
+ * its own bucket clearing MIN_EMPIRICAL_SAMPLE, and on the Wilson lower bound
+ * clearing the price. Tennis's thin tails (1 and 7 outcomes) still produce no
+ * floor; its six populated deciles now can.
+ */
+const MINIMUM_PROMOTED_COHORT_SAMPLE = CALIBRATION_DECILES * MIN_EMPIRICAL_SAMPLE;
 
 function numberFromWeight(weights: Record<string, unknown>, key: string): number | null {
   const value = weights[key];
@@ -963,16 +996,10 @@ export function buildDecisionLearningProfileFromSnapshot(
   );
   const promotedCalibrationBuckets = promotionMatchesBacktest ? calibrationBucketsFromPromotion(activePromotion) : [];
   const promotedBucketSample = promotedCalibrationBuckets.reduce((sum, bucket) => sum + bucket.sampleSize, 0);
-  const resolvedCalibrationBuckets =
-    promotionMatchesBacktest && promotedBucketSample >= snapshot.readiness.minimumRecommendedFixtures
-      ? promotedCalibrationBuckets
-      : calibrationBuckets(backtest);
+  const promotedCohortIsUsable = promotionMatchesBacktest && promotedBucketSample >= MINIMUM_PROMOTED_COHORT_SAMPLE;
+  const resolvedCalibrationBuckets = promotedCohortIsUsable ? promotedCalibrationBuckets : calibrationBuckets(backtest);
   const calibrationBucketSource: DecisionLearningProfile["calibrationBucketSource"] =
-    promotionMatchesBacktest && promotedBucketSample >= snapshot.readiness.minimumRecommendedFixtures
-      ? "promoted-cohort"
-      : backtest
-        ? "backtest"
-        : null;
+    promotedCohortIsUsable ? "promoted-cohort" : backtest ? "backtest" : null;
   const demoOnly = Boolean(backtest?.dataSource?.includes("demo")) || snapshot.counts.realFinishedFixtures === 0;
   const promotionApproved = requireDurablePromotion ? promotionMatchesBacktest : promotionMatchesBacktest || hasExplicitLivePromotion(backtest);
   const metricBlockers = liveMetricBlockers(snapshot, backtest, runtimeEvidence);

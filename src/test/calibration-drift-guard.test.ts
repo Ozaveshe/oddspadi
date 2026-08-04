@@ -177,6 +177,61 @@ describe("live calibration drift guard", () => {
     expect(receipt.blockers).toEqual(expect.arrayContaining([expect.stringContaining("Promotion age"), expect.stringContaining("Latest exact outcome")]));
   });
 
+  it("attributes outcomes carrying their own model identity, with no decision run", () => {
+    // The defect this pins: identity was read only off the joined decision run,
+    // and outcomes are written with a null `decision_run_id`. Measured in
+    // production on 2026-08-03, it was null on all 424 tennis outcomes settled
+    // since the calibration window, so every one was discarded and the receipt
+    // read "0/30 exact out-of-sample outcomes are available" — indistinguishable
+    // from having settled nothing. No promoted profile could ever go live, which
+    // is why no selection anywhere showed an empirical value floor.
+    const detached = outcomes().map((outcome) => ({
+      ...outcome,
+      decision_run_id: null,
+      model_key: "football-runtime",
+      engine_version: "engine-v1"
+    }));
+
+    const receipt = buildCalibrationDriftReceipt({ promotion: promotion(), outcomes: detached, decisionRuns: [], now: NOW });
+
+    expect(receipt).toMatchObject({ status: "pass", eligibleForLive: true });
+    expect(receipt.current.sampleSize).toBe(40);
+    expect(receipt.blockers).toEqual([]);
+  });
+
+  it("still rejects a run-less outcome whose own identity is the wrong model", () => {
+    // Widening the source must not widen what counts as a match.
+    const wrongModel = outcomes().map((outcome) => ({
+      ...outcome,
+      decision_run_id: null,
+      model_key: "legacy-model",
+      engine_version: "engine-v1"
+    }));
+    const unattributed = outcomes().map((outcome) => ({ ...outcome, decision_run_id: null }));
+
+    expect(buildCalibrationDriftReceipt({ promotion: promotion(), outcomes: wrongModel, decisionRuns: [], now: NOW }))
+      .toMatchObject({ eligibleForLive: false, current: { sampleSize: 0 } });
+    expect(buildCalibrationDriftReceipt({ promotion: promotion(), outcomes: unattributed, decisionRuns: [], now: NOW }))
+      .toMatchObject({ eligibleForLive: false, current: { sampleSize: 0 } });
+  });
+
+  it("prefers the outcome's own identity over a contradicting decision run", () => {
+    const conflicting = outcomes().map((outcome) => ({
+      ...outcome,
+      model_key: "football-runtime",
+      engine_version: "engine-v1"
+    }));
+
+    const receipt = buildCalibrationDriftReceipt({
+      promotion: promotion(),
+      outcomes: conflicting,
+      decisionRuns: [run("run-1", "legacy-model")],
+      now: NOW
+    });
+
+    expect(receipt).toMatchObject({ status: "pass", eligibleForLive: true });
+  });
+
   it("never splits an identical settlement cohort to manufacture live stability", () => {
     const receipt = buildCalibrationDriftReceipt({
       promotion: promotion(),

@@ -5,6 +5,9 @@ import {
   getSportsProviderRuntimeStatus
 } from "@/lib/sports/providers/providerBackedProvider";
 import { getSupabaseRuntimeStatus } from "@/lib/supabase/server";
+import { buildCurrentCalibrationMetrics } from "@/lib/sports/prediction/decisionCalibration";
+import { bandsFromBuckets } from "@/lib/accumulator/dailyDoubleReads";
+import type { BandEvidence } from "@/lib/accumulator/calibratedBands";
 import {
   buildCanonicalDecisions,
   buildCanonicalDecisionForPrediction,
@@ -265,6 +268,27 @@ async function collectFixtures({
   return { matches: dedupeMatches(matches), predictionByFixture, rejectedMockFixtures, errors, sportCoverage };
 }
 
+/**
+ * Calibration bands per sport, read once for the whole run.
+ *
+ * A sport with no usable profile is simply absent from the map, and the
+ * decision falls back to the fixed constants — never to a fabricated band.
+ * A failed read is treated the same way: no bands rather than empty bands,
+ * because an empty array would read as "measured, and there is nothing there".
+ */
+async function calibrationBandsForSports(sports: readonly Sport[]): Promise<Map<string, BandEvidence[]>> {
+  const bandsBySport = new Map<string, BandEvidence[]>();
+  await Promise.all(
+    [...new Set(sports)].map(async (sport) => {
+      const profile = await buildCurrentCalibrationMetrics(sport).catch(() => null);
+      if (!profile || "error" in profile) return;
+      const bands = bandsFromBuckets(profile.probabilityBuckets);
+      if (bands.length) bandsBySport.set(sport, bands);
+    })
+  );
+  return bandsBySport;
+}
+
 async function executePipeline({
   jobType,
   dates,
@@ -355,19 +379,34 @@ async function executePipeline({
   const decisionsByFixture = new Map<string, CanonicalDecision[]>();
   const decisionSummariesByFixture = new Map<string, DecisionSummary>();
   if (generateDecisions) {
+    // Measured accuracy per probability band, once per sport rather than once
+    // per fixture.
+    //
+    // Without these the decision falls back to a flat "at least 3 independent
+    // bookmakers" rule. Measured 2026-08-03, 87.5% of priced football
+    // selections and 74.5% of tennis carry exactly one bookmaker, so that rule
+    // refused roughly nine in ten selections on panel depth alone and the
+    // engine published nothing. With bands the panel is priced instead of
+    // vetoed: a thinner panel has to clear a higher edge (`consensusEdgePremium`
+    // charges +3% for one book, +1.5% for two) rather than being rejected for
+    // being thin. The daily double has worked this way since it shipped; the
+    // main decision path never received the bands.
+    const bandsBySport = await calibrationBandsForSports(sports);
     for (const match of collected.matches) {
       const prediction = collected.predictionByFixture.get(match.id);
       if (!prediction) continue;
       const snapshots = oddsByFixture.get(match.id) ?? [];
+      const calibrationBands = bandsBySport.get(match.sport);
       decisionSummariesByFixture.set(
         match.id,
-        buildCanonicalDecisionForPrediction(match, prediction, snapshots, now)
+        buildCanonicalDecisionForPrediction(match, prediction, snapshots, now, calibrationBands)
       );
       decisionsByFixture.set(
         match.id,
         buildCanonicalDecisions(match, prediction, snapshots, {
           now,
-          preliminary
+          preliminary,
+          calibrationBands
         })
       );
     }
@@ -520,6 +559,56 @@ export async function refreshOdds({
   return executePipeline({
     jobType: "refresh-odds",
     dates: utcDateWindow(now, boundedHorizonDays),
+    scope: "daily",
+    sports: sports ?? configuredSports(env),
+    generateDecisions: false,
+    preliminary: true,
+    persist,
+    now,
+    env,
+    dependencies
+  });
+}
+
+/**
+ * Re-read days that have already happened.
+ *
+ * Every other job in this file walks forward: `utcDateWindow` starts at today's
+ * UTC midnight and `offsetDays` is always 0. So a fixture is written once while
+ * it is still upcoming and then never looked at again. When it kicks off,
+ * finishes and gets a scoreline, nothing asks the provider for it — the row
+ * keeps whatever status it had when it was in the future.
+ *
+ * Measured 2026-08-03: 1,929 fixtures sat at `scheduled` with a kickoff already
+ * past, the oldest by 22 days. They were not stuck; they were never revisited.
+ *
+ * This walks the window backwards so the final status and score land. It runs
+ * with `generateDecisions: false`, which takes the fixtures endpoint rather
+ * than predictions and reads odds off the same payload — one provider call per
+ * (day, sport), no extra odds quota. Nothing is predicted for a match that has
+ * already been played.
+ */
+export async function refreshResults({
+  now = new Date(),
+  lookbackDays = 3,
+  sports,
+  persist = true,
+  env = process.env,
+  dependencies = defaultDependencies
+}: {
+  now?: Date;
+  lookbackDays?: number;
+  sports?: Sport[];
+  persist?: boolean;
+  env?: Record<string, string | undefined>;
+  dependencies?: IntelligencePipelineDependencies;
+} = {}): Promise<PipelineRunResult> {
+  const bounded = Math.floor(Math.max(1, Math.min(30, lookbackDays)));
+  // Ends yesterday, not today: the daily engine already re-reads today every
+  // half hour, so including it would spend calls on days already covered.
+  return executePipeline({
+    jobType: "refresh-results",
+    dates: utcDateWindow(now, bounded, -bounded),
     scope: "daily",
     sports: sports ?? configuredSports(env),
     generateDecisions: false,

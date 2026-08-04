@@ -136,10 +136,27 @@ function exactOutOfSampleRows({
   for (const outcome of outcomes) {
     const run = outcome.decision_run_id ? runById.get(outcome.decision_run_id) : null;
     const settledAt = outcome.settled_at ? Date.parse(outcome.settled_at) : Number.NaN;
+    // Model identity comes from the outcome row first and the decision run only
+    // as a fallback.
+    //
+    // This used to demand a decision run and read the identity off it. Outcomes
+    // are written without a `decision_run_id` — measured 2026-08-03, it was null
+    // on all 424 tennis outcomes settled since the calibration window — so `run`
+    // was always null and every single outcome was discarded. The receipt then
+    // reported "0/30 exact out-of-sample outcomes are available", which reads as
+    // "we have not settled anything yet" rather than "we cannot tell what
+    // produced these", and no promoted profile could ever go live.
+    //
+    // 20260803011500_attribute_prediction_outcomes stamped `model_key` and
+    // `engine_version` onto the outcome itself precisely so attribution no
+    // longer depends on that join; this is the reader catching up. 402 of those
+    // 424 carry the exact runtime identity.
+    const modelKey = outcome.model_key ?? run?.model_key ?? null;
+    const engineVersion = outcome.engine_version ?? run?.engine_version ?? null;
     if (
       outcome.sport !== promotion.sport || outcome.result !== "won" && outcome.result !== "lost" ||
       !finite(outcome.model_probability) || outcome.model_probability < 0 || outcome.model_probability > 1 ||
-      !run || run.model_key !== promotion.modelKey || run.engine_version !== promotion.engineVersion ||
+      modelKey !== promotion.modelKey || engineVersion !== promotion.engineVersion ||
       !Number.isFinite(settledAt) || settledAt <= monitoringStart || settledAt > now.getTime()
     ) continue;
     deduplicated.set(outcome.id, outcome);
@@ -289,7 +306,7 @@ export async function readCalibrationDriftReceipt(
   if (!client) return buildFailedReceipt(promotion, now, "Supabase client could not be created.");
   const outcomesResult = await client
     .from("op_prediction_outcomes")
-    .select("id,decision_run_id,fixture_external_id,sport,model_probability,implied_probability,value_edge,odds,closing_odds,result,settled_at,created_at")
+    .select("id,decision_run_id,fixture_external_id,sport,model_probability,implied_probability,value_edge,odds,closing_odds,result,settled_at,created_at,model_key,engine_version")
     .eq("sport", promotion.sport)
     .neq("result", "pending")
     .gt("settled_at", monitoringWindowStart(promotion))

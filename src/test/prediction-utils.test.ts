@@ -22421,6 +22421,23 @@ describe("prediction utilities", () => {
     // on network speed alone — and `npm run release:verify` gates releases on
     // this suite. The proof now takes the same `fetchCsv` its dossier already
     // accepted, so the assertions below test the proof rather than the internet.
+    //
+    // `maxSeasons: 5`, not 10, and that is the whole fix for a flaky failure.
+    // The remaining cost is CPU — the walk-forward and threshold sweeps, about
+    // 2.5s per season. Measured: 10 seasons 25.2s, 5 seasons 11.7s, 3 seasons
+    // 5.9s. Skipping the database stage made it *slower*, not faster, so the
+    // sweeps are the entire cost and there is nothing to mock away.
+    //
+    // At 25s against this file's 60s ceiling, with `maxWorkers: 1`, there was
+    // only 2.4x headroom, and the suite timed out when it ran beside a dev
+    // server and a large backfill on the same machine. That took five later
+    // tests in this file down with it: an aborted test leaves its work running
+    // and its module-scope caches half-populated, so the next assertions read
+    // state nobody wrote on purpose.
+    //
+    // Five seasons keeps every assertion below true and still exercises
+    // `minTrainingSeasons: 3` exactly at its floor (5 * 0.7 -> 3), which the
+    // ten-season version never did.
     const promotionSeasonCsv = [
       "Div,Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR,B365H,B365D,B365A",
       "E0,13/08/16,12:30,Hull,Leicester,2,1,H,4.50,3.50,1.91",
@@ -22435,7 +22452,7 @@ describe("prediction utilities", () => {
       env: { NODE_ENV: "test" },
       seasonFrom: 2016,
       seasonTo: 2025,
-      maxSeasons: 10,
+      maxSeasons: 5,
       trainRatio: 0.7,
       minEdge: 0.02,
       minModelProbability: 0.36,
@@ -22456,9 +22473,8 @@ describe("prediction utilities", () => {
     expect(proof.modelPromotionDecision?.proofUrls).toContain("/api/sports/decision/training/football-data-model-promotion-decision");
     expect(proof.modelPromotionDecision?.controls.canPromoteLiveProbabilities).toBe(false);
     expect(proof.modelPromotionDecision?.controls.canPublishPicks).toBe(false);
-    // 60s, not 30s: the remaining cost is the walk-forward and threshold sweeps
-    // over ten seasons, which is real work rather than a hung request. The old
-    // 30s ceiling was tuned around a network fetch that no longer happens.
+    // 60s against a measured 11.7s is ~5x headroom. The ceiling is for a busy
+    // machine, not for the work itself — see the note above the fixture.
   }, 60000);
 
   it("builds a provider corpus dry-run queue across fixture and odds providers without writes", async () => {
