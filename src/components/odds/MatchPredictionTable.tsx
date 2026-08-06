@@ -43,7 +43,7 @@ export function MatchPredictionTable({ rows }: { rows: PredictionListRow[] }) {
                 <td>
                   <LocalTime iso={match.kickoffTime} variant="kickoff" />
                   <br />
-                  <MatchStatusBadge status={match.status} />
+                  <MatchStatusBadge status={match.status} sport={match.sport} kickoffAt={match.kickoffTime} />
                 </td>
                 <td>
                   <span className="table-match">

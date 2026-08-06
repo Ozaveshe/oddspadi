@@ -88,3 +88,28 @@ describe("every state has public copy", () => {
     }
   });
 });
+
+describe("the board badge derives rather than echoes", () => {
+  it("shows a finished match as finished, not as its stored status", async () => {
+    // The exact defect: the badge printed `op_fixtures.status` straight to the
+    // page, so a match that ended at 14:00 read "scheduled" until a sweep
+    // noticed hours later. Same stored status, same fixture, correct label.
+    const { MatchStatusBadge } = await import("@/components/odds/Badges");
+    const markup = renderToStaticMarkup(
+      <MatchStatusBadge
+        status="scheduled"
+        sport="football"
+        kickoffAt="2026-08-06T12:00:00Z"
+        now={new Date("2026-08-06T20:00:00Z")}
+      />
+    );
+    expect(markup).not.toContain(">scheduled<");
+    expect(markup).toContain("Result missing");
+  });
+
+  it("still renders when a caller has only the status to give", async () => {
+    // Several call sites have no kickoff to hand. A bare label beats an error.
+    const { MatchStatusBadge } = await import("@/components/odds/Badges");
+    expect(renderToStaticMarkup(<MatchStatusBadge status="scheduled" />)).toContain(">scheduled<");
+  });
+});

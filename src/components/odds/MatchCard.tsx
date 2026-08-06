@@ -67,7 +67,7 @@ export function MatchCard({ match, prediction, context = {} }: { match: MatchSum
               {match.league.name}
             </span>
             <span className="country-inline"><CountryFlag country={match.league.country} flag={match.league.flag} size={16} />{match.league.country}</span>
-            <MatchStatusBadge status={match.status} />
+            <MatchStatusBadge status={match.status} sport={match.sport} kickoffAt={match.kickoffTime} />
           </div>
           <div className="teams">
             <span className="team-inline">
