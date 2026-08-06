@@ -32,17 +32,22 @@ emits one of a **four-step funnel** defined in
 | open_match_detail | `match_detail_opened` | `/predictions/[matchId]` |
 | action | `share_clicked`, `betslip_pick_added`, `team_followed`, `outbound_link_clicked`, `affiliate_outbound_clicked` | anywhere |
 
-Routes marked **none** below emit no view event at all. That is a real
-measurement gap, not an omission in this table — see *Known gaps*.
+Routes the funnel does not name emit **`surface_viewed`**, carrying a
+`page_context` of the owning surface (`today`, `explore`, `track_record`,
+`my_padi`) and a `surface_route`. One event per navigation, gated on consent
+like every other. Surface ownership comes from
+`src/lib/navigation/surfaces.ts`, the same map the nav uses for active-state
+highlighting, so a view cannot report one surface while the nav highlights
+another.
 
 ## Table
 
 | Route | Canonical | Code | Index | Surface | Legacy support | Analytics |
 |---|---|---|---|---|---|---|
 | `/` | `/` | 200 | SEO | Today | — | `site_landed` (`home`) |
-| `/explore` | `/explore` | 200 | SEO | Explore | — | none |
-| `/track-record` | `/track-record` | 200 | SEO | Track Record | — | none |
-| `/my` | `/my` | 200 | noindex | My Padi | — | none |
+| `/explore` | `/explore` | 200 | SEO | Explore | — | `surface_viewed` (`explore`) |
+| `/track-record` | `/track-record` | 200 | SEO | Track Record | — | `surface_viewed` (`track_record`) |
+| `/my` | `/my` | 200 | noindex | My Padi | — | `surface_viewed` (`my_padi`) |
 | `/tips` | `/predictions/today` | **308** | noindex | Explore | **yes** — pre-v1.7 alias | none (redirects before render) |
 | `/predictions` | `/predictions` | 200 | SEO | Explore | — | `predictions_viewed` |
 | `/predictions/[matchId]` | `/predictions/[matchId]` | 200 | SEO | Explore | — | `match_detail_opened` (+ `match_id`) |
@@ -54,27 +59,24 @@ measurement gap, not an omission in this table — see *Known gaps*.
 | `/predictions/decision-engine` | `/predictions/decision-engine` | 200 | SEO | Track Record | — | `predictions_viewed` |
 | `/predictions/bet-slip` | `/predictions/bet-slip` | 200 | SEO | My Padi | — | `predictions_viewed`; `betslip_pick_added` on action |
 | `/predictions/league/[slug]/table` | same | 200 | SEO | Explore | — | `predictions_viewed` |
-| `/daily-double` | `/daily-double` | 200 | SEO | Today | — | none |
-| `/live-scores` | `/live-scores` | 200 | SEO | Explore | — | none |
-| `/news`, `/news/[slug]` | same | 200 | SEO | Explore | — | none |
-| `/season-outlooks` | `/season-outlooks` | 200 | SEO | Explore | — | none |
-| `/community`, `/community/u/[handle]` | same | 200 | SEO / noindex | Explore | — | none on view; `community_post_created`, `community_comment_posted` on action |
-| `/forums`, `/forums/[category]`, `/forums/[category]/[thread]` | same | 200 | SEO | Explore | — | none on view; `forum_thread_created`, `forum_reply_created` on action |
-| `/engine/performance` | `/engine/performance` | 200 | SEO | Track Record | — | none |
-| `/account` | `/account` | 200 | noindex | My Padi | — | none on view; `account_auth_completed`, `account_signed_out` on action |
+| `/daily-double` | `/daily-double` | 200 | SEO | Today | — | `surface_viewed` (`today`) |
+| `/live-scores` | `/live-scores` | 200 | SEO | Explore | — | `surface_viewed` (`explore`) |
+| `/news`, `/news/[slug]` | same | 200 | SEO | Explore | — | `surface_viewed` (`explore`) |
+| `/season-outlooks` | `/season-outlooks` | 200 | SEO | Explore | — | `surface_viewed` (`explore`) |
+| `/community`, `/community/u/[handle]` | same | 200 | SEO / noindex | Explore | — | `surface_viewed` (`explore`); `community_post_created`, `community_comment_posted` on action |
+| `/forums`, `/forums/[category]`, `/forums/[category]/[thread]` | same | 200 | SEO | Explore | — | `surface_viewed` (`explore`); `forum_thread_created`, `forum_reply_created` on action |
+| `/engine/performance` | `/engine/performance` | 200 | SEO | Track Record | — | `surface_viewed` (`track_record`) |
+| `/account` | `/account` | 200 | noindex | My Padi | — | `surface_viewed` (`my_padi`); `account_auth_completed`, `account_signed_out` on action |
 | `/about`, `/privacy`, `/terms` | same | 200 | SEO | footer | — | none |
 | `/responsible-use` | `/responsible-use` | 200 | SEO | footer | — | none |
 | `/offline` | — | 200 | noindex | — | — | — |
 
 ## Known gaps
 
-**Fifteen routes emit no view event**, including all four surface hubs except
-Today. The funnel can therefore measure land → predictions → match → action,
-but cannot answer "did anyone use Explore, Track Record or My Padi", which is
-precisely what the v1.7 consolidation was meant to change. Closing this means
-extending the pathname match in `Analytics.tsx` with a surface-level
-`page_context`; it is not done here because adding events is a measurement
-decision with consent and volume implications, not a routing fix.
+Legal and utility routes (`/about`, `/privacy`, `/terms`, `/responsible-use`,
+`/offline`) emit nothing. They sit outside the four surfaces —
+`surfaceForPath()` returns null — so there is no surface to label them with,
+and a footer page view is not a product question worth an event.
 
 `/results` has never existed and is not linked from anywhere. It returns 404 by
 design; it is listed here only because external audits have asked after it.
@@ -119,3 +121,4 @@ the pre-v1.7 navigation arrived days after the consolidation shipped.
   chains, duplicate canonicals, orphans, route-map coverage
 - `src/test/product-shell-contract.test.tsx` — one shell on every route
 - `src/test/product-navigation.test.ts` — surface ownership and hub links
+- `src/test/navigation-context.test.ts` — carried `?sport=`/`?date=` and the shared surface map

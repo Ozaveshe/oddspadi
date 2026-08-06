@@ -50,9 +50,41 @@ loop.
 - every fixture doorway points at the canonical `/predictions/[matchId]`, so
   context cannot be lost to a duplicate page
 
-## What is not yet tested
+## Carrying `?sport=` and `?date=` across a link
 
-Query-parameter round-tripping across a real navigation (Today → match →
-back, with `?date=` and `?sport=` intact) needs a browser-driven test rather
-than a unit test. It is not covered today, and is the largest remaining hole in
-this document's guarantees.
+`src/lib/navigation/context.ts` is the one place this happens.
+`readNavigationContext()` pulls the carried keys off the incoming params;
+`withNavigationContext(href, context)` appends them to an internal link.
+
+The whitelist is deliberate. Copying the whole query string would drag cache
+busters and campaign tags into every internal link, and each variant is a
+separate indexable URL. A key already on the href wins, so the sport switcher's
+explicit `?sport=football` is never overwritten by ambient tennis context.
+
+**This was broken until 2026-08-03.** Every fixture and view link was built as
+a bare path, so `/predictions?sport=tennis` → "Week" landed on the *football*
+week. The browser back button restores the query, which is why it survived: it
+only breaks on forward links, and only when someone uses the page's own
+navigation instead of the back gesture. The view switcher on `/predictions` now
+carries the context; the remaining call sites are listed below.
+
+## Still bare
+
+These links do not yet carry context. None of them lose it to the back button,
+so the cost is limited to forward navigation, but they are the remaining work:
+
+- fixture cards (`MatchCard`, `IntelligenceSlate`) → `/predictions/[matchId]`
+- the sport switcher's "All sports" entry, which intentionally clears `?sport=`
+- hub tiles on `/explore` and `/track-record`
+
+## What is tested
+
+`src/test/navigation-context.test.ts` — 14 tests over the pure helpers: key
+whitelist, both param shapes, blank handling, append, no-op when empty,
+existing-key precedence, query and fragment preservation, external links left
+alone, and a board → fixture → board round trip.
+
+Testing this as a pure function rather than end-to-end is a deliberate trade.
+The property is decided entirely by how an href is built, and a browser test
+would need Playwright, a dev server and a CI browser download to assert the
+same thing more slowly.
