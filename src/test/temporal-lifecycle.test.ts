@@ -108,6 +108,25 @@ describe("fixture state never rests on the clock alone", () => {
     expect(done.terminal).toBe(true);
   });
 
+  it("stops believing a provider 'live' once the match should have ended", () => {
+    // Found by running the reconciler against production: 35 fixtures were
+    // still marked live, some more than 60 hours past kick-off. A status is a
+    // claim that goes stale silently, and rendering a three-day-old match as
+    // in-play is a worse lie than admitting we lost track of it.
+    const stillLive = fixtureLifecycle({ ...base, status: "live" }, at("2026-08-09T12:00:00Z"));
+    expect(stillLive.state).toBe("unresolved");
+
+    // Inside the window it is still credible.
+    const plausible = fixtureLifecycle({ ...base, status: "live" }, at("2026-08-06T14:00:00Z"));
+    expect(plausible.state).toBe("live");
+  });
+
+  it("quarantines an observed start that never produced a result", () => {
+    const state = fixtureLifecycle({ ...base, startedAt: at("2026-08-06T12:01:00Z") }, at("2026-08-07T12:00:00Z"));
+    expect(state.state).toBe("unresolved");
+    expect(state.basis).toBe("start-observed");
+  });
+
   it("lets an observed result outrank a provider status still saying live", () => {
     const state = fixtureLifecycle(
       { ...base, status: "live", resultedAt: at("2026-08-06T13:55:00Z") },

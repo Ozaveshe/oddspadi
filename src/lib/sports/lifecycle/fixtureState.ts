@@ -125,7 +125,20 @@ export function fixtureLifecycle(facts: FixtureTemporalFacts, now: Date): Fixtur
     return decide(overdueByMs > 0 ? "unresolved" : "due", "no-evidence");
   }
 
-  // 4. Observed in play.
+  // 4. Observed in play — but only while that is still plausible.
+  //
+  //    A provider status is a claim with a timestamp we mostly do not get, and
+  //    it goes stale silently. Measured against production on 2026-08-06: 35
+  //    fixtures were still marked `live`, some more than 60 hours after
+  //    kick-off. Trusting that unconditionally would render three-day-old
+  //    matches as in-play, which is a worse lie than admitting we lost track.
+  //
+  //    Past the window, evidence of a start with no result is exactly the
+  //    "should have finished, did not hear" case, so it lands in quarantine
+  //    with everything else we cannot account for.
+  if (overdueByMs > 0 && (facts.startedAt || stated === "live")) {
+    return decide("unresolved", facts.startedAt ? "start-observed" : "provider-status");
+  }
   if (facts.startedAt) return decide("live", "start-observed");
   if (stated === "live") return decide("live", "provider-status");
 
