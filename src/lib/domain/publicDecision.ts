@@ -3,10 +3,15 @@
  *
  * Audited 2026-08-06. Nothing in the codebase carried these fields together:
  * `DecisionMarketAnalysis` had ~13 of them, `CanonicalDecision` a different
- * overlapping set, and `PublicationCandidate` was the only object holding all
- * four provenance versions — while recomputing edge itself rather than reading
- * it. Surfaces therefore assembled their own view from two or three of those,
- * and disagreed.
+ * overlapping set, and `PublicationCandidate` was the only object naming the
+ * provenance versions — while recomputing edge itself rather than reading it.
+ * Surfaces therefore assembled their own view from two or three of those, and
+ * disagreed.
+ *
+ * `PublicationCandidate` names four versions; this carries three. The fourth,
+ * `featureSetVersion`, is deliberately omitted: nothing in `src/lib` produces
+ * it, its only writers are SQL parameters, so a slot here would be a field
+ * that is null on every payload forever. Add it when something sets it.
  *
  * This type is deliberately *flat and total*. No optional escape hatches on the
  * numbers: if a value cannot be established the field is `null`, and `null`
@@ -173,14 +178,25 @@ export function supportsValueClaim(decision: PublicDecision): boolean {
 }
 
 /**
- * True when the two are describing the same market differently.
+ * True when a payload is internally incoherent, regardless of when it is read.
  *
  * A positive candidate under a `pass` is *expected* and not a contradiction —
  * that is the separation working. What must never happen is the inverse: a
- * decision we published while the arithmetic says the candidate is negative or
- * its price is gone.
+ * selection we published while the arithmetic says the candidate was never
+ * positive.
+ *
+ * `stale_candidate` is deliberately **not** included, though it was in the
+ * first draft of this contract. A publication is an immutable historical
+ * record: a pick published at 09:00 legitimately has a dead price by 21:00,
+ * and flagging that as a contradiction conflates "this record is wrong" with
+ * "this record is old" — which would fire on almost every published pick and
+ * train everyone to ignore the signal.
+ *
+ * Staleness is already handled, and more precisely, by `supportsValueClaim`:
+ * a `stale_candidate` fails its `positive_candidate` requirement, so it cannot
+ * back a current claim while remaining a truthful record of what was decided.
  */
 export function isContradictory(decision: PublicDecision): boolean {
   const published = decision.decisionState === "pick" || decision.publicationState === "published";
-  return published && (decision.candidateState === "negative_candidate" || decision.candidateState === "stale_candidate");
+  return published && decision.candidateState === "negative_candidate";
 }

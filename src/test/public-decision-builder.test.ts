@@ -416,9 +416,14 @@ describe("candidate state is arithmetic, not policy", () => {
     expect(decision.candidateState).toBe("stale_candidate");
   });
 
-  it("surfaces the contradiction when a published pick outlives its price", () => {
+  it("lets a published pick outlive its price without calling the record wrong", () => {
     // Same payload, read four hours later. The engine's verdict has not
     // changed; the price it depended on has expired.
+    //
+    // This is NOT a contradiction. A publication is an immutable historical
+    // record — a pick published at 09:00 legitimately has a dead price by
+    // 21:00, and flagging that would fire on almost every published pick and
+    // train everyone to ignore the signal. It is old, not wrong.
     const analysis = analysisFixture();
     const later = new Date("2026-08-06T16:00:00.000Z");
     const decision = buildPublicDecision({
@@ -431,6 +436,24 @@ describe("candidate state is arithmetic, not policy", () => {
 
     expect(decision.decisionState).toBe("pick");
     expect(decision.candidateState).toBe("stale_candidate");
+    expect(isContradictory(decision)).toBe(false);
+    // Staleness is caught here instead, and more precisely: the record stays
+    // truthful about what was decided, but cannot back a claim made now.
+    expect(supportsValueClaim(decision)).toBe(false);
+  });
+
+  it("still calls a published pick wrong when the arithmetic was never positive", () => {
+    // The case isContradictory does exist for: not a question of age.
+    const analysis = analysisFixture({ modelProbability: 0.2, noVigImpliedProbability: 0.5 });
+    const decision = buildPublicDecision({
+      analysis,
+      summary: summaryFixture({ allMarketAnalyses: [analysis] }),
+      publication: publicationFixture(),
+      consensusMethod: "median-shin-no-vig-v2",
+      now: new Date("2026-08-06T12:05:00.000Z")
+    });
+
+    expect(decision.candidateState).toBe("negative_candidate");
     expect(isContradictory(decision)).toBe(true);
   });
 
