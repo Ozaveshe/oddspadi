@@ -1,3 +1,5 @@
+import type { FixtureStatus } from "@/lib/domain/states";
+
 /**
  * What state a fixture is in, and why.
  *
@@ -146,6 +148,44 @@ export function fixtureLifecycle(facts: FixtureTemporalFacts, now: Date): Fixtur
   if (elapsedMs < 0) return decide("scheduled", "clock-only");
   if (overdueByMs > 0) return decide("unresolved", "no-evidence");
   return decide("due", "no-evidence");
+}
+
+/**
+ * How a derived state answers to the shared domain vocabulary.
+ *
+ * `FixtureStatus` in `@/lib/domain/states` is the normalised **provider**
+ * status — what a fixture is according to whoever told us. `FixtureLifecycleState`
+ * is **our** reading of the evidence. They are two concepts, mirroring
+ * `op_fixtures.status` and `op_fixtures.lifecycle_state`, and collapsing them
+ * would lose the distinction the schema exists to preserve.
+ *
+ * What is striking is that the domain vocabulary already had the right shape.
+ * `delayed` and `unknown` were the correct words for "kick-off passed, nothing
+ * heard" and "we cannot account for this" — there was simply no way to
+ * *compute* them, so nothing ever produced one. `due` and `unresolved` are
+ * those two states with evidence behind them.
+ *
+ * The mapping is total, and a test asserts it: every lifecycle state resolves
+ * to a real `FixtureStatus`, so the two vocabularies cannot drift into being
+ * genuine synonyms for each other.
+ */
+export const LIFECYCLE_TO_FIXTURE_STATUS: Record<FixtureLifecycleState, FixtureStatus> = {
+  scheduled: "scheduled",
+  due: "delayed",
+  live: "live",
+  finished: "finished",
+  unresolved: "unknown",
+  postponed: "postponed",
+  cancelled: "cancelled",
+  abandoned: "abandoned",
+  // No `suspended` in the shared vocabulary. A paused match that may resume is
+  // a delay from the visitor's side, and inventing a ninth domain state to say
+  // so would be adding vocabulary for a distinction no surface acts on.
+  suspended: "delayed"
+};
+
+export function fixtureStatusFromLifecycle(state: FixtureLifecycleState): FixtureStatus {
+  return LIFECYCLE_TO_FIXTURE_STATUS[state];
 }
 
 /**
