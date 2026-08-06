@@ -41,7 +41,9 @@
     "ops:publish": "node --env-file-if-exists=.env.local scripts/publish-picks.mjs",
     "ops:run-publisher": "node --env-file-if-exists=.env.local scripts/run-publisher.mjs",
     "ops:expire-fixtures": "node --env-file-if-exists=.env.local scripts/expire-stale-fixtures.mjs",
-    "ops:backfill-results": "node --env-file-if-exists=.env.local scripts/backfill-fixture-results.mjs"
+    "ops:backfill-results": "node --env-file-if-exists=.env.local scripts/backfill-fixture-results.mjs",
+    "check:migrations": "node --env-file-if-exists=.env.local scripts/check-migrations.mjs",
+    "check:migrations:ledger": "node --env-file-if-exists=.env.local scripts/check-migrations.mjs --ledger"
   },
   "engines": {
     "node": "22.x"

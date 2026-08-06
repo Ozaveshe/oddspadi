@@ -8,8 +8,17 @@
  * skipped, silently), and a destructive statement shipped without the operator
  * knowing it is destructive.
  *
- * This checks both. It does not connect to a database — it is a lint over the
- * files, safe to run anywhere.
+ * This checks both. By default it does not connect to a database — it is a
+ * lint over the files, safe to run anywhere.
+ *
+ * With `--ledger` it also compares the filenames against what the database
+ * says it has applied. That catches a third failure, which the file lint
+ * cannot see and which happened here: eleven migrations were applied through
+ * the MCP path, which assigns its own version at apply time
+ * (`20260803114025`) rather than using the filename (`20260803120000`). The
+ * schema was right and the ledger was right about what ran, but they did not
+ * refer to the same things, so a `supabase db push` against a fresh
+ * environment would have re-run all eleven.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -74,6 +83,37 @@ for (const file of files) {
 }
 
 console.log(`checked ${files.length} migrations`);
+
+// --ledger: compare filenames against the applied versions the database
+// reports. Needs SUPABASE_SECRET_KEY; the RPC is revoked from anon.
+if (process.argv.includes("--ledger")) {
+  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    console.error("--ledger needs SUPABASE_URL and SUPABASE_SECRET_KEY.");
+    process.exit(2);
+  }
+  const { createClient } = await import("@supabase/supabase-js");
+  const db = createClient(url, key, { auth: { persistSession: false } });
+  const { data, error } = await db.rpc("op_applied_migration_versions");
+  if (error) {
+    console.error(`ledger read failed: ${error.message}`);
+    process.exit(2);
+  }
+  const applied = new Set((data ?? []).map((row) => String(row.version)));
+  const unapplied = files.map((file) => file.slice(0, 14)).filter((version) => !applied.has(version));
+  // Ledger rows with no file are historical: the MCP path records each apply
+  // under its own version, so an iterative fix that was later folded into one
+  // committed file leaves extra rows behind. Harmless, and reported for
+  // context rather than failed on.
+  const ledgerOnly = [...applied].filter((version) => !files.some((file) => file.startsWith(version)));
+  console.log(`ledger: ${applied.size} applied, ${ledgerOnly.length} historical row(s) with no file`);
+  if (unapplied.length) {
+    problems.push(
+      `${unapplied.length} migration file(s) are not recorded as applied and would re-run on push: ${unapplied.join(", ")}`
+    );
+  }
+}
 if (destructive.length) {
   console.log(`\n${destructive.length} destructive statement(s) — confirm each is intended:`);
   for (const entry of destructive) console.log(`  ${entry}`);
