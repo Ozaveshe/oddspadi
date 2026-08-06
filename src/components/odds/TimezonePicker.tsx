@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DEFAULT_TIMEZONE, getPreferredTimeZone, setPreferredTimeZone } from "@/components/odds/LocalTime";
+import { DEFAULT_TIMEZONE, getPreferredTimeZone, publishTimeZoneToServer, setPreferredTimeZone } from "@/components/odds/LocalTime";
 
 /**
  * Site-wide timezone preference.
@@ -28,7 +28,14 @@ export function TimezonePicker() {
   const [browserZone, setBrowserZone] = useState<string | null>(null);
 
   useEffect(() => {
-    setZone(getPreferredTimeZone());
+    const preferred = getPreferredTimeZone();
+    setZone(preferred);
+    // Visitors who chose a zone before the cookie existed have it only in
+    // localStorage, which the server cannot see — so their first render after
+    // this ships would still be built for the UTC day. Mirroring on mount
+    // backfills them silently; the picker is in the layout, so it happens once
+    // per session on every page.
+    publishTimeZoneToServer(preferred);
     try {
       const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (detected && !ZONES.some((entry) => entry.id === detected)) setBrowserZone(detected);

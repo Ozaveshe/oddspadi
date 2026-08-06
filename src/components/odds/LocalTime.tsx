@@ -44,7 +44,33 @@ export function setPreferredTimeZone(zone: string): void {
   } catch {
     // Storage can be unavailable (private mode); the event still updates the page.
   }
+  publishTimeZoneToServer(zone);
   window.dispatchEvent(new CustomEvent(TIMEZONE_CHANGE_EVENT, { detail: zone }));
+}
+
+/**
+ * Mirror the preference into a cookie so the server can read it.
+ *
+ * localStorage is invisible to a server render, so until this existed the
+ * picker only re-formatted times that had already been *selected* for the UTC
+ * day. Choosing the right rows has to happen before the query, which means the
+ * zone has to travel with the request. See `src/lib/time/timezoneCookie.ts`,
+ * which owns the read and the attribute string.
+ *
+ * Attributes are duplicated here rather than imported because that module
+ * pulls in `next/headers`, which cannot be bundled into a client component.
+ * `timezone-cookie-contract.test.ts` asserts the two stay identical.
+ */
+export function publishTimeZoneToServer(zone: string): void {
+  if (typeof document === "undefined") return;
+  const attributes = [
+    `oddspadi-tz=${encodeURIComponent(zone)}`,
+    "path=/",
+    `max-age=${60 * 60 * 24 * 365}`,
+    "samesite=lax"
+  ];
+  if (window.location.protocol === "https:") attributes.push("secure");
+  document.cookie = attributes.join("; ");
 }
 
 const TIME_ONLY: ReadonlySet<Variant> = new Set<Variant>(["time", "seconds"]);
