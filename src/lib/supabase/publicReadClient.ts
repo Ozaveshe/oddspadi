@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabasePublicConfig } from "@/lib/supabase/publicConfig";
+import { uncachedFetch } from "@/lib/supabase/uncachedFetch";
 
 // Optional public enhancements must yield quickly to repository-backed
 // fallbacks when the managed database is slow or unavailable.
@@ -24,7 +25,8 @@ export function getSupabasePublicReadClient(): SupabaseClient | null {
   const client = createClient(config.url, config.key, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: {
-      fetch: (input, init) => fetch(input, { ...init, cache: "no-store" })
+      // Same reason as the server client, which was missing this. See uncachedFetch.
+      fetch: uncachedFetch
     }
   });
 

@@ -475,7 +475,28 @@ export async function persistMarketDecisions({
     .in("fixture_id", databaseFixtureIds)
     .is("superseded_by", null);
   if (previousError) throw new Error(`Previous decision read failed: ${previousError.message}`);
-  const previousByKey = new Map((previous ?? []).map((row) => [`${row.fixture_id}:${row.market}:${row.selection}`, row]));
+  /**
+   * Every prior decision for a selection, not one of them.
+   *
+   * This was `new Map(rows.map(row => [key, row]))`, which keeps only the last
+   * row per duplicate key. There is normally more than one prior — each engine
+   * run appends a decision — so supersession retired a single arbitrary row and
+   * left the rest marked current. Net effect: one row added and at most one
+   * retired per run, so the backlog only ever grew.
+   *
+   * Measured 2026-08-03 on today's board: 534 distinct selections carrying
+   * 43,586 rows with `superseded_by is null`, 81.6 generations each, going back
+   * six days. That is a correctness problem before it is a performance one —
+   * "current" is supposed to identify one decision, and it identified eighty.
+   */
+  const previousByKey = new Map<string, Array<{ id: string; settlement_status: string | null }>>();
+  for (const row of previous ?? []) {
+    const key = `${row.fixture_id}:${row.market}:${row.selection}`;
+    const bucket = previousByKey.get(key);
+    const entry = { id: String(row.id), settlement_status: row.settlement_status as string | null };
+    if (bucket) bucket.push(entry);
+    else previousByKey.set(key, [entry]);
+  }
   const insertedRows: Array<{ id: string; fixture_id: string; market: string; selection: string }> = [];
   for (const decisions of chunks(allDecisions)) {
     const rows = decisions.map((decision) => ({
@@ -516,14 +537,23 @@ export async function persistMarketDecisions({
     if (error) throw new Error(`Decision persistence failed: ${error.message}`);
     insertedRows.push(...((data ?? []) as Array<{ id: string; fixture_id: string; market: string; selection: string }>));
   }
+  // Retire every pending prior for the selection, in one statement per insert
+  // rather than one per prior. A settled prior is deliberately left alone —
+  // marking a decision stale after it has been graded would rewrite the record
+  // — but it no longer blocks its siblings from being retired, which is what
+  // the previous `settlement_status !== "pending"` early-continue did.
+  const supersededAt = new Date().toISOString();
   for (const inserted of insertedRows) {
-    const prior = previousByKey.get(`${inserted.fixture_id}:${inserted.market}:${inserted.selection}`);
-    if (!prior || prior.id === inserted.id || prior.settlement_status !== "pending") continue;
-    const { error } = await client
-      .from("op_market_decisions")
-      .update({ superseded_by: inserted.id, decision_status: "stale", public_status: "stale", updated_at: new Date().toISOString() })
-      .eq("id", prior.id);
-    if (error) throw new Error(`Decision supersession failed: ${error.message}`);
+    const priors = previousByKey.get(`${inserted.fixture_id}:${inserted.market}:${inserted.selection}`) ?? [];
+    const retirable = priors.filter((prior) => prior.id !== inserted.id && prior.settlement_status === "pending").map((prior) => prior.id);
+    if (!retirable.length) continue;
+    for (const idChunk of chunks(retirable)) {
+      const { error } = await client
+        .from("op_market_decisions")
+        .update({ superseded_by: inserted.id, decision_status: "stale", public_status: "stale", updated_at: supersededAt })
+        .in("id", idChunk);
+      if (error) throw new Error(`Decision supersession failed: ${error.message}`);
+    }
   }
   return decisionsByFixture;
 }
@@ -866,7 +896,32 @@ export async function readStoredSlate({
     const metadata = record(row.metadata);
     return !String(row.provider).toLowerCase().includes("mock") && metadata.sourceKind !== "demo" && metadata.sourceKind !== "mock";
   });
-  const eligibleRows = includeSuspended ? providerRows : providerRows.filter((row) => row.status !== "suspended");
+  // One card per match.
+  //
+  // The Odds API and API-Sports both create a fixture row for the same real
+  // match under different names — "TPS Turku v IFK Mariehamn" and "Turku PS v
+  // Mariehamn" — so the board showed it twice. Worse, only API-Sports has a
+  // results endpoint, so the Odds API copy could never be graded: of 84 pairs
+  // measured 2026-08-03, 47 disagreed on status and the disagreement always ran
+  // the same way, the gradeable copy `finished` and its twin `abandoned`.
+  //
+  // `op_flag_duplicate_fixtures` stamps the loser rather than deleting it, and
+  // only when the winner actually carries odds — 10 of the 84 duplicates held
+  // the only priced copy. The row keeps its data and stays auditable; it just
+  // does not get a second card.
+  //
+  // `abandoned` belongs with `suspended` here, not on the board.
+  //
+  // Marking a fixture abandoned in the database was only half the job: the
+  // slate read still returned it, so a match that kicked off at 01:30 and was
+  // written off hours later kept rendering as a decision card with a live
+  // price all day. That is the thing the expiry sweep exists to stop.
+  //
+  // An abandoned fixture has no result to show and no kickoff to wait for. It
+  // settles as void and belongs in the record, not on a board of what is on.
+  const NON_BOARD_STATUSES = new Set(["suspended", "abandoned"]);
+  const boardRows = providerRows.filter((row) => !record(row.metadata).duplicateOf);
+  const eligibleRows = includeSuspended ? boardRows : boardRows.filter((row) => !NON_BOARD_STATUSES.has(String(row.status)));
   const staleRows = eligibleRows.filter((row) => !isStoredFixtureFresh(text(row.last_synced_at), now, maxFixtureAgeMs));
   const identityMaxAgeMs = Math.max(maxFixtureAgeMs, DEFAULT_STORED_FIXTURE_IDENTITY_MAX_AGE_MS);
   const expiredIdentityRows = eligibleRows.filter((row) => !isStoredFixtureFresh(text(row.last_synced_at), now, identityMaxAgeMs));

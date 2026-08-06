@@ -39,7 +39,9 @@
     "docs:state-matrix": "vite-node --config scripts/vite-node.config.ts scripts/generate-state-matrix-doc.ts",
     "gate:release": "node scripts/release-gate.mjs",
     "ops:publish": "node --env-file-if-exists=.env.local scripts/publish-picks.mjs",
-    "ops:run-publisher": "node --env-file-if-exists=.env.local scripts/run-publisher.mjs"
+    "ops:run-publisher": "node --env-file-if-exists=.env.local scripts/run-publisher.mjs",
+    "ops:expire-fixtures": "node --env-file-if-exists=.env.local scripts/expire-stale-fixtures.mjs",
+    "ops:backfill-results": "node --env-file-if-exists=.env.local scripts/backfill-fixture-results.mjs"
   },
   "engines": {
     "node": "22.x"

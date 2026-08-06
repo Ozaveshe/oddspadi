@@ -1,0 +1,381 @@
+Div,Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR,B365H,B365D,B365A
+E0,05/08/2022,20:00,Crystal Palace,Arsenal,0,2,A,4.2,3.6,1.85
+E0,06/08/2022,12:30,Fulham,Liverpool,2,2,D,11,6,1.25
+E0,06/08/2022,15:00,Bournemouth,Aston Villa,2,0,H,3.75,3.5,2
+E0,06/08/2022,15:00,Leeds,Wolves,2,1,H,2.25,3.4,3.2
+E0,06/08/2022,15:00,Newcastle,Nott'm Forest,2,0,H,1.66,3.8,5.25
+E0,06/08/2022,15:00,Tottenham,Southampton,4,1,H,1.33,5.5,8.5
+E0,06/08/2022,17:30,Everton,Chelsea,0,1,A,5.5,4,1.61
+E0,07/08/2022,14:00,Leicester,Brentford,2,2,D,2,3.75,3.5
+E0,07/08/2022,14:00,Man United,Brighton,1,2,A,1.6,4.2,5.25
+E0,07/08/2022,16:30,West Ham,Man City,0,2,A,8,5,1.36
+E0,13/08/2022,12:30,Aston Villa,Everton,2,1,H,1.8,3.5,4.75
+E0,13/08/2022,15:00,Arsenal,Leicester,4,2,H,1.53,4.33,5.75
+E0,13/08/2022,15:00,Brighton,Newcastle,0,0,D,2.45,3.2,3
+E0,13/08/2022,15:00,Man City,Bournemouth,4,0,H,1.06,13,29
+E0,13/08/2022,15:00,Southampton,Leeds,2,2,D,2.25,3.5,3.1
+E0,13/08/2022,15:00,Wolves,Fulham,0,0,D,2.3,3.3,3.2
+E0,13/08/2022,17:30,Brentford,Man United,4,0,H,3.75,3.5,2
+E0,14/08/2022,14:00,Nott'm Forest,West Ham,1,0,H,4.2,3.6,1.85
+E0,14/08/2022,16:30,Chelsea,Tottenham,2,2,D,2.25,3.4,3.2
+E0,15/08/2022,20:00,Liverpool,Crystal Palace,1,1,D,1.18,6.75,16
+E0,20/08/2022,12:30,Tottenham,Wolves,1,0,H,1.4,4.75,7.5
+E0,20/08/2022,15:00,Crystal Palace,Aston Villa,3,1,H,2.5,3.25,2.9
+E0,20/08/2022,15:00,Everton,Nott'm Forest,1,1,D,1.9,3.6,4
+E0,20/08/2022,15:00,Fulham,Brentford,3,2,H,2.45,3.4,2.9
+E0,20/08/2022,15:00,Leicester,Southampton,1,2,A,1.83,4,4
+E0,20/08/2022,17:30,Bournemouth,Arsenal,0,3,A,8,4.75,1.4
+E0,21/08/2022,14:00,Leeds,Chelsea,3,0,H,5.75,4.5,1.53
+E0,21/08/2022,14:00,West Ham,Brighton,0,2,A,2.3,3.4,3.1
+E0,21/08/2022,16:30,Newcastle,Man City,3,3,D,7.5,5,1.36
+E0,22/08/2022,20:00,Man United,Liverpool,2,1,H,5.25,4.33,1.6
+E0,27/08/2022,12:30,Southampton,Man United,0,1,A,4.2,4,1.8
+E0,27/08/2022,15:00,Brentford,Everton,1,1,D,2,3.5,3.75
+E0,27/08/2022,15:00,Brighton,Leeds,1,0,H,1.9,3.8,3.8
+E0,27/08/2022,15:00,Chelsea,Leicester,2,1,H,1.4,5,7
+E0,27/08/2022,15:00,Liverpool,Bournemouth,9,0,H,1.1,10,26
+E0,27/08/2022,15:00,Man City,Crystal Palace,4,2,H,1.18,7.5,13
+E0,27/08/2022,17:30,Arsenal,Fulham,2,1,H,1.3,5.75,9
+E0,28/08/2022,14:00,Aston Villa,West Ham,0,1,A,2.3,3.4,3.1
+E0,28/08/2022,14:00,Wolves,Newcastle,1,1,D,2.7,3.3,2.7
+E0,28/08/2022,16:30,Nott'm Forest,Tottenham,0,2,A,7,4.6,1.44
+E0,30/08/2022,19:30,Crystal Palace,Brentford,1,1,D,2.05,3.4,3.6
+E0,30/08/2022,19:30,Fulham,Brighton,2,1,H,3.1,3.3,2.3
+E0,30/08/2022,19:45,Southampton,Chelsea,2,1,H,5.25,4,1.61
+E0,30/08/2022,20:00,Leeds,Everton,1,1,D,2.15,3.5,3.3
+E0,31/08/2022,19:30,Arsenal,Aston Villa,2,1,H,1.45,4.5,6
+E0,31/08/2022,19:30,Bournemouth,Wolves,0,0,D,3.5,3.3,2.15
+E0,31/08/2022,19:30,Man City,Nott'm Forest,6,0,H,1.06,13,29
+E0,31/08/2022,19:45,West Ham,Tottenham,1,1,D,3.6,3.8,1.95
+E0,31/08/2022,20:00,Liverpool,Newcastle,2,1,H,1.33,5.25,9
+E0,01/09/2022,20:00,Leicester,Man United,0,1,A,3.4,3.75,2.05
+E0,03/09/2022,12:30,Everton,Liverpool,0,0,D,7,4.75,1.4
+E0,03/09/2022,15:00,Brentford,Leeds,5,2,H,2.1,3.5,3.4
+E0,03/09/2022,15:00,Chelsea,West Ham,2,1,H,1.55,4.5,5.5
+E0,03/09/2022,15:00,Newcastle,Crystal Palace,0,0,D,2,3.5,3.75
+E0,03/09/2022,15:00,Nott'm Forest,Bournemouth,2,3,A,1.95,3.5,3.8
+E0,03/09/2022,15:00,Tottenham,Fulham,2,1,H,1.5,4.5,6.5
+E0,03/09/2022,15:00,Wolves,Southampton,1,0,H,2.2,3.4,3.25
+E0,03/09/2022,17:30,Aston Villa,Man City,1,1,D,8,5.5,1.33
+E0,04/09/2022,14:00,Brighton,Leicester,5,2,H,1.83,3.5,4.5
+E0,04/09/2022,16:30,Man United,Arsenal,3,1,H,2.5,3.5,2.7
+E0,16/09/2022,20:00,Aston Villa,Southampton,1,0,H,2.1,3.5,3.5
+E0,16/09/2022,20:00,Nott'm Forest,Fulham,2,3,A,2.75,3.3,2.62
+E0,17/09/2022,12:30,Wolves,Man City,0,3,A,9.5,5,1.33
+E0,17/09/2022,15:00,Newcastle,Bournemouth,1,1,D,1.44,4.4,7.5
+E0,17/09/2022,17:30,Tottenham,Leicester,6,2,H,1.45,4.5,7
+E0,18/09/2022,12:00,Brentford,Arsenal,0,3,A,4.2,3.8,1.8
+E0,18/09/2022,14:15,Everton,West Ham,1,0,H,2.9,3.25,2.5
+E0,01/10/2022,12:30,Arsenal,Tottenham,3,1,H,2.05,3.75,3.3
+E0,01/10/2022,15:00,Bournemouth,Brentford,0,0,D,3.3,3.4,2.2
+E0,01/10/2022,15:00,Crystal Palace,Chelsea,1,2,A,4.2,3.6,1.85
+E0,01/10/2022,15:00,Fulham,Newcastle,1,4,A,3,3.4,2.37
+E0,01/10/2022,15:00,Liverpool,Brighton,3,3,D,1.33,5.25,8.5
+E0,01/10/2022,15:00,Southampton,Everton,1,2,A,2.15,3.4,3.4
+E0,01/10/2022,17:30,West Ham,Wolves,2,0,H,1.95,3.5,4.2
+E0,02/10/2022,14:00,Man City,Man United,6,3,H,1.33,5.75,7.5
+E0,02/10/2022,16:30,Leeds,Aston Villa,0,0,D,2.35,3.4,3
+E0,03/10/2022,20:00,Leicester,Nott'm Forest,4,0,H,1.75,4,4.33
+E0,08/10/2022,15:00,Bournemouth,Leicester,2,1,H,3.6,3.4,2.05
+E0,08/10/2022,15:00,Chelsea,Wolves,3,0,H,1.4,4.5,8
+E0,08/10/2022,15:00,Man City,Southampton,4,0,H,1.11,10,17
+E0,08/10/2022,15:00,Newcastle,Brentford,5,1,H,1.83,3.8,4.2
+E0,08/10/2022,17:30,Brighton,Tottenham,0,1,A,2.8,3.4,2.5
+E0,09/10/2022,14:00,Crystal Palace,Leeds,2,1,H,2.05,3.5,3.6
+E0,09/10/2022,14:00,West Ham,Fulham,3,1,H,1.72,3.8,4.75
+E0,09/10/2022,16:30,Arsenal,Liverpool,3,2,H,2.5,3.6,2.62
+E0,09/10/2022,19:00,Everton,Man United,1,2,A,3.6,3.5,2.05
+E0,10/10/2022,20:00,Nott'm Forest,Aston Villa,1,1,D,3.3,3.4,2.2
+E0,14/10/2022,20:00,Brentford,Brighton,2,0,H,3.1,3.4,2.3
+E0,15/10/2022,12:30,Leicester,Crystal Palace,0,0,D,2.3,3.4,3.1
+E0,15/10/2022,15:00,Fulham,Bournemouth,2,2,D,1.85,3.75,4
+E0,15/10/2022,15:00,Wolves,Nott'm Forest,1,0,H,1.7,3.75,5
+E0,15/10/2022,17:30,Tottenham,Everton,2,0,H,1.5,4.5,6.5
+E0,16/10/2022,14:00,Aston Villa,Chelsea,0,2,A,4.33,3.75,1.8
+E0,16/10/2022,14:00,Leeds,Arsenal,0,1,A,6,4.2,1.55
+E0,16/10/2022,14:00,Man United,Newcastle,0,0,D,1.95,3.8,3.5
+E0,16/10/2022,14:00,Southampton,West Ham,1,1,D,2.9,3.4,2.4
+E0,16/10/2022,16:30,Liverpool,Man City,1,0,H,3.6,4,1.9
+E0,18/10/2022,19:30,Brighton,Nott'm Forest,0,0,D,1.4,4.75,7
+E0,18/10/2022,20:15,Crystal Palace,Wolves,2,1,H,2.25,3.1,3.4
+E0,19/10/2022,19:30,Bournemouth,Southampton,0,1,A,2.62,3.3,2.62
+E0,19/10/2022,19:30,Brentford,Chelsea,0,0,D,4.75,3.8,1.72
+E0,19/10/2022,19:30,Liverpool,West Ham,1,0,H,1.4,5,7
+E0,19/10/2022,19:30,Newcastle,Everton,1,0,H,1.6,3.8,5.75
+E0,19/10/2022,20:15,Man United,Tottenham,2,0,H,2.45,3.5,2.75
+E0,20/10/2022,19:30,Fulham,Aston Villa,3,0,H,2.9,3.3,2.5
+E0,20/10/2022,20:15,Leicester,Leeds,2,0,H,2.25,3.6,3
+E0,22/10/2022,12:30,Nott'm Forest,Liverpool,1,0,H,11,6,1.25
+E0,22/10/2022,15:00,Everton,Crystal Palace,3,0,H,2.6,3.2,2.87
+E0,22/10/2022,15:00,Man City,Brighton,3,1,H,1.2,7,13
+E0,22/10/2022,17:30,Chelsea,Man United,1,1,D,2.05,3.5,3.5
+E0,23/10/2022,14:00,Aston Villa,Brentford,4,0,H,2.1,3.5,3.5
+E0,23/10/2022,14:00,Leeds,Fulham,2,3,A,2.05,3.5,3.6
+E0,23/10/2022,14:00,Southampton,Arsenal,1,1,D,6,4,1.57
+E0,23/10/2022,14:00,Wolves,Leicester,0,4,A,2.25,3.25,3.25
+E0,23/10/2022,16:30,Tottenham,Newcastle,1,2,A,2.05,3.5,3.5
+E0,24/10/2022,20:00,West Ham,Bournemouth,2,0,H,1.55,4,6
+E0,29/10/2022,12:30,Leicester,Man City,0,1,A,10,6.5,1.25
+E0,29/10/2022,15:00,Bournemouth,Tottenham,2,3,A,5,3.8,1.7
+E0,29/10/2022,15:00,Brentford,Wolves,1,1,D,2.2,3.4,3.3
+E0,29/10/2022,15:00,Brighton,Chelsea,4,1,H,3,3.3,2.4
+E0,29/10/2022,15:00,Crystal Palace,Southampton,1,0,H,1.9,3.6,4
+E0,29/10/2022,15:00,Newcastle,Aston Villa,4,0,H,1.8,3.75,4.5
+E0,29/10/2022,17:30,Fulham,Everton,0,0,D,2.37,3.4,3
+E0,29/10/2022,19:45,Liverpool,Leeds,1,2,A,1.3,6,9
+E0,30/10/2022,14:00,Arsenal,Nott'm Forest,5,0,H,1.2,7,12
+E0,30/10/2022,16:15,Man United,West Ham,1,0,H,1.66,4,4.8
+E0,05/11/2022,15:00,Leeds,Bournemouth,4,3,H,1.72,3.8,4.75
+E0,05/11/2022,15:00,Man City,Fulham,2,1,H,1.11,9.5,19
+E0,05/11/2022,15:00,Nott'm Forest,Brentford,2,2,D,2.75,3.3,2.6
+E0,05/11/2022,15:00,Wolves,Brighton,2,3,A,3.3,3.3,2.25
+E0,05/11/2022,17:30,Everton,Leicester,0,2,A,2.4,3.3,3
+E0,06/11/2022,12:00,Chelsea,Arsenal,0,1,A,2.55,3.4,2.7
+E0,06/11/2022,14:00,Aston Villa,Man United,3,1,H,3.3,3.8,2.1
+E0,06/11/2022,14:00,Southampton,Newcastle,1,4,A,4,3.6,1.9
+E0,06/11/2022,14:00,West Ham,Crystal Palace,1,2,A,1.9,3.4,4.2
+E0,06/11/2022,16:30,Tottenham,Liverpool,1,2,A,3.3,3.6,2.1
+E0,12/11/2022,12:30,Man City,Brentford,1,2,A,1.14,8,17
+E0,12/11/2022,15:00,Bournemouth,Everton,3,0,H,2.8,3.25,2.6
+E0,12/11/2022,15:00,Liverpool,Southampton,3,1,H,1.25,6.5,11
+E0,12/11/2022,15:00,Nott'm Forest,Crystal Palace,1,0,H,3.1,3.1,2.45
+E0,12/11/2022,15:00,Tottenham,Leeds,4,3,H,1.65,4.2,4.75
+E0,12/11/2022,15:00,West Ham,Leicester,0,2,A,2.05,3.4,3.75
+E0,12/11/2022,17:30,Newcastle,Chelsea,1,0,H,2.35,3.4,3
+E0,12/11/2022,19:45,Wolves,Arsenal,0,2,A,6,4.2,1.55
+E0,13/11/2022,14:00,Brighton,Aston Villa,1,2,A,1.83,3.75,4.2
+E0,13/11/2022,16:30,Fulham,Man United,1,2,A,3.8,3.8,1.9
+E0,26/12/2022,12:30,Brentford,Tottenham,2,2,D,4,3.6,1.91
+E0,26/12/2022,15:00,Crystal Palace,Fulham,0,3,A,2.05,3.6,3.5
+E0,26/12/2022,15:00,Everton,Wolves,1,2,A,2.3,3.25,3.2
+E0,26/12/2022,15:00,Leicester,Newcastle,0,3,A,3.25,3.5,2.2
+E0,26/12/2022,15:00,Southampton,Brighton,1,3,A,3.3,3.5,2.15
+E0,26/12/2022,17:30,Aston Villa,Liverpool,1,3,A,4.75,4,1.7
+E0,26/12/2022,20:00,Arsenal,West Ham,3,1,H,1.5,4.33,6.5
+E0,27/12/2022,17:30,Chelsea,Bournemouth,2,0,H,1.3,5.5,10
+E0,27/12/2022,20:00,Man United,Nott'm Forest,3,0,H,1.29,5.5,11
+E0,28/12/2022,20:00,Leeds,Man City,1,3,A,9.5,6,1.29
+E0,30/12/2022,19:45,West Ham,Brentford,0,2,A,2,3.6,3.6
+E0,30/12/2022,20:00,Liverpool,Leicester,2,1,H,1.29,6,9.5
+E0,31/12/2022,12:30,Wolves,Man United,0,1,A,4,3.6,1.91
+E0,31/12/2022,15:00,Bournemouth,Crystal Palace,0,2,A,2.8,3.3,2.5
+E0,31/12/2022,15:00,Fulham,Southampton,2,1,H,1.95,3.6,3.75
+E0,31/12/2022,15:00,Man City,Everton,1,1,D,1.13,9,19
+E0,31/12/2022,15:00,Newcastle,Leeds,0,0,D,1.45,4.5,7
+E0,31/12/2022,17:30,Brighton,Arsenal,2,4,A,3.4,3.5,2.1
+E0,01/01/2023,14:00,Tottenham,Aston Villa,0,2,A,1.67,4,5
+E0,01/01/2023,16:30,Nott'm Forest,Chelsea,1,1,D,5,3.8,1.7
+E0,02/01/2023,17:30,Brentford,Liverpool,3,1,H,5.5,4.33,1.55
+E0,03/01/2023,19:45,Arsenal,Newcastle,0,0,D,1.8,3.8,4.33
+E0,03/01/2023,19:45,Everton,Brighton,1,4,A,3.5,3.5,2.1
+E0,03/01/2023,19:45,Leicester,Fulham,0,1,A,2.2,3.6,3.1
+E0,03/01/2023,20:00,Man United,Bournemouth,3,0,H,1.29,5.5,11
+E0,04/01/2023,19:30,Southampton,Nott'm Forest,0,1,A,2,3.5,3.8
+E0,04/01/2023,19:45,Leeds,West Ham,2,2,D,2.6,3.5,2.6
+E0,04/01/2023,20:00,Aston Villa,Wolves,1,1,D,1.95,3.6,4
+E0,04/01/2023,20:00,Crystal Palace,Tottenham,0,4,A,3.4,3.5,2.15
+E0,05/01/2023,20:00,Chelsea,Man City,0,1,A,5,4,1.67
+E0,12/01/2023,20:00,Fulham,Chelsea,2,1,H,3.3,3.5,2.15
+E0,13/01/2023,20:00,Aston Villa,Leeds,2,1,H,1.91,3.6,4
+E0,14/01/2023,12:30,Man United,Man City,2,1,H,4.2,3.6,1.85
+E0,14/01/2023,15:00,Brighton,Liverpool,3,0,H,3.4,3.6,2.1
+E0,14/01/2023,15:00,Everton,Southampton,1,2,A,2.25,3.25,3.3
+E0,14/01/2023,15:00,Nott'm Forest,Leicester,2,0,H,2.7,3.3,2.63
+E0,14/01/2023,15:00,Wolves,West Ham,1,0,H,2.63,3.3,2.7
+E0,14/01/2023,17:30,Brentford,Bournemouth,2,0,H,1.65,4,5.25
+E0,15/01/2023,14:00,Chelsea,Crystal Palace,1,0,H,1.62,4,5.25
+E0,15/01/2023,14:00,Newcastle,Fulham,1,0,H,1.5,4.33,6.5
+E0,15/01/2023,16:30,Tottenham,Arsenal,0,2,A,3.1,3.6,2.2
+E0,18/01/2023,20:00,Crystal Palace,Man United,1,1,D,4.5,3.6,1.8
+E0,19/01/2023,20:00,Man City,Tottenham,4,2,H,1.36,5,8.5
+E0,21/01/2023,12:30,Liverpool,Chelsea,0,0,D,1.85,3.75,4
+E0,21/01/2023,15:00,Bournemouth,Nott'm Forest,1,1,D,2.75,3.1,2.75
+E0,21/01/2023,15:00,Leicester,Brighton,2,2,D,3.6,3.5,2.05
+E0,21/01/2023,15:00,Southampton,Aston Villa,0,1,A,2.88,3.25,2.55
+E0,21/01/2023,15:00,West Ham,Everton,2,0,H,1.8,3.75,4.75
+E0,21/01/2023,17:30,Crystal Palace,Newcastle,0,0,D,4.4,3.5,1.85
+E0,22/01/2023,14:00,Leeds,Brentford,0,0,D,2.38,3.6,2.88
+E0,22/01/2023,14:00,Man City,Wolves,3,0,H,1.2,8,11
+E0,22/01/2023,16:30,Arsenal,Man United,3,2,H,1.8,3.8,4.2
+E0,23/01/2023,20:00,Fulham,Tottenham,0,1,A,3.3,3.6,2.1
+E0,03/02/2023,20:00,Chelsea,Fulham,0,0,D,1.62,4,5.25
+E0,04/02/2023,12:30,Everton,Arsenal,1,0,H,8.5,4.5,1.4
+E0,04/02/2023,15:00,Aston Villa,Leicester,2,4,A,1.95,3.6,3.8
+E0,04/02/2023,15:00,Brentford,Southampton,3,0,H,1.85,3.6,4.2
+E0,04/02/2023,15:00,Brighton,Bournemouth,1,0,H,1.33,5.25,8.5
+E0,04/02/2023,15:00,Man United,Crystal Palace,2,1,H,1.4,4.75,8
+E0,04/02/2023,15:00,Wolves,Liverpool,3,0,H,4,3.8,1.85
+E0,04/02/2023,17:30,Newcastle,West Ham,1,1,D,1.6,3.8,6
+E0,05/02/2023,14:00,Nott'm Forest,Leeds,1,0,H,2.63,3.3,2.7
+E0,05/02/2023,16:30,Tottenham,Man City,1,0,H,4.33,4.2,1.73
+E0,08/02/2023,20:00,Man United,Leeds,2,2,D,1.45,5,6
+E0,11/02/2023,12:30,West Ham,Chelsea,1,1,D,3.3,3.3,2.25
+E0,11/02/2023,15:00,Arsenal,Brentford,1,1,D,1.44,4.75,7
+E0,11/02/2023,15:00,Crystal Palace,Brighton,1,1,D,3.8,3.5,2
+E0,11/02/2023,15:00,Fulham,Nott'm Forest,2,0,H,1.91,3.5,4.33
+E0,11/02/2023,15:00,Leicester,Tottenham,4,1,H,3.4,3.6,2.1
+E0,11/02/2023,15:00,Southampton,Wolves,1,2,A,2.9,3.2,2.55
+E0,11/02/2023,17:30,Bournemouth,Newcastle,1,1,D,6.5,4,1.53
+E0,12/02/2023,14:00,Leeds,Man United,0,2,A,3.75,3.8,1.91
+E0,12/02/2023,16:30,Man City,Aston Villa,3,1,H,1.25,6.5,11
+E0,13/02/2023,20:00,Liverpool,Everton,2,0,H,1.5,4.33,6.5
+E0,15/02/2023,19:30,Arsenal,Man City,1,3,A,2.9,3.5,2.35
+E0,18/02/2023,12:30,Aston Villa,Arsenal,2,4,A,4.5,3.6,1.5
+E0,18/02/2023,15:00,Brentford,Crystal Palace,1,1,D,1.83,3.5,4.5
+E0,18/02/2023,15:00,Brighton,Fulham,0,1,A,1.65,3.8,5.5
+E0,18/02/2023,15:00,Chelsea,Southampton,0,1,A,1.4,4.75,8.5
+E0,18/02/2023,15:00,Everton,Leeds,1,0,H,2.4,3.3,3
+E0,18/02/2023,15:00,Nott'm Forest,Man City,1,1,D,8.5,5.5,1.3
+E0,18/02/2023,15:00,Wolves,Bournemouth,0,1,A,1.67,3.6,6
+E0,18/02/2023,17:30,Newcastle,Liverpool,0,2,A,2.5,3.5,2.7
+E0,19/02/2023,14:00,Man United,Leicester,3,0,H,1.62,4.33,5.25
+E0,19/02/2023,16:30,Tottenham,West Ham,2,0,H,1.75,3.6,4.75
+E0,24/02/2023,20:00,Fulham,Wolves,1,1,D,2.5,3.2,3
+E0,25/02/2023,15:00,Everton,Aston Villa,0,2,A,2.5,3.2,3
+E0,25/02/2023,15:00,Leeds,Southampton,1,0,H,1.95,3.5,4
+E0,25/02/2023,15:00,Leicester,Arsenal,0,1,A,4.75,4,1.7
+E0,25/02/2023,15:00,West Ham,Nott'm Forest,4,0,H,1.75,3.6,5
+E0,25/02/2023,17:30,Bournemouth,Man City,1,4,A,10,5.75,1.29
+E0,25/02/2023,19:45,Crystal Palace,Liverpool,0,0,D,4.75,3.8,1.73
+E0,26/02/2023,13:30,Tottenham,Chelsea,2,0,H,2.55,3.25,2.9
+E0,01/03/2023,19:45,Arsenal,Everton,4,0,H,1.36,4.75,10
+E0,01/03/2023,20:00,Liverpool,Wolves,2,0,H,1.5,4.75,6
+E0,04/03/2023,12:30,Man City,Newcastle,2,0,H,1.45,4.5,7
+E0,04/03/2023,15:00,Arsenal,Bournemouth,3,2,H,1.22,7,12
+E0,04/03/2023,15:00,Aston Villa,Crystal Palace,1,0,H,2.05,3.3,3.8
+E0,04/03/2023,15:00,Brighton,West Ham,4,0,H,1.8,3.6,4.5
+E0,04/03/2023,15:00,Chelsea,Leeds,1,0,H,1.62,4,5.5
+E0,04/03/2023,15:00,Wolves,Tottenham,1,0,H,3.3,3.4,2.2
+E0,04/03/2023,17:30,Southampton,Leicester,1,0,H,2.75,3.3,2.6
+E0,05/03/2023,14:00,Nott'm Forest,Everton,2,2,D,2.7,3,2.88
+E0,05/03/2023,16:30,Liverpool,Man United,7,0,H,2.38,3.6,2.88
+E0,06/03/2023,20:00,Brentford,Fulham,3,2,H,1.95,3.6,3.75
+E0,11/03/2023,12:30,Bournemouth,Liverpool,1,0,H,7.5,5,1.4
+E0,11/03/2023,15:00,Everton,Brentford,1,0,H,2.7,3.25,2.7
+E0,11/03/2023,15:00,Leeds,Brighton,2,2,D,3.75,3.6,1.95
+E0,11/03/2023,15:00,Leicester,Chelsea,1,3,A,3.75,3.5,1.95
+E0,11/03/2023,15:00,Tottenham,Nott'm Forest,3,1,H,1.44,4.75,7
+E0,11/03/2023,17:30,Crystal Palace,Man City,0,1,A,9,4.75,1.36
+E0,12/03/2023,14:00,Fulham,Arsenal,0,3,A,6,4,1.57
+E0,12/03/2023,14:00,Man United,Southampton,0,0,D,1.36,5,9
+E0,12/03/2023,14:00,West Ham,Aston Villa,1,1,D,2.2,3.3,3.4
+E0,12/03/2023,16:30,Newcastle,Wolves,2,1,H,1.65,3.75,5.5
+E0,15/03/2023,19:30,Brighton,Crystal Palace,1,0,H,1.44,4.2,8
+E0,15/03/2023,19:30,Southampton,Brentford,0,2,A,2.88,3.25,2.5
+E0,17/03/2023,20:00,Nott'm Forest,Newcastle,1,2,A,5.5,3.8,1.62
+E0,18/03/2023,15:00,Aston Villa,Bournemouth,3,0,H,1.7,3.8,5
+E0,18/03/2023,15:00,Brentford,Leicester,1,1,D,1.91,3.6,3.75
+E0,18/03/2023,15:00,Southampton,Tottenham,3,3,D,4.75,3.6,1.75
+E0,18/03/2023,15:00,Wolves,Leeds,2,4,A,2.25,3.2,3.3
+E0,18/03/2023,17:30,Chelsea,Everton,2,2,D,1.5,4.2,7.5
+E0,19/03/2023,14:00,Arsenal,Crystal Palace,4,1,H,1.25,5.5,15
+E0,01/04/2023,12:30,Man City,Liverpool,4,1,H,1.62,4.2,5
+E0,01/04/2023,15:00,Arsenal,Leeds,4,1,H,1.29,6,9
+E0,01/04/2023,15:00,Bournemouth,Fulham,2,1,H,2.55,3.3,2.8
+E0,01/04/2023,15:00,Brighton,Brentford,3,3,D,1.67,4,5
+E0,01/04/2023,15:00,Crystal Palace,Leicester,2,1,H,2.5,3.25,2.9
+E0,01/04/2023,15:00,Nott'm Forest,Wolves,1,1,D,3,3.1,2.55
+E0,01/04/2023,17:30,Chelsea,Aston Villa,0,2,A,1.67,3.8,5.25
+E0,02/04/2023,14:00,West Ham,Southampton,1,0,H,1.73,3.6,5
+E0,02/04/2023,16:30,Newcastle,Man United,2,0,H,2.4,3.4,2.9
+E0,03/04/2023,20:00,Everton,Tottenham,1,1,D,3.4,3.3,2.2
+E0,04/04/2023,19:45,Bournemouth,Brighton,0,2,A,6,4.2,1.53
+E0,04/04/2023,19:45,Leeds,Nott'm Forest,2,1,H,1.7,3.75,5
+E0,04/04/2023,19:45,Leicester,Aston Villa,1,2,A,2.55,3.3,2.75
+E0,04/04/2023,20:00,Chelsea,Liverpool,0,0,D,2.2,3.4,3.25
+E0,05/04/2023,20:00,Man United,Brentford,1,0,H,1.65,4,5
+E0,05/04/2023,20:00,West Ham,Newcastle,1,5,A,3.6,3.25,2.15
+E0,08/04/2023,12:30,Man United,Everton,2,0,H,1.5,4.33,6.5
+E0,08/04/2023,15:00,Aston Villa,Nott'm Forest,2,0,H,1.6,4.2,5.25
+E0,08/04/2023,15:00,Brentford,Newcastle,1,2,A,3.6,3.4,2.05
+E0,08/04/2023,15:00,Fulham,West Ham,0,1,A,2.8,3.25,2.63
+E0,08/04/2023,15:00,Leicester,Bournemouth,0,1,A,1.83,3.75,4.2
+E0,08/04/2023,15:00,Tottenham,Brighton,2,1,H,2.55,3.5,2.7
+E0,08/04/2023,15:00,Wolves,Chelsea,1,0,H,4.2,3.5,1.91
+E0,08/04/2023,17:30,Southampton,Man City,1,4,A,11,6,1.25
+E0,09/04/2023,14:00,Leeds,Crystal Palace,1,5,A,2.1,3.4,3.6
+E0,09/04/2023,16:30,Liverpool,Arsenal,2,2,D,2.88,3.6,2.38
+E0,15/04/2023,12:30,Aston Villa,Newcastle,3,0,H,3.6,3.4,2.05
+E0,15/04/2023,15:00,Chelsea,Brighton,1,2,A,2.63,3.4,2.63
+E0,15/04/2023,15:00,Everton,Fulham,1,3,A,2.05,3.4,3.7
+E0,15/04/2023,15:00,Southampton,Crystal Palace,0,2,A,2.8,3.1,2.7
+E0,15/04/2023,15:00,Tottenham,Bournemouth,2,3,A,1.45,4.5,7
+E0,15/04/2023,15:00,Wolves,Brentford,2,0,H,2.45,3.1,3
+E0,15/04/2023,17:30,Man City,Leicester,3,1,H,1.14,8.5,15
+E0,16/04/2023,14:00,West Ham,Arsenal,2,2,D,6,4.2,1.55
+E0,16/04/2023,16:30,Nott'm Forest,Man United,0,2,A,5.5,4,1.62
+E0,17/04/2023,20:00,Leeds,Liverpool,1,6,A,4.2,4.2,1.73
+E0,21/04/2023,20:00,Arsenal,Southampton,3,3,D,1.2,7,13
+E0,22/04/2023,12:30,Fulham,Leeds,2,1,H,2.3,3.4,3.1
+E0,22/04/2023,15:00,Brentford,Aston Villa,1,1,D,2.5,3.25,2.88
+E0,22/04/2023,15:00,Crystal Palace,Everton,0,0,D,2.05,3.2,3.75
+E0,22/04/2023,15:00,Leicester,Wolves,2,1,H,2.38,3.3,3
+E0,22/04/2023,15:00,Liverpool,Nott'm Forest,3,2,H,1.17,7.5,17
+E0,23/04/2023,14:00,Bournemouth,West Ham,0,4,A,2.88,3.2,2.55
+E0,23/04/2023,14:00,Newcastle,Tottenham,6,1,H,1.83,3.75,4.2
+E0,25/04/2023,19:30,Wolves,Crystal Palace,2,0,H,2.45,3.2,3
+E0,25/04/2023,19:45,Aston Villa,Fulham,1,0,H,1.75,4,4.2
+E0,25/04/2023,20:00,Leeds,Leicester,1,1,D,2.3,3.5,3
+E0,26/04/2023,19:30,Nott'm Forest,Brighton,3,1,H,6,4.2,1.53
+E0,26/04/2023,19:45,Chelsea,Brentford,0,2,A,1.7,4,4.75
+E0,26/04/2023,19:45,West Ham,Liverpool,1,2,A,3.9,3.9,1.85
+E0,26/04/2023,20:00,Man City,Arsenal,4,1,H,1.55,4.5,5.25
+E0,27/04/2023,19:45,Everton,Newcastle,1,4,A,4.75,3.6,1.73
+E0,27/04/2023,19:45,Southampton,Bournemouth,0,1,A,2.25,3.4,3.2
+E0,27/04/2023,20:15,Tottenham,Man United,2,2,D,2.8,3.6,2.4
+E0,29/04/2023,12:30,Crystal Palace,West Ham,4,3,H,2.63,3.25,2.75
+E0,29/04/2023,15:00,Brentford,Nott'm Forest,2,1,H,1.65,3.8,5.5
+E0,29/04/2023,15:00,Brighton,Wolves,6,0,H,1.5,4.33,6.5
+E0,30/04/2023,14:00,Bournemouth,Leeds,4,1,H,2.55,3.5,2.7
+E0,30/04/2023,14:00,Fulham,Man City,1,2,A,12,6,1.25
+E0,30/04/2023,14:00,Man United,Aston Villa,1,0,H,1.73,3.9,4.6
+E0,30/04/2023,14:00,Newcastle,Southampton,3,1,H,1.3,5.25,10
+E0,30/04/2023,16:30,Liverpool,Tottenham,4,3,H,1.53,4.5,5.75
+E0,01/05/2023,20:00,Leicester,Everton,2,2,D,2,3.5,3.75
+E0,02/05/2023,20:00,Arsenal,Chelsea,3,1,H,1.6,4,5.5
+E0,03/05/2023,20:00,Liverpool,Fulham,1,0,H,1.25,5.75,11
+E0,03/05/2023,20:00,Man City,West Ham,3,0,H,1.2,7,13
+E0,04/05/2023,20:00,Brighton,Man United,1,0,H,1.95,3.5,3.75
+E0,06/05/2023,15:00,Bournemouth,Chelsea,1,3,A,3.3,3.5,2.15
+E0,06/05/2023,15:00,Man City,Leeds,2,1,H,1.17,8.5,15
+E0,06/05/2023,15:00,Tottenham,Crystal Palace,1,0,H,1.8,3.8,4.2
+E0,06/05/2023,15:00,Wolves,Aston Villa,1,0,H,2.88,3.3,2.5
+E0,06/05/2023,17:30,Liverpool,Brentford,1,0,H,1.44,5,6
+E0,07/05/2023,16:30,Newcastle,Arsenal,0,2,A,2.45,3.75,2.63
+E0,07/05/2023,19:00,West Ham,Man United,1,0,H,3.4,3.75,2.05
+E0,08/05/2023,15:00,Fulham,Leicester,5,3,H,2.63,3.5,2.6
+E0,08/05/2023,17:30,Brighton,Everton,1,5,A,1.33,5.25,9
+E0,08/05/2023,20:00,Nott'm Forest,Southampton,4,3,H,2.1,3.6,3.4
+E0,13/05/2023,12:30,Leeds,Newcastle,2,2,D,4.33,4.2,1.7
+E0,13/05/2023,15:00,Aston Villa,Tottenham,2,1,H,2.25,3.6,2.9
+E0,13/05/2023,15:00,Chelsea,Nott'm Forest,2,2,D,1.5,4.5,6
+E0,13/05/2023,15:00,Crystal Palace,Bournemouth,2,0,H,1.83,3.6,4.2
+E0,13/05/2023,15:00,Man United,Wolves,2,0,H,1.36,5,7.5
+E0,13/05/2023,15:00,Southampton,Fulham,0,2,A,2.75,3.3,2.5
+E0,14/05/2023,14:00,Brentford,West Ham,2,0,H,2,3.5,3.6
+E0,14/05/2023,14:00,Everton,Man City,0,3,A,9,4.75,1.36
+E0,14/05/2023,16:30,Arsenal,Brighton,0,3,A,1.73,4.2,4.2
+E0,15/05/2023,20:00,Leicester,Liverpool,0,3,A,5.25,4.33,1.57
+E0,18/05/2023,19:30,Newcastle,Brighton,4,1,H,2,3.8,3.5
+E0,20/05/2023,12:30,Tottenham,Brentford,1,3,A,1.83,3.9,4
+E0,20/05/2023,15:00,Bournemouth,Man United,0,1,A,6,4.75,1.5
+E0,20/05/2023,15:00,Fulham,Crystal Palace,2,2,D,2.45,3.4,2.9
+E0,20/05/2023,15:00,Liverpool,Aston Villa,1,1,D,1.45,5,6.25
+E0,20/05/2023,15:00,Wolves,Everton,1,1,D,2.75,3.3,2.6
+E0,20/05/2023,17:30,Nott'm Forest,Arsenal,1,0,H,5.25,4.33,1.57
+E0,21/05/2023,13:30,West Ham,Leeds,3,1,H,2.4,3.5,2.88
+E0,21/05/2023,14:00,Brighton,Southampton,3,1,H,1.22,7,11
+E0,21/05/2023,16:00,Man City,Chelsea,1,0,H,1.25,6,11
+E0,22/05/2023,20:00,Newcastle,Leicester,0,0,D,1.36,5.5,7
+E0,24/05/2023,20:00,Brighton,Man City,1,1,D,4,4.33,1.75
+E0,25/05/2023,20:00,Man United,Chelsea,4,1,H,1.6,4.33,5
+E0,28/05/2023,16:30,Arsenal,Wolves,5,0,H,1.36,5.25,8
+E0,28/05/2023,16:30,Aston Villa,Brighton,2,1,H,2,3.6,3.5
+E0,28/05/2023,16:30,Brentford,Man City,1,0,H,3.8,4,1.83
+E0,28/05/2023,16:30,Chelsea,Newcastle,1,1,D,2.9,3.5,2.38
+E0,28/05/2023,16:30,Crystal Palace,Nott'm Forest,1,1,D,1.67,4,5
+E0,28/05/2023,16:30,Everton,Bournemouth,1,0,H,1.5,4.5,6.5
+E0,28/05/2023,16:30,Leeds,Tottenham,1,4,A,2.75,3.8,2.3
+E0,28/05/2023,16:30,Leicester,West Ham,2,1,H,1.91,3.8,3.6
+E0,28/05/2023,16:30,Man United,Fulham,2,1,H,1.5,4.33,6
+E0,28/05/2023,16:30,Southampton,Liverpool,4,4,D,6.5,4.75,1.44

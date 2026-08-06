@@ -22,7 +22,7 @@
 export type MarketDecisionResult = "won" | "lost" | "push" | "void" | "needs_review";
 
 export type SettleableFixtureResult = {
-  status: "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "suspended";
+  status: "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "abandoned" | "suspended";
   homeScore: number | null;
   awayScore: number | null;
 };
@@ -54,7 +54,11 @@ export function gradeMarketDecision({
   selection: string;
   fixture: SettleableFixtureResult;
 }): MarketDecisionGrade {
-  if (fixture.status === "cancelled" || fixture.status === "postponed") {
+  if (fixture.status === "cancelled" || fixture.status === "postponed" || fixture.status === "abandoned") {
+    // `abandoned` reaches here two ways: the provider reported it, or the stale
+    // sweep expired a fixture whose result never arrived. Both mean no usable
+    // outcome. Without this branch the sweep's 1,112 expired fixtures would all
+    // fall through to needs_review and sit in the queue forever.
     return decided("void", `Fixture was ${fixture.status}, so the market never resolved.`);
   }
   if (fixture.status !== "finished") {

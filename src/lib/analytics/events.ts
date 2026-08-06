@@ -1,6 +1,17 @@
 export type AnalyticsEvent =
   | "site_landed"
   | "predictions_viewed"
+  /**
+   * A view of a surface the funnel does not otherwise name.
+   *
+   * Fifteen routes emitted nothing on view, including three of the four
+   * top-level surfaces, so the funnel could not answer whether anyone used
+   * Explore, Track Record or My Padi — the exact question the v1.7
+   * consolidation was meant to make answerable. One event with a
+   * `page_context` of the owning surface covers all of them without adding
+   * fifteen names to this union or a second event per navigation.
+   */
+  | "surface_viewed"
   | "value_pick_clicked"
   | "match_detail_opened"
   | "filter_used"

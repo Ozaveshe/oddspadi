@@ -492,13 +492,17 @@ describe("calibration promotion safety", () => {
   });
 
   it("uses settled win/loss counts and only marks a sufficiently large promoted cohort as the economic curve", () => {
+    // The cohort threshold is 10 deciles x 30 settled outcomes per bucket. It
+    // used to be `readiness.minimumRecommendedFixtures` — the 1,000-fixture
+    // training-corpus constant — which compared settled predictions against
+    // fixtures needed to train, and blocked every empirical value floor on the
+    // site. Tennis held 932 against that bar and football 482.
     const snapshot = readySnapshot();
-    snapshot.readiness.minimumRecommendedFixtures = 30;
     const promoted = promotion();
     promoted.candidate.probabilityBuckets = [{
       ...promoted.candidate.probabilityBuckets[0]!,
-      sampleSize: 44,
-      settledSize: 30
+      sampleSize: 440,
+      settledSize: 300
     }];
 
     const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
@@ -506,10 +510,49 @@ describe("calibration promotion safety", () => {
       requireDurablePromotion: true
     });
 
+    // Settled counts, not attempted counts: 300, not 440.
     expect(profile.calibrationBucketSource).toBe("promoted-cohort");
     expect(profile.calibrationBuckets).toEqual([
-      expect.objectContaining({ sampleSize: 30, observedRate: 0.35 })
+      expect.objectContaining({ sampleSize: 300, observedRate: 0.35 })
     ]);
+  });
+
+  it("falls back to the backtest curve when the promoted cohort cannot populate the deciles", () => {
+    const snapshot = readySnapshot();
+    const promoted = promotion();
+    promoted.candidate.probabilityBuckets = [{
+      ...promoted.candidate.probabilityBuckets[0]!,
+      sampleSize: 440,
+      settledSize: 299
+    }];
+
+    const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
+      activePromotion: promoted,
+      requireDurablePromotion: true
+    });
+
+    expect(profile.calibrationBucketSource).toBe("backtest");
+  });
+
+  it("does not re-couple the cohort threshold to the training-corpus minimum", () => {
+    // The regression: raising or lowering the corpus readiness bar must not
+    // move the calibration-cohort bar. They measure different things.
+    const promoted = promotion();
+    promoted.candidate.probabilityBuckets = [{
+      ...promoted.candidate.probabilityBuckets[0]!,
+      sampleSize: 440,
+      settledSize: 300
+    }];
+
+    for (const corpusMinimum of [30, 1_000, 50_000]) {
+      const snapshot = readySnapshot();
+      snapshot.readiness.minimumRecommendedFixtures = corpusMinimum;
+      const profile = buildDecisionLearningProfileFromSnapshot(snapshot, {
+        activePromotion: promoted,
+        requireDurablePromotion: true
+      });
+      expect(profile.calibrationBucketSource, `corpus minimum ${corpusMinimum}`).toBe("promoted-cohort");
+    }
   });
 
   it("keeps benchmark and receipt-free runtime-key backtests out of live learning", () => {

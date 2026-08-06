@@ -5,6 +5,7 @@ import { DailyDecisionOverview, DailyTipsSections, ProviderRunStrip } from "@/co
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
 import { filterDailyTipsProductBySport } from "@/lib/sports/tips/product";
+import { readNavigationContext, withNavigationContext } from "@/lib/navigation/context";
 import type { Sport } from "@/lib/sports/types";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,9 @@ function predictionSport(value: string | string[] | undefined): Sport | null {
 }
 
 export default async function PredictionsPage({ searchParams }: PageProps) {
-  const requestedSport = predictionSport((await searchParams)?.sport);
+  const resolvedParams = await searchParams;
+  const requestedSport = predictionSport(resolvedParams?.sport);
+  const carried = readNavigationContext(resolvedParams);
   const fullProduct = await getCachedTodayTipsProduct();
   const product = requestedSport ? filterDailyTipsProductBySport(fullProduct, requestedSport) : fullProduct;
   const sportLabel = requestedSport ? requestedSport[0].toUpperCase() + requestedSport.slice(1) : null;
@@ -53,15 +56,17 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
             return <Link key={view.label} className={active ? "active" : ""} href={view.href} aria-current={active ? "page" : undefined}>{view.label}</Link>;
           })}
         </nav>
+        {/* Switching view must not silently drop the sport filter: someone on
+            the tennis board who taps "Week" means the tennis week. */}
         <nav className="prediction-view-row" aria-label="Prediction views">
-          <Link href="/predictions/today">Daily</Link>
-          <Link href="/predictions/week">Week</Link>
-          <Link href="/predictions/value-picks">Published</Link>
-          <Link href="/predictions/history">Results</Link>
+          <Link href={withNavigationContext("/predictions/today", carried)}>Daily</Link>
+          <Link href={withNavigationContext("/predictions/week", carried)}>Week</Link>
+          <Link href={withNavigationContext("/predictions/value-picks", carried)}>Published</Link>
+          <Link href={withNavigationContext("/predictions/history", carried)}>Results</Link>
         </nav>
       </div>
       <DailyDecisionOverview product={product} />
-      <DailyTipsSections product={product} />
+      <DailyTipsSections product={product} context={carried} />
       <section className="prediction-receipt">
         <div><span className="section-kicker">Data receipt</span><h2>How this slate was built</h2></div>
         <ProviderRunStrip slate={product.slate} />

@@ -2823,7 +2823,19 @@ a.score-row:active,
 .intelligence-card-topline { display: flex; justify-content: space-between; gap: 12px; align-items: center; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: capitalize; }
 .intelligence-card-topline > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .intelligence-matchline { display: grid; gap: 3px; }
-.intelligence-matchline a { display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px; color: var(--text); font-family: var(--font-display); font-size: clamp(17px, 2vw, 22px); line-height: 1.15; }
+/* Centred, not baseline-aligned.
+ *
+ * `align-items: baseline` lines the home block, the "vs" and the away block up
+ * on their first text baseline. A crest is `inline-grid`, so an <img> baselines
+ * on its bottom edge while the initials fallback baselines on its own text —
+ * two different baselines for the same 30px box. Measured against this
+ * stylesheet, a card with a logo on one side and initials on the other dropped
+ * the second team 18.83px and stretched the row from 30px to 48.83px.
+ *
+ * That is why the fixture header looked crooked on exactly the fixtures with a
+ * missing crest: tennis (api-tennis serves players, who have no club badge) and
+ * anything sourced from the-odds-api, which carries no images at all. */
+.intelligence-matchline a { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; color: var(--text); font-family: var(--font-display); font-size: clamp(17px, 2vw, 22px); line-height: 1.15; }
 .intelligence-matchline a span { color: var(--faint); font-family: var(--font-ui); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .intelligence-matchline small { color: var(--muted); }
 .intelligence-pick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: end; padding: 15px 0 13px; border-block: 1px solid var(--border); }

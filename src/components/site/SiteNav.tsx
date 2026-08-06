@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AccountIcon, CompassIcon, HistoryIcon, HomeIcon, MoreIcon } from "./NavIcons";
+import { isSurfaceActive } from "@/lib/navigation/surfaces";
 
 /**
  * Four surfaces, not eighteen destinations. Everything else stays reachable —
@@ -39,48 +40,12 @@ const moreSheetItems = [
   { href: "/predictions/bet-slip", label: "Bet Workspace" }
 ];
 
-/** Routes owned by each top-level surface, for aria-current highlighting. */
-const SURFACE_PREFIXES: Record<string, string[]> = {
-  "/": [],
-  "/explore": [
-    "/explore",
-    "/predictions",
-    "/live-scores",
-    "/news",
-    "/season-outlooks",
-    "/community",
-    "/forums",
-    "/tips"
-  ],
-  "/track-record": ["/track-record", "/engine/performance"],
-  "/my": ["/my", "/account"]
-};
-
-/** Explore owns /predictions/* except the routes Track Record claims. */
-const TRACK_RECORD_PREDICTION_ROUTES = [
-  "/predictions/history",
-  "/predictions/value-picks",
-  "/predictions/decision-engine"
-];
-const MY_PREDICTION_ROUTES = ["/predictions/bet-slip"];
-
-function isActive(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/";
-  if (href === "/track-record") {
-    return SURFACE_PREFIXES[href].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
-      || TRACK_RECORD_PREDICTION_ROUTES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-  }
-  if (href === "/my") {
-    return SURFACE_PREFIXES[href].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
-      || MY_PREDICTION_ROUTES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-  }
-  if (href === "/explore") {
-    if (TRACK_RECORD_PREDICTION_ROUTES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return false;
-    if (MY_PREDICTION_ROUTES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return false;
-    return SURFACE_PREFIXES[href].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-  }
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
+/**
+ * Surface ownership and active-state resolution now live in
+ * `@/lib/navigation/surfaces`, shared with analytics so the nav cannot
+ * highlight one surface while a view reports another.
+ */
+const isActive = isSurfaceActive;
 
 export function DesktopNavLinks() {
   const pathname = usePathname() ?? "/";

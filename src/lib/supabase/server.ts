@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { uncachedFetch } from "./uncachedFetch";
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -285,6 +286,8 @@ export function getSupabaseServerClient(env: EnvMap = process.env): SupabaseClie
       persistSession: false
     },
     global: {
+      // Database reads must not land in Next's Data Cache. See uncachedFetch.
+      fetch: uncachedFetch,
       headers: {
         "X-Client-Info": "oddspadi-mvp"
       }

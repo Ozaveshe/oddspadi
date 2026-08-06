@@ -2,7 +2,16 @@ import type { DecisionBeliefState, DecisionLearningProfile } from "@/lib/sports/
 
 const CONFIDENCE_LEVEL = 0.95;
 const Z_95 = 1.959963984540054;
-const MIN_EMPIRICAL_SAMPLE = 30;
+
+/**
+ * Settled outcomes a single probability bucket needs before its observed rate
+ * can bound anything. This is the gate that actually protects the claim: the
+ * Wilson interval is computed only for the bucket containing the runtime
+ * probability, and a thin bucket produces an interval too wide to clear a
+ * price. Exported so the cohort-level threshold is derived from it rather than
+ * chosen separately and left to drift.
+ */
+export const MIN_EMPIRICAL_SAMPLE = 30;
 
 type ProbabilityInterval = DecisionBeliefState["confidenceInterval"];
 
