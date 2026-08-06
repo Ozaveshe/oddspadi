@@ -65,17 +65,24 @@ explicit `?sport=football` is never overwritten by ambient tennis context.
 a bare path, so `/predictions?sport=tennis` → "Week" landed on the *football*
 week. The browser back button restores the query, which is why it survived: it
 only breaks on forward links, and only when someone uses the page's own
-navigation instead of the back gesture. The view switcher on `/predictions` now
-carries the context; the remaining call sites are listed below.
+navigation instead of the back gesture.
 
-## Still bare
+## Where it is carried
 
-These links do not yet carry context. None of them lose it to the back button,
-so the cost is limited to forward navigation, but they are the remaining work:
+- the view switcher on `/predictions` (Daily / Week / Published / Results)
+- every fixture card — `SlateFixtureCard`, `NoPickFixtureCard`, `MatchCard` —
+  through an optional `context` prop that defaults to `{}`, so a surface with
+  no filter renders exactly the links it did before
 
-- fixture cards (`MatchCard`, `IntelligenceSlate`) → `/predictions/[matchId]`
-- the sport switcher's "All sports" entry, which intentionally clears `?sport=`
-- hub tiles on `/explore` and `/track-record`
+Context is threaded as a prop rather than read from a hook because these are
+server components: the filter is known at render time on the page that owns it,
+and passing it down keeps the cards pure and testable.
+
+## Deliberately not carried
+
+- the sport switcher's **All sports** entry, which exists to *clear* `?sport=`
+- hub tiles on `/explore` and `/track-record`, which are entry points to a
+  surface rather than continuations of a filtered board
 
 ## What is tested
 

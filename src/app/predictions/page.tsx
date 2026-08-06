@@ -66,7 +66,7 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
         </nav>
       </div>
       <DailyDecisionOverview product={product} />
-      <DailyTipsSections product={product} />
+      <DailyTipsSections product={product} context={carried} />
       <section className="prediction-receipt">
         <div><span className="section-kicker">Data receipt</span><h2>How this slate was built</h2></div>
         <ProviderRunStrip slate={product.slate} />

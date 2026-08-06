@@ -1,5 +1,6 @@
 import * as React from "react";
 import Link from "next/link";
+import { withNavigationContext, type NavigationContext } from "@/lib/navigation/context";
 import { LiveCoverageFallback } from "@/components/live/MatchdayFallback";
 import type { LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import { LocalTime } from "@/components/odds/LocalTime";
@@ -51,7 +52,7 @@ export function ProviderRunStrip({ slate }: { slate: SportsSlate }) {
   );
 }
 
-export function SlateFixtureCard({ row, compact = false, asOf, surface = "prediction-list" }: { row: SlateFixture; compact?: boolean; asOf?: string; surface?: PublicSurface }) {
+export function SlateFixtureCard({ row, compact = false, asOf, surface = "prediction-list", context = {} }: { row: SlateFixture; compact?: boolean; asOf?: string; surface?: PublicSurface; context?: NavigationContext }) {
   const { fixture, decisionSummary } = row;
   const presentation = buildPredictionPresentation(row, asOf ?? decisionSummary.generatedAt);
   const displayedDecision = displayedSlateDecision(row);
@@ -62,7 +63,7 @@ export function SlateFixtureCard({ row, compact = false, asOf, surface = "predic
         <span className={`badge ${badgeClass(row.publicStatus)}`}>{STATUS_LABELS[row.publicStatus]}</span>
       </div>
       <div className="intelligence-matchline">
-        <Link href={presentation.analysisHref}>
+        <Link href={withNavigationContext(presentation.analysisHref, context)}>
           <span className="intelligence-team"><TeamCrest name={fixture.homeTeam.name} logo={fixture.homeTeam.logo} size={30} /><span className="intelligence-team-copy"><strong>{fixture.homeTeam.name}</strong><small><CountryFlag country={fixture.homeTeam.country} size={12} />{fixture.homeTeam.country ?? "Country pending"}</small></span></span>
           <span className="intelligence-versus">vs</span>
           <span className="intelligence-team intelligence-team--away"><TeamCrest name={fixture.awayTeam.name} logo={fixture.awayTeam.logo} size={30} /><span className="intelligence-team-copy"><strong>{fixture.awayTeam.name}</strong><small><CountryFlag country={fixture.awayTeam.country} size={12} />{fixture.awayTeam.country ?? "Country pending"}</small></span></span>
@@ -98,7 +99,7 @@ export function SlateFixtureCard({ row, compact = false, asOf, surface = "predic
       ) : <p className="muted small">{noPickExplanation(row)}</p>}
       {!compact ? <div className="intelligence-why"><p><strong>Why it qualifies</strong><span>{presentation.primaryReason}</span></p><p><strong>Main risk</strong><span>{presentation.primaryRisk}</span></p></div> : null}
       <div className="intelligence-card-actions">
-        <Link className="text-link intelligence-analysis-link" href={presentation.analysisHref}>View analysis →</Link>
+        <Link className="text-link intelligence-analysis-link" href={withNavigationContext(presentation.analysisHref, context)}>View analysis →</Link>
         <Link className="text-link intelligence-community-link" href={presentation.communityHref}>Community pulse</Link>
       </div>
       <p className="community-boundary-note">Community opinions never change the OddsPadi model decision.</p>
@@ -107,12 +108,12 @@ export function SlateFixtureCard({ row, compact = false, asOf, surface = "predic
   );
 }
 
-function NoPickFixtureCard({ row, asOf, surface = "prediction-list" }: { row: SlateFixture; asOf: string; surface?: PublicSurface }) {
+function NoPickFixtureCard({ row, asOf, surface = "prediction-list", context = {} }: { row: SlateFixture; asOf: string; surface?: PublicSurface; context?: NavigationContext }) {
   const presentation = buildPredictionPresentation(row, asOf);
   return (
     <article className="no-pick-card">
       <div><span className={`badge ${badgeClass(row.publicStatus)}`}>{STATUS_LABELS[row.publicStatus]}</span><small><LocalTime iso={row.fixture.kickoffAt} variant="kickoff" /> · {row.fixture.league}</small></div>
-      <h3><Link href={`/predictions/${encodeURIComponent(row.fixture.fixtureId)}`}>{row.fixture.homeTeam.name} vs {row.fixture.awayTeam.name}</Link></h3>
+      <h3><Link href={withNavigationContext(`/predictions/${encodeURIComponent(row.fixture.fixtureId)}`, context)}>{row.fixture.homeTeam.name} vs {row.fixture.awayTeam.name}</Link></h3>
       <dl><div><dt>Model lean</dt><dd>{strongestModelLean(row)}</dd></div><div><dt>Why no pick</dt><dd>{noPickExplanation(row)}</dd></div></dl>
       <span className={`badge ${presentation.freshness === "fresh" ? "positive" : presentation.freshness === "stale" ? "no-value" : "scheduled"}`}>{presentation.freshnessLabel}</span>
       {/* A no-pick row is still a claim about the fixture, and one of the
@@ -122,13 +123,13 @@ function NoPickFixtureCard({ row, asOf, surface = "prediction-list" }: { row: Sl
   );
 }
 
-function SlateSection({ id, title, eyebrow, rows, empty, asOf, compact = false }: { id?: string; title: string; eyebrow: string; rows: SlateFixture[]; empty: string; asOf: string; compact?: boolean }) {
+function SlateSection({ id, title, eyebrow, rows, empty, asOf, compact = false, context = {} }: { id?: string; title: string; eyebrow: string; rows: SlateFixture[]; empty: string; asOf: string; compact?: boolean; context?: NavigationContext }) {
   const visibleRows = rows.slice(0, DAILY_DECISION_RENDER_LIMIT);
   const hiddenRows = rows.length - visibleRows.length;
   return (
     <section className="section intelligence-section" id={id}>
       <div className="section-title"><div><span className="section-kicker">{eyebrow}</span><h2>{title}</h2></div><span className="badge scheduled">{rows.length}</span></div>
-      {visibleRows.length ? <div className="intelligence-grid">{visibleRows.map((row) => <SlateFixtureCard key={`${title}-${row.fixture.fixtureId}`} row={row} compact={compact} asOf={asOf} />)}</div> : <div className="empty-state compact"><h3>{empty}</h3><p className="muted">The engine does not fill this section with sample fixtures.</p></div>}
+      {visibleRows.length ? <div className="intelligence-grid">{visibleRows.map((row) => <SlateFixtureCard key={`${title}-${row.fixture.fixtureId}`} row={row} compact={compact} asOf={asOf} context={context} />)}</div> : <div className="empty-state compact"><h3>{empty}</h3><p className="muted">The engine does not fill this section with sample fixtures.</p></div>}
       {hiddenRows > 0 ? <p className="small muted">Showing the first {visibleRows.length} of {rows.length} decisions to keep this matchday page fast. Use the sport filters above to narrow the board.</p> : null}
     </section>
   );
@@ -179,20 +180,20 @@ export function DailyDecisionOverview({ product }: { product: DailyTipsProduct }
   );
 }
 
-function DailyCoverageQueue({ rows, dayLabel, asOf }: { rows: SlateFixture[]; dayLabel: string; asOf: string }) {
+function DailyCoverageQueue({ rows, dayLabel, asOf, context = {} }: { rows: SlateFixture[]; dayLabel: string; asOf: string; context?: NavigationContext }) {
   const visible = rows.slice(0, DAILY_QUEUE_RENDER_LIMIT);
   const remaining = rows.length - visible.length;
   return (
     <section className="section intelligence-section daily-coverage-queue" id="daily-queue">
       <div className="section-title"><div><span className="section-kicker">Provider coverage, not predictions</span><h2>{dayLabel}&apos;s Evidence Queue</h2></div><span className="badge scheduled">{rows.length}</span></div>
       <p className="daily-coverage-intro">These fixtures are real and current, but the engine has not completed a market-backed review. They stay separate from published decisions and watchlist entries.</p>
-      {visible.length ? <div className="intelligence-grid">{visible.map((row) => <SlateFixtureCard key={`queue-${row.fixture.fixtureId}`} row={row} compact asOf={asOf} />)}</div> : <div className="empty-state compact"><h3>Every listed fixture has been reviewed</h3><p className="muted">There is no outstanding evidence queue for this slate.</p></div>}
+      {visible.length ? <div className="intelligence-grid">{visible.map((row) => <SlateFixtureCard key={`queue-${row.fixture.fixtureId}`} row={row} compact asOf={asOf} context={context} />)}</div> : <div className="empty-state compact"><h3>Every listed fixture has been reviewed</h3><p className="muted">There is no outstanding evidence queue for this slate.</p></div>}
       {remaining > 0 ? <p className="small muted">{remaining} additional provider fixture{remaining === 1 ? " remains" : "s remain"} in the evidence queue. They are counted above but not rendered into this page until reviewed.</p> : null}
     </section>
   );
 }
 
-export function DailyTipsSections({ product, fallbackBoard = null }: { product: DailyTipsProduct; fallbackBoard?: LiveScoreBoard | null }) {
+export function DailyTipsSections({ product, fallbackBoard = null, context = {} }: { product: DailyTipsProduct; fallbackBoard?: LiveScoreBoard | null; context?: NavigationContext }) {
   const dayLabel = product.day === "today" ? "Today" : "Tomorrow";
   if (!product.sections.schedule.length) {
     if (fallbackBoard?.fixtures.length) return <LiveCoverageFallback board={fallbackBoard} />;
@@ -236,16 +237,16 @@ export function DailyTipsSections({ product, fallbackBoard = null }: { product: 
   const { published, abstentions, waitingForEvidence } = partitionDailyTipsSections(product);
   return (
     <>
-      {product.sections.valuePicks.length ? <SlateSection id="daily-published" title="Top Value Picks" eyebrow="Positive edge, fully cleared" rows={product.sections.valuePicks} empty="No value pick clears every gate" asOf={product.generatedAt} /> : null}
-      {product.sections.leans.length ? <SlateSection id={product.sections.valuePicks.length ? "daily-leans" : "daily-published"} title="Safer Leans" eyebrow="Model preference, not a value claim" rows={product.sections.leans} empty="No safer lean is ready" asOf={product.generatedAt} /> : null}
-      <SlateSection id="daily-watchlist" title="Watch" eyebrow="Possible value, still blocked" rows={product.sections.watchlist} empty="Nothing is waiting on a price or evidence refresh" asOf={product.generatedAt} />
+      {product.sections.valuePicks.length ? <SlateSection context={context} id="daily-published" title="Top Value Picks" eyebrow="Positive edge, fully cleared" rows={product.sections.valuePicks} empty="No value pick clears every gate" asOf={product.generatedAt} /> : null}
+      {product.sections.leans.length ? <SlateSection context={context} id={product.sections.valuePicks.length ? "daily-leans" : "daily-published"} title="Safer Leans" eyebrow="Model preference, not a value claim" rows={product.sections.leans} empty="No safer lean is ready" asOf={product.generatedAt} /> : null}
+      <SlateSection context={context} id="daily-watchlist" title="Watch" eyebrow="Possible value, still blocked" rows={product.sections.watchlist} empty="Nothing is waiting on a price or evidence refresh" asOf={product.generatedAt} />
       {!published.length ? <section className="daily-no-publish" id="daily-published"><span className="badge scheduled">0 published</span><div><h2>No public pick was forced for {product.day}</h2><p>The engine reviewed {product.sections.allAnalysed.length} fixture{product.sections.allAnalysed.length === 1 ? "" : "s"}, but none cleared every value, confidence and risk gate. Watchlist readings remain analysis, not tips.</p></div></section> : null}
       <section className="section intelligence-section" id="daily-abstentions">
         <div className="section-title"><div><span className="section-kicker">Reviewed and withheld</span><h2>Analysed Abstentions</h2></div><span className="badge scheduled">{abstentions.length}</span></div>
-        {abstentions.length ? <div className="no-pick-grid">{abstentions.slice(0, DAILY_DECISION_RENDER_LIMIT).map((row) => <NoPickFixtureCard key={row.fixture.fixtureId} row={row} asOf={product.generatedAt} />)}</div> : <div className="empty-state compact"><h3>No additional analysed abstentions</h3><p className="muted">Every completed review currently appears in a published or watchlist section.</p></div>}
+        {abstentions.length ? <div className="no-pick-grid">{abstentions.slice(0, DAILY_DECISION_RENDER_LIMIT).map((row) => <NoPickFixtureCard context={context} key={row.fixture.fixtureId} row={row} asOf={product.generatedAt} />)}</div> : <div className="empty-state compact"><h3>No additional analysed abstentions</h3><p className="muted">Every completed review currently appears in a published or watchlist section.</p></div>}
         {abstentions.length > DAILY_DECISION_RENDER_LIMIT ? <p className="small muted">Showing {DAILY_DECISION_RENDER_LIMIT} of {abstentions.length} abstentions; the complete count remains in the decision receipt.</p> : null}
       </section>
-      <DailyCoverageQueue rows={waitingForEvidence} dayLabel={dayLabel} asOf={product.generatedAt} />
+      <DailyCoverageQueue context={context} rows={waitingForEvidence} dayLabel={dayLabel} asOf={product.generatedAt} />
     </>
   );
 }
@@ -316,7 +317,7 @@ export function WeeklyDecisionOverview({ product }: { product: WeeklyTipsProduct
   );
 }
 
-export function WeeklySlateSections({ product }: { product: WeeklyTipsProduct }) {
+export function WeeklySlateSections({ product, context = {} }: { product: WeeklyTipsProduct; context?: NavigationContext }) {
   const hasProviderFixtures = product.days.some((group) => group.fixtures.length > 0);
   if (!hasProviderFixtures) {
     const firstDate = product.days[0]?.date ?? product.slate.range.from;
@@ -368,14 +369,14 @@ export function WeeklySlateSections({ product }: { product: WeeklyTipsProduct })
                 {reviewed.length ? (
                   <>
                     <div className="weekly-day-heading"><div><span className="section-kicker">Completed market review</span><h3>Reviewed decisions</h3></div><span className="badge scheduled">{reviewedCount}</span></div>
-                    <div className="intelligence-grid">{reviewed.map((row) => <SlateFixtureCard key={`reviewed-${row.fixture.fixtureId}`} row={row} compact asOf={product.generatedAt} />)}</div>
+                    <div className="intelligence-grid">{reviewed.map((row) => <SlateFixtureCard key={`reviewed-${row.fixture.fixtureId}`} row={row} compact asOf={product.generatedAt} context={context} />)}</div>
                     {reviewedCount > reviewed.length ? <p className="small muted">Showing the first {reviewed.length} of {reviewedCount} reviewed fixtures for this date.</p> : null}
                   </>
                 ) : <div className="weekly-review-pending"><strong>No completed market review yet</strong><span>Provider fixtures remain visible below, but they are not presented as predictions.</span></div>}
                 {waitingForEvidenceCount ? (
                   <details className="weekly-coverage-queue">
                     <summary>Show {waitingForEvidenceCount} provider fixture{waitingForEvidenceCount === 1 ? "" : "s"} awaiting review</summary>
-                    <div className="intelligence-grid">{waitingForEvidence.map((row) => <SlateFixtureCard key={`waiting-${row.fixture.fixtureId}`} row={row} compact asOf={product.generatedAt} />)}</div>
+                    <div className="intelligence-grid">{waitingForEvidence.map((row) => <SlateFixtureCard key={`waiting-${row.fixture.fixtureId}`} row={row} compact asOf={product.generatedAt} context={context} />)}</div>
                     {waitingForEvidenceCount > waitingForEvidence.length ? <p className="small muted">Showing {waitingForEvidence.length} representative fixtures from this date&apos;s evidence queue.</p> : null}
                   </details>
                 ) : <div className="weekly-queue-clear"><strong>Evidence queue clear</strong><span>Every listed fixture for this date has a completed market review.</span></div>}
