@@ -38,7 +38,7 @@ function row(status: SlatePublicStatus, blockers: string[] = []): SlateFixture {
     fixtureId: "fixture-1",
     bestPublishedPick: status === "value_pick" ? candidate : null,
     bestLean: status === "lean" ? { ...candidate, analysisStatus: "lean", publicationEligible: false } : null,
-    bestWatchlistCandidate: status === "watchlist" || status === "stale" ? { ...candidate, analysisStatus: status, publicationEligible: false } : null,
+    bestDisplayCandidate: status === "watchlist" || status === "stale" ? { ...candidate, analysisStatus: status, publicationEligible: false } : null,
     noPickReason: status === "no_clear_value" ? "No current market clears the value floor." : null,
     allMarketAnalyses: [candidate],
     publicStatus: status === "preliminary" || status === "ready" || status === "settled" || status === "needs_review" ? "needs_data" : status,

@@ -256,7 +256,7 @@ export function buildWorld(id: string, cell: StateCell): CanonicalWorld {
     fixtureId,
     bestPublishedPick: cell.decision === "pick" ? analysis : null,
     bestLean: cell.decision === "lean" ? analysis : null,
-    bestWatchlistCandidate: cell.decision === "watch" ? analysis : null,
+    bestDisplayCandidate: cell.decision === "watch" ? analysis : null,
     noPickReason: cell.decision === "pass" ? "No priced edge above the gate." : null,
     allMarketAnalyses: [analysis],
     publicStatus,

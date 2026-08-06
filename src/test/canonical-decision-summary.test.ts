@@ -195,7 +195,7 @@ describe("canonical DecisionSummary", () => {
 
     expect(decision.publicStatus).toBe("watchlist");
     expect(decision.bestPublishedPick).toBeNull();
-    expect(decision.bestWatchlistCandidate?.blockers).toContain(blocker);
+    expect(decision.bestDisplayCandidate?.blockers).toContain(blocker);
   });
 
   it("downgrades the same candidate when odds are stale", async () => {
@@ -208,7 +208,7 @@ describe("canonical DecisionSummary", () => {
   it("holds positive edge on the watchlist when data quality is below the floor", async () => {
     const decision = summary(await fixture({ dataQualityScore: 0.5 }));
     expect(decision.publicStatus).toBe("watchlist");
-    expect(decision.bestWatchlistCandidate?.blockers).toContain("data quality is below the sport threshold");
+    expect(decision.bestDisplayCandidate?.blockers).toContain("data quality is below the sport threshold");
   });
 
   // v1.1: an unavailable floor no longer blocks outright — it raises the bar.
@@ -235,7 +235,7 @@ describe("canonical DecisionSummary", () => {
 
     expect(decision.publicStatus).toBe("watchlist");
     expect(decision.bestPublishedPick).toBeNull();
-    expect(decision.bestWatchlistCandidate?.blockers.join(" | ")).toContain("uncalibrated publication needs at least 5% raw edge");
+    expect(decision.bestDisplayCandidate?.blockers.join(" | ")).toContain("uncalibrated publication needs at least 5% raw edge");
   });
 
   it("requires the empirical lower-bound edge and EV to clear the same publication thresholds", async () => {
@@ -255,7 +255,7 @@ describe("canonical DecisionSummary", () => {
     }));
 
     expect(decision.publicStatus).toBe("watchlist");
-    expect(decision.bestWatchlistCandidate?.blockers).toEqual(expect.arrayContaining([
+    expect(decision.bestDisplayCandidate?.blockers).toEqual(expect.arrayContaining([
       "empirical 95% lower-bound edge is below 4%",
       "empirical 95% lower-bound EV is below 3%"
     ]));
@@ -277,7 +277,7 @@ describe("canonical DecisionSummary", () => {
     );
     expect(decision.publicStatus).toBe("watchlist");
     expect(decision.bestPublishedPick).toBeNull();
-    expect(decision.bestWatchlistCandidate?.blockers).toContain("robustness stress tests classify the recommendation as fragile");
+    expect(decision.bestDisplayCandidate?.blockers).toContain("robustness stress tests classify the recommendation as fragile");
   });
 
   it("does not publish while uncertainty decomposition remains high-risk", async () => {
@@ -295,7 +295,7 @@ describe("canonical DecisionSummary", () => {
       } as unknown as Prediction["decision"]
     );
     expect(decision.publicStatus).toBe("watchlist");
-    expect(decision.bestWatchlistCandidate?.blockers).toContain("uncertainty decomposition classifies the recommendation as high-risk");
+    expect(decision.bestDisplayCandidate?.blockers).toContain("uncertainty decomposition classifies the recommendation as high-risk");
   });
 
   it("does not publish when a sufficiently powered exact-runtime holdout loses money", async () => {
@@ -336,7 +336,7 @@ describe("canonical DecisionSummary", () => {
 
     expect(decision.publicStatus).toBe("watchlist");
     expect(decision.bestPublishedPick).toBeNull();
-    expect(decision.bestWatchlistCandidate?.blockers).toEqual(
+    expect(decision.bestDisplayCandidate?.blockers).toEqual(
       expect.arrayContaining([
         "exact-runtime holdout yield is not positive",
         "exact-runtime closing-line value is not positive"
@@ -506,8 +506,8 @@ describe("canonical DecisionSummary", () => {
     expect(decision.publicStatus).toBe("watchlist");
     // The old EV-weighted ranking scored the longshot 4.8 against the
     // favorite's 0.65 and fronted it. The favorite must win this tier.
-    expect(decision.bestWatchlistCandidate?.selectionId).toBe("home");
-    expect(decision.bestWatchlistCandidate?.modelProbability).toBeCloseTo(0.55, 5);
+    expect(decision.bestDisplayCandidate?.selectionId).toBe("home");
+    expect(decision.bestDisplayCandidate?.modelProbability).toBeCloseTo(0.55, 5);
     // The longshot is still analysed and visible — just not the headline tip.
     expect(decision.allMarketAnalyses.some((analysis) => analysis.selectionId === "yes")).toBe(true);
   });
@@ -563,7 +563,7 @@ describe("canonical DecisionSummary", () => {
     // The longshot sits in the watchlist tier; the favorite, with negative
     // edge, sits in no_clear_value. The displayed candidate must still be the
     // favorite.
-    expect(decision.bestWatchlistCandidate?.selectionId).toBe("home");
-    expect(decision.bestWatchlistCandidate?.modelProbability).toBeCloseTo(0.52, 5);
+    expect(decision.bestDisplayCandidate?.selectionId).toBe("home");
+    expect(decision.bestDisplayCandidate?.modelProbability).toBeCloseTo(0.52, 5);
   });
 });

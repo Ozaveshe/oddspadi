@@ -234,7 +234,23 @@ const DISPLAY_CANDIDATE_STATUSES: ReadonlySet<DecisionMarketAnalysisStatus> = ne
   "no_clear_value"
 ]);
 
-function bestDisplayCandidate(analyses: DecisionMarketAnalysis[]): DecisionMarketAnalysis | null {
+/**
+ * The best market to *show*, which is not the same as a market we back.
+ *
+ * `DISPLAY_CANDIDATE_STATUSES` spans watchlist, stale, needs_data and
+ * no_clear_value, so the result is routinely a market the engine explicitly
+ * declined. That is intentional — a fixture with nothing to publish should
+ * still show its strongest reading and say why it was not published.
+ *
+ * What was not intentional: this fed a field called `bestWatchlistCandidate`,
+ * so a `no_clear_value` analysis arrived at the surfaces under a name claiming
+ * it was on the watchlist, and `presentation.ts` rendered it as the headline.
+ * That is the mechanism behind a summary reading "no clear value" while the
+ * card beneath it showed a positive-EV selection. The field is now
+ * `bestDisplayCandidate`, and callers must read `analysisStatus` before
+ * describing it as anything the engine endorses.
+ */
+function selectDisplayCandidate(analyses: DecisionMarketAnalysis[]): DecisionMarketAnalysis | null {
   const eligible = analyses.filter((analysis) => DISPLAY_CANDIDATE_STATUSES.has(analysis.analysisStatus));
   if (!eligible.length) return null;
   const matchWinner = eligible.filter((analysis) => analysis.marketId === "match_winner");
@@ -609,8 +625,8 @@ export function buildCanonicalDecision(
   const publicStatus = statusFromAnalyses({ analyses, providerBacked, fixtureSuspended });
   const bestPublishedPick = best(analyses, "published_value_pick");
   const bestLean = best(analyses, "lean");
-  const bestWatchlistCandidate = bestDisplayCandidate(analyses);
-  const primary = bestPublishedPick ?? bestLean ?? bestWatchlistCandidate ?? analyses[0] ?? null;
+  const bestDisplayCandidate = selectDisplayCandidate(analyses);
+  const primary = bestPublishedPick ?? bestLean ?? bestDisplayCandidate ?? analyses[0] ?? null;
   const generatedAt = modelOutput.generatedAt ?? now.toISOString();
   const publicInvariantPassed =
     (publicStatus === "value_pick") === Boolean(bestPublishedPick) &&
@@ -621,8 +637,8 @@ export function buildCanonicalDecision(
     fixtureId: fixture.id,
     bestPublishedPick,
     bestLean,
-    bestWatchlistCandidate,
-    noPickReason: noPickReasonFor(publicStatus, bestWatchlistCandidate),
+    bestDisplayCandidate,
+    noPickReason: noPickReasonFor(publicStatus, bestDisplayCandidate),
     allMarketAnalyses: analyses,
     publicStatus,
     engineStatus: engineStatus(publicStatus),
@@ -687,8 +703,8 @@ export function refreshCanonicalDecision(summary: DecisionSummary, now = new Dat
   });
   const bestPublishedPick = best(analyses, "published_value_pick");
   const bestLean = best(analyses, "lean");
-  const bestWatchlistCandidate = bestDisplayCandidate(analyses);
-  const primary = bestPublishedPick ?? bestLean ?? bestWatchlistCandidate ?? analyses[0] ?? null;
+  const bestDisplayCandidate = selectDisplayCandidate(analyses);
+  const primary = bestPublishedPick ?? bestLean ?? bestDisplayCandidate ?? analyses[0] ?? null;
   const publicInvariantPassed =
     (publicStatus === "value_pick") === Boolean(bestPublishedPick) &&
     Boolean(bestPublishedPick) === analyses.some((analysis) => analysis.analysisStatus === "published_value_pick");
@@ -696,11 +712,11 @@ export function refreshCanonicalDecision(summary: DecisionSummary, now = new Dat
     ...summary,
     bestPublishedPick,
     bestLean,
-    bestWatchlistCandidate,
+    bestDisplayCandidate,
     allMarketAnalyses: analyses,
     publicStatus,
     engineStatus: engineStatus(publicStatus),
-    noPickReason: noPickReasonFor(publicStatus, bestWatchlistCandidate),
+    noPickReason: noPickReasonFor(publicStatus, bestDisplayCandidate),
     confidence: publicStatus === "value_pick" || publicStatus === "lean" ? primary?.confidence ?? "low" : "low",
     risk: publicStatus === "value_pick" || publicStatus === "lean" ? primary?.risk ?? "high" : "high",
     expiresAt: primary?.expiresAt ?? null,

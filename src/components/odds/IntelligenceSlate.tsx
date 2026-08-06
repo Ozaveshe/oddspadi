@@ -413,7 +413,7 @@ export function HomepageIntelligencePanels({ daily, weekly, yesterday }: { daily
         <div className="intelligence-home-metrics">
           <div><span>Best value</span><strong>{best?.decisionSummary.bestPublishedPick?.label ?? "No value published"}</strong></div>
           <div><span>Safer lean</span><strong>{lean?.decisionSummary.bestLean?.label ?? "No lean ready"}</strong></div>
-          <div><span>Watch</span><strong>{watch?.decisionSummary.bestWatchlistCandidate?.label ?? "Nothing held"}</strong></div>
+          <div><span>Watch</span><strong>{watch?.decisionSummary.bestDisplayCandidate?.label ?? "Nothing held"}</strong></div>
           <div><span>Analysed</span><strong>{daily?.summary.fixturesAnalysed ?? 0} / {daily?.summary.fixturesFound ?? 0}</strong></div>
         </div>
       </article>

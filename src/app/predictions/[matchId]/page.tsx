@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { AgentReport, DecisionEnginePanel, ModelDiagnostics } from "@/components/odds/AgentReport";
 import { ConfidenceBadge, MatchStatusBadge, RiskBadge, ValueEdgeBadge } from "@/components/odds/Badges";
 import { FormGuide } from "@/components/odds/FormGuide";
 import { OddsTable } from "@/components/odds/OddsTable";
@@ -119,7 +118,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
   const winner = prediction.markets.find((market) => market.marketId === "match_winner");
   const canonical = prediction.canonicalDecision;
   const publishedPick = canonical.bestPublishedPick;
-  const displayedDecision = publishedPick ?? canonical.bestLean ?? canonical.bestWatchlistCandidate;
+  const displayedDecision = publishedPick ?? canonical.bestLean ?? canonical.bestDisplayCandidate;
   const hasValue = canonical.publicStatus === "value_pick" && publishedPick !== null;
   const bestEdge = displayedDecision?.edge ?? 0;
   const historyMarket = displayedDecision?.marketId ?? "match_winner";

@@ -26,7 +26,7 @@ function decisionSummary(fixtureId: string, status: SlatePublicStatus, expiresAt
     fixtureId,
     bestPublishedPick: status === "value_pick" ? candidate : null,
     bestLean: status === "lean" ? { ...candidate, analysisStatus: "lean", publicationEligible: false } : null,
-    bestWatchlistCandidate: status === "watchlist" || status === "stale" ? { ...candidate, analysisStatus: status, publicationEligible: false } : null,
+    bestDisplayCandidate: status === "watchlist" || status === "stale" ? { ...candidate, analysisStatus: status, publicationEligible: false } : null,
     noPickReason: status === "no_clear_value" ? "No clear value found." : null,
     allMarketAnalyses: [candidate],
     publicStatus: ["value_pick", "lean", "watchlist", "no_clear_value", "stale", "needs_data", "suspended"].includes(status) ? status as DecisionSummary["publicStatus"] : "needs_data",

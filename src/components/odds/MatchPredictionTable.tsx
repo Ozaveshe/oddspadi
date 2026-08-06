@@ -29,7 +29,7 @@ export function MatchPredictionTable({ rows }: { rows: PredictionListRow[] }) {
           {rows.map(({ match, prediction }) => {
             const canonical = prediction.canonicalDecision;
             const publishedPick = canonical.bestPublishedPick;
-            const displayedDecision = publishedPick ?? canonical.bestLean ?? canonical.bestWatchlistCandidate;
+            const displayedDecision = publishedPick ?? canonical.bestLean ?? canonical.bestDisplayCandidate;
             const odds = match.oddsMarkets.find((market) => market.id === "match_winner")?.selections ?? [];
             const market = prediction.markets.find((item) => item.marketId === "match_winner");
             const modelText =
