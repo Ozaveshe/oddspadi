@@ -36,7 +36,9 @@ hub page, `ctx` = reached contextually (from fixture/competition/article), `SEO`
 | `/forums/[category]` | category | Explore | ctx | SEO | — | community tables | category page |
 | `/forums/[category]/[thread]` | thread | Explore | ctx | SEO | — | community tables | thread page |
 | `/account` | account & profile settings | My Padi | hub | noindex | — | Supabase auth | account page |
+| `/daily-double` | two-leg accumulator product | Today | footer + Today hub | SEO | — | calibrated bands + slate | daily-double page |
 | `/about`, `/privacy`, `/terms` | unchanged | footer | footer | SEO | — | static | static pages |
+| `/responsible-use` | responsible-use & support centre | footer | footer | SEO | — | static | responsible-use page |
 | `/offline` | PWA fallback | — | service worker | noindex | — | static | offline page |
 
 ## Navigation before → after
