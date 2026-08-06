@@ -12,6 +12,7 @@ import {
   type AnalyticsMetadata,
   trackEvent
 } from "@/lib/analytics/events";
+import { SURFACE_CONTEXT, surfaceForPath } from "@/lib/navigation/surfaces";
 
 type ConsentChoice = "granted" | "denied";
 
@@ -235,13 +236,26 @@ export function Analytics() {
     previousFunnelPath.current = pathname;
     const main = document.querySelector<HTMLElement>("main");
     const context = main ? metadataFromElement(main) : {};
-    if (pathname === "/") trackEvent("site_landed", { page_context: "home" });
-    else if (pathname === "/predictions") trackEvent("predictions_viewed", { page_context: "predictions", ...context });
-    else {
-      const match = pathname.match(/^\/predictions\/([^/]+)$/);
-      if (match && !["value-picks", "history", "decision-engine", "bet-slip"].includes(match[1])) {
-        trackEvent("match_detail_opened", { page_context: "match_prediction", match_id: decodeURIComponent(match[1]), ...context });
-      }
+    if (pathname === "/") {
+      trackEvent("site_landed", { page_context: "home" });
+      return;
+    }
+    if (pathname === "/predictions") {
+      trackEvent("predictions_viewed", { page_context: "predictions", ...context });
+      return;
+    }
+    const match = pathname.match(/^\/predictions\/([^/]+)$/);
+    if (match && !["value-picks", "history", "decision-engine", "bet-slip"].includes(match[1])) {
+      trackEvent("match_detail_opened", { page_context: "match_prediction", match_id: decodeURIComponent(match[1]), ...context });
+      return;
+    }
+    // Everything else the funnel does not name. Exactly one event per
+    // navigation — the `previousFunnelPath` guard above already prevents a
+    // repeat — labelled with the surface that owns the route, so Explore,
+    // Track Record and My Padi stop being invisible.
+    const surface = surfaceForPath(pathname);
+    if (surface) {
+      trackEvent("surface_viewed", { page_context: SURFACE_CONTEXT[surface], surface_route: pathname, ...context });
     }
   }, [choice, pathname]);
 

@@ -7,6 +7,7 @@ import { ConfidenceBadge, MatchStatusBadge, RiskBadge, ValueEdgeBadge } from "./
 import { LocalTime } from "./LocalTime";
 import { ProbabilityBar } from "./ProbabilityBar";
 import { TeamCrest } from "./TeamCrest";
+import { withNavigationContext, type NavigationContext } from "@/lib/navigation/context";
 import { CountryFlag } from "./CountryFlag";
 import { useFollowedTeams } from "@/components/account/FollowedTeamsProvider";
 import { AddToSlipButton } from "./AddToSlipButton";
@@ -39,7 +40,7 @@ function modelLean(match: MatchSummary, probabilities: Record<string, number | u
   return entries.reduce((best, current) => (current[1] > best[1] ? current : best));
 }
 
-export function MatchCard({ match, prediction }: { match: MatchSummary; prediction: PredictionSummary }) {
+export function MatchCard({ match, prediction, context = {} }: { match: MatchSummary; prediction: PredictionSummary; context?: NavigationContext }) {
   const followed = useFollowedTeams();
   const odds = mainOdds(match);
   const probabilities = winnerProbabilities(prediction);
@@ -82,7 +83,7 @@ export function MatchCard({ match, prediction }: { match: MatchSummary; predicti
         </div>
         <Link
           className="button small-btn"
-          href={`/predictions/${encodeURIComponent(match.id)}`}
+          href={withNavigationContext(`/predictions/${encodeURIComponent(match.id)}`, context)}
           aria-label={`Full analysis: ${match.homeTeam.name} vs ${match.awayTeam.name}`}
         >
           Full analysis
