@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DailyTipsPageView } from "@/components/odds/DailyTipsPageView";
 import { fetchLiveScoreBoard } from "@/lib/sports/liveScoreBoard";
 import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
+import { readTimezonePreference } from "@/lib/time/timezoneCookie";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +34,11 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 }
 
 export default async function DailyTipsPage() {
+  // Which day this is depends on where the visitor is, so the zone has to be
+  // resolved before the read rather than applied to the times afterwards.
+  const timeZone = await readTimezonePreference();
   const [product, liveBoard] = await Promise.all([
-    getCachedTodayTipsProduct(),
+    getCachedTodayTipsProduct(timeZone),
     withTimeout(fetchLiveScoreBoard(), 2_500, null)
   ]);
   return <DailyTipsPageView product={product} fallbackBoard={liveBoard} />;

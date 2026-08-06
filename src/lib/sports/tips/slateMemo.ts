@@ -57,6 +57,49 @@ export function ttlMemo<T>(
 }
 
 /**
+ * The same memo, split by a key.
+ *
+ * "Today" stopped being one answer once it started meaning the visitor's day
+ * rather than the UTC day. A single-slot memo would hand whichever slate loaded
+ * first to every subsequent visitor, so a Lagos morning reader could be served
+ * Sydney's board — a correctness bug that would look exactly like a caching
+ * flake and be miserable to reproduce.
+ *
+ * Expired entries are swept on every access rather than left to accumulate.
+ * The key space is visitor-influenced — it derives from a cookie — so an
+ * unbounded map here would be a slow memory leak that a spread of unusual
+ * timezones could widen at will.
+ */
+export function ttlMemoByKey<T>(
+  load: (key: string) => Promise<T>,
+  ttlMs: number,
+  shouldCache: (value: T) => boolean = () => true
+): (key: string) => Promise<T> {
+  const entries = new Map<string, Entry<T>>();
+  return (key: string) => {
+    const now = Date.now();
+    for (const [existing, entry] of entries) {
+      if (entry.expiresAt <= now) entries.delete(existing);
+    }
+    const hit = entries.get(key);
+    if (hit && hit.expiresAt > now) return hit.value;
+
+    const value = load(key);
+    const next: Entry<T> = { expiresAt: now + ttlMs, value };
+    entries.set(key, next);
+    value.then(
+      (resolved) => {
+        if (entries.get(key) === next && !shouldCache(resolved)) entries.delete(key);
+      },
+      () => {
+        if (entries.get(key) === next) entries.delete(key);
+      }
+    );
+    return value;
+  };
+}
+
+/**
  * A slate worth holding.
  *
  * `getDailySlate`/`getWeeklySlate` fail soft: a repository error returns a

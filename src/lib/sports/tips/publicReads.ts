@@ -9,7 +9,8 @@ import {
 } from "@/lib/sports/tips/product";
 import { getDailySlate, getWeeklySlate } from "@/lib/sports/intelligence/pipeline";
 import { pruneSlateForCache } from "@/lib/sports/tips/tipsCacheShape";
-import { slateIsCacheable, ttlMemo } from "@/lib/sports/tips/slateMemo";
+import { slateIsCacheable, ttlMemo, ttlMemoByKey } from "@/lib/sports/tips/slateMemo";
+import { DEFAULT_TIMEZONE, dayWindowRange } from "@/lib/time/dayWindow";
 
 // Public surfaces read scheduled engine output only. Provider execution belongs
 // to the cron/operator lane, not to an anonymous page request.
@@ -40,17 +41,44 @@ import { slateIsCacheable, ttlMemo } from "@/lib/sports/tips/slateMemo";
  * of the per-market dossier a week is 3.9MB — fitting today would only mean
  * failing again the first busy Saturday.
  */
-const cachedTodayTipsSlate = ttlMemo(
-  async () => pruneSlateForCache(await getDailySlate({ ensure: false, dayOffset: 0 })),
+/**
+ * Keyed by timezone, because "today" is no longer one answer.
+ *
+ * Not keying at all would serve whichever board loaded first to every
+ * subsequent visitor — a Lagos morning reader could get Sydney's day, which
+ * would look like a caching flake and be miserable to reproduce.
+ *
+ * The key carries the window's start instant as well as the zone name, so an
+ * entry cannot outlive the day it describes: at the local midnight the key
+ * changes and the stale board is simply never looked up again.
+ *
+ * This does fragment per zone rather than per UTC offset, so two zones sharing
+ * an offset hold duplicate slates. That is accepted: entries expire in five
+ * minutes and are evicted on access, and collapsing them would mean passing
+ * instants through `getDailySlate` instead of a zone, which buys memory this
+ * process is not short of at the cost of a less obvious contract.
+ */
+const cachedDailyTipsSlate = ttlMemoByKey(
+  async (key: string) => {
+    const [timeZone, offset] = key.split("|");
+    return pruneSlateForCache(await getDailySlate({ ensure: false, dayOffset: Number(offset), timeZone }));
+  },
   300_000,
   slateIsCacheable
 );
 
-const cachedTomorrowTipsSlate = ttlMemo(
-  async () => pruneSlateForCache(await getDailySlate({ ensure: false, dayOffset: 1 })),
-  90_000,
-  slateIsCacheable
-);
+function slateKey(timeZone: string, dayOffset: number, now = new Date()): string {
+  const window = dayWindowRange(now, timeZone, 1, dayOffset);
+  // Two zones sharing an offset share the entry; the name rides along only so
+  // the loader can rebuild the same window.
+  return `${timeZone}|${dayOffset}|${window.startUtc.getTime()}`;
+}
+
+const cachedTodayTipsSlate = (timeZone: string) =>
+  cachedDailyTipsSlate(slateKey(timeZone, 0));
+
+const cachedTomorrowTipsSlate = (timeZone: string) =>
+  cachedDailyTipsSlate(slateKey(timeZone, 1));
 
 const cachedWeeklyTipsSlate = ttlMemo(
   async () => pruneSlateForCache(await getWeeklySlate({ ensure: false })),
@@ -69,12 +97,12 @@ const cachedWeeklyTipsSlate = ttlMemo(
  * evaluates expiry against the actual request, which is both cheaper and more
  * honest.
  */
-export async function getCachedTodayTipsProduct(): Promise<DailyTipsProduct> {
-  return buildDailyTipsProduct(await cachedTodayTipsSlate(), { day: "today", asOf: new Date() });
+export async function getCachedTodayTipsProduct(timeZone = DEFAULT_TIMEZONE): Promise<DailyTipsProduct> {
+  return buildDailyTipsProduct(await cachedTodayTipsSlate(timeZone), { day: "today", asOf: new Date() });
 }
 
-export async function getCachedTomorrowTipsProduct(): Promise<DailyTipsProduct> {
-  return buildDailyTipsProduct(await cachedTomorrowTipsSlate(), { day: "tomorrow", asOf: new Date() });
+export async function getCachedTomorrowTipsProduct(timeZone = DEFAULT_TIMEZONE): Promise<DailyTipsProduct> {
+  return buildDailyTipsProduct(await cachedTomorrowTipsSlate(timeZone), { day: "tomorrow", asOf: new Date() });
 }
 
 export async function getCachedWeeklyTipsProduct(): Promise<WeeklyTipsProduct> {

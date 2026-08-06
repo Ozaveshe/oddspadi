@@ -13,6 +13,7 @@ import { SurfaceClaimMarker } from "@/components/system/SurfaceClaimMarker";
 import { normaliseScore } from "@/lib/domain/surfaceClaim";
 import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
 import { formatOdds } from "@/lib/sports/prediction/format";
+import { readTimezonePreference } from "@/lib/time/timezoneCookie";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +27,9 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default async function DailyDoublePage() {
+  const timeZone = await readTimezonePreference();
   const [product, calibration] = await Promise.all([
-    getCachedTodayTipsProduct().catch(() => null),
+    getCachedTodayTipsProduct(timeZone).catch(() => null),
     getCachedCalibrationBands().catch(() => ({ bandsBySport: {}, provenance: [] as ProfileProvenance[] }))
   ]);
 

@@ -118,6 +118,31 @@ Evidence precedence, highest first:
 `due` and `unresolved` are the honest answers the system previously could not
 express. Neither is terminal; both are quarantine states, not write-offs.
 
+### Where the state is stored
+
+`op_fixtures.status` stays the **provider's** last word.
+`op_fixtures.lifecycle_state` is **ours**, written by the reconciler. They sit
+side by side so that a disagreement is visible rather than resolved by
+overwriting one with the other — see [fixture-reconciliation.md](fixture-reconciliation.md).
+
+The read path can derive the state itself and does not depend on the job having
+run. That dependency — a page being correct only because a cron fired — was the
+original defect.
+
+### How the timestamps get written
+
+A trigger, `op_fixture_temporal_transitions`, not application code. Ingestion
+upserts, so application-side stamping would overwrite the first observation on
+every sync, and ingestion is not the only writer.
+
+Only observed transitions count. A row that arrives **already finished** gets no
+timestamps at all: we did not see that match start and did not see its result
+land, so recording `now()` would record our import time as though it were match
+evidence. Historical backfills therefore leave these null, which is correct.
+
+A reschedule writes `metadata.rescheduledFrom` alongside the new kick-off, so a
+fixture moving is recorded rather than silently applied.
+
 ### Play windows
 
 Longest a match plausibly runs, from kick-off: football 4h, basketball 4h30,

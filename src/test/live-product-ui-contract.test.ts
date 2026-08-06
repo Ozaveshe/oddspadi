@@ -12,7 +12,11 @@ describe("live OddsPadi product UI contract", () => {
     expect(home).toContain("home-engine-strip");
     expect(home).toContain("Daily Tips Preview");
     expect(home).toContain("<LiveTicker initial={liveBoard}");
-    expect(home).toContain("getCachedTodayTipsProduct()");
+    // The zone must be resolved before the read, not applied to its output:
+    // the day boundary decides which fixtures are selected, not merely how
+    // their kick-off times are printed.
+    expect(home).toContain("readTimezonePreference()");
+    expect(home).toContain("getCachedTodayTipsProduct(timeZone)");
     expect(home).toContain("getCachedWeeklyTipsProduct()");
     // The card also accepts a counts-only summary, which carries it when the
     // full product read misses the page's 2.5s budget.
@@ -73,9 +77,14 @@ describe("live OddsPadi product UI contract", () => {
     // rebuild the product, so these assert the slate calls rather than the
     // product ones — the whole product was 36.6MB for a day and 62.5MB for a
     // week, over Next's 2MB data-cache ceiling, and was therefore never cached.
-    expect(reads).toContain("getDailySlate({ ensure: false, dayOffset: 0 })");
-    expect(reads).toContain("getDailySlate({ ensure: false, dayOffset: 1 })");
+    // The daily reads are now one keyed loader taking the offset and the
+    // visitor's zone from the cache key, so the assertion is on the invariant
+    // rather than on two literal call shapes.
+    expect(reads).toContain("getDailySlate({ ensure: false, dayOffset: Number(offset), timeZone })");
     expect(reads).toContain("getWeeklySlate({ ensure: false })");
+    for (const call of reads.match(/getDailySlate\(\{[^}]*\}\)/g) ?? []) {
+      expect(call, "a public read must never invoke live providers").toContain("ensure: false");
+    }
     for (const path of [
       "src/app/predictions/page.tsx",
       "src/app/predictions/today/page.tsx",

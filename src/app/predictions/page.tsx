@@ -7,6 +7,7 @@ import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
 import { filterDailyTipsProductBySport } from "@/lib/sports/tips/product";
 import { readNavigationContext, withNavigationContext } from "@/lib/navigation/context";
 import type { Sport } from "@/lib/sports/types";
+import { readTimezonePreference } from "@/lib/time/timezoneCookie";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
   const resolvedParams = await searchParams;
   const requestedSport = predictionSport(resolvedParams?.sport);
   const carried = readNavigationContext(resolvedParams);
-  const fullProduct = await getCachedTodayTipsProduct();
+  const fullProduct = await getCachedTodayTipsProduct(await readTimezonePreference());
   const product = requestedSport ? filterDailyTipsProductBySport(fullProduct, requestedSport) : fullProduct;
   const sportLabel = requestedSport ? requestedSport[0].toUpperCase() + requestedSport.slice(1) : null;
   return (

@@ -4,6 +4,7 @@ import { ProviderRunStrip, SlateFixtureCard } from "@/components/odds/Intelligen
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
 import type { SlateFixture } from "@/lib/sports/intelligence/types";
 import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
+import { readTimezonePreference } from "@/lib/time/timezoneCookie";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ function FallbackSection({ title, eyebrow, rows, empty }: { title: string; eyebr
 }
 
 export default async function ValuePicksPage() {
-  const product = await getCachedTodayTipsProduct();
+  const product = await getCachedTodayTipsProduct(await readTimezonePreference());
   const { slate } = product;
   const hasPublishedValue = product.sections.valuePicks.length > 0;
 
