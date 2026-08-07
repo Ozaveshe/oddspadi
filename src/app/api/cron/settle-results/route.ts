@@ -7,6 +7,7 @@ import { runCommunityTipSettlement } from "@/lib/community/tipSettlement";
 import { runConsensusResearchBackfill } from "@/lib/community/consensusResearchBackfill";
 import { runPublicationSettlement } from "@/lib/publication/settlePublications";
 import { runCanonicalPublicationSettlement } from "@/lib/publication/canonicalSettlement";
+import { runClosingCapture } from "@/lib/closing/captureSweep";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -36,14 +37,28 @@ export const POST = withApiHandler(async (request: Request) => {
   // and the public track record showed nothing.
   const publications = await runPublicationSettlement({ limit, persist: true });
 
+  // Closing capture is independent of settlement — a claim's close is a fact
+  // about the market before kickoff, not about the result — but it runs here
+  // because both are post-kickoff work on the same set of claims, and one cron
+  // pass is easier to reason about than two racing on the same rows.
+  const closingPrices = await runClosingCapture({ limit, persist: true });
+
   const communityTips = await runCommunityTipSettlement({ limit, persist: true });
   const consensusResearch = await runConsensusResearchBackfill({ limit, persist: true });
-  const parts = [publicPicks, canonicalPublications, publications, communityTips, consensusResearch];
+  const parts = [publicPicks, canonicalPublications, publications, closingPrices, communityTips, consensusResearch];
   const unavailable = parts.some((part) => part.status === "unavailable");
   const partial = parts.some((part) => part.status === "partial");
   const status = unavailable ? "unavailable" : partial ? "partial" : "completed";
   return apiSuccess(
-    { status, publicPicks, canonicalPublications, publications, communityTips, consensusResearch },
+    {
+      status,
+      publicPicks,
+      canonicalPublications,
+      publications,
+      closingPrices: { ...closingPrices, exceptions: closingPrices.exceptions.length },
+      communityTips,
+      consensusResearch
+    },
     { status: unavailable ? 503 : partial ? 207 : 200 }
   );
 });
