@@ -267,12 +267,30 @@ export function computeSelectionMetrics(
   };
 }
 
+/**
+ * Price buckets, defined once.
+ *
+ * The segment table and the track-record filter both bucket by price, and if
+ * they used different edges a reader could filter to "2.00–2.99" and get a
+ * different sample from the segment row of the same name. Both now read this
+ * list; the `id` is what a URL carries, the `label` is what a page prints.
+ */
+export const ODDS_BANDS = [
+  { id: "under-1-50", label: "Under 1.50", min: 0, max: 1.5 },
+  { id: "1-50-1-99", label: "1.50–1.99", min: 1.5, max: 2 },
+  { id: "2-00-2-99", label: "2.00–2.99", min: 2, max: 3 },
+  { id: "3-00-4-99", label: "3.00–4.99", min: 3, max: 5 },
+  { id: "5-00-plus", label: "5.00+", min: 5, max: Number.POSITIVE_INFINITY }
+] as const;
+
+export type OddsBand = (typeof ODDS_BANDS)[number];
+
+export function oddsBandFor(odds: number): OddsBand {
+  return ODDS_BANDS.find((band) => odds < band.max) ?? ODDS_BANDS[ODDS_BANDS.length - 1];
+}
+
 function oddsBand(odds: number): string {
-  if (odds < 1.5) return "Under 1.50";
-  if (odds < 2) return "1.50–1.99";
-  if (odds < 3) return "2.00–2.99";
-  if (odds < 5) return "3.00–4.99";
-  return "5.00+";
+  return oddsBandFor(odds).label;
 }
 
 function segmentValue(publication: OfficialPublicationSummary, key: SegmentKey): string {
