@@ -80,14 +80,14 @@ export function isProviderBackedSlateFixture(row: SlateFixture): boolean {
 function decisionExpiry(row: SlateFixture): string | null {
   return row.decisionSummary.bestPublishedPick?.expiresAt
     ?? row.decisionSummary.bestLean?.expiresAt
-    ?? row.decisionSummary.bestWatchlistCandidate?.expiresAt
+    ?? row.decisionSummary.bestDisplayCandidate?.expiresAt
     ?? row.decisionSummary.expiresAt;
 }
 
 export function normalizeExpiredTip(row: SlateFixture, asOf: Date): SlateFixture {
   const expiry = decisionExpiry(row);
   if (!expiry || !["value_pick", "lean"].includes(row.publicStatus) || Date.parse(expiry) > asOf.getTime()) return row;
-  const heldCandidate = row.decisionSummary.bestPublishedPick ?? row.decisionSummary.bestLean ?? row.decisionSummary.bestWatchlistCandidate;
+  const heldCandidate = row.decisionSummary.bestPublishedPick ?? row.decisionSummary.bestLean ?? row.decisionSummary.bestDisplayCandidate;
   return {
     ...row,
     publicStatus: "stale",
@@ -103,7 +103,7 @@ export function normalizeExpiredTip(row: SlateFixture, asOf: Date): SlateFixture
       engineStatus: "stale",
       bestPublishedPick: null,
       bestLean: null,
-      bestWatchlistCandidate: heldCandidate,
+      bestDisplayCandidate: heldCandidate,
       noPickReason: "The supporting odds expired; this selection is held for a market refresh."
     }
   };

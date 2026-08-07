@@ -8,6 +8,7 @@ import { getSupabaseRuntimeStatus } from "@/lib/supabase/server";
 import { buildCurrentCalibrationMetrics } from "@/lib/sports/prediction/decisionCalibration";
 import { bandsFromBuckets } from "@/lib/accumulator/dailyDoubleReads";
 import type { BandEvidence } from "@/lib/accumulator/calibratedBands";
+import { DEFAULT_TIMEZONE, dayWindowRange } from "@/lib/time/dayWindow";
 import {
   buildCanonicalDecisions,
   buildCanonicalDecisionForPrediction,
@@ -671,21 +672,33 @@ function buildReadOnlySlate({
   });
 }
 
+/**
+ * `timeZone` decides which day this is, and it must come from the visitor.
+ *
+ * It defaults to Africa/Lagos rather than UTC because a default is a real
+ * answer served to real people — the first audience is Nigerian, and a visitor
+ * whose cookie has not arrived yet should get the board that is right for most
+ * of them rather than one that is right for nobody in particular.
+ */
 export async function getDailySlate({
   now = new Date(),
   ensure = true,
   dayOffset = 0,
+  timeZone = DEFAULT_TIMEZONE,
   env = process.env,
   maxFixtureAgeMs: requestedMaxFixtureAgeMs,
   includeSuspended = false
-}: { now?: Date; ensure?: boolean; dayOffset?: number; env?: Record<string, string | undefined>; maxFixtureAgeMs?: number; includeSuspended?: boolean } = {}): Promise<SportsSlate> {
-  const date = utcDateWindow(now, 1, dayOffset)[0];
+}: { now?: Date; ensure?: boolean; dayOffset?: number; timeZone?: string; env?: Record<string, string | undefined>; maxFixtureAgeMs?: number; includeSuspended?: boolean } = {}): Promise<SportsSlate> {
+  // The day label and the instants it spans come from one call, so a caller
+  // cannot re-derive the boundary and disagree with the query that ran.
+  const window = dayWindowRange(now, timeZone, 1, dayOffset);
+  const date = window.days[0];
   const maxFixtureAgeMs = requestedMaxFixtureAgeMs ?? configuredNumber(env, "ODDSPADI_STORED_FIXTURE_MAX_AGE_MINUTES", 360, 30, 1440) * 60_000;
   try {
     const stored = await readStoredSlate({
       scope: "daily",
-      from: isoDayStart(date),
-      toExclusive: isoDayAfter(date),
+      from: window.startUtc.toISOString(),
+      toExclusive: window.endUtc.toISOString(),
       jobTypes: ["run-daily-engine", "refresh-odds"],
       now,
       maxFixtureAgeMs,

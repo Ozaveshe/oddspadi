@@ -2,7 +2,7 @@ import type { DecisionSummary } from "@/lib/sports/types";
 
 export function publicWatchlistReason(summary: DecisionSummary): string {
   const blockers = [
-    ...(summary.bestWatchlistCandidate?.blockers ?? []),
+    ...(summary.bestDisplayCandidate?.blockers ?? []),
     ...summary.auditSummary.blockers
   ];
   if (summary.publicStatus === "stale" || blockers.some((blocker) => blocker.includes("odds snapshot is stale"))) {

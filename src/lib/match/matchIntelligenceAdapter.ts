@@ -68,7 +68,7 @@ function intervalFrom(displayed: { beliefState?: { confidenceInterval?: { low: n
 function toFactors(prediction: Prediction): RawFactor[] {
   const factors: RawFactor[] = [];
   const canonical = prediction.canonicalDecision;
-  const displayed = canonical.bestPublishedPick ?? canonical.bestLean ?? canonical.bestWatchlistCandidate;
+  const displayed = canonical.bestPublishedPick ?? canonical.bestLean ?? canonical.bestDisplayCandidate;
 
   if (displayed) {
     const edge = Number(displayed.edge);
@@ -159,7 +159,7 @@ export function toMatchIntelligenceInput({
 
   const canonical = prediction.canonicalDecision;
   const winner = prediction.markets?.find((market) => market.marketId === "match_winner");
-  const displayed = canonical.bestPublishedPick ?? canonical.bestLean ?? canonical.bestWatchlistCandidate;
+  const displayed = canonical.bestPublishedPick ?? canonical.bestLean ?? canonical.bestDisplayCandidate;
   const bookmakerCount = new Set(quotes.map((quote) => quote.bookmaker).filter(Boolean)).size;
   const winnerConsensus = match.oddsMarkets?.find((market) => market.id === "match_winner")?.consensus?.probabilities ?? null;
 

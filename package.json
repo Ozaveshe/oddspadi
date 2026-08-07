@@ -43,7 +43,8 @@
     "ops:expire-fixtures": "node --env-file-if-exists=.env.local scripts/expire-stale-fixtures.mjs",
     "ops:backfill-results": "node --env-file-if-exists=.env.local scripts/backfill-fixture-results.mjs",
     "check:migrations": "node --env-file-if-exists=.env.local scripts/check-migrations.mjs",
-    "check:migrations:ledger": "node --env-file-if-exists=.env.local scripts/check-migrations.mjs --ledger"
+    "check:migrations:ledger": "node --env-file-if-exists=.env.local scripts/check-migrations.mjs --ledger",
+    "ops:reconcile-lifecycles": "npx vite-node -c vitest.config.ts scripts/reconcile-fixture-lifecycles.ts"
   },
   "engines": {
     "node": "22.x"

@@ -1178,6 +1178,52 @@ p {
   color: var(--red-strong);
 }
 
+/* Fixture lifecycle chips.
+   `waiting` covers the two states that admit ignorance — due and unresolved.
+   It is deliberately quiet: a board full of loud amber for "we have not heard
+   yet" reads as breakage, when the honest meaning is simply that nothing has
+   arrived. Muted text on the plain surface says that without alarm. */
+.badge.lifecycle-waiting {
+  background: var(--surface-strong);
+  border-color: var(--hairline);
+  color: var(--muted);
+}
+
+.badge.lifecycle-settled {
+  background: var(--green-soft);
+  border-color: var(--green-line);
+  color: var(--green-strong);
+}
+
+/* Postponed, cancelled, abandoned, suspended: something happened to the match
+   itself, which is worth distinguishing from us having lost track of it. */
+.badge.lifecycle-disrupted {
+  background: var(--surface);
+  border-color: var(--hairline);
+  color: var(--text);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--faint);
+}
+
+.badge.lifecycle-neutral {
+  background: var(--surface-strong);
+  border-color: var(--hairline);
+  color: var(--text);
+}
+
+.badge.lifecycle-live {
+  background: var(--live-soft);
+  border-color: rgba(255, 61, 110, 0.35);
+  color: var(--red-strong);
+}
+
+.lifecycle-badge__detail {
+  font-weight: 500;
+  text-transform: none;
+  color: var(--muted);
+}
+
 .badge.live::before {
   content: "";
   width: 7px;

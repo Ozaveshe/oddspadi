@@ -147,7 +147,7 @@ function decisionSummaryFromRow(row: Record<string, unknown>): DecisionSummary |
     fixtureId,
     bestPublishedPick: (row.best_published_pick ?? null) as DecisionSummary["bestPublishedPick"],
     bestLean: (row.best_lean ?? null) as DecisionSummary["bestLean"],
-    bestWatchlistCandidate: (row.best_watchlist_candidate ?? null) as DecisionSummary["bestWatchlistCandidate"],
+    bestDisplayCandidate: (row.best_watchlist_candidate ?? null) as DecisionSummary["bestDisplayCandidate"],
     noPickReason: text(row.no_pick_reason),
     allMarketAnalyses: analyses,
     publicStatus,
@@ -579,7 +579,7 @@ export async function persistDecisionSummaries({
       sport: fixtureSports.get(summary.fixtureId) ?? "football",
       best_published_pick: summary.bestPublishedPick,
       best_lean: summary.bestLean,
-      best_watchlist_candidate: summary.bestWatchlistCandidate,
+      best_watchlist_candidate: summary.bestDisplayCandidate,
       no_pick_reason: summary.noPickReason,
       all_market_analyses: summary.allMarketAnalyses,
       public_status: summary.publicStatus,
@@ -866,7 +866,7 @@ export async function readStoredSlate({
   for (let page = 0; page < STORED_FIXTURE_MAX_PAGES; page += 1) {
     const { data: pageRows, error: pageError } = await client
       .from("op_fixtures")
-      .select("id,sport,provider,external_id,provider_fixture_id,league_external_id,league_name,season,kickoff_at,status,home_team_external_id,away_team_external_id,home_team_name,away_team_name,home_score,away_score,country,data_quality,last_synced_at,metadata")
+      .select("id,sport,provider,external_id,provider_fixture_id,league_external_id,league_name,season,kickoff_at,status,lifecycle_state,home_team_external_id,away_team_external_id,home_team_name,away_team_name,home_score,away_score,country,data_quality,last_synced_at,metadata")
       .gte("kickoff_at", cursor)
       .lt("kickoff_at", toExclusive)
       .order("kickoff_at", { ascending: true })
@@ -919,9 +919,21 @@ export async function readStoredSlate({
   //
   // An abandoned fixture has no result to show and no kickoff to wait for. It
   // settles as void and belongs in the record, not on a board of what is on.
+  //
+  // Keeping a written-off fixture off the board and claiming the provider
+  // called it off were the same act while the sweep wrote `status`. They are
+  // not the same act, and separating them is the whole point of
+  // `lifecycle_state`: the sweep now says `unresolved` in its own column, so
+  // this filter has to read that column too or every quarantined match walks
+  // back onto the board with a live price under it.
   const NON_BOARD_STATUSES = new Set(["suspended", "abandoned"]);
+  const NON_BOARD_LIFECYCLE_STATES = new Set(["unresolved"]);
   const boardRows = providerRows.filter((row) => !record(row.metadata).duplicateOf);
-  const eligibleRows = includeSuspended ? boardRows : boardRows.filter((row) => !NON_BOARD_STATUSES.has(String(row.status)));
+  const eligibleRows = includeSuspended
+    ? boardRows
+    : boardRows.filter(
+        (row) => !NON_BOARD_STATUSES.has(String(row.status)) && !NON_BOARD_LIFECYCLE_STATES.has(String(row.lifecycle_state ?? ""))
+      );
   const staleRows = eligibleRows.filter((row) => !isStoredFixtureFresh(text(row.last_synced_at), now, maxFixtureAgeMs));
   const identityMaxAgeMs = Math.max(maxFixtureAgeMs, DEFAULT_STORED_FIXTURE_IDENTITY_MAX_AGE_MS);
   const expiredIdentityRows = eligibleRows.filter((row) => !isStoredFixtureFresh(text(row.last_synced_at), now, identityMaxAgeMs));

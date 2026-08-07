@@ -33,7 +33,7 @@ function readableMarket(value: string): string {
 export function displayedSlateDecision(row: SlateFixture): DecisionMarketAnalysis | null {
   return row.decisionSummary.bestPublishedPick
     ?? row.decisionSummary.bestLean
-    ?? row.decisionSummary.bestWatchlistCandidate;
+    ?? row.decisionSummary.bestDisplayCandidate;
 }
 
 export function noPickExplanation(row: SlateFixture): string {

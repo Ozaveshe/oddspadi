@@ -9,7 +9,7 @@ function matchLabel(row: SlateFixture): string {
 }
 
 function decisionLine(row: SlateFixture): string {
-  const pick = row.decisionSummary.bestPublishedPick ?? row.decisionSummary.bestLean ?? row.decisionSummary.bestWatchlistCandidate;
+  const pick = row.decisionSummary.bestPublishedPick ?? row.decisionSummary.bestLean ?? row.decisionSummary.bestDisplayCandidate;
   return pick
     ? `${matchLabel(row)} — ${pick.label} @ ${formatOdds(pick.odds)} | edge ${formatSignedPercent(pick.edge)} | ${row.publicStatus.replaceAll("_", " ")}`
     : `${matchLabel(row)} — ${row.decisionSummary.noPickReason ?? "No clear value found."}`;

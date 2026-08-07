@@ -15,6 +15,7 @@ import {
   getCachedWeeklyTipsProduct,
   getCachedYesterdayResultsProduct
 } from "@/lib/sports/tips/publicReads";
+import { readTimezonePreference } from "@/lib/time/timezoneCookie";
 
 export const dynamic = "force-dynamic";
 
@@ -51,13 +52,16 @@ function weekdayLabel(date: string, firstDate: string): string {
 }
 
 export default async function HomePage() {
+  // Resolved before the reads, not applied to their output: the day boundary
+  // decides which fixtures are selected, not just how their times are printed.
+  const timeZone = await readTimezonePreference();
   const [summary, weeklySummary, modelRecord, daily, weekly, yesterday, liveBoard] = await Promise.all([
     // Counts finish in milliseconds, so the card no longer depends on the full
     // product read completing inside the budget.
     withTimeout(getCachedHomepageMatchdaySummary(), 2_500, null),
     withTimeout(getCachedHomepageWeeklySummary(), 2_500, null),
     withTimeout(getCachedHomepageModelRecordSummary(), 2_500, null),
-    withTimeout(getCachedTodayTipsProduct(), 2_500, null),
+    withTimeout(getCachedTodayTipsProduct(timeZone), 2_500, null),
     withTimeout(getCachedWeeklyTipsProduct(), 2_500, null),
     withTimeout(getCachedYesterdayResultsProduct(), 2_500, null),
     withTimeout(fetchLiveScoreBoard(), 2_500, null)

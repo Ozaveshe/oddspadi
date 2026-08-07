@@ -491,7 +491,7 @@ export interface DecisionSummary {
   fixtureId: string;
   bestPublishedPick: DecisionMarketAnalysis | null;
   bestLean: DecisionMarketAnalysis | null;
-  bestWatchlistCandidate: DecisionMarketAnalysis | null;
+  bestDisplayCandidate: DecisionMarketAnalysis | null;
   noPickReason: string | null;
   allMarketAnalyses: DecisionMarketAnalysis[];
   publicStatus: DecisionSummaryPublicStatus;

@@ -4,7 +4,7 @@ import type { PredictionOutcomeInput } from "@/lib/sports/prediction/decisionOut
 function strongestEvaluationEdge(prediction: Prediction): ValueEdge | null {
   return prediction.canonicalDecision.bestPublishedPick ??
     prediction.canonicalDecision.bestLean ??
-    prediction.canonicalDecision.bestWatchlistCandidate;
+    prediction.canonicalDecision.bestDisplayCandidate;
 }
 
 function oddsProviderSportKey(match: Match): string | null {

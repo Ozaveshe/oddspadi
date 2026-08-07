@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { DailyTipsPageView } from "@/components/odds/DailyTipsPageView";
 import { getCachedTomorrowTipsProduct } from "@/lib/sports/tips/publicReads";
+import { readTimezonePreference } from "@/lib/time/timezoneCookie";
 
 export const dynamic = "force-dynamic";
 
@@ -14,5 +15,5 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default async function TomorrowTipsPage() {
-  return <DailyTipsPageView product={await getCachedTomorrowTipsProduct()} />;
+  return <DailyTipsPageView product={await getCachedTomorrowTipsProduct(await readTimezonePreference())} />;
 }

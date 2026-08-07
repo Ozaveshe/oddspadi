@@ -338,7 +338,7 @@ export function buildSportsSlate({
           fixtureId: fixture.fixtureId,
           bestPublishedPick: null,
           bestLean: null,
-          bestWatchlistCandidate: null,
+          bestDisplayCandidate: null,
           noPickReason: "The canonical engine has not analysed this provider-backed fixture yet.",
           allMarketAnalyses: [],
           publicStatus: "needs_data",

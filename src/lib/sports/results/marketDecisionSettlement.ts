@@ -25,6 +25,15 @@ export type SettleableFixtureResult = {
   status: "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "abandoned" | "suspended";
   homeScore: number | null;
   awayScore: number | null;
+  /**
+   * Our reading of the evidence, when it has been reconciled.
+   *
+   * `status` is the provider's last word and `lifecycleState` is ours, and the
+   * only reason settlement needs both is that they can disagree. `unresolved`
+   * is the disagreement that matters here: it means the match should have
+   * finished and no result reached us, which is not a fact about the match.
+   */
+  lifecycleState?: string | null;
 };
 
 export type MarketDecisionGrade = {
@@ -54,11 +63,25 @@ export function gradeMarketDecision({
   selection: string;
   fixture: SettleableFixtureResult;
 }): MarketDecisionGrade {
+  // A quarantined fixture is an unknown, and an unknown is not a void.
+  //
+  // This branch used to be a comment admitting the opposite: `abandoned`
+  // reached here two ways, the provider reporting it and the stale sweep
+  // inventing it, and both were graded void so the queue would drain. Draining
+  // the queue is not worth the price it charged — 50 of 134 settled
+  // publications were void, and ~50 of those were matches that were played.
+  //
+  // The sweep now writes `lifecycle_state = 'unresolved'` and leaves `status`
+  // alone, so the two cases are distinguishable at last. An unsettled claim is
+  // a claim we have not graded yet; a void claim is one we say never resolved.
+  // Only the provider can put us in the second case.
+  if (fixture.lifecycleState === "unresolved") {
+    return decided(
+      "needs_review",
+      "The fixture is past its plausible window with no provider result. We do not know the outcome, which is not the same as there not having been one."
+    );
+  }
   if (fixture.status === "cancelled" || fixture.status === "postponed" || fixture.status === "abandoned") {
-    // `abandoned` reaches here two ways: the provider reported it, or the stale
-    // sweep expired a fixture whose result never arrived. Both mean no usable
-    // outcome. Without this branch the sweep's 1,112 expired fixtures would all
-    // fall through to needs_review and sit in the queue forever.
     return decided("void", `Fixture was ${fixture.status}, so the market never resolved.`);
   }
   if (fixture.status !== "finished") {

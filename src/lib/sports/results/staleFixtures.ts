@@ -12,17 +12,24 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
  * per sport, and the clock the sweep happens to run on does not matter.
  *
  * The windows live in `op_expire_stale_fixtures`; this is the typed caller.
+ *
+ * "Expiry" is the historical name and it overstates what happens. The sweep
+ * quarantines: it records `lifecycle_state = 'unresolved'` — our reading, in
+ * our column — and leaves `op_fixtures.status` saying whatever the provider
+ * last said. It used to write `status = 'abandoned'`, which read as a claim the
+ * match had been called off and settled 50 published picks void on matches that
+ * were played.
  */
 export type StaleFixtureExpiry = {
   status: "completed" | "preview" | "unavailable" | "partial";
   committed: boolean;
   generatedAt: string;
   total: number;
-  bySport: { sport: string; expired: number; oldestHours: number }[];
+  bySport: { sport: string; quarantined: number; oldestHours: number }[];
   errors: string[];
 };
 
-type ExpiryRow = { sport: string; expired: number; oldest_hours: number | string };
+type ExpiryRow = { sport: string; quarantined: number; oldest_hours: number | string };
 
 export async function expireStaleFixtures({
   commit = false,
@@ -47,14 +54,14 @@ export async function expireStaleFixtures({
   const rows = (data ?? []) as ExpiryRow[];
   const bySport = rows.map((row) => ({
     sport: String(row.sport),
-    expired: Number(row.expired) || 0,
+    quarantined: Number(row.quarantined) || 0,
     oldestHours: Number(row.oldest_hours) || 0
   }));
   return {
     status: commit ? "completed" : "preview",
     committed: commit,
     generatedAt,
-    total: bySport.reduce((sum, row) => sum + row.expired, 0),
+    total: bySport.reduce((sum, row) => sum + row.quarantined, 0),
     bySport,
     errors: []
   };

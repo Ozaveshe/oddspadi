@@ -13,6 +13,7 @@ import { TeamCrest } from "@/components/odds/TeamCrest";
 import { DecisionPriceSignal } from "@/components/odds/DecisionPriceSignal";
 import { marketPriorReceiptFor } from "@/lib/sports/prediction/marketPriorPresentation";
 import { decisionStatusBadgeClass as badgeClass, DECISION_STATUS_LABELS as STATUS_LABELS } from "@/lib/product/vocabulary";
+import { MatchStatusBadge } from "@/components/odds/Badges";
 import { SurfaceClaimMarker } from "@/components/system/SurfaceClaimMarker";
 import { claimFromSlateFixture } from "@/lib/domain/claimAdapters";
 import type { PublicSurface } from "@/lib/domain/surfaceClaim";
@@ -60,6 +61,10 @@ export function SlateFixtureCard({ row, compact = false, asOf, surface = "predic
     <article className={`intelligence-card status-${row.publicStatus}${compact ? " compact" : ""}`}>
       <div className="intelligence-card-topline">
         <span className="intelligence-competition"><CountryFlag country={fixture.country} flag={fixture.leagueFlag} size={16} /><span>{fixture.sport} · {fixture.league} · {fixture.country}</span></span>
+        {/* Two badges answering two different questions. The decision badge
+            says what the engine concluded; this one says whether the match is
+            still a match. Both were previously answered by "scheduled". */}
+        <MatchStatusBadge status={fixture.status} sport={fixture.sport} kickoffAt={fixture.kickoffAt} score={fixture.score} />
         <span className={`badge ${badgeClass(row.publicStatus)}`}>{STATUS_LABELS[row.publicStatus]}</span>
       </div>
       <div className="intelligence-matchline">
@@ -112,7 +117,14 @@ function NoPickFixtureCard({ row, asOf, surface = "prediction-list", context = {
   const presentation = buildPredictionPresentation(row, asOf);
   return (
     <article className="no-pick-card">
-      <div><span className={`badge ${badgeClass(row.publicStatus)}`}>{STATUS_LABELS[row.publicStatus]}</span><small><LocalTime iso={row.fixture.kickoffAt} variant="kickoff" /> · {row.fixture.league}</small></div>
+      <div>
+        <span className={`badge ${badgeClass(row.publicStatus)}`}>{STATUS_LABELS[row.publicStatus]}</span>
+        {/* The decision badge beside it says what the engine concluded. This
+            says whether the match is still a match — two different questions
+            that were both being answered by "scheduled". */}
+        <MatchStatusBadge status={row.fixture.status} sport={row.fixture.sport} kickoffAt={row.fixture.kickoffAt} score={row.fixture.score} />
+        <small><LocalTime iso={row.fixture.kickoffAt} variant="kickoff" /> · {row.fixture.league}</small>
+      </div>
       <h3><Link href={withNavigationContext(`/predictions/${encodeURIComponent(row.fixture.fixtureId)}`, context)}>{row.fixture.homeTeam.name} vs {row.fixture.awayTeam.name}</Link></h3>
       <dl><div><dt>Model lean</dt><dd>{strongestModelLean(row)}</dd></div><div><dt>Why no pick</dt><dd>{noPickExplanation(row)}</dd></div></dl>
       <span className={`badge ${presentation.freshness === "fresh" ? "positive" : presentation.freshness === "stale" ? "no-value" : "scheduled"}`}>{presentation.freshnessLabel}</span>
@@ -401,7 +413,7 @@ export function HomepageIntelligencePanels({ daily, weekly, yesterday }: { daily
         <div className="intelligence-home-metrics">
           <div><span>Best value</span><strong>{best?.decisionSummary.bestPublishedPick?.label ?? "No value published"}</strong></div>
           <div><span>Safer lean</span><strong>{lean?.decisionSummary.bestLean?.label ?? "No lean ready"}</strong></div>
-          <div><span>Watch</span><strong>{watch?.decisionSummary.bestWatchlistCandidate?.label ?? "Nothing held"}</strong></div>
+          <div><span>Watch</span><strong>{watch?.decisionSummary.bestDisplayCandidate?.label ?? "Nothing held"}</strong></div>
           <div><span>Analysed</span><strong>{daily?.summary.fixturesAnalysed ?? 0} / {daily?.summary.fixturesFound ?? 0}</strong></div>
         </div>
       </article>

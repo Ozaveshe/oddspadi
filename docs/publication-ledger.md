@@ -93,7 +93,34 @@ A model with no settled picks has no accuracy, and rendering 0% is a claim.
 
 ## Current state
 
-As of the 2026-07-31 reconciliation: **0 official publications.** OddsPadi has
-never published a pick that meets this bar. Every public surface now says so
-consistently, which is the first time the product has been internally
-consistent about its own record.
+At the 2026-07-31 reconciliation this read **0 official publications** — nothing
+in the product's history met the bar. That is no longer true, and a doc that
+says a product has never published anything while it is publishing daily is the
+same class of error the ledger exists to prevent.
+
+Measured 2026-08-06: **230 official publications**. 134 settled — 35 won, 47
+lost, 52 void — and 96 unsettled.
+
+Re-measured 2026-08-07, after the repair below: **84 settled — 35 won, 47 lost,
+2 void — and 146 unsettled.** The won and lost counts did not move. The hit rate
+did not move. What moved is that the record no longer claims to know 50 things
+it does not.
+
+**Why 50 voids were withdrawn.** The stale-fixture sweep wrote
+`op_fixtures.status = 'abandoned'` on any fixture past kickoff plus its sport's
+window, and `abandoned` is a provider statement that a match was called off.
+Settlement read it back as one. The matches had been played: on 2026-08-03 the
+Toronto WTA 1/64-finals had 17 fixtures finish with a score and one expire. 37%
+of the settled record was decided by a clock.
+
+`op_repair_inference_expired_fixtures` withdrew all 50 through
+`op_unsettle_publication`, which captures the prior state in
+`op_publication_revisions`, retires the settlement row rather than deleting it,
+and returns the claim to `unsettled` so a late result can still grade it. Every
+withdrawal is in the public correction log. The two remaining voids are genuine
+provider cancellations and were left alone. See
+[fixture-reconciliation.md](fixture-reconciliation.md).
+
+**This section will go stale again.** It is a measurement with a date on it, not
+a property of the system. Re-measure before citing it; the live figures are what
+`readOfficialPublications` returns.

@@ -196,7 +196,7 @@ describe("canonical odds provenance", () => {
     const missingSummary = canonicalSummary(match, missingEvidence);
     expect(missingSummary.publicStatus).toBe("watchlist");
     expect(missingSummary.bestPublishedPick).toBeNull();
-    expect(missingSummary.bestWatchlistCandidate?.blockers).toEqual(expect.arrayContaining([
+    expect(missingSummary.bestDisplayCandidate?.blockers).toEqual(expect.arrayContaining([
       "best-price method is missing or mismatched on the canonical odds snapshot",
       "best-price source does not match the canonical bookmaker snapshot"
     ]));
@@ -206,7 +206,7 @@ describe("canonical odds provenance", () => {
       : snapshot);
     const mismatchedSummary = canonicalSummary(match, mismatchedEvidence);
     expect(mismatchedSummary.publicStatus).toBe("watchlist");
-    expect(mismatchedSummary.bestWatchlistCandidate?.blockers).toEqual(expect.arrayContaining([
+    expect(mismatchedSummary.bestDisplayCandidate?.blockers).toEqual(expect.arrayContaining([
       "best-price source does not match the canonical bookmaker snapshot",
       "best-price timestamp is missing, mismatched, or ahead of the decision clock"
     ]));

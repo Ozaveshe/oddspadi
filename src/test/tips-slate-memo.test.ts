@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
-import { slateIsCacheable, ttlMemo } from "@/lib/sports/tips/slateMemo";
+import { slateIsCacheable, ttlMemo, ttlMemoByKey } from "@/lib/sports/tips/slateMemo";
 import { DATA_CACHE_LIMIT_BYTES, cacheEntryBytes, pruneSlateForCache } from "@/lib/sports/tips/tipsCacheShape";
 import type { SportsSlate } from "@/lib/sports/intelligence/types";
 
@@ -99,12 +99,48 @@ describe("the tips reads stay off the data cache", () => {
     // a cache with no entries and a serialisation cost on every request, and
     // says so only in a log line.
     const source = await readFile("src/lib/sports/tips/publicReads.ts", "utf8");
-    const memoised = /const cached(Today|Tomorrow|Weekly)TipsSlate = ttlMemo\(/g;
 
-    expect(source.match(memoised)).toHaveLength(3);
+    // Weekly still has its own single-slot memo; the two daily reads now share
+    // one keyed memo, because "today" depends on the visitor's timezone.
+    expect(source).toMatch(/const cachedWeeklyTipsSlate = ttlMemo\(/);
+    expect(source).toMatch(/const cachedDailyTipsSlate = ttlMemoByKey\(/);
     expect(source, "tips slates must not go through unstable_cache").not.toMatch(
-      /const cached(Today|Tomorrow|Weekly)TipsSlate = unstable_cache\(/
+      /const cached(Daily|Today|Tomorrow|Weekly)TipsSlate = unstable_cache\(/
     );
+  });
+
+  it("keys the daily slate so one visitor's day cannot be served to another", () => {
+    // A single-slot memo would hand whichever board loaded first to everyone,
+    // so a Lagos reader could be served Sydney's day. It would look exactly
+    // like a caching flake and be miserable to reproduce.
+    const load = vi.fn(async (key: string) => slate({ generatedAt: key }));
+    const memo = ttlMemoByKey(load, 60_000);
+
+    memo("Africa/Lagos|0|1");
+    memo("Africa/Lagos|0|1");
+    memo("Australia/Sydney|0|2");
+
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(load).toHaveBeenCalledWith("Africa/Lagos|0|1");
+    expect(load).toHaveBeenCalledWith("Australia/Sydney|0|2");
+  });
+
+  it("evicts expired keys instead of growing without bound", async () => {
+    // The key space derives from a cookie, so an unbounded map here is a slow
+    // memory leak a spread of unusual timezones could widen at will.
+    vi.useFakeTimers();
+    try {
+      const load = vi.fn(async (key: string) => slate({ generatedAt: key }));
+      const memo = ttlMemoByKey(load, 1_000);
+      await memo("zone-a");
+      vi.advanceTimersByTime(1_500);
+      await memo("zone-b");
+      // zone-a expired and was swept, so asking again is a fresh load.
+      await memo("zone-a");
+      expect(load).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("prunes the derived views the product rebuilds anyway", () => {

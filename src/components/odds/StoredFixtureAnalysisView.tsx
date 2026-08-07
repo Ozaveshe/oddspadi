@@ -27,7 +27,7 @@ export function StoredFixtureAnalysisView({ read }: { read: StoredFixtureAnalysi
 
   const { analysis } = read;
   const summary = analysis.summary;
-  const candidate = summary?.bestPublishedPick ?? summary?.bestLean ?? summary?.bestWatchlistCandidate ?? null;
+  const candidate = summary?.bestPublishedPick ?? summary?.bestLean ?? summary?.bestDisplayCandidate ?? null;
   const blockers = summary?.auditSummary.blockers ?? [];
   const communitySport = analysis.sport === "football" || analysis.sport === "basketball" || analysis.sport === "tennis" ? analysis.sport : null;
   const marketOptions = new Map<string, CommunityMarketOption>();

@@ -255,7 +255,7 @@ function buildPersistedDecisionThinkingTrace({
   decision: DecisionEngineReport;
   brain: ReturnType<typeof buildDecisionBrain>;
 }): PersistedDecisionThinkingTrace {
-  const canonicalCandidate = prediction.canonicalDecision.bestPublishedPick ?? prediction.canonicalDecision.bestLean ?? prediction.canonicalDecision.bestWatchlistCandidate;
+  const canonicalCandidate = prediction.canonicalDecision.bestPublishedPick ?? prediction.canonicalDecision.bestLean ?? prediction.canonicalDecision.bestDisplayCandidate;
   const bestEdge = canonicalCandidate?.edge ?? null;
   const bestExpectedValue = canonicalCandidate?.expectedValue ?? null;
   const unresolvedDisagreements = decision.committee.unresolvedDisagreements.length;
@@ -644,7 +644,7 @@ export function buildDecisionRunPayload({
     brain,
     thinkingTrace
   });
-  const canonicalCandidate = prediction.canonicalDecision.bestPublishedPick ?? prediction.canonicalDecision.bestLean ?? prediction.canonicalDecision.bestWatchlistCandidate;
+  const canonicalCandidate = prediction.canonicalDecision.bestPublishedPick ?? prediction.canonicalDecision.bestLean ?? prediction.canonicalDecision.bestDisplayCandidate;
 
   return {
     fixture_external_id: match.id,

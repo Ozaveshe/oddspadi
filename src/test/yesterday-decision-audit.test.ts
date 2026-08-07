@@ -29,7 +29,7 @@ function row(id: string, publicStatus: "value_pick" | "watchlist" | "no_clear_va
     decisionSummary: {
       bestPublishedPick: publicStatus === "value_pick" ? { expiresAt: "2026-07-15T19:00:00.000Z" } : null,
       bestLean: null,
-      bestWatchlistCandidate: null,
+      bestDisplayCandidate: null,
       expiresAt: "2026-07-15T19:00:00.000Z",
       allMarketAnalyses: [{}]
     }
