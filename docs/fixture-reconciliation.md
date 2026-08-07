@@ -141,6 +141,98 @@ are left with a claim of a transition that did not happen — noisy but
 detectable. The reverse, a silent state change with no record, is the failure
 this table exists to prevent.
 
+## Clearing the quarantine
+
+Repairing the forged statuses left 1,888 fixtures sitting at
+`lifecycle_state = 'unresolved'`. That is the honest state, but it is not a
+resting place: the count does not shrink on its own, and every publication on
+one of those fixtures stays unsettled.
+
+Two things were stopping it from ever shrinking.
+
+**The reconciler could not see a fixture it had already quarantined.** The scan
+filtered on `status in ('scheduled', 'live')`, so the moment a recovery wrote
+`status = 'finished'` the row dropped out of the only job that can clear
+`lifecycle_state`. Measured 2026-08-07: twelve football fixtures held a final
+score, a `resulted_at` **and** `lifecycle_state = 'unresolved'` at the same
+time. The scan is now two reads — the forward path (past kick-off, still
+`scheduled`/`live`, inside `lookbackHours`) and a release path over anything in
+a quarantined state, at any age and whatever its status.
+
+**PostgREST was truncating the backlog at 1,000 rows.** `db-max-rows` caps a
+response whatever `.limit()` asks for, and says nothing about having done it.
+Against 1,888 quarantined rows a single read returned 1,000 and looked complete;
+32 fixtures that already held a final score were stranded on page two. Both
+reads now keyset-paginate on `id` — not `kickoff_at`, which ties — and stop on
+an empty page rather than a short one, because "short means last" quietly stops
+being true the moment the server's cap is lower than the page size.
+
+### Recovering results the sweep cannot reach
+
+`npm run ops:backfill-results` asks the provider about *specific fixtures* rather
+than about a date, which is what lets it reach past both the curated league
+registry and the scheduled window. Dry run by default.
+
+```bash
+npm run ops:backfill-results              # preview
+npm run ops:backfill-results -- --commit
+npm run ops:reconcile-lifecycles -- --commit   # releases what came back
+```
+
+It writes `status` and scores only. `lifecycle_state` is the reconciler's to
+write, because that is what records the transition — setting both in the
+backfill would produce a state change with no audit row.
+
+### What is actually reachable
+
+Provider windows are not documentation, they are enforced, and **API-Sports
+reports a refusal as HTTP 200 with a populated `errors` object**. A run that
+looks clean can be one hundred per cent rejected, which is why the backfill
+prints a per-provider call ledger before any outcome counts.
+
+Measured 2026-08-07:
+
+| Provider | Reach | Evidence |
+| --- | --- | --- |
+| API-Football | No practical limit | A fixture 26.5 days old still returned `AET` |
+| api-basketball (Free) | **Yesterday only** | *"Free plans do not have access to this date, try from 2026-08-06 to 2026-08-08."* |
+| api-tennis | ~9 days | Needs `API_TENNIS_KEY`; absent from some environments |
+| The Odds API `/scores` | 3 days | `daysFrom` caps at 3 |
+
+Anything older than its provider's window is **permanently** beyond reach. It
+stays `unresolved`. Do not mark it abandoned, do not delete it, and do not infer
+a result — an unknown outcome is not the same as no outcome.
+
+```sql
+-- The quarantine backlog, split by whether anyone can still answer for it.
+select
+  case
+    when f.provider in ('api-football', 'api_football') then 'api-football (reachable)'
+    when f.provider = 'api-basketball' and f.kickoff_at::date >= current_date - 1
+      then 'api-basketball (in window)'
+    when f.provider = 'api-basketball' then 'api-basketball (BEYOND window)'
+    when f.provider = 'api-tennis' and f.kickoff_at >= now() - interval '9 days'
+      then 'api-tennis (in window)'
+    when f.provider = 'api-tennis' then 'api-tennis (BEYOND window)'
+    when f.kickoff_at >= now() - interval '3 days' then 'the-odds-api (in window)'
+    else 'the-odds-api (BEYOND window)'
+  end as segment,
+  count(distinct f.id) as fixtures,
+  count(distinct p.id) as unsettled_publications
+from public.op_fixtures f
+left join public.op_publications p
+  on p.fixture_id = f.id and p.settlement_status = 'unsettled'
+where f.lifecycle_state = 'unresolved'
+group by 1 order by fixtures desc;
+```
+
+Run 2026-08-07, after recovery: **1,662 fixtures remain quarantined**, of which
+**1,143 are permanently unresolvable** — 490 api-basketball and 365 api-tennis
+and 288 The Odds API fixtures whose windows have closed. The other 519 are
+reachable given a credential or tomorrow's quota. Thirty-one publications rest
+on quarantined fixtures and are correctly held at `unsettled`; settlement grades
+them `needs_review` rather than guessing.
+
 ## Running it by hand
 
 ```bash
@@ -156,6 +248,9 @@ nothing. Always preview before committing a window you have not run before.
   inferring it from a clock is the mistake this replaces.
 - **It never touches `status`.** A test asserts the update patch contains
   `lifecycle_state` and not `status`.
-- **It does not reach back indefinitely.** `lookbackHours` (default 96) bounds
-  the scan to fixtures a provider might still resolve. Older rows are history,
-  and re-deciding them serves nobody.
+- **It does not reach back indefinitely — for fixtures it has not judged yet.**
+  `lookbackHours` (default 96) bounds the forward scan to fixtures a provider
+  might still resolve. Older rows are history, and re-deciding them serves
+  nobody. The release path is deliberately exempt: quarantine is an open
+  backlog, not a window, and a fixture we have admitted we cannot account for is
+  owed an answer however old it is. The oldest currently in it is 27 days.
