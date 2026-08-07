@@ -7,8 +7,8 @@ how to audit what it decided.
 
 | Column | Meaning | Written by |
 |---|---|---|
-| `op_fixtures.status` | The provider's last word | ingestion, `op_expire_stale_fixtures` |
-| `op_fixtures.lifecycle_state` | **Our** reading of the evidence | `reconcileFixtureLifecycles()` |
+| `op_fixtures.status` | The provider's last word | ingestion only |
+| `op_fixtures.lifecycle_state` | **Our** reading of the evidence | `reconcileFixtureLifecycles()`, `op_expire_stale_fixtures` |
 
 The obvious design was to add `due` and `unresolved` to `status`. That is wrong
 twice: it overwrites what the provider told us with what we inferred —
@@ -82,6 +82,59 @@ a test asserts a quarantined fixture returns to `finished` once a result
 arrives.
 
 `reconcile.ts` contains no `.delete(`, and a test enforces that.
+
+## The sweep, and the 50 picks it voided
+
+`op_expire_stale_fixtures` used to write `status = 'abandoned'` on the same
+fixtures the reconciler now quarantines. Its own comment admitted the problem in
+plain words — *in most of these cases the match did finish and we simply never
+received the result* — and settled for it because `abandoned` "settles as void,
+which is the honest outcome for a result we never received."
+
+It is not. Void is a claim that the market never resolved. The cost, measured
+2026-08-07: **52 of 134 settled publications were void, and 50 of those were
+matches that were played** — 22 competitions over four days, Leagues Cup, EFL
+Cup, Liga Profesional. The provider was answering on those days; on 2026-08-03
+the Toronto WTA 1/64-finals returned 17 finished fixtures with scores and one
+expiry. "Did not answer about this match" is not "the match was called off".
+
+Since `20260807050311_quarantine_stale_fixtures.sql` the sweep writes
+`lifecycle_state = 'unresolved'`, leaves `status` untouched, and appends to
+`op_fixture_lifecycle_transitions` like the reconciler it shares its rules with.
+`metadata.expiredReason` / `statusBeforeExpiry` stay — that trail is the only
+reason the damage was repairable.
+
+`marketDecisionSettlement` no longer voids a quarantined fixture; it returns
+`needs_review`, and `settlePublications` leaves the claim unsettled. Only a
+provider-stated cancellation, postponement or abandonment voids.
+
+### Repairing rows the old sweep wrote
+
+`op_repair_inference_expired_fixtures(p_commit)` — preview by default.
+
+```sql
+select * from public.op_repair_inference_expired_fixtures(false);
+```
+
+It restores `status` from `metadata.statusBeforeExpiry`, writes
+`lifecycle_state = 'unresolved'` with a transition row per fixture, and
+withdraws every publication verdict that rested on the forged status via
+`op_unsettle_publication` — the sanctioned correction path, so the prior state
+lands in `op_publication_revisions` and shows up in the public correction log.
+Idempotent: the repair moves rows off `status = 'abandoned'`, so a second run
+matches nothing.
+
+Run 2026-08-07: **1,841 fixtures and 50 publications repaired.** Void fell from
+52 to 2; the two survivors are provider-stated cancellations. Won (35) and lost
+(47) did not move — no verdict was invented, only withdrawn.
+
+```sql
+-- What the sweep has quarantined that the provider still calls scheduled.
+select f.sport, f.status, count(*)
+from public.op_fixtures f
+where f.lifecycle_state = 'unresolved'
+group by 1, 2 order by 3 desc;
+```
 
 The audit row is written *before* the state change. If the update then fails we
 are left with a claim of a transition that did not happen — noisy but

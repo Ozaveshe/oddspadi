@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { fixtureLifecycle, playWindowMs } from "@/lib/sports/lifecycle/fixtureState";
@@ -161,8 +161,19 @@ describe("fixture state never rests on the clock alone", () => {
   });
 
   it("keeps the TypeScript windows equal to the ones the SQL sweep uses", () => {
-    // Two copies of a policy drift. The migration is the other copy.
-    const sql = readFileSync("supabase/migrations/20260803150000_expire_stale_fixtures_cte.sql", "utf8");
+    // Two copies of a policy drift. The migration is the other copy — and
+    // which migration is itself a moving target, since the sweep is replaced
+    // forward rather than edited. Read whichever one defines the function
+    // last, so a rewrite cannot quietly leave this asserting against a
+    // superseded definition.
+    const dir = "supabase/migrations";
+    const latest = readdirSync(dir)
+      .filter((name) => name.endsWith(".sql"))
+      .sort()
+      .filter((name) => /create\s+(or\s+replace\s+)?function\s+public\.op_expire_stale_fixtures/i.test(readFileSync(`${dir}/${name}`, "utf8")))
+      .at(-1);
+    expect(latest, "no migration defines op_expire_stale_fixtures").toBeDefined();
+    const sql = readFileSync(`${dir}/${latest}`, "utf8");
     const windows = new Map<string, number>();
     for (const match of sql.matchAll(/when\s+'(\w+)'\s+then\s+interval\s+'([^']+)'/g)) {
       const [hours, minutes] = [/(\d+)\s*hour/.exec(match[2])?.[1], /(\d+)\s*minute/.exec(match[2])?.[1]];

@@ -98,7 +98,7 @@ describe("stale expiry", () => {
   });
 
   it("previews without committing by default", async () => {
-    mocks.rpc.mockResolvedValue({ data: [{ sport: "football", expired: 1172, oldest_hours: "542.7" }], error: null });
+    mocks.rpc.mockResolvedValue({ data: [{ sport: "football", quarantined: 1172, oldest_hours: "542.7" }], error: null });
 
     const result = await expireStaleFixtures({ now: NOW });
 

@@ -46,11 +46,22 @@ type PublicationRow = {
 type FixtureRow = {
   id: string;
   status: string;
+  lifecycle_state: string | null;
   home_score: number | null;
   away_score: number | null;
 };
 
 const TERMINAL_FIXTURE_STATUSES = new Set(["finished", "postponed", "cancelled", "abandoned"]);
+
+/**
+ * Quarantine, which is the opposite of a terminal state however similar it
+ * looks from the settlement job's side.
+ *
+ * A fixture we have written off for want of a result is not settleable and is
+ * not finished. It is a row we are still waiting on, and the honest thing to do
+ * with a claim attached to it is nothing at all.
+ */
+const QUARANTINED_LIFECYCLE_STATES = new Set(["unresolved", "due", "suspended"]);
 
 function emptyTotals(): PublicationSettlementRun["totals"] {
   return { candidates: 0, settled: 0, won: 0, lost: 0, push: 0, void: 0, awaitingResult: 0, needsReview: 0, failed: 0 };
@@ -94,7 +105,7 @@ export async function runPublicationSettlement({
   for (let index = 0; index < fixtureIds.length; index += 200) {
     const { data, error } = await client
       .from("op_fixtures")
-      .select("id,status,home_score,away_score")
+      .select("id,status,lifecycle_state,home_score,away_score")
       .in("id", fixtureIds.slice(index, index + 200));
     if (error) return { status: "unavailable", generatedAt, totals, errors: [error.message] };
     for (const fixture of (data ?? []) as FixtureRow[]) fixtures.set(fixture.id, fixture);
@@ -103,7 +114,16 @@ export async function runPublicationSettlement({
   const errors: string[] = [];
   for (const row of rows) {
     const fixture = row.fixture_id ? fixtures.get(row.fixture_id) : undefined;
-    if (!fixture || !TERMINAL_FIXTURE_STATUSES.has(fixture.status)) {
+    // A repaired fixture sits back at its provider status — usually
+    // `scheduled` — so it fails the terminal test and lands here, which is the
+    // correct destination: still waiting, still gradeable later. The lifecycle
+    // check catches the other shape, a fixture the provider called terminal
+    // that we have nonetheless quarantined.
+    if (
+      !fixture ||
+      !TERMINAL_FIXTURE_STATUSES.has(fixture.status) ||
+      QUARANTINED_LIFECYCLE_STATES.has(fixture.lifecycle_state ?? "")
+    ) {
       totals.awaitingResult += 1;
       continue;
     }
@@ -113,6 +133,7 @@ export async function runPublicationSettlement({
       selection: row.selection,
       fixture: {
         status: fixture.status as SettleableFixtureResult["status"],
+        lifecycleState: fixture.lifecycle_state,
         homeScore: fixture.home_score,
         awayScore: fixture.away_score
       }

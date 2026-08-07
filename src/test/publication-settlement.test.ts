@@ -82,14 +82,19 @@ describe("published claims reach a verdict", () => {
     expect(result.totals.lost).toBe(1);
   });
 
-  it("voids a fixture the stale sweep expired, and carries no score", async () => {
-    // The sweep marks `abandoned` when no result ever arrived. Before this, the
-    // grader's status union omitted `abandoned`, so all 1,112 expired fixtures
-    // would have queued at needs_review indefinitely.
+  it("voids a match the provider abandoned, and carries no score", async () => {
+    // Only a provider statement reaches this branch now. The stale sweep used
+    // to write `abandoned` too, which is why 52 of 134 settled publications
+    // were void; it quarantines in `lifecycle_state` instead, and
+    // `stale-fixture-settlement.test.ts` holds that line.
+    //
+    // A genuinely abandoned match still carries a partial scoreline —
+    // production held a WNBA game at 51-56, a third-quarter snapshot — and it
+    // must never be published as a final score.
     const rpc = vi.fn().mockResolvedValue({ error: null });
     const client = stubClient({
       publications: [publication()],
-      fixtures: [{ id: "fix-1", status: "abandoned", home_score: 51, away_score: 56 }],
+      fixtures: [{ id: "fix-1", status: "abandoned", lifecycle_state: "abandoned", home_score: 51, away_score: 56 }],
       rpc
     });
 
