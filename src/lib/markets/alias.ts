@@ -42,6 +42,12 @@ export type MarketAlias = {
   confidence: number;
   conditions: string[];
   evidence: Record<string, unknown>;
+  /**
+   * Free text for the reviewer. Deliberately excluded from the impact token:
+   * editing it changes nothing the mapping does, and forcing a re-preview for a
+   * typo fix trains people to click through the preview that matters.
+   */
+  notes?: string | null;
 
   effectiveFrom: string;
   effectiveTo: string | null;

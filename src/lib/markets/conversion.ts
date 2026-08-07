@@ -105,9 +105,10 @@ export function convertSelection(canonicalSelectionKey: string, context: Convers
     return { status: "unavailable", reason: resolution.reason };
   }
 
-  const state = resolution.status === "blocked" ? resolution.alias.mappingState : resolution.alias.mappingState;
-
-  switch (state) {
+  // A blocked resolution still carries the alias, and its declared state is
+  // what decides the answer here: `ambiguous` and `different_settlement` both
+  // block resolution but mean different things to a user holding a slip.
+  switch (resolution.alias.mappingState) {
     case "exact_equivalent": {
       // Belt and braces: even an alias asserting exactness is checked against
       // the declared rules, because the assertion is the thing most likely to
@@ -144,7 +145,7 @@ export function convertSelection(canonicalSelectionKey: string, context: Convers
       return { status: "unavailable", reason: "The mapping is ambiguous and awaiting review." };
     case "unsupported":
     case "rejected":
-      return { status: "unsupported", reason: `Mapping is ${state}.` };
+      return { status: "unsupported", reason: `Mapping is ${resolution.alias.mappingState}.` };
   }
 }
 
