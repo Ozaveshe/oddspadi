@@ -6,6 +6,7 @@ import { runPublicPickSettlement } from "@/lib/sports/results/settlement";
 import { runCommunityTipSettlement } from "@/lib/community/tipSettlement";
 import { runConsensusResearchBackfill } from "@/lib/community/consensusResearchBackfill";
 import { runPublicationSettlement } from "@/lib/publication/settlePublications";
+import { runCanonicalPublicationSettlement } from "@/lib/publication/canonicalSettlement";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -17,15 +18,32 @@ export const POST = withApiHandler(async (request: Request) => {
   const requested = Number(new URL(request.url).searchParams.get("limit") ?? "250");
   const limit = Number.isInteger(requested) ? Math.max(1, Math.min(1000, requested)) : 250;
   const publicPicks = await runPublicPickSettlement({ limit, persist: true });
-  // The published ledger settles here too. `op_settle_publication` shipped with
-  // the ledger and had no caller until now, which is why 230 published picks
-  // sat unsettled and the public track record showed nothing.
+
+  // Canonical settlement runs first, and precedence follows from that rather
+  // than from a flag: it settles what it can from verified canonical results,
+  // which sets `settlement_status`, and the legacy pass below only ever queries
+  // rows still marked `unsettled`.
+  const canonicalPublications = await runCanonicalPublicationSettlement({ limit, persist: true });
+
+  // The transitional pass. It grades from an aggregate final score, so it
+  // settles a penalty shootout against the post-shootout result — correct for a
+  // match that went the regulation distance and wrong for one that did not.
+  // It drains to nothing as op_fixture_results fills, and is removed when it
+  // reaches zero candidates for a full cycle.
+  //
+  // `op_settle_publication` shipped with the ledger and had no caller at all
+  // until this route called it, which is why 230 published picks sat unsettled
+  // and the public track record showed nothing.
   const publications = await runPublicationSettlement({ limit, persist: true });
+
   const communityTips = await runCommunityTipSettlement({ limit, persist: true });
   const consensusResearch = await runConsensusResearchBackfill({ limit, persist: true });
-  const parts = [publicPicks, publications, communityTips, consensusResearch];
+  const parts = [publicPicks, canonicalPublications, publications, communityTips, consensusResearch];
   const unavailable = parts.some((part) => part.status === "unavailable");
   const partial = parts.some((part) => part.status === "partial");
   const status = unavailable ? "unavailable" : partial ? "partial" : "completed";
-  return apiSuccess({ status, publicPicks, publications, communityTips, consensusResearch }, { status: unavailable ? 503 : partial ? 207 : 200 });
+  return apiSuccess(
+    { status, publicPicks, canonicalPublications, publications, communityTips, consensusResearch },
+    { status: unavailable ? 503 : partial ? 207 : 200 }
+  );
 });
