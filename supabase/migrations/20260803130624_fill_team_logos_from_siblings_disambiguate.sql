@@ -1,0 +1,26 @@
+-- Superseded intermediate. Intentionally empty.
+--
+-- Corrected the match key in `op_fill_team_logos_from_siblings` to
+-- preserve W / Women / U19 / U21 / U23 / II, so a women's or youth side
+-- never inherits the first team's crest.
+--
+-- Recorded in `supabase_migrations.schema_migrations` as `20260803130624
+-- fill_team_logos_from_siblings_disambiguate`, applied through the
+-- Supabase MCP tool, which assigns its own version at apply time rather
+-- than using a committed filename. The change was folded into
+-- `20260803160000_fill_team_logos_from_siblings.sql`, which is what a
+-- fresh environment runs.
+--
+-- Verified against production 2026-08-07: The live function strips only
+-- `(fc|cf|sc|afc|ssc|cd|ac)` — the corrected key. The committed
+-- 20260803160000 file contains this same corrected body, so a fresh
+-- environment gets the fix directly and never passes through the broken
+-- form.
+--
+-- This file carries no statements on purpose. Its only job is to hold the
+-- version, so the local migrations directory and the remote ledger list
+-- the same set. Without it `supabase db push` reports "Remote migration
+-- versions not found in local migrations directory" and the Supabase
+-- Preview check fails. The ledger row is the record of what actually ran
+-- and is kept as is; replaying its statements here would re-run history
+-- out of order. See docs/migration-ledger.md.

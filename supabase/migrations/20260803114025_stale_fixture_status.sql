@@ -1,0 +1,23 @@
+-- Superseded intermediate. Intentionally empty.
+--
+-- First apply of the stale-fixture status sweep.
+--
+-- Recorded in `supabase_migrations.schema_migrations` as `20260803114025
+-- stale_fixture_status`, applied through the Supabase MCP tool, which
+-- assigns its own version at apply time rather than using a committed
+-- filename. The change was folded into
+-- `20260803120000_stale_fixture_status.sql`, which is what a fresh
+-- environment runs.
+--
+-- Verified against production 2026-08-07: The committed file of the same
+-- name is recorded applied at 20260803120000, and
+-- `op_expire_stale_fixtures` has since been redefined again by
+-- 20260807050311.
+--
+-- This file carries no statements on purpose. Its only job is to hold the
+-- version, so the local migrations directory and the remote ledger list
+-- the same set. Without it `supabase db push` reports "Remote migration
+-- versions not found in local migrations directory" and the Supabase
+-- Preview check fails. The ledger row is the record of what actually ran
+-- and is kept as is; replaying its statements here would re-run history
+-- out of order. See docs/migration-ledger.md.

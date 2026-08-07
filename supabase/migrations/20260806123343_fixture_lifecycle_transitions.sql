@@ -1,0 +1,22 @@
+-- Superseded intermediate. Intentionally empty.
+--
+-- First apply of `op_fixture_lifecycle_transitions`.
+--
+-- Recorded in `supabase_migrations.schema_migrations` as `20260806123343
+-- fixture_lifecycle_transitions`, applied through the Supabase MCP tool,
+-- which assigns its own version at apply time rather than using a
+-- committed filename. The change was folded into
+-- `20260806150000_fixture_lifecycle_transitions.sql`, which is what a
+-- fresh environment runs.
+--
+-- Verified against production 2026-08-07:
+-- `op_fixture_lifecycle_transitions` exists in production, and the
+-- committed file of the same name is recorded applied at 20260806150000.
+--
+-- This file carries no statements on purpose. Its only job is to hold the
+-- version, so the local migrations directory and the remote ledger list
+-- the same set. Without it `supabase db push` reports "Remote migration
+-- versions not found in local migrations directory" and the Supabase
+-- Preview check fails. The ledger row is the record of what actually ran
+-- and is kept as is; replaying its statements here would re-run history
+-- out of order. See docs/migration-ledger.md.

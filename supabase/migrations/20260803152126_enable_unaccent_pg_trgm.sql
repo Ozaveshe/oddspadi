@@ -1,0 +1,22 @@
+-- Superseded intermediate. Intentionally empty.
+--
+-- Enabled the `unaccent` and `pg_trgm` extensions.
+--
+-- Recorded in `supabase_migrations.schema_migrations` as `20260803152126
+-- enable_unaccent_pg_trgm`, applied through the Supabase MCP tool, which
+-- assigns its own version at apply time rather than using a committed
+-- filename. The change was folded into
+-- `20260803165000_enable_unaccent_pg_trgm.sql`, which is what a fresh
+-- environment runs.
+--
+-- Verified against production 2026-08-07: Both extensions are present in
+-- `pg_extension`, and the committed file of the same name is recorded
+-- applied at 20260803165000.
+--
+-- This file carries no statements on purpose. Its only job is to hold the
+-- version, so the local migrations directory and the remote ledger list
+-- the same set. Without it `supabase db push` reports "Remote migration
+-- versions not found in local migrations directory" and the Supabase
+-- Preview check fails. The ledger row is the record of what actually ran
+-- and is kept as is; replaying its statements here would re-run history
+-- out of order. See docs/migration-ledger.md.

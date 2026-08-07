@@ -1,0 +1,26 @@
+-- Superseded intermediate. Intentionally empty.
+--
+-- First apply of `op_collapse_superseded_decisions`, taking a plain row
+-- limit and returning an integer.
+--
+-- Recorded in `supabase_migrations.schema_migrations` as `20260803150825
+-- collapse_duplicate_current_decisions`, applied through the Supabase MCP
+-- tool, which assigns its own version at apply time rather than using a
+-- committed filename. The change was folded into
+-- `20260803180000_slate_read_current_rows.sql`, which is what a fresh
+-- environment runs.
+--
+-- Verified against production 2026-08-07: The live function returns `table
+-- (fixtures_processed integer, rows_retired integer)` — the by-fixture
+-- form from the next step, not this one.
+--
+-- Superseded within four minutes: ranking all current rows at once tripped
+-- the statement timeout the work existed to remove.
+--
+-- This file carries no statements on purpose. Its only job is to hold the
+-- version, so the local migrations directory and the remote ledger list
+-- the same set. Without it `supabase db push` reports "Remote migration
+-- versions not found in local migrations directory" and the Supabase
+-- Preview check fails. The ledger row is the record of what actually ran
+-- and is kept as is; replaying its statements here would re-run history
+-- out of order. See docs/migration-ledger.md.

@@ -1,0 +1,29 @@
+-- Superseded intermediate. Intentionally empty.
+--
+-- Added `op_backfill_current_odds(integer)`, the batched seeder for the
+-- projection.
+--
+-- Recorded in `supabase_migrations.schema_migrations` as `20260803144750
+-- backfill_current_odds_incremental`, applied through the Supabase MCP
+-- tool, which assigns its own version at apply time rather than using a
+-- committed filename. The change was folded into
+-- `20260803180000_slate_read_current_rows.sql`, which is what a fresh
+-- environment runs.
+--
+-- Verified against production 2026-08-07: `op_backfill_current_odds`
+-- exists in production, and the committed 20260803180000 file defines it
+-- with the identical body and the same `p_fixture_limit integer default
+-- 200` signature.
+--
+-- Replaying this step's SQL here would break a fresh push: it inserts into
+-- `public.op_current_odds`, which is not created until 20260803170000 — a
+-- *later* version than this one. The consolidated file is the only order
+-- that builds.
+--
+-- This file carries no statements on purpose. Its only job is to hold the
+-- version, so the local migrations directory and the remote ledger list
+-- the same set. Without it `supabase db push` reports "Remote migration
+-- versions not found in local migrations directory" and the Supabase
+-- Preview check fails. The ledger row is the record of what actually ran
+-- and is kept as is; replaying its statements here would re-run history
+-- out of order. See docs/migration-ledger.md.

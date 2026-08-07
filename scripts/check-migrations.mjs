@@ -13,12 +13,24 @@
  *
  * With `--ledger` it also compares the filenames against what the database
  * says it has applied. That catches a third failure, which the file lint
- * cannot see and which happened here: eleven migrations were applied through
- * the MCP path, which assigns its own version at apply time
- * (`20260803114025`) rather than using the filename (`20260803120000`). The
- * schema was right and the ledger was right about what ran, but they did not
- * refer to the same things, so a `supabase db push` against a fresh
- * environment would have re-run all eleven.
+ * cannot see and which happened here: migrations applied through the MCP
+ * path, which assigns its own version at apply time (`20260803114025`)
+ * rather than using the filename (`20260803120000`). The schema was right
+ * and the ledger was right about what ran, but they did not refer to the
+ * same things.
+ *
+ * The two version sets must match in **both** directions, because that is
+ * what `supabase db push` compares:
+ *
+ *   file with no ledger row  -> it re-runs on a fresh push
+ *   ledger row with no file  -> push refuses outright, "Remote migration
+ *                               versions not found in local migrations
+ *                               directory"
+ *
+ * The second direction used to be reported and not failed on. That left this
+ * check green while the Supabase Preview check on `main` was red for the same
+ * repository state — a check that cannot fail cannot warn, so it was worse
+ * than no check. Both directions fail now.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -102,15 +114,38 @@ if (process.argv.includes("--ledger")) {
   }
   const applied = new Set((data ?? []).map((row) => String(row.version)));
   const unapplied = files.map((file) => file.slice(0, 14)).filter((version) => !applied.has(version));
-  // Ledger rows with no file are historical: the MCP path records each apply
-  // under its own version, so an iterative fix that was later folded into one
-  // committed file leaves extra rows behind. Harmless, and reported for
-  // context rather than failed on.
+  // Ledger rows with no file. These were treated as harmless history for a
+  // while, on the grounds that the MCP path records each apply under its own
+  // version and an iterative fix folded into one committed file leaves its
+  // intermediate steps behind. That reasoning was right about the cause and
+  // wrong about the consequence: `supabase db push` compares the two version
+  // *sets*, and refuses on any remote version it cannot find locally —
+  // "Remote migration versions not found in local migrations directory".
+  //
+  // So this check passed while the Supabase Preview check on `main` failed,
+  // which is the worst of the two states: a green local check that certifies
+  // nothing. Both directions fail here now.
+  //
+  // The fix for a row in this direction is a file at that exact version. Where
+  // the step was folded into a later committed file, that file carries no
+  // statements and says so — it exists to hold the version. Do not replay the
+  // recovered SQL: MCP versions interleave *before* the consolidated files
+  // that create the objects they depend on, so a replay builds in an order
+  // that never ran and would fail on a fresh push.
   const ledgerOnly = [...applied].filter((version) => !files.some((file) => file.startsWith(version)));
-  console.log(`ledger: ${applied.size} applied, ${ledgerOnly.length} historical row(s) with no file`);
+  console.log(`ledger: ${applied.size} applied, ${files.length} file(s), ${ledgerOnly.length} row(s) with no file`);
   if (unapplied.length) {
     problems.push(
       `${unapplied.length} migration file(s) are not recorded as applied and would re-run on push: ${unapplied.join(", ")}`
+    );
+  }
+  if (ledgerOnly.length) {
+    problems.push(
+      `${ledgerOnly.length} applied version(s) have no file, so \`supabase db push\` will refuse ` +
+        `("Remote migration versions not found in local migrations directory"): ${ledgerOnly.join(", ")}. ` +
+        `Commit a file named <version>_<name>.sql for each — empty, documenting what ran and which ` +
+        `committed file superseded it, if the change is already carried elsewhere. ` +
+        `Never delete the ledger row. See docs/migration-ledger.md.`
     );
   }
 }
@@ -121,6 +156,14 @@ if (destructive.length) {
 if (problems.length) {
   console.error(`\n${problems.length} problem(s):`);
   for (const problem of problems) console.error(`  ${problem}`);
-  process.exit(1);
+  // `process.exitCode`, not `process.exit()`. Calling `process.exit()` while
+  // the supabase-js client still holds open sockets aborts Node's teardown on
+  // Windows with a libuv assertion (`!(handle->flags & UV_HANDLE_CLOSING)`),
+  // which replaces the intended exit code 1 with 127. Non-zero either way, so
+  // CI still fails — but a check that exists to report a specific failure
+  // should not report it as a crash. Setting the code and falling off the end
+  // lets the client close first.
+  process.exitCode = 1;
+} else {
+  console.log("migration ordering and ledger immutability OK");
 }
-console.log("migration ordering and ledger immutability OK");
