@@ -144,6 +144,10 @@ export function isDecisionStatus(value: unknown): value is DecisionStatus {
   return typeof value === "string" && (DECISION_STATUSES as readonly string[]).includes(value);
 }
 
+export function isDataAvailability(value: unknown): value is DataAvailability {
+  return typeof value === "string" && (DATA_AVAILABILITY_STATES as readonly string[]).includes(value);
+}
+
 /**
  * Legacy slate statuses → canonical decision status.
  *
