@@ -5,6 +5,7 @@ import { readLatestProviderRun } from "@/lib/sports/intelligence/repository";
 import { toPublicRunReceipt } from "@/lib/sports/intelligence/publicRunReceipt";
 import { expireStaleFixtures } from "@/lib/sports/results/staleFixtures";
 import { reconcileFixtureLifecycles } from "@/lib/sports/lifecycle/reconcile";
+import { runResultIngestion } from "@/lib/results/ingestionSweep";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -37,12 +38,23 @@ export const POST = withApiHandler(async (request: Request) => {
   // fixture, so the two are comparable rather than competing.
   const lifecycle = await reconcileFixtureLifecycles({ commit, lookbackHours: lookbackDays * 24 });
 
+  // Last, and after the refresh rather than before it, because a canonical
+  // result is only as good as the payload it was built from. Running this first
+  // would verify yesterday's provisional score and then have the refresh
+  // contradict it — manufacturing a provider correction out of our own ordering.
+  const canonicalResults = await runResultIngestion({ persist: commit });
+
   const failed =
     refresh.run.status === "failed" ||
     refresh.run.status === "unavailable" ||
     expiry.status === "unavailable" ||
-    lifecycle.status === "unavailable";
-  const partial = refresh.run.status === "partial" || expiry.status === "partial" || lifecycle.errors.length > 0;
+    lifecycle.status === "unavailable" ||
+    canonicalResults.status === "unavailable";
+  const partial =
+    refresh.run.status === "partial" ||
+    expiry.status === "partial" ||
+    lifecycle.errors.length > 0 ||
+    canonicalResults.status === "partial";
   return apiSuccess(
     {
       lookbackDays,
@@ -50,7 +62,8 @@ export const POST = withApiHandler(async (request: Request) => {
       expiry,
       // The changes array can be thousands of rows; the receipt carries the
       // shape of the run, not the run itself. The audit table has the detail.
-      lifecycle: { ...lifecycle, changes: lifecycle.changes.length }
+      lifecycle: { ...lifecycle, changes: lifecycle.changes.length },
+      canonicalResults: { ...canonicalResults, exceptions: canonicalResults.exceptions.length }
     },
     { status: failed ? 503 : partial ? 207 : 200 }
   );

@@ -4,6 +4,7 @@ import { legacySelectionKey } from "@/lib/markets/legacyKeys";
 import type { CanonicalSport } from "@/lib/markets/canonicalMarkets";
 import { settle, type SettlementOutcome } from "@/lib/settlement/grade";
 import type { CanonicalResult } from "@/lib/results/canonicalResult";
+import { isMissingRelation } from "@/lib/results/migrationState";
 
 /**
  * Settling published claims through the canonical engine.
@@ -126,19 +127,6 @@ export function toCanonicalResult(row: ResultRow): CanonicalResult {
 }
 
 /**
- * Postgres 42P01, as PostgREST reports it.
- *
- * Narrow on purpose: only "this relation does not exist" is treated as a
- * not-yet-migrated state. A permission error or a timeout is a real failure and
- * must stay one, because both can otherwise masquerade as an empty table.
- */
-function isMissingRelation(error: { code?: string; message?: string }): boolean {
-  if (error.code === "42P01") return true;
-  const message = (error.message ?? "").toLowerCase();
-  return message.includes("does not exist") && message.includes("op_fixture_results");
-}
-
-/**
  * Outcomes the ledger accepts. `needs_review` is not one — it settles nothing.
  *
  * A type predicate rather than a `Set.has` check, because the compiler cannot
@@ -213,7 +201,7 @@ export async function runCanonicalPublicationSettlement({
       // settle-results cron the moment this code shipped ahead of its
       // migration, taking the legacy pass down with it — a self-inflicted
       // outage in the name of loudness.
-      if (isMissingRelation(error)) {
+      if (isMissingRelation(error, "op_fixture_results")) {
         return {
           status: "canonical-results-missing",
           generatedAt,
