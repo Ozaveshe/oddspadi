@@ -46,7 +46,8 @@
     "check:migrations:ledger": "node --env-file-if-exists=.env.local scripts/check-migrations.mjs --ledger",
     "ops:reconcile-lifecycles": "npx vite-node -c vitest.config.ts scripts/reconcile-fixture-lifecycles.ts",
     "docs:canonical-seed": "vite-node --config scripts/vite-node.config.ts scripts/generate-canonical-market-seed.ts",
-    "ops:alerts": "node --env-file-if-exists=.env.local scripts/settlement-alerts.mjs"
+    "ops:alerts": "node --env-file-if-exists=.env.local scripts/settlement-alerts.mjs",
+    "ops:resettle": "vite-node --config scripts/vite-node.config.ts scripts/resettle-publications.ts"
   },
   "engines": {
     "node": "22.x"
