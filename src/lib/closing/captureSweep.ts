@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingRelation } from "@/lib/results/migrationState";
+import { writeExceptions } from "@/lib/settlement/exceptionWriter";
 import { legacySelectionKey } from "@/lib/markets/legacyKeys";
 import { canonicalSelection, type CanonicalSport } from "@/lib/markets/canonicalMarkets";
 import {
@@ -263,6 +264,13 @@ export async function runClosingCapture({
       errors.push(`${publication.id}: ${error.message}`);
     }
   }
+
+  const exceptionWrite = await writeExceptions(
+    client,
+    exceptions.map((exception) => ({ ...exception, publicationId: exception.publicationId })),
+    { persist }
+  );
+  if (exceptionWrite.errors.length) errors.push(...exceptionWrite.errors);
 
   const status = !persist ? "preview" : errors.length ? "partial" : "completed";
   return { status, generatedAt, totals, byStatus, exceptions, errors };

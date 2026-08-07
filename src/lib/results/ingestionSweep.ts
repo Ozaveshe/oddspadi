@@ -7,6 +7,7 @@ import { toCanonicalResult } from "@/lib/publication/canonicalSettlement";
 import type { CanonicalResult } from "@/lib/results/canonicalResult";
 import type { ResultObservation } from "@/lib/results/verification";
 import { isMissingRelation } from "@/lib/results/migrationState";
+import { writeExceptions } from "@/lib/settlement/exceptionWriter";
 
 /**
  * Populate `op_fixture_results` from what the providers actually sent.
@@ -280,6 +281,13 @@ export async function runResultIngestion({
     if (decision.action === "insert") totals.inserted += 1;
     else totals.superseded += 1;
   }
+
+  // Exceptions are persisted, not merely returned. Returned-and-discarded is
+  // how op_settlement_exceptions came to have a reader and no writer, which
+  // produces a permanently clean alert dashboard over a pipeline with real
+  // problems.
+  const exceptionWrite = await writeExceptions(client, exceptions, { persist });
+  if (exceptionWrite.errors.length) errors.push(...exceptionWrite.errors);
 
   const status = !persist ? "preview" : errors.length ? "partial" : "completed";
   return { status, generatedAt, totals, exceptions, errors };

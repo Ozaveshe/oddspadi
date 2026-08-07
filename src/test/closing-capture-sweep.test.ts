@@ -12,6 +12,7 @@ function stubClient({
   snapshots = [],
   existing = [],
   insert = vi.fn().mockResolvedValue({ error: null }),
+  rpc = vi.fn().mockResolvedValue({ error: null }),
   existingError = null,
   snapshotError = null
 }: {
@@ -19,10 +20,12 @@ function stubClient({
   snapshots?: Row[];
   existing?: Row[];
   insert?: ReturnType<typeof vi.fn>;
+  rpc?: ReturnType<typeof vi.fn>;
   existingError?: { code?: string; message: string } | null;
   snapshotError?: { message: string } | null;
 }) {
   return {
+    rpc,
     from: vi.fn((table: string) => {
       const chain: Record<string, unknown> = {};
       for (const method of ["select", "eq", "lt", "gte", "order"]) chain[method] = vi.fn(() => chain);
@@ -104,6 +107,22 @@ describe("closing capture sweep", () => {
     expect(written.closing_odds).toBeNull();
     expect(written.missing_reason).toContain("3 required");
     expect(run.exceptions[0]).toMatchObject({ kind: "close_insufficient_sources", publicationId: "pub-1" });
+  });
+
+  it("persists the exception to the queue rather than only returning it", async () => {
+    // Returned-and-discarded is how op_settlement_exceptions came to have a
+    // reader and no writer — a permanently clean dashboard over a pipeline
+    // with real problems.
+    const rpc = vi.fn().mockResolvedValue({ error: null });
+    await runClosingCapture({
+      persist: true,
+      now: NOW,
+      client: stubClient({ publications: [publication()], snapshots: quoteRows("a", 10, 2.0), rpc })
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "op_record_settlement_exception",
+      expect.objectContaining({ p_kind: "close_insufficient_sources", p_publication_id: "pub-1" })
+    );
   });
 
   it("records the publication probability even when the capture failed", async () => {
