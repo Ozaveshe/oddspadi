@@ -1,8 +1,22 @@
 # Settlement rules
 
 *Implementation: `op_settle_publication()` in the ledger migration;
-grading logic in [`marketDecisionSettlement.ts`](../src/lib/sports/results/marketDecisionSettlement.ts);
 aggregation in [`canonicalReads.ts`](../src/lib/domain/canonicalReads.ts).*
+
+> **Grading moved.** The sport- and market-specific rules now live in the
+> versioned registry described in
+> [market-settlement-rules.md](market-settlement-rules.md), executed by
+> [`grade.ts`](../src/lib/settlement/grade.ts) against the canonical result in
+> [result-verification.md](result-verification.md).
+>
+> [`marketDecisionSettlement.ts`](../src/lib/sports/results/marketDecisionSettlement.ts)
+> remains for legacy string-keyed decisions. It grades from an aggregate final
+> score, which is why it settles a cup tie decided on penalties against the
+> post-shootout result and cannot resolve a handicap at all. New work binds to
+> canonical market keys.
+>
+> This page still describes the ledger mechanics — states, idempotency,
+> supersession — which are unchanged.
 
 ## What settlement is
 
@@ -21,9 +35,18 @@ claim cannot.
 | `void` | Market never resolved | No | No |
 | `cancelled` | Fixture cancelled | No | No |
 | `pending_verification` | Grading needs a human | No | No |
+| `half_won` | Quarter line, one half won and one pushed | Yes | Yes (+(odds−1)/2) |
+| `half_lost` | Quarter line, one half lost and one pushed | Yes | Yes (−0.5 units) |
 
-Only `won` and `lost` enter the denominator. A push returned the stake and a
-void never ran; counting either as a played pick misstates the record.
+`won`, `lost`, `half_won` and `half_lost` enter the denominator. A push returned
+the stake and a void never ran; counting either as a played pick misstates the
+record.
+
+The half outcomes exist because an Asian quarter line splits the stake between
+the two neighbouring half lines, and the alternative — collapsing it onto the
+nearest half — misprices every quarter-line claim by half a stake, invisibly.
+`return_multiple` is stored on the settlement so ROI is not re-derived, and got
+wrong, per consumer.
 
 ## Rules
 
