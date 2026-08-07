@@ -93,7 +93,23 @@ A model with no settled picks has no accuracy, and rendering 0% is a claim.
 
 ## Current state
 
-As of the 2026-07-31 reconciliation: **0 official publications.** OddsPadi has
-never published a pick that meets this bar. Every public surface now says so
-consistently, which is the first time the product has been internally
-consistent about its own record.
+At the 2026-07-31 reconciliation this read **0 official publications** — nothing
+in the product's history met the bar. That is no longer true, and a doc that
+says a product has never published anything while it is publishing daily is the
+same class of error the ledger exists to prevent.
+
+Measured 2026-08-06: **230 official publications**, all `published` and all
+classed `official_public_pick`. 134 settled — 35 won, 47 lost, 52 void — and 96
+still unsettled. 82 are graded, which is the denominator behind the 42.7% hit
+rate on Track Record.
+
+Two cautions attach to those numbers rather than to the schema:
+
+- **The void count is not trustworthy.** ~50 of the 52 are matches that were
+  played and whose result we simply never received; a stale-fixture sweep marked
+  them abandoned and settlement honoured it. See
+  [fixture-reconciliation.md](fixture-reconciliation.md). Those publications are
+  being repaired through the correction path, not edited.
+- **This section will go stale again.** It is a measurement with a date on it,
+  not a property of the system. Re-measure before citing it; the live figures
+  are what `readOfficialPublications` returns.
