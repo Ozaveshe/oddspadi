@@ -15,6 +15,7 @@ import {
   getCachedWeeklyTipsProduct,
   getCachedYesterdayResultsProduct
 } from "@/lib/sports/tips/publicReads";
+import { formatRecordHitRate } from "@/lib/performance/ledgerMetrics";
 import { readTimezonePreference } from "@/lib/time/timezoneCookie";
 
 export const dynamic = "force-dynamic";
@@ -154,18 +155,18 @@ export default async function HomePage() {
           <div><strong>{yesterday.summary.losses}</strong><span>Losses</span></div>
           <div><strong>{yesterday.summary.pending}</strong><span>Pending</span></div>
           <div><strong>{yesterday.summary.manualReview}</strong><span>Manual review</span></div>
-        </div> : modelRecord && (modelRecord.won + modelRecord.lost > 0) ? <div className="home-results-grid">
+        </div> : modelRecord && (modelRecord.won + modelRecord.lost + modelRecord.pending + modelRecord.voided > 0) ? <div className="home-results-grid">
           <div><strong>{modelRecord.won}</strong><span>Model wins</span></div>
           <div><strong>{modelRecord.lost}</strong><span>Model losses</span></div>
           <div><strong>{modelRecord.pending}</strong><span>Pending</span></div>
-          <div><strong>{modelRecord.won + modelRecord.lost > 0 ? Math.round((modelRecord.won / (modelRecord.won + modelRecord.lost)) * 100) : 0}%</strong><span>Hit rate</span></div>
+          <div><strong>{formatRecordHitRate(modelRecord.hitRate)}</strong><span>Hit rate</span></div>
         </div> : <div className="home-results-grid">
           <div><strong>0</strong><span>Wins</span></div>
           <div><strong>0</strong><span>Losses</span></div>
           <div><strong>0</strong><span>Pending</span></div>
           <div><strong>0</strong><span>Manual review</span></div>
         </div>}
-        <p className="muted small">{yesterday?.source === "unavailable" ? yesterday.reason : yesterday?.items.length ? `${yesterday.summary.settled} published picks settled yesterday.` : modelRecord && (modelRecord.won + modelRecord.lost > 0) ? "Internal model record — decisions the engine graded against final scores yesterday. No picks are published until the model passes its promotion gates." : "No published picks settled yesterday, and the internal record has not been graded yet."}</p>
+        <p className="muted small">{yesterday?.source === "unavailable" ? yesterday.reason : yesterday?.items.length ? `${yesterday.summary.settled} published picks settled yesterday.` : modelRecord && (modelRecord.won + modelRecord.lost + modelRecord.pending + modelRecord.voided > 0) ? "Internal model record — decisions the engine graded against final scores yesterday, counted once per decision rather than once per bookmaker price. No picks are published until the model passes its promotion gates." : "No published picks settled yesterday, and the internal record has not been graded yet."}</p>
       </section>
 
       <section className="section home-weekly-radar">
