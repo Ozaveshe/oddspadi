@@ -53,6 +53,11 @@ export type PublicationStatus = (typeof PUBLICATION_STATUSES)[number];
 export const SETTLEMENT_STATUSES = [
   "unsettled",
   "won",
+  // Asian quarter lines split the stake across the two neighbouring half
+  // lines, so they can return half a win or half a loss. Both are played
+  // picks and enter the accuracy denominator; a push and a void do not.
+  "half_won",
+  "half_lost",
   "lost",
   "push",
   "void",

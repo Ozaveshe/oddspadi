@@ -14,13 +14,13 @@ and constrained against each other in [`src/lib/domain/stateMatrix.ts`](../src/l
 | Data state | `complete`, `partial`, `stale`, `unavailable`, `confirmed_empty` |
 | Decision state | `pick`, `lean`, `watch`, `pass`, `withheld`, `unavailable` |
 | Publication state | `none`, `draft`, `published`, `corrected`, `retracted` |
-| Settlement state | `unsettled`, `won`, `lost`, `push`, `void`, `cancelled`, `pending_verification` |
+| Settlement state | `unsettled`, `won`, `half_won`, `half_lost`, `lost`, `push`, `void`, `cancelled`, `pending_verification` |
 
 ## Coherence
 
-The unconstrained cross-product is **7,350** combinations.
+The unconstrained cross-product is **9,450** combinations.
 Most describe situations that cannot exist. Applying the coherence rules leaves
-**395** cells — 5.4% of the space.
+**407** cells — 4.3% of the space.
 
 The reduction is the point: every excluded cell is a contradiction the product
 is now forbidden to render, and the exclusions are executable rules rather than
@@ -34,7 +34,7 @@ prevented.
 | `scheduled` | 47 |
 | `delayed` | 47 |
 | `live` | 47 |
-| `finished` | 83 |
+| `finished` | 95 |
 | `postponed` | 47 |
 | `cancelled` | 59 |
 | `abandoned` | 65 |
@@ -43,8 +43,8 @@ prevented.
 
 | Data state | Coherent cells |
 |---|---|
-| `complete` | 131 |
-| `partial` | 131 |
+| `complete` | 137 |
+| `partial` | 137 |
 | `stale` | 63 |
 | `unavailable` | 7 |
 | `confirmed_empty` | 63 |
@@ -82,6 +82,8 @@ cannot quietly stop exercising a state.
 | `live-complete-published` | live | complete | pick | published | unsettled | In play: a score exists and pre-kickoff language must be gone. |
 | `finished-complete-won` | finished | complete | pick | published | won | Settled winner. Counts toward the record. |
 | `finished-complete-lost` | finished | complete | pick | published | lost | Settled loser. Also counts, and must not be quietly dropped. |
+| `finished-half-won` | finished | complete | pick | published | half_won | Asian quarter line: one half won, the other pushed. A played pick returning half the profit — it counts toward the record, and copy must not round it to a win. |
+| `finished-half-lost` | finished | complete | pick | published | half_lost | Asian quarter line: one half lost, the other pushed. Half the stake returned, so it counts toward the record but costs 0.5 units rather than 1. |
 | `finished-push` | finished | complete | pick | published | push | Stake returned. Must not land in the win-rate denominator. |
 | `finished-pending-verification` | finished | partial | pick | published | pending_verification | Final whistle but the result is not trusted yet. |
 | `finished-corrected` | finished | complete | pick | corrected | won | An append-only correction. The original must remain visible. |

@@ -79,6 +79,12 @@ const TO_INTELLIGENCE_DECISION: Record<StateCell["decision"], IntelligenceDecisi
 const TO_LEGACY_SETTLEMENT: Record<SettlementStatus, CanonicalDecision["settlementStatus"]> = {
   unsettled: "pending",
   won: "won",
+  // The legacy vocabulary has no half outcomes. Collapsing them to won and
+  // lost is the least wrong reading — a half win is a played pick that
+  // returned a profit — but it overstates both, so any surface that reports
+  // ROI must read the canonical status rather than this mapping.
+  half_won: "won",
+  half_lost: "lost",
   lost: "lost",
   push: "push",
   void: "void",

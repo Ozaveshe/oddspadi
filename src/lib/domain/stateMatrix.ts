@@ -57,6 +57,23 @@ const PUBLIC_PUBLICATIONS: ReadonlySet<PublicationStatus> = new Set<PublicationS
 ]);
 
 /**
+ * Settlements that assert an outcome, as opposed to returning a stake.
+ *
+ * The half outcomes belong here: an Asian quarter line that half-wins has
+ * resolved, it simply resolved across the two neighbouring half lines. Treating
+ * them as undecided would let a coherent cell put a half win on an abandoned
+ * fixture, which is exactly the contradiction this model exists to make
+ * unrepresentable.
+ */
+const DECIDED_SETTLEMENTS: ReadonlySet<SettlementStatus> = new Set<SettlementStatus>([
+  "won",
+  "half_won",
+  "half_lost",
+  "lost",
+  "push"
+]);
+
+/**
  * Whether "monitor this", "before kickoff", "add to your slip" language is
  * allowed. Anything that has started or ended cannot carry it.
  */
@@ -84,9 +101,10 @@ export function explainIncoherence(cell: StateCell): string[] {
   if (settled && !TERMINAL_FIXTURES.has(cell.fixture)) {
     problems.push(`settlement "${cell.settlement}" on a fixture that is "${cell.fixture}" and has not ended`);
   }
-  if ((cell.settlement === "won" || cell.settlement === "lost" || cell.settlement === "push") && cell.fixture !== "finished") {
-    // A decided outcome needs a completed match. An abandoned game may void,
-    // but it cannot produce a winner.
+  // A decided outcome needs a completed match. An abandoned game may void, but
+  // it cannot produce a winner — and a half win is a decided outcome too: the
+  // quarter line resolved, it simply resolved across two half lines.
+  if (DECIDED_SETTLEMENTS.has(cell.settlement) && cell.fixture !== "finished") {
     problems.push(`settlement "${cell.settlement}" requires a finished fixture, not "${cell.fixture}"`);
   }
   if (cell.fixture === "cancelled" && cell.settlement !== "unsettled" && cell.settlement !== "cancelled" && cell.settlement !== "void") {
@@ -225,6 +243,16 @@ export const REPRESENTATIVE_CELLS: ReadonlyArray<{ id: string; cell: StateCell; 
     id: "finished-complete-lost",
     cell: { fixture: "finished", data: "complete", decision: "pick", publication: "published", settlement: "lost" },
     note: "Settled loser. Also counts, and must not be quietly dropped."
+  },
+  {
+    id: "finished-half-won",
+    cell: { fixture: "finished", data: "complete", decision: "pick", publication: "published", settlement: "half_won" },
+    note: "Asian quarter line: one half won, the other pushed. A played pick returning half the profit — it counts toward the record, and copy must not round it to a win."
+  },
+  {
+    id: "finished-half-lost",
+    cell: { fixture: "finished", data: "complete", decision: "pick", publication: "published", settlement: "half_lost" },
+    note: "Asian quarter line: one half lost, the other pushed. Half the stake returned, so it counts toward the record but costs 0.5 units rather than 1."
   },
   {
     id: "finished-push",
