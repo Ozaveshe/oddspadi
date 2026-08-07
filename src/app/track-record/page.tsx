@@ -5,7 +5,7 @@ import { PromotionGateBoard } from "@/components/odds/PromotionGateBoard";
 import { readPromotionGateStatus } from "@/lib/sports/promotionGateStatus";
 import { getCachedHomepageModelRecordSummary } from "@/lib/sports/tips/publicReads";
 import { readOfficialPublications } from "@/lib/domain/canonicalReads";
-import { computeLedgerPerformance, formatMetric } from "@/lib/performance/ledgerMetrics";
+import { computeLedgerPerformance, formatMetric, formatRecordHitRate } from "@/lib/performance/ledgerMetrics";
 
 export const revalidate = 300;
 
@@ -87,17 +87,17 @@ export default async function TrackRecordPage() {
 
       <section className="section" aria-labelledby="record-yesterday-heading">
         <div className="section-title"><div><span className="section-kicker">Yesterday</span><h2 id="record-yesterday-heading">Internal model record</h2></div><Link className="button primary" href="/predictions/history">Full results ledger</Link></div>
-        {record && graded > 0 ? (
+        {record && graded + record.pending + record.voided > 0 ? (
           <div className="metrics-grid">
             <div className="metric"><span className="metric-label">Model wins</span><span className="metric-value">{record.won}</span></div>
             <div className="metric"><span className="metric-label">Model losses</span><span className="metric-value">{record.lost}</span></div>
             <div className="metric"><span className="metric-label">Pending</span><span className="metric-value">{record.pending}</span></div>
-            <div className="metric"><span className="metric-label">Hit rate</span><span className="metric-value">{Math.round((record.won / graded) * 100)}%</span></div>
+            <div className="metric"><span className="metric-label">Hit rate</span><span className="metric-value">{formatRecordHitRate(record.hitRate)}</span></div>
           </div>
         ) : (
           <p className="muted small">Yesterday&apos;s grading has not landed yet — the settlement sweep runs hourly. The full ledger has the complete history.</p>
         )}
-        <p className="muted small">Internal record: every decision the engine grades against final scores, published or not. Published picks are the subset that cleared all gates — see the ledger for those.</p>
+        <p className="muted small">Internal record: every decision the engine grades against final scores, published or not — counted once per decision, not once per bookmaker price. Wins and losses are what the grader resolved yesterday; pending is what yesterday&apos;s fixtures still owe it, including calls on fixtures no provider ever resolved. Published picks are the subset that cleared all gates — see the ledger for those.</p>
       </section>
 
       {gateStatus ? (
