@@ -1,0 +1,24 @@
+-- Superseded intermediate. Intentionally empty.
+--
+-- Created the two partial indexes the slate reads drive off:
+-- `op_fixture_decision_summaries_current_fixture_idx` and
+-- `op_market_decisions_current_fixture_idx`.
+--
+-- Recorded in `supabase_migrations.schema_migrations` as `20260803150313
+-- current_rows_by_fixture_partial_indexes`, applied through the Supabase
+-- MCP tool, which assigns its own version at apply time rather than using
+-- a committed filename. The change was folded into
+-- `20260803180000_slate_read_current_rows.sql`, which is what a fresh
+-- environment runs.
+--
+-- Verified against production 2026-08-07: Both indexes exist in
+-- production, and the committed 20260803180000 file creates both with the
+-- same columns and the same `where superseded_by is null` predicate.
+--
+-- This file carries no statements on purpose. Its only job is to hold the
+-- version, so the local migrations directory and the remote ledger list
+-- the same set. Without it `supabase db push` reports "Remote migration
+-- versions not found in local migrations directory" and the Supabase
+-- Preview check fails. The ledger row is the record of what actually ran
+-- and is kept as is; replaying its statements here would re-run history
+-- out of order. See docs/migration-ledger.md.

@@ -1,0 +1,27 @@
+-- Superseded intermediate. Intentionally empty.
+--
+-- Repointed `op_latest_odds_for_fixtures` at the `op_current_odds`
+-- projection instead of scanning `op_odds_snapshots`.
+--
+-- Recorded in `supabase_migrations.schema_migrations` as `20260803145321
+-- latest_odds_reads_current_projection`, applied through the Supabase MCP
+-- tool, which assigns its own version at apply time rather than using a
+-- committed filename. The change was folded into
+-- `20260803170000_current_odds_projection.sql`, which is what a fresh
+-- environment runs.
+--
+-- Verified against production 2026-08-07: The live function body selects
+-- from `public.op_current_odds`, matching the definition committed in
+-- 20260803170000.
+--
+-- Replaying this step's SQL here would break a fresh push: it reads
+-- `public.op_current_odds`, which is not created until 20260803170000 — a
+-- *later* version than this one.
+--
+-- This file carries no statements on purpose. Its only job is to hold the
+-- version, so the local migrations directory and the remote ledger list
+-- the same set. Without it `supabase db push` reports "Remote migration
+-- versions not found in local migrations directory" and the Supabase
+-- Preview check fails. The ledger row is the record of what actually ran
+-- and is kept as is; replaying its statements here would re-run history
+-- out of order. See docs/migration-ledger.md.

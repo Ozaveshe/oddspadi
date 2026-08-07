@@ -28,6 +28,20 @@ import { type FixtureLifecycleState, fixtureLifecycle } from "./fixtureState";
  * read. `unresolved` is deliberately not terminal.
  */
 
+/**
+ * Lifecycle states that hold a fixture out of settlement.
+ *
+ * These mirror `QUARANTINED_LIFECYCLE_STATES` in `settlePublications.ts`, and
+ * the pairing is the point: a state that blocks settlement is exactly a state
+ * the reconciler must keep revisiting, because nothing else will ever let the
+ * fixture out. A test asserts the two sets agree.
+ */
+export const QUARANTINED_STATES: ReadonlySet<FixtureLifecycleState> = new Set([
+  "unresolved",
+  "due",
+  "suspended"
+]);
+
 export type ReconciliationChange = {
   fixtureId: string;
   sport: string;
@@ -88,21 +102,88 @@ export async function reconcileFixtureLifecycles({
     return { ...base, status: "unavailable", errors: ["OddsPadi Supabase server storage is not configured."] };
   }
 
-  // Only fixtures that could plausibly need correcting: past kick-off, not yet
-  // in a terminal state, and recent enough that a provider might still resolve
-  // them. Older rows are history and re-deciding them serves nobody.
+  // Two populations need reconciling, and one bound cannot serve both.
+  //
+  // **Forward path.** Fixtures past kick-off that we have not judged yet: still
+  // `scheduled` or `live` according to the provider, and recent enough that a
+  // provider might yet resolve them. Older rows are history and re-deciding
+  // them serves nobody, so `lookbackHours` bounds the scan.
+  //
+  // **Release path.** Fixtures already in quarantine. `unresolved` is
+  // documented as "not terminal — still able to be resolved by a later provider
+  // read", but until now nothing could perform that release: the scan filtered
+  // on `status in (scheduled, live)`, so the moment a recovery wrote
+  // `status = 'finished'` the row became invisible to the only job that can
+  // clear `lifecycle_state`. Measured in production on 2026-08-07, twelve
+  // football fixtures held a final score, a `resulted_at`, and
+  // `lifecycle_state = 'unresolved'` simultaneously — the strongest evidence
+  // there is, sat behind a filter that could not see it. Publications on those
+  // fixtures stay unsettled for ever, because settlement skips quarantined
+  // lifecycle states by design.
+  //
+  // The release path therefore ignores `status` (that is the column that has
+  // just changed) and ignores `lookbackHours` (quarantine is an open backlog,
+  // not a window — the oldest of these is 27 days old and still owed an
+  // answer). It is bounded instead by quarantine membership, which is small and
+  // shrinks as rows are resolved.
   const since = new Date(now.getTime() - lookbackHours * 3_600_000).toISOString();
-  const { data, error } = await client
-    .from("op_fixtures")
-    .select("id,sport,status,lifecycle_state,kickoff_at,started_at,resulted_at,home_score,away_score")
-    .lt("kickoff_at", now.toISOString())
-    .gte("kickoff_at", since)
-    .in("status", ["scheduled", "live"])
-    .limit(5_000);
+  const nowIso = now.toISOString();
+  const columns = "id,sport,status,lifecycle_state,kickoff_at,started_at,resulted_at,home_score,away_score";
 
-  if (error) return { ...base, status: "unavailable", errors: [error.message] };
+  /**
+   * Read every matching row, not the first page of them.
+   *
+   * PostgREST caps a response at `db-max-rows` — 1000 on this project —
+   * **regardless of the `.limit()` asked for**, and says nothing about having
+   * truncated. A single `.limit(5_000)` over a 1,888-row quarantine backlog
+   * returned 1000 rows and looked like the whole set; 32 football fixtures
+   * holding a final score stayed quarantined because they sat on page two.
+   *
+   * Keyset on `id` rather than `kickoff_at`: fixtures routinely share a
+   * kick-off time, and a cursor over a non-unique column silently skips every
+   * row that ties with the last one on the page.
+   *
+   * The loop ends on an **empty** page, not on a short one. "Short means last"
+   * only holds while the requested page size matches the server's cap exactly;
+   * the moment `db-max-rows` is lower than `PAGE`, every page is short and the
+   * very first one looks like the end. That is the same silent truncation this
+   * helper exists to remove, so it is not worth one saved round trip.
+   */
+  const PAGE = 1_000;
+  async function readAll(
+    apply: (query: ReturnType<ReturnType<SupabaseClient["from"]>["select"]>) => typeof query
+  ): Promise<{ rows: FixtureRow[]; error: string | null }> {
+    const rows: FixtureRow[] = [];
+    let cursor = "00000000-0000-0000-0000-000000000000";
+    for (;;) {
+      const { data, error } = await apply(
+        client!.from("op_fixtures").select(columns) as never
+      )
+        .gt("id", cursor)
+        .order("id", { ascending: true })
+        .limit(PAGE);
+      if (error) return { rows, error: error.message };
+      const page = (data ?? []) as FixtureRow[];
+      if (!page.length) return { rows, error: null };
+      rows.push(...page);
+      cursor = page[page.length - 1].id;
+    }
+  }
 
-  const rows = (data ?? []) as FixtureRow[];
+  const [pending, quarantined] = await Promise.all([
+    readAll((query) => query.lt("kickoff_at", nowIso).gte("kickoff_at", since).in("status", ["scheduled", "live"])),
+    readAll((query) => query.lt("kickoff_at", nowIso).in("lifecycle_state", [...QUARANTINED_STATES]))
+  ]);
+
+  const error = pending.error ?? quarantined.error;
+  if (error) return { ...base, status: "unavailable", errors: [error] };
+
+  // The two populations overlap — a quarantined fixture the provider still
+  // calls `scheduled` is in both — so de-duplicate before deciding, or it would
+  // be counted twice and written twice.
+  const byId = new Map<string, FixtureRow>();
+  for (const row of [...pending.rows, ...quarantined.rows]) byId.set(row.id, row);
+  const rows = [...byId.values()];
   const changes: ReconciliationChange[] = [];
   const tally = new Map<string, { scanned: number; changed: number }>();
 

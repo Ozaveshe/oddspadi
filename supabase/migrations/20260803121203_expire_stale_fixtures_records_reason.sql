@@ -1,0 +1,25 @@
+-- Superseded intermediate. Intentionally empty.
+--
+-- Added `expiredReason` / `expiredAt` / `statusBeforeExpiry` to the
+-- metadata `op_expire_stale_fixtures` writes.
+--
+-- Recorded in `supabase_migrations.schema_migrations` as `20260803121203
+-- expire_stale_fixtures_records_reason`, applied through the Supabase MCP
+-- tool, which assigns its own version at apply time rather than using a
+-- committed filename. The change was folded into
+-- `20260807050311_quarantine_stale_fixtures.sql`, which is what a fresh
+-- environment runs.
+--
+-- Verified against production 2026-08-07: The live
+-- `op_expire_stale_fixtures` returns `quarantined` (not `expired`) and
+-- sets `lifecycle_state = 'unresolved'` rather than `status = 'abandoned'`
+-- — the 20260807050311 definition. The three metadata keys this step
+-- introduced are carried forward there unchanged.
+--
+-- This file carries no statements on purpose. Its only job is to hold the
+-- version, so the local migrations directory and the remote ledger list
+-- the same set. Without it `supabase db push` reports "Remote migration
+-- versions not found in local migrations directory" and the Supabase
+-- Preview check fails. The ledger row is the record of what actually ran
+-- and is kept as is; replaying its statements here would re-run history
+-- out of order. See docs/migration-ledger.md.

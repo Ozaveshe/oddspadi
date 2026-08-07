@@ -5,7 +5,7 @@ import { PromotionGateBoard } from "@/components/odds/PromotionGateBoard";
 import { readPromotionGateStatus } from "@/lib/sports/promotionGateStatus";
 import { getCachedHomepageModelRecordSummary } from "@/lib/sports/tips/publicReads";
 import { readOfficialPublications } from "@/lib/domain/canonicalReads";
-import { computeLedgerPerformance, formatMetric } from "@/lib/performance/ledgerMetrics";
+import { computeLedgerPerformance, formatMetric, formatRecordHitRate } from "@/lib/performance/ledgerMetrics";
 
 export const revalidate = 300;
 
@@ -78,7 +78,12 @@ export default async function TrackRecordPage() {
         <ul className="evidence-class-list">
           <li className="evidence-class official"><strong>Official public picks</strong><span>The published ledger above. The only class in OddsPadi&apos;s public record.</span></li>
           <li className="evidence-class"><strong>Internal decisions</strong><span>Every call the engine grades, published or not. Training evidence — shown below, never as public performance.</span></li>
-          <li className="evidence-class"><strong>Shadow decisions</strong><span>Paper-mode runs of candidate models. Never public.</span></li>
+          {/* "Never public" was false, and falsifiably so: the internal model
+              record above is built from shadow decisions. The claim worth
+              making — and the one the ledger actually enforces — is that they
+              never enter the official record. Showing them is the useful part;
+              claiming we don't was the error. */}
+          <li className="evidence-class"><strong>Shadow decisions</strong><span>Paper-mode runs of candidate models. Shown in the internal record above, never counted in the official one.</span></li>
           <li className="evidence-class"><strong>Backtests</strong><span>Historical replays on the corpus. Never live performance.</span></li>
           <li className="evidence-class"><strong>Community selections</strong><span>Members&apos; own tips, with their own leaderboard. Never OddsPadi&apos;s record.</span></li>
         </ul>
@@ -87,17 +92,17 @@ export default async function TrackRecordPage() {
 
       <section className="section" aria-labelledby="record-yesterday-heading">
         <div className="section-title"><div><span className="section-kicker">Yesterday</span><h2 id="record-yesterday-heading">Internal model record</h2></div><Link className="button primary" href="/predictions/history">Full results ledger</Link></div>
-        {record && graded > 0 ? (
+        {record && graded + record.pending + record.voided > 0 ? (
           <div className="metrics-grid">
             <div className="metric"><span className="metric-label">Model wins</span><span className="metric-value">{record.won}</span></div>
             <div className="metric"><span className="metric-label">Model losses</span><span className="metric-value">{record.lost}</span></div>
             <div className="metric"><span className="metric-label">Pending</span><span className="metric-value">{record.pending}</span></div>
-            <div className="metric"><span className="metric-label">Hit rate</span><span className="metric-value">{Math.round((record.won / graded) * 100)}%</span></div>
+            <div className="metric"><span className="metric-label">Hit rate</span><span className="metric-value">{formatRecordHitRate(record.hitRate)}</span></div>
           </div>
         ) : (
           <p className="muted small">Yesterday&apos;s grading has not landed yet — the settlement sweep runs hourly. The full ledger has the complete history.</p>
         )}
-        <p className="muted small">Internal record: every decision the engine grades against final scores, published or not. Published picks are the subset that cleared all gates — see the ledger for those.</p>
+        <p className="muted small">Internal record: every decision the engine grades against final scores, published or not — counted once per decision, not once per bookmaker price. Wins and losses are what the grader resolved yesterday; pending is what yesterday&apos;s fixtures still owe it, including calls on fixtures no provider ever resolved. Published picks are the subset that cleared all gates — see the ledger for those.</p>
       </section>
 
       {gateStatus ? (

@@ -33,10 +33,51 @@ is operator information, not a public listing of every schema change and its
 date. It **fails** when a committed file is not recorded as applied, because
 that file would re-run.
 
-It **reports but does not fail** on ledger rows with no file. Those are
-expected: the MCP path records every apply, so an iterative fix that was later
-folded into one committed file leaves its intermediate steps behind. 19 such
-rows exist. They are real history and are deliberately kept.
+It **also fails** when a ledger row has no file. It used only to report those,
+on the grounds that they were expected MCP artefacts. That was right about the
+cause and wrong about the consequence — see below.
+
+## The other direction
+
+Measured 2026-08-07: **23 ledger rows had no committed file.** `supabase db
+push` compares the two version *sets* and refuses on any remote version it
+cannot find locally:
+
+```
+Remote migration versions not found in local migrations directory.
+```
+
+So the Supabase Preview check on `main` had been failing on exactly the state
+this document described as harmless, while `npm run check:migrations` passed.
+A check that stays green when the thing it guards is broken is worse than no
+check, because it is trusted. Both directions fail now.
+
+All 23 were genuine superseded intermediates — steps of an iterative fix later
+folded into one committed file. Each was confirmed against production before
+being resolved: the live object matches the *committed* file, not the
+intermediate. None was schema the repo had no record of.
+
+### Resolve with an empty file, not a replay
+
+The obvious fix — recover the SQL from `statements` and commit it under its own
+version — is wrong here, and would have broken a fresh push.
+
+MCP-assigned versions interleave *before* the consolidated files that create
+the objects they depend on. `20260803145321 latest_odds_reads_current_projection`
+reads `public.op_current_odds`; that table is created by
+`20260803170000_current_odds_projection.sql`, a **later** version. Replaying it
+in filename order would run against a table that does not exist yet. The same
+holds for `20260803144750 backfill_current_odds_incremental`.
+
+So a superseded intermediate gets a file at its exact version carrying **no
+statements**, documenting what ran, which committed file superseded it, and
+what was verified in production. It exists to hold the version. The ledger row
+keeps the SQL that actually executed; the file does not duplicate it, because
+that would imply this version executed something, which on a fresh environment
+it does not.
+
+Commit a *reproducing* file instead only when the ledger row is real schema no
+committed file rebuilds — the dangerous case, and none of the 23 were it.
 
 ## Reconciling
 

@@ -1,4 +1,5 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { rateWithMinimumSample, type MetricValue } from "@/lib/performance/ledgerMetrics";
 
 /**
  * Counts-only read for the homepage's matchday card.
@@ -132,8 +133,79 @@ export async function readHomepageWeeklySummary(now = new Date()): Promise<Homep
  * note that internal runs "do not appear here". Users read four zeros as a
  * broken product. The engine settles thousands of internal decisions; showing
  * that record, clearly labelled as internal, is both honest and alive.
+ *
+ * Three defects made this panel read "18 wins, 0 losses, 0 pending, 100%" on a
+ * day the engine actually resolved two calls.
+ *
+ * **`op_prediction_outcomes` stores one row per bookmaker price, not per
+ * decision.** The previous head-counts counted rows, so a single call on
+ * Ararat-Armenia held at seven quotes counted as seven wins. On 2026-08-06 the
+ * eighteen "wins" were three decisions fanned out 7/7/4. Rows are therefore
+ * collapsed to one record per (fixture, market, selection) before anything is
+ * counted — the engine made one call, and it counts once.
+ *
+ * **Pending could never be anything but zero.** Every branch of the old count
+ * filtered `settled_at` into the window, including the pending branch; a
+ * pending row has `settled_at IS NULL` by construction, so the tile was a
+ * hardcoded zero. Pending is windowed on the fixture's kickoff instead, which
+ * is the only timestamp an ungraded decision has. The two windows answer two
+ * questions on purpose: won/lost is what the grader resolved during the day,
+ * pending is what yesterday's fixtures still owe it.
+ *
+ * **Nothing refused to print a rate.** A denominator of two produced a bare
+ * "100%" on the credibility page. The rate now goes through the same
+ * `MIN_SEGMENT_SAMPLE` gate the publication ledger uses, so a sample too small
+ * to mean anything reports that instead of a number.
+ *
+ * Decisions sitting on a fixture whose lifecycle is `unresolved` — no provider
+ * ever returned a result — are excluded from both numerator and denominator and
+ * reported as pending. An ungraded decision stays ungraded; it is never
+ * counted as a loss, and never quietly dropped so the rate looks better.
  */
-export type HomepageModelRecordSummary = { won: number; lost: number; pending: number };
+export type HomepageModelRecordSummary = {
+  won: number;
+  lost: number;
+  pending: number;
+  /** Void and push: settled, but no verdict a rate can use. */
+  voided: number;
+  /** Null below the sample threshold — never a bare 0% or 100%. */
+  hitRate: MetricValue;
+};
+
+type OutcomeRow = { fixture_external_id: string; market: string; selection: string; result: string };
+
+/** One record per call the engine made, regardless of how many prices it was quoted at. */
+function dedupeDecisions(rows: OutcomeRow[]): OutcomeRow[] {
+  const byDecision = new Map<string, OutcomeRow>();
+  for (const row of rows) {
+    const key = `${row.fixture_external_id}|${row.market}|${row.selection}`;
+    if (!byDecision.has(key)) byDecision.set(key, row);
+  }
+  return [...byDecision.values()];
+}
+
+/**
+ * Fixtures whose lifecycle says no result ever arrived. Read in chunks because
+ * a busy day touches several hundred fixtures and `in.()` travels in the URL.
+ */
+async function unresolvedFixtureIds(
+  client: NonNullable<ReturnType<typeof getSupabaseServerClient>>,
+  externalIds: string[]
+): Promise<Set<string> | null> {
+  const unresolved = new Set<string>();
+  for (let index = 0; index < externalIds.length; index += 150) {
+    const { data, error } = await client
+      .from("op_fixtures")
+      .select("external_id,lifecycle_state")
+      .in("external_id", externalIds.slice(index, index + 150))
+      .eq("lifecycle_state", "unresolved");
+    // A lifecycle read we could not make is not proof that everything resolved.
+    // Fail closed rather than counting decisions we cannot vouch for.
+    if (error) return null;
+    for (const row of data ?? []) if (typeof row.external_id === "string") unresolved.add(row.external_id);
+  }
+  return unresolved;
+}
 
 export async function readHomepageModelRecordSummary(now = new Date()): Promise<HomepageModelRecordSummary | null> {
   const client = getSupabaseServerClient();
@@ -141,20 +213,50 @@ export async function readHomepageModelRecordSummary(now = new Date()): Promise<
   const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const from = new Date(to);
   from.setUTCDate(from.getUTCDate() - 1);
+  const columns = "fixture_external_id,market,selection,result";
 
-  const countOf = async (result?: string): Promise<number | null> => {
-    let query = client
+  const [settledRead, pendingRead] = await Promise.all([
+    client
       .from("op_prediction_outcomes")
-      .select("id", { count: "exact", head: true })
+      .select(columns)
       .gte("settled_at", from.toISOString())
-      .lt("settled_at", to.toISOString());
-    if (result) query = query.eq("result", result);
-    else query = query.eq("result", "pending");
-    const { count, error } = await query;
-    return error ? null : count ?? 0;
-  };
+      .lt("settled_at", to.toISOString())
+      .limit(5000),
+    // Kickoff, not settlement: an ungraded decision has no settled_at at all.
+    client
+      .from("op_prediction_outcomes")
+      .select(columns)
+      .eq("result", "pending")
+      .gte("metadata->>kickoffTime", from.toISOString().slice(0, 10))
+      .lt("metadata->>kickoffTime", to.toISOString().slice(0, 10))
+      .limit(5000)
+  ]);
+  // A failed read is not a zero.
+  if (settledRead.error || pendingRead.error) return null;
 
-  const [won, lost, pending] = await Promise.all([countOf("won"), countOf("lost"), countOf()]);
-  if (won === null || lost === null) return null;
-  return { won, lost, pending: pending ?? 0 };
+  const settled = dedupeDecisions((settledRead.data ?? []) as OutcomeRow[]);
+  const pendingRows = dedupeDecisions((pendingRead.data ?? []) as OutcomeRow[]);
+  const unresolved = await unresolvedFixtureIds(
+    client,
+    [...new Set([...settled, ...pendingRows].map((row) => row.fixture_external_id))]
+  );
+  if (unresolved === null) return null;
+
+  let won = 0;
+  let lost = 0;
+  let voided = 0;
+  let pending = pendingRows.length;
+  for (const row of settled) {
+    // Graded against a fixture no provider ever resolved: back to pending.
+    if (unresolved.has(row.fixture_external_id)) {
+      pending += 1;
+      continue;
+    }
+    if (row.result === "won") won += 1;
+    else if (row.result === "lost") lost += 1;
+    else if (row.result === "void" || row.result === "push") voided += 1;
+    else pending += 1;
+  }
+
+  return { won, lost, pending, voided, hitRate: rateWithMinimumSample(won, won + lost) };
 }

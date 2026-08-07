@@ -49,6 +49,27 @@ export function unavailableMetric(): MetricValue {
   return { value: null, state: "unavailable", sampleSize: 0 };
 }
 
+// Exported under explicit names so other surfaces that report a rate — the
+// internal model record on the homepage and /track-record — reach the same
+// verdict from the same helpers instead of inventing a second convention.
+export const measuredMetric = measured;
+export const insufficientSampleMetric = insufficient;
+export const notApplicableMetric = notApplicable;
+
+/**
+ * A rate that refuses to be printed below its sample threshold.
+ *
+ * `won / decided` is arithmetic; whether that arithmetic means anything is a
+ * separate question, and it is the one that matters on a credibility page.
+ * Three graded decisions produce a real 100%, and a bare "100%" in a metric
+ * tile reads as a performance claim no caption can undo.
+ */
+export function rateWithMinimumSample(successes: number, decided: number, minSample = MIN_SEGMENT_SAMPLE): MetricValue {
+  if (decided <= 0) return notApplicable(0);
+  if (decided < minSample) return insufficient(decided);
+  return measured(successes / decided, decided);
+}
+
 export type ConfidenceInterval = { low: number; high: number; level: number } | null;
 
 /**
@@ -333,6 +354,17 @@ export function computeLedgerPerformance(
     smallSampleWarning,
     segments: computeSegments(publications)
   };
+}
+
+/**
+ * Hit-rate label for the internal model record.
+ *
+ * Shared by the homepage card and /track-record so the two surfaces cannot
+ * disagree, and so neither can fall back to printing a percentage the sample
+ * does not support.
+ */
+export function formatRecordHitRate(metric: MetricValue): string {
+  return metric.value === null ? "Not enough settled decisions yet" : formatMetric(metric, "percent");
 }
 
 /** Format a metric for display without ever inventing a number. */

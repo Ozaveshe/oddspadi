@@ -60,8 +60,13 @@ const TERMINAL_FIXTURE_STATUSES = new Set(["finished", "postponed", "cancelled",
  * A fixture we have written off for want of a result is not settleable and is
  * not finished. It is a row we are still waiting on, and the honest thing to do
  * with a claim attached to it is nothing at all.
+ *
+ * Exported so the lifecycle reconciler can be held to the same list. These are
+ * the states that hold a publication out of settlement, so they are precisely
+ * the states the reconciler has to keep revisiting — if the two sets drift, a
+ * fixture becomes unsettleable with nothing left to release it.
  */
-const QUARANTINED_LIFECYCLE_STATES = new Set(["unresolved", "due", "suspended"]);
+export const QUARANTINED_LIFECYCLE_STATES = new Set(["unresolved", "due", "suspended"]);
 
 function emptyTotals(): PublicationSettlementRun["totals"] {
   return { candidates: 0, settled: 0, won: 0, lost: 0, push: 0, void: 0, awaitingResult: 0, needsReview: 0, failed: 0 };
