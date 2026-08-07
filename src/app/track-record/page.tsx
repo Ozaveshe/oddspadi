@@ -78,7 +78,12 @@ export default async function TrackRecordPage() {
         <ul className="evidence-class-list">
           <li className="evidence-class official"><strong>Official public picks</strong><span>The published ledger above. The only class in OddsPadi&apos;s public record.</span></li>
           <li className="evidence-class"><strong>Internal decisions</strong><span>Every call the engine grades, published or not. Training evidence — shown below, never as public performance.</span></li>
-          <li className="evidence-class"><strong>Shadow decisions</strong><span>Paper-mode runs of candidate models. Never public.</span></li>
+          {/* "Never public" was false, and falsifiably so: the internal model
+              record above is built from shadow decisions. The claim worth
+              making — and the one the ledger actually enforces — is that they
+              never enter the official record. Showing them is the useful part;
+              claiming we don't was the error. */}
+          <li className="evidence-class"><strong>Shadow decisions</strong><span>Paper-mode runs of candidate models. Shown in the internal record above, never counted in the official one.</span></li>
           <li className="evidence-class"><strong>Backtests</strong><span>Historical replays on the corpus. Never live performance.</span></li>
           <li className="evidence-class"><strong>Community selections</strong><span>Members&apos; own tips, with their own leaderboard. Never OddsPadi&apos;s record.</span></li>
         </ul>
