@@ -44,7 +44,8 @@
     "ops:backfill-results": "node --env-file-if-exists=.env.local scripts/backfill-fixture-results.mjs",
     "check:migrations": "node --env-file-if-exists=.env.local scripts/check-migrations.mjs",
     "check:migrations:ledger": "node --env-file-if-exists=.env.local scripts/check-migrations.mjs --ledger",
-    "ops:reconcile-lifecycles": "npx vite-node -c vitest.config.ts scripts/reconcile-fixture-lifecycles.ts"
+    "ops:reconcile-lifecycles": "npx vite-node -c vitest.config.ts scripts/reconcile-fixture-lifecycles.ts",
+    "docs:canonical-seed": "vite-node --config scripts/vite-node.config.ts scripts/generate-canonical-market-seed.ts"
   },
   "engines": {
     "node": "22.x"
