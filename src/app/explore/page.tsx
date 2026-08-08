@@ -3,6 +3,7 @@ import Link from "next/link";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { getCachedHomepageWeeklySummary } from "@/lib/sports/tips/publicReads";
 import { footballLeagueRegistry } from "@/lib/sports/footballLeagues";
+import { SearchBox } from "@/components/product/SearchBox";
 
 export const revalidate = 300;
 
@@ -40,6 +41,10 @@ export default async function ExplorePage() {
         <h1>Every way into the <span className="accent">board</span></h1>
         <p>Fixtures by sport, date or competition; live now; tables, season outlooks, news and community. Wherever you start, each match has one page with everything the engine knows.</p>
       </div>
+
+      <section className="section" aria-label="Search">
+        <SearchBox />
+      </section>
 
       <section className="section" aria-labelledby="explore-dates-heading">
         <div className="section-title"><div><span className="section-kicker">By date</span><h2 id="explore-dates-heading">The week ahead</h2></div><Link className="button" href="/predictions/week">Weekly radar</Link></div>
