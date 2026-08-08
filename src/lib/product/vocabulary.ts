@@ -1,3 +1,4 @@
+import type { SettlementStatus as CanonicalSettlementStatus } from "@/lib/domain/states";
 import type { SlatePublicStatus } from "@/lib/sports/intelligence/types";
 
 /**
@@ -76,4 +77,42 @@ export const SETTLEMENT_LABELS: Record<SettlementState, string> = {
 
 export function settlementLabel(state: string): string {
   return SETTLEMENT_LABELS[state as SettlementState] ?? state;
+}
+
+/**
+ * The canonical settlement states, in words.
+ *
+ * `SETTLEMENT_LABELS` is keyed by the legacy vocabulary, which has no entry for
+ * `cancelled` and folds two different waiting states into `pending`. The public
+ * track record shows all seven canonical states from `@/lib/domain/states`, and
+ * the difference between them is exactly the distinction the ledger exists to
+ * preserve: a cancelled fixture is not a void market, and a claim awaiting
+ * verification is not one nobody has looked at.
+ */
+export const CANONICAL_SETTLEMENT_LABELS: Record<CanonicalSettlementStatus, string> = {
+  unsettled: "Pending",
+  won: "Won",
+  // Asian quarter lines: half the stake settled one way, half pushed. Named
+  // plainly rather than rounded to Won/Lost, because rounding is exactly the
+  // half-a-stake misstatement the outcomes exist to prevent.
+  half_won: "Half won",
+  half_lost: "Half lost",
+  lost: "Lost",
+  push: "Push",
+  void: "Void",
+  cancelled: "Cancelled",
+  pending_verification: "Under review"
+};
+
+export function canonicalSettlementLabel(state: string): string {
+  return CANONICAL_SETTLEMENT_LABELS[state as CanonicalSettlementStatus] ?? "Pending";
+}
+
+/** Badge tone for a canonical settlement state. One mapping, every surface. */
+export function canonicalSettlementBadgeClass(state: string): string {
+  if (state === "won") return "positive";
+  if (state === "lost") return "no-value";
+  if (state === "push" || state === "void" || state === "cancelled") return "finished";
+  if (state === "pending_verification") return "medium";
+  return "scheduled";
 }

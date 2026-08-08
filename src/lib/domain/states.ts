@@ -112,6 +112,13 @@ export function isOfficialLedgerClass(value: string | null | undefined): value i
 /** Settlement states in which the outcome is known and final. */
 const TERMINAL_SETTLEMENTS: ReadonlySet<SettlementStatus> = new Set<SettlementStatus>([
   "won",
+  // A half outcome is decided — the quarter line resolved, across two half
+  // lines. Omitting these left a half-won pick reading as still-in-flight,
+  // which the merge with the track-record work surfaced: git saw no conflict
+  // because the vocabulary widened in one branch and its consumers were
+  // written in the other.
+  "half_won",
+  "half_lost",
   "lost",
   "push",
   "void",
@@ -127,10 +134,11 @@ export function isTerminalSettlement(status: SettlementStatus): boolean {
  *
  * Only decided outcomes: a push returned the stake and a void never ran, so
  * counting either as a played selection misstates the record in both
- * directions.
+ * directions. The half outcomes are played picks — half the stake won or lost
+ * — and excluding them would misstate it the same way.
  */
 export function countsTowardRecord(status: SettlementStatus): boolean {
-  return status === "won" || status === "lost";
+  return status === "won" || status === "lost" || status === "half_won" || status === "half_lost";
 }
 
 export function isFixtureStatus(value: unknown): value is FixtureStatus {
@@ -147,6 +155,10 @@ export function isSettlementStatus(value: unknown): value is SettlementStatus {
 
 export function isDecisionStatus(value: unknown): value is DecisionStatus {
   return typeof value === "string" && (DECISION_STATUSES as readonly string[]).includes(value);
+}
+
+export function isDataAvailability(value: unknown): value is DataAvailability {
+  return typeof value === "string" && (DATA_AVAILABILITY_STATES as readonly string[]).includes(value);
 }
 
 /**

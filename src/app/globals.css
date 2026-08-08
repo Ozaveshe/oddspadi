@@ -4431,3 +4431,90 @@ a.score-row:active,
 .search-box-group ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; }
 .search-box-group a { text-decoration: none; color: inherit; }
 .search-box-group a:hover strong { color: var(--green-strong); }
+
+/* ---------------------------------------------------------------------------
+   Track Record
+   ---------------------------------------------------------------------------
+   The public publication ledger. Layout primitives are reused from the panel,
+   table and metric kits above; what is defined here is only what those did not
+   already cover — the period control, the record cards that replace a ten
+   column table on a phone, keyset pagination, and the print variant.
+
+   The evidence-class list is defined here too. It has been used by
+   /track-record since v1.7 with no rule behind it, so the "official" class was
+   visually identical to the classes the page exists to keep separate from it.
+   -------------------------------------------------------------------------- */
+
+.evidence-class-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.evidence-class { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-left: 3px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); }
+.evidence-class strong { font-size: 15px; }
+.evidence-class > span { color: var(--muted); font-size: 13px; }
+.evidence-class .small { color: var(--faint); }
+.evidence-class.official { border-left-color: var(--green-strong); background: var(--green-soft); }
+.track-record-evidence-heading { margin: 22px 0 10px; font-size: 15px; }
+
+.track-record-periods { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+.track-record-period { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); font-size: 13px; font-weight: 750; text-decoration: none; }
+.track-record-period:hover { background: var(--surface-2); }
+.track-record-period.active { background: var(--green-deep); border-color: var(--green-deep); color: var(--green-ink); }
+
+.track-record-custom { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-top: 12px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-soft); }
+.track-record-custom label { display: grid; gap: 6px; color: var(--faint); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.track-record-custom input { min-height: 44px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); color: var(--text); font-size: 16px; }
+.track-record-custom > p { flex: 1 1 100%; margin: 0; }
+.track-record-range-error { color: var(--red-strong); }
+
+.track-record-summary { display: grid; gap: 10px; }
+.track-record-summary > p { margin: 0; }
+.track-record-extent { display: block; }
+
+.track-record-active-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+
+.track-record-table-wrap { margin-top: 12px; }
+.track-record-table caption { caption-side: top; text-align: left; padding: 0 0 10px; }
+.track-record-row-links { display: inline-flex; gap: 10px; }
+.track-record-id { font-family: var(--font-mono); font-size: 11px; word-break: break-all; }
+
+.track-record-cards { display: none; list-style: none; margin: 12px 0 0; padding: 0; gap: 12px; }
+.track-record-card { display: grid; gap: 8px; }
+.track-record-card-head { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+.track-record-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.track-record-card-grid dt { color: var(--faint); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.track-record-card-grid dd { margin: 0; font-size: 14px; font-weight: 750; font-variant-numeric: tabular-nums; }
+
+.track-record-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
+.track-record-pagination .button.disabled { opacity: .45; pointer-events: none; }
+
+.track-record-exports { display: grid; gap: 8px; margin-top: 18px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-soft); }
+.track-record-export-links { display: flex; flex-wrap: wrap; gap: 10px; }
+.track-record-exports p { margin: 0; }
+.track-record-definitions { margin-top: 16px; }
+.track-record-revisions { display: grid; gap: 10px; padding-left: 18px; }
+
+@media (max-width: 860px) {
+  .track-record-table-wrap { display: none; }
+  .track-record-cards { display: grid; }
+  .track-record-periods { flex-wrap: nowrap; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px; }
+  .track-record-period { flex: 0 0 auto; scroll-snap-align: start; }
+  .track-record-filters { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 520px) {
+  .track-record-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* The printable variant is the same page with the controls removed, so the
+   printed numbers are by construction the numbers that were on the screen. */
+.track-record-print .track-record-cards { display: none; }
+.track-record-print .track-record-table-wrap { display: block; }
+
+@media print {
+  .track-record-print .track-record-table { min-width: 0; font-size: 10px; }
+  .track-record-print .track-record-table th,
+  .track-record-print .track-record-table td { padding: 4px 6px; }
+  .track-record-print .table-wrap { overflow: visible; border: 0; box-shadow: none; }
+  .track-record-print details.fold { border: 0; }
+  .track-record-print details.fold > summary { display: none; }
+  .track-record-print details.fold > .fold-body { display: block; }
+  .track-record-print .track-record-table tbody tr { break-inside: avoid; }
+}

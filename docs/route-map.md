@@ -13,7 +13,8 @@ hub page, `ctx` = reached contextually (from fixture/competition/article), `SEO`
 | `/` | **Today hub** (unchanged URL) | Today | nav | SEO | — | daily tips product + homepage summaries | `page.tsx` + IntelligenceSlate |
 | `/explore` | **new** Explore hub | Explore | nav | SEO | — | composes existing reads | `explore/page.tsx` |
 | `/my` | **new** My Padi hub | My Padi | nav | noindex | — | localStorage + account APIs | `my/page.tsx` |
-| `/track-record` | **new** Track Record hub | Track Record | nav | SEO | — | outcomes + performance reads | `track-record/page.tsx` |
+| `/track-record` | **new** Track Record hub | Track Record | nav | SEO | — | publication ledger (`buildTrackRecordView`) | `track-record/page.tsx` |
+| `/track-record/publication/[publicationId]` | **new** publication receipt | Track Record | ctx from every record row | noindex | — | publication ledger (`readPublicationReceipt`) | `track-record/publication/[publicationId]/page.tsx` |
 | `/predictions` | canonical fixture browser | Explore | nav ("Explore" secondary row) + hub | SEO | — | stored slate | `predictions/page.tsx` |
 | `/predictions/[matchId]` | **canonical fixture page** (unchanged) | Explore | ctx from every card | SEO | — | provider-backed match read | match page |
 | `/predictions/today` | today's tips list | Today | hub (Today → "Full slate") | SEO | — | daily tips product | DailyTipsPageView |
