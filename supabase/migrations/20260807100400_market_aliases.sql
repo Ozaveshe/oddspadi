@@ -14,7 +14,18 @@
 -- one audit row per record it changes. There is no path from the workbench to a
 -- historical rewrite.
 
-create extension if not exists btree_gist;
+-- Into `extensions`, matching 20260803165000 and Supabase's convention.
+-- Installed into `public` it pollutes the schema PostgREST exposes, and a
+-- later `create extension` elsewhere with the correct schema then fails
+-- because the extension already exists in the wrong one.
+create extension if not exists btree_gist with schema extensions;
+
+-- The exclusion constraint below needs btree_gist's operator classes, and
+-- Postgres resolves an operator class through search_path. With the extension
+-- in `extensions` and search_path unset, `provider with =` fails outright:
+-- "data type text has no default operator class for access method gist".
+-- `set local` reverts when the migration's transaction ends.
+set local search_path = public, extensions;
 
 create table if not exists public.op_market_aliases (
   id uuid primary key default gen_random_uuid(),

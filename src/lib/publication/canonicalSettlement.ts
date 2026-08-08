@@ -104,6 +104,7 @@ function emptyTotals(): CanonicalSettlementRun["totals"] {
 
 export function toCanonicalResult(row: ResultRow): CanonicalResult {
   return {
+    resultId: row.id,
     fixtureId: row.fixture_id,
     sport: row.sport as CanonicalSport,
     resultStatus: row.result_status as CanonicalResult["resultStatus"],
@@ -285,6 +286,7 @@ export async function runCanonicalPublicationSettlement({
         ruleVersion: verdict.ruleVersion,
         settlementBasis: verdict.basis,
         selectionKey,
+        resultId: result.resultId,
         resultRevision: result.revision,
         resultStatus: result.resultStatus,
         winnerBasis: result.winnerBasis,

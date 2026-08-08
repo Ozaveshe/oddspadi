@@ -205,6 +205,7 @@ export async function runResettle({
         ruleVersion: verdict.ruleVersion,
         settlementBasis: verdict.basis,
         selectionKey,
+        resultId: result.resultId,
         resultRevision: result.revision,
         supersedes: row.settlement_status,
         correction:

@@ -45,7 +45,6 @@ export type ClosingCaptureRun = {
 type PublicationRow = {
   id: string;
   fixture_id: string | null;
-  fixture_external_id: string;
   sport: string;
   market: string;
   selection: string;
@@ -55,7 +54,7 @@ type PublicationRow = {
 };
 
 type SnapshotRow = {
-  fixture_external_id: string;
+  fixture_id: string;
   bookmaker: string;
   market: string;
   selection: string;
@@ -118,7 +117,7 @@ export async function runClosingCapture({
 
   const { data: publicationData, error: publicationError } = await client
     .from("op_publications")
-    .select("id,fixture_id,fixture_external_id,sport,market,selection,market_line,odds_at_publication,kickoff_at")
+    .select("id,fixture_id,sport,market,selection,market_line,odds_at_publication,kickoff_at")
     .eq("publication_status", "published")
     .lt("kickoff_at", generatedAt)
     .order("kickoff_at", { ascending: false })
@@ -172,10 +171,14 @@ export async function runClosingCapture({
 
   const { data: snapshotData, error: snapshotError } = await client
     .from("op_odds_snapshots")
-    .select("fixture_external_id,bookmaker,market,selection,line,decimal_odds,observed_at,is_live")
+    .select("fixture_id,bookmaker,market,selection,line,decimal_odds,observed_at,is_live")
+    // Joined on the uuid foreign key, not on fixture_external_id. Both tables
+    // carry that text column and two different write paths populate it, so a
+    // namespace mismatch would silently report no_quotes against every claim —
+    // a wrong reason, permanently, in a row that reads as a finding.
     .in(
-      "fixture_external_id",
-      [...new Set(pending.map((row) => row.fixture_external_id))]
+      "fixture_id",
+      [...new Set(pending.map((row) => row.fixture_id).filter((value): value is string => Boolean(value)))]
     )
     .gte("observed_at", earliestWindow)
     .order("observed_at", { ascending: true })
@@ -189,9 +192,9 @@ export async function runClosingCapture({
   const snapshotsByFixture = new Map<string, SnapshotRow[]>();
   for (const row of (snapshotData ?? []) as unknown as SnapshotRow[]) {
     if (row.is_live) continue;
-    const held = snapshotsByFixture.get(row.fixture_external_id) ?? [];
+    const held = snapshotsByFixture.get(row.fixture_id) ?? [];
     held.push(row);
-    snapshotsByFixture.set(row.fixture_external_id, held);
+    snapshotsByFixture.set(row.fixture_id, held);
   }
 
   for (const publication of pending) {
@@ -204,7 +207,7 @@ export async function runClosingCapture({
     const resolved = selectionKey ? canonicalSelection(selectionKey) : null;
 
     const quotes = resolved
-      ? buildQuotes(snapshotsByFixture.get(publication.fixture_external_id) ?? [], publication, resolved.selection.id)
+      ? buildQuotes(snapshotsByFixture.get(publication.fixture_id ?? "") ?? [], publication, resolved.selection.id)
       : [];
 
     const capture = captureClose({
@@ -243,7 +246,7 @@ export async function runClosingCapture({
       // Describes the publication, not the close, so it is recorded even when
       // the capture failed — otherwise a retry could not reproduce the CLV.
       published_probability_novig: publishedProbabilityNoVig(
-        snapshotsByFixture.get(publication.fixture_external_id) ?? [],
+        snapshotsByFixture.get(publication.fixture_id ?? "") ?? [],
         publication,
         resolved?.selection.id ?? null
       ),

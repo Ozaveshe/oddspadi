@@ -57,6 +57,13 @@ export type PeriodScore = {
 };
 
 export type CanonicalResult = {
+  /**
+   * The stored row's id, where this result came from storage. Absent on a
+   * result freshly parsed from a payload, which has not been written yet — so
+   * a settlement produced from one links to nothing, honestly, rather than to
+   * a guess.
+   */
+  resultId?: string | null;
   fixtureId: string;
   sport: CanonicalSport;
   resultStatus: ResultStatus;
@@ -119,6 +126,7 @@ export function gameScore(result: CanonicalResult): { home: number; away: number
  */
 export function emptyResult(fixtureId: string, sport: CanonicalSport): CanonicalResult {
   return {
+    resultId: null,
     fixtureId,
     sport,
     resultStatus: "finished",

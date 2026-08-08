@@ -15263,7 +15263,14 @@ describe("prediction utilities", () => {
     expect(prediction.decision.dataCoverage.signals.find((signal) => signal.id === "odds")?.status).toBe("provider-backed");
     expect(prediction.decision.dataCoverage.signals.find((signal) => signal.id === "recent-form")?.status).toBe("computed");
     expect(prediction.decision.dataCoverage.signals.find((signal) => signal.id === "weather")?.status).toBe("computed");
-    expect(prediction.decision.evidence.find((item) => item.category === "weather")?.detail).toContain("London weather");
+    // Asserted on the venue city and the subject, not on one branch's phrasing.
+    // The previous assertion matched only the outside-the-window copy, so it
+    // passed until the fixture's fixed kickoff drifted inside the 14-day
+    // forecast window and the branch flipped underneath it — a test that
+    // depends on the wall clock fails on a date nobody changed anything on.
+    const weatherDetail = prediction.decision.evidence.find((item) => item.category === "weather")?.detail ?? "";
+    expect(weatherDetail).toContain("London");
+    expect(weatherDetail.toLowerCase()).toContain("weather");
     expect(prediction.decision.dataCoverage.signals.find((signal) => signal.id === "lineups")?.status).not.toBe("provider-backed");
     expect(prediction.decision.dataCoverage.requiredBeforeTrust.join(" ")).toContain("Standings");
   });

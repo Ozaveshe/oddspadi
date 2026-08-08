@@ -48,7 +48,6 @@ function publication(overrides: Row = {}): Row {
   return {
     id: "pub-1",
     fixture_id: "fix-1",
-    fixture_external_id: "ext-1",
     sport: "football",
     market: "match_winner",
     selection: "home",
@@ -61,9 +60,9 @@ function publication(overrides: Row = {}): Row {
 
 function quoteRows(bookmaker: string, minutesBefore: number, homeOdds: number): Row[] {
   return [
-    { fixture_external_id: "ext-1", bookmaker, market: "match_winner", selection: "home", line: null, decimal_odds: homeOdds, observed_at: before(minutesBefore), is_live: false },
-    { fixture_external_id: "ext-1", bookmaker, market: "match_winner", selection: "draw", line: null, decimal_odds: 3.4, observed_at: before(minutesBefore), is_live: false },
-    { fixture_external_id: "ext-1", bookmaker, market: "match_winner", selection: "away", line: null, decimal_odds: 3.8, observed_at: before(minutesBefore), is_live: false }
+    { fixture_id: "fix-1", bookmaker, market: "match_winner", selection: "home", line: null, decimal_odds: homeOdds, observed_at: before(minutesBefore), is_live: false },
+    { fixture_id: "fix-1", bookmaker, market: "match_winner", selection: "draw", line: null, decimal_odds: 3.4, observed_at: before(minutesBefore), is_live: false },
+    { fixture_id: "fix-1", bookmaker, market: "match_winner", selection: "away", line: null, decimal_odds: 3.8, observed_at: before(minutesBefore), is_live: false }
   ];
 }
 
@@ -166,8 +165,8 @@ describe("closing capture sweep", () => {
     // A 2.5 quote is not a closing price for a 3.5 claim, however close the
     // numbers look.
     const wrongLine = ["a", "b", "c"].flatMap((book) => [
-      { fixture_external_id: "ext-1", bookmaker: book, market: "over_under_25", selection: "over_25", line: 2.5, decimal_odds: 1.9, observed_at: before(10), is_live: false },
-      { fixture_external_id: "ext-1", bookmaker: book, market: "over_under_25", selection: "under_25", line: 2.5, decimal_odds: 1.9, observed_at: before(10), is_live: false }
+      { fixture_id: "fix-1", bookmaker: book, market: "over_under_25", selection: "over_25", line: 2.5, decimal_odds: 1.9, observed_at: before(10), is_live: false },
+      { fixture_id: "fix-1", bookmaker: book, market: "over_under_25", selection: "under_25", line: 2.5, decimal_odds: 1.9, observed_at: before(10), is_live: false }
     ]);
     const insert = vi.fn().mockResolvedValue({ error: null });
     const run = await runClosingCapture({

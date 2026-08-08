@@ -14,9 +14,13 @@
 -- selection's identity in the registry. The full key with its line
 -- (football.asian_handicap.regulation.home.-0_25) is formed at resolution.
 
-delete from public.op_canonical_selections;
-delete from public.op_canonical_markets;
-
+-- Upserted, not deleted and re-inserted.
+--
+-- op_market_aliases references both mirror tables with ON DELETE RESTRICT, so
+-- once a single alias exists a delete-then-insert seed fails outright — and it
+-- fails on the regeneration, long after this file was written and reviewed.
+-- The mirror is a cache of the registry; refreshing it must not depend on
+-- nothing pointing at it.
 insert into public.op_canonical_markets (
   key, version, sport, family, period, participant_scope, selection_type,
   line_required, line_granularity, basis, overtime_rule, push_rule, void_rule,
@@ -35,7 +39,23 @@ insert into public.op_canonical_markets (
   ('basketball.total_points.full_game_incl_ot', '2026-08-07.1', 'basketball', 'total_points', 'full_game_incl_ot', 'match', 'total', true, 'half', 'full_game_including_ot', 'included', 'exact_line_push', 'void_on_no_result', 'not_applicable', '2026-08-07.1', 'Settles on combined points including overtime. A total landing exactly on a whole line returns the stake.'),
   ('tennis.match_winner.full_match', '2026-08-07.1', 'tennis', 'match_winner', 'full_match', 'player', 'binary', false, 'none', 'match_award', 'not_applicable', 'no_push', 'settle_if_awarded', 'settle_on_award', '2026-08-07.1', 'Settles on the player awarded the match. A retirement still produces a winner and settles; a walkover, where no play took place, voids.'),
   ('tennis.set_handicap.full_match', '2026-08-07.1', 'tennis', 'set_handicap', 'full_match', 'player', 'handicap', true, 'half', 'sets', 'not_applicable', 'exact_line_push', 'void_on_no_result', 'void', '2026-08-07.1', 'The line is applied to sets won in a completed match. A retirement voids, because the set count never reached its final value even though the match has a winner.'),
-  ('tennis.total_games.full_match', '2026-08-07.1', 'tennis', 'total_games', 'full_match', 'match', 'total', true, 'half', 'games', 'not_applicable', 'exact_line_push', 'void_on_no_result', 'void', '2026-08-07.1', 'Settles on total games in a completed match. A retirement voids, because games that would have been played were not.');
+  ('tennis.total_games.full_match', '2026-08-07.1', 'tennis', 'total_games', 'full_match', 'match', 'total', true, 'half', 'games', 'not_applicable', 'exact_line_push', 'void_on_no_result', 'void', '2026-08-07.1', 'Settles on total games in a completed match. A retirement voids, because games that would have been played were not.')
+on conflict (key) do update set
+  version = excluded.version,
+  sport = excluded.sport,
+  family = excluded.family,
+  period = excluded.period,
+  participant_scope = excluded.participant_scope,
+  selection_type = excluded.selection_type,
+  line_required = excluded.line_required,
+  line_granularity = excluded.line_granularity,
+  basis = excluded.basis,
+  overtime_rule = excluded.overtime_rule,
+  push_rule = excluded.push_rule,
+  void_rule = excluded.void_rule,
+  retirement_rule = excluded.retirement_rule,
+  settlement_rule_version = excluded.settlement_rule_version,
+  settlement_basis_statement = excluded.settlement_basis_statement;
 
 insert into public.op_canonical_selections (key, market_key, selection, label) values
   ('football.1x2.regulation.home', 'football.1x2.regulation', 'home', 'Home win'),
@@ -68,4 +88,14 @@ insert into public.op_canonical_selections (key, market_key, selection, label) v
   ('tennis.set_handicap.full_match.player_a', 'tennis.set_handicap.full_match', 'player_a', 'Player A'),
   ('tennis.set_handicap.full_match.player_b', 'tennis.set_handicap.full_match', 'player_b', 'Player B'),
   ('tennis.total_games.full_match.over', 'tennis.total_games.full_match', 'over', 'Over'),
-  ('tennis.total_games.full_match.under', 'tennis.total_games.full_match', 'under', 'Under');
+  ('tennis.total_games.full_match.under', 'tennis.total_games.full_match', 'under', 'Under')
+on conflict (key) do update set
+  market_key = excluded.market_key,
+  selection = excluded.selection,
+  label = excluded.label;
+
+-- A market removed from the registry is left in the mirror rather than
+-- deleted. Nothing points at a stale row except an alias that would break
+-- without it, and the parity test — which compares the registry to this file,
+-- not to the database — still fails loudly if the two drift. Removing a market
+-- an alias depends on is a migration somebody writes deliberately.
