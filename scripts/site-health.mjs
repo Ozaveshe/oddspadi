@@ -335,7 +335,8 @@ for (const sport of ["football", "basketball", "tennis"]) {
 await checkJson("/api/community/posts", (payload) => {
   if (!Array.isArray(payload?.posts)) return "no posts array";
   if (payload.note) return `feed note: ${payload.note}`;
-  if (!payload.posts.length) return "feed is empty";
+  // An empty feed is healthy. Honest empty states beat seeded chatter, so the
+  // canary only fails on malformed payloads or explicit degradation notes.
   return null;
 }, "api community feed");
 

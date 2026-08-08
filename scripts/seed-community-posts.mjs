@@ -1,10 +1,18 @@
 #!/usr/bin/env node
 /**
- * Post fresh community-feed content from the existing seed personas so the
- * padi feed never looks dead. Idempotent per day: skips personas that already
- * posted in the last 20 hours.
+ * Demo-content poster for the community feed. HONESTY RULES:
  *
- *   node scripts/seed-community-posts.mjs
+ *   - Default invocation is a DRY-RUN: it prints what it would post and exits.
+ *   - Posting requires the explicit `--post` flag.
+ *   - Posting refuses to run unless every persona's profile is labelled with
+ *     the right account_type ('staff' for oddspadi_desk, 'demo' for the fans),
+ *     because demo content must carry a visible label on the site, never
+ *     masquerade as organic users, and never count toward leaderboards.
+ *   - Prefer an honest quiet feed: the production canary does NOT require a
+ *     non-empty feed, so skipping this script entirely is always safe.
+ *
+ *   node scripts/seed-community-posts.mjs           # dry-run
+ *   node scripts/seed-community-posts.mjs --post    # write labelled demo posts
  *
  * Env (required, service-role — server side only, never ship to the client):
  *   SUPABASE_URL          e.g. https://wncwtzqipnoqwmqlznqn.supabase.co
@@ -14,6 +22,8 @@
  * profiles don't exist yet (see docs/automations.md).
  */
 import { createClient } from "@supabase/supabase-js";
+
+const shouldPost = process.argv.includes("--post");
 
 const url = process.env.SUPABASE_URL?.trim();
 const key = process.env.SUPABASE_SECRET_KEY?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
@@ -68,10 +78,13 @@ const pools = {
   ]
 };
 
+/** The label each persona MUST carry before this script will post as it. */
+const requiredAccountType = (username) => (username === "oddspadi_desk" ? "staff" : "demo");
+
 const dayIndex = Math.floor(Date.now() / 86_400_000);
 const { data: profiles, error: profilesError } = await db
   .from("op_profiles")
-  .select("id, username")
+  .select("id, username, account_type")
   .in("username", Object.keys(pools));
 if (profilesError) {
   console.error(`Could not read profiles: ${profilesError.message}`);
@@ -79,6 +92,18 @@ if (profilesError) {
 }
 if (!profiles?.length) {
   console.error("No seed personas found — run the account seed first (docs/automations.md).");
+  process.exit(1);
+}
+
+// Demo content may only be produced by accounts that are visibly labelled on
+// the site. Refuse to post as anything unlabelled or mislabelled.
+const mislabelled = profiles.filter((profile) => profile.account_type !== requiredAccountType(profile.username));
+if (mislabelled.length) {
+  console.error("Refusing to post: these personas are not labelled for demo/staff provenance:");
+  for (const profile of mislabelled) {
+    console.error(`  ${profile.username}: account_type=${profile.account_type ?? "null"} (needs '${requiredAccountType(profile.username)}')`);
+  }
+  console.error("Apply migration 20260808180000_community_provenance.sql first.");
   process.exit(1);
 }
 
@@ -109,6 +134,10 @@ for (const profile of profiles) {
   // persona after it — contradicting the documented promise that a rerun on the
   // same day is stable.
   const body = pool[(dayIndex + personaOffset(profile.username)) % pool.length];
+  if (!shouldPost) {
+    console.log(`would post  ${profile.username} (${profile.account_type}): ${body.slice(0, 60)}...`);
+    continue;
+  }
   const { error } = await db.from("op_feed_posts").insert({ author_id: profile.id, body });
   if (error) {
     failed += 1;
@@ -118,7 +147,11 @@ for (const profile of profiles) {
   posted += 1;
   console.log(`post  ${profile.username}`);
 }
-console.log(`\n${posted} new post(s)${failed ? `, ${failed} failed` : ""}.`);
+if (!shouldPost) {
+  console.log("\nDry-run only. Re-run with --post to write these labelled demo posts. An honest quiet feed is also fine.");
+} else {
+  console.log(`\n${posted} new post(s)${failed ? `, ${failed} failed` : ""}.`);
+}
 // Without this the script always exited 0, so `npm run ops:seed-feed` reported
 // success even when every insert had been rejected.
 process.exit(failed ? 1 : 0);
