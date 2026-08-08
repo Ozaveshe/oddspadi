@@ -102,6 +102,26 @@ export async function readAlertReport({
   const [unverified, unsettled, closeMissing, conflicts, corrections, settlements, voids] = reads;
   const couldNotCheck = reads.map((read) => read.error).filter((error): error is UnreadableSource => error !== null);
 
+  // A median cannot be a PostgREST count, so lag comes from its own function.
+  // Null is a real answer here — no measurable results yet — and is reported as
+  // unknown rather than as fine, so a failed read is the only thing that lands
+  // in couldNotCheck.
+  let medianProviderLagMinutes: number | null = null;
+  try {
+    const { data, error } = await client.rpc("op_provider_result_lag_minutes");
+    if (error) couldNotCheck.push({ source: "op_provider_result_lag_minutes", error: describe(error) });
+    else if (typeof data === "number" && Number.isFinite(data)) medianProviderLagMinutes = data;
+    else if (data !== null) {
+      const parsed = Number(data);
+      medianProviderLagMinutes = Number.isFinite(parsed) ? parsed : null;
+    }
+  } catch (cause) {
+    couldNotCheck.push({
+      source: "op_provider_result_lag_minutes",
+      error: cause instanceof Error ? cause.message : String(cause)
+    });
+  }
+
   return buildAlertReport(
     {
       unverifiedBeyondSla: unverified!.value,
@@ -111,10 +131,7 @@ export async function readAlertReport({
       correctionsLast24h: corrections!.value,
       settlementsLast24h: settlements!.value,
       voidsLast24h: voids!.value,
-      // Provider lag needs a median over observation timestamps rather than a
-      // count, so it is left unknown until the results sweep records them.
-      // Unknown is reported as unknown; it is not reported as fine.
-      medianProviderLagMinutes: null
+      medianProviderLagMinutes
     },
     couldNotCheck,
     now

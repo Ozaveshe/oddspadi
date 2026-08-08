@@ -88,6 +88,15 @@ const voids = await counted("op_publication_settlements.voids", () =>
     .eq("is_current", true).eq("status", "void").gte("created_at", hoursAgo(24))
 );
 
+let medianLag = null;
+try {
+  const { data, error } = await client.rpc("op_provider_result_lag_minutes");
+  if (error) couldNotCheck.push(["op_provider_result_lag_minutes", describe(error)]);
+  else if (data !== null && Number.isFinite(Number(data))) medianLag = Number(data);
+} catch (cause) {
+  couldNotCheck.push(["op_provider_result_lag_minutes", cause instanceof Error ? cause.message : String(cause)]);
+}
+
 const critical = [];
 const warnings = [];
 
@@ -99,6 +108,9 @@ if (settlements >= 10 && voids / settlements > 0.15) {
 }
 if (closeMissing > 0) warnings.push(`close-missing: ${closeMissing} open closing-price exception(s)`);
 if (corrections > 0) warnings.push(`settlement-correction: ${corrections} verdict(s) superseded in 24h`);
+if (medianLag !== null && medianLag > 90) {
+  warnings.push(`provider-result-lag: median ${Math.round(medianLag)} minutes from final whistle to first observation`);
+}
 
 if (critical.length) {
   console.log("CRITICAL");
