@@ -266,6 +266,19 @@ lines.push("  strengths + home advantage + time decay, nothing more.");
 lines.push("- Closing quotes carry no intra-day timestamp in this corpus, so lead-time");
 lines.push("  analysis and CLV-by-hours are out of scope for this run.");
 
+// Preserve any hand-written findings section across reruns: the numbers are
+// regenerated, the interpretation is not.
+try {
+  const existing = readFileSync("docs/model-evaluation-report.md", "utf8");
+  const findings = existing.match(/## Findings[\s\S]*?(?=\n## |$)/);
+  if (findings) {
+    const limitationsAt = lines.indexOf("## Limitations");
+    lines.splice(limitationsAt, 0, findings[0].trimEnd(), "");
+  }
+} catch {
+  // First run — nothing to preserve.
+}
+
 writeFileSync("docs/model-evaluation-report.md", lines.join("\n") + "\n");
 console.log("wrote docs/model-evaluation-report.md");
 for (const contender of contenders) {

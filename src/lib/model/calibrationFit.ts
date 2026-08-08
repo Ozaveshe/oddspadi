@@ -74,8 +74,20 @@ export function fitTemperature(validation: Forecast[]): Calibrator {
  * Returns a step function mapping raw probability → calibrated frequency.
  */
 function pav(pairs: Array<{ x: number; y: number }>): (x: number) => number {
-  const sorted = [...pairs].sort((a, b) => a.x - b.x);
-  const blocks = sorted.map((pair) => ({ sum: pair.y, n: 1, minX: pair.x, maxX: pair.x }));
+  // Aggregate tied x values first. Without this, a run of identical inputs
+  // becomes many single-point blocks whose means PAV sorts into a monotone
+  // staircase, and lookup at that x returns the *first* step — the lowest
+  // mean of the tie group, not its average. Constant or coarsely-quantised
+  // forecasters then get a wildly wrong curve.
+  const grouped = new Map<number, { sum: number; n: number }>();
+  for (const pair of pairs) {
+    const entry = grouped.get(pair.x) ?? { sum: 0, n: 0 };
+    entry.sum += pair.y;
+    entry.n += 1;
+    grouped.set(pair.x, entry);
+  }
+  const sorted = [...grouped.entries()].sort((a, b) => a[0] - b[0]);
+  const blocks = sorted.map(([x, entry]) => ({ sum: entry.sum, n: entry.n, minX: x, maxX: x }));
   let index = 0;
   while (index < blocks.length - 1) {
     const current = blocks[index]!;
@@ -99,9 +111,12 @@ function pav(pairs: Array<{ x: number; y: number }>): (x: number) => number {
   };
 }
 
-export function fitIsotonic(validation: Forecast[], classes = 3): Calibrator {
+export function fitIsotonic(validation: Forecast[], classes?: number): Calibrator {
+  // Infer the class count from the data — the same machinery serves football
+  // 1X2 (3) and tennis match-winner (2).
+  const classCount = classes ?? validation[0]?.probabilities.length ?? 3;
   const maps: Array<(x: number) => number> = [];
-  for (let k = 0; k < classes; k += 1) {
+  for (let k = 0; k < classCount; k += 1) {
     maps.push(
       pav(
         validation.map((forecast) => ({

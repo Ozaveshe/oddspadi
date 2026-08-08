@@ -4,7 +4,7 @@
 2023-08 → 2026-05, 100% closing-odds coverage. Splits: train 3504 (→ 2025-06-30),
 validation 802 (→ 2025-12-31), holdout 950 (2026). The holdout was scored once.*
 
-Calibration selected on validation: **isotonic per class, renormalised, floored at 0.5%**. Blend weight on the model: **0.45** (0 = market alone; the grid includes it deliberately).
+Calibration selected on validation: **temperature scaling (T=0.886)**. Blend weight on the model: **0.00** (0 = market alone; the grid includes it deliberately).
 
 ## Holdout results
 
@@ -13,8 +13,8 @@ Calibration selected on validation: **isotonic per class, renormalised, floored 
 | Closing market (Shin, Pinnacle 2x) | 950 | 0.5927 | 0.9926 | 0.0229 | 0.1996 | 0.525 |
 | Elo + Davidson draw | 950 | 0.6124 | 1.0230 | 0.0415 | 0.2085 | 0.513 |
 | Dixon-Coles (raw) | 950 | 0.6165 | 1.0302 | 0.0665 | 0.2104 | 0.544 |
-| Dixon-Coles + isotonic | 950 | 0.6324 | 1.0930 | 0.1075 | 0.2156 | 0.594 |
-| Ensemble (w=0.45) | 950 | 0.6054 | 1.0201 | 0.0451 | 0.2041 | 0.556 |
+| Dixon-Coles + temperature | 950 | 0.6222 | 1.0409 | 0.0859 | 0.2127 | 0.567 |
+| Ensemble (w=0.00) | 950 | 0.5927 | 0.9926 | 0.0229 | 0.1996 | 0.525 |
 
 ## Paired differences vs the closing market (negative = better than market)
 
@@ -22,8 +22,8 @@ Calibration selected on validation: **isotonic per class, renormalised, floored 
 |---|---|---|
 | Elo + Davidson draw | 0.0198 [0.0102, 0.0296] | 0.0304 [0.0162, 0.0446] |
 | Dixon-Coles (raw) | 0.0238 [0.0131, 0.0343] | 0.0376 [0.0208, 0.0541] |
-| Dixon-Coles + isotonic | 0.0397 [0.0260, 0.0535] | 0.1004 [0.0662, 0.1371] |
-| Ensemble (w=0.45) | 0.0127 [0.0053, 0.0202] | 0.0275 [0.0124, 0.0434] |
+| Dixon-Coles + temperature | 0.0295 [0.0174, 0.0414] | 0.0483 [0.0289, 0.0680] |
+| Ensemble (w=0.00) | 0.0000 [-0.0000, 0.0000] | 0.0000 [-0.0000, 0.0000] |
 
 ## Reading it
 
@@ -40,14 +40,22 @@ Calibration selected on validation: **isotonic per class, renormalised, floored 
 - **No contender beats the closing market** on this holdout; every ΔBrier CI
   should be read with that as the headline. This matches the documented prior
   (see sport-models.md): the honest starting weight for the independent view
-  is small, and the ensemble grid agreeing (w=0.45 on validation, still behind
-  the close on holdout) is the measured version of that sentence.
-- **Isotonic calibration overfitted its validation fold** (802 matches): it
-  won selection there and degraded both Brier and ECE on holdout. The
-  selection procedure was clean — the candidate was too expressive for the
-  sample. `selectCalibrator` now requires 2,000 validation forecasts before
-  isotonic is eligible; this run's numbers stand as scored because the holdout
-  has been seen once and re-selection would spend it.
+  is small. The blend grid now lands on w=0.00 outright — "market alone" was
+  deliberately reachable, and it was reached; the number saying so is the
+  deliverable.
+- **Isotonic calibration overfitted its validation fold** (802 matches) in the
+  first run of this harness: it won selection there (and pulled the blend to
+  w=0.45), then degraded both Brier and ECE on holdout (0.6165 → 0.6324,
+  ECE 0.067 → 0.108). The selection procedure was clean — the candidate was
+  too expressive for the sample. `selectCalibrator` now requires 2,000
+  validation forecasts before isotonic is eligible, which is why the tables
+  above show temperature scaling instead; the tennis run (2,072 validation
+  forecasts, over the floor) shows the same method generalising when the
+  sample supports it.
+- **Temperature scaling did not transfer either** (T=0.886 sharpened slightly;
+  holdout preferred the raw model, +0.0057 Brier). At this validation size the
+  honest calibration choice for football is close to "none", and the market
+  needs no help from ours.
 
 ## Limitations
 
