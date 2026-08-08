@@ -7,6 +7,9 @@ import {
 import type { Sport } from "@/lib/sports/types";
 import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
 import { readCalibrationDriftReceipt } from "@/lib/sports/prediction/calibrationDriftGuard";
+import { requireStepUp, actorTokenFingerprint } from "@/lib/security/adminStepUp";
+import { writeOperatorAudit } from "@/lib/security/operatorAudit";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +45,10 @@ export const POST = withApiHandler(async (request: Request) => {
   const approvedBy = boundedText(body.approvedBy, 120) ?? "operator";
 
   if (action === "approve") {
+    // Model promotion is in the destructive class: a second secret plus a typed
+    // confirmation ("promote_calibration") are required on top of the admin token.
+    const stepUp = requireStepUp(request, "promote_calibration", body.confirm);
+    if (stepUp) return stepUp;
     const candidateId = boundedText(body.candidateId, 80);
     const comparisonReceiptId = body.comparisonReceiptId === undefined || body.comparisonReceiptId === null
       ? null
@@ -53,6 +60,14 @@ export const POST = withApiHandler(async (request: Request) => {
     if (body.expiresAt !== undefined && body.expiresAt !== null && !expiresAt) return apiError("expiresAt is invalid.");
     const result = await approveCalibrationCandidate({ candidateId, approvedBy, rationale, expiresAt, comparisonReceiptId });
     const status = result.status === "approved" ? 200 : result.status === "not-configured" ? 503 : result.status === "pending-migration" ? 409 : 422;
+    const audit = getSupabaseServerClient();
+    if (audit) await writeOperatorAudit(audit, {
+      actorFingerprint: actorTokenFingerprint(request),
+      action: "promote_calibration",
+      target: candidateId,
+      detail: { approvedBy },
+      outcome: result.status === "approved" ? "applied" : "rejected"
+    });
     return apiSuccess(result, { status });
   }
 
