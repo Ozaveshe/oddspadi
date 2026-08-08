@@ -8,6 +8,7 @@ import { formatOdds } from "@/lib/sports/prediction/format";
 import type { SlateFixture, SlatePublicStatus, SportsSlate } from "@/lib/sports/intelligence/types";
 import type { DailyTipsProduct, WeeklyTipsDay, WeeklyTipsProduct, YesterdayResultsProduct } from "@/lib/sports/tips/product";
 import { buildPredictionPresentation, displayedSlateDecision, noPickExplanation } from "@/lib/sports/prediction/presentation";
+import { toPublicReason } from "@/lib/security/publicErrorText";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { footballLeagueById } from "@/lib/sports/footballLeagues";
 import { TeamCrest } from "@/components/odds/TeamCrest";
@@ -38,7 +39,10 @@ export function ProviderRunStrip({ slate }: { slate: SportsSlate }) {
         <span className={`badge ${slate.provider.status === "completed" ? "positive" : slate.provider.status === "partial" || slate.provider.status === "empty" ? "scheduled" : "no-value"}`}>
           {slate.provider.status}
         </span>
-        <div><strong>Provider health</strong><small>{slate.provider.providers.join(", ") || (readable ? "No provider returned a slate" : "No stored provider response was read")}</small></div>
+        {/* Data sources are counted, never named: a private provider slug is
+            not public transparency. Raw provider/pipeline error text is not
+            rendered either — a coarse condition line replaces it. */}
+        <div><strong>Data sources</strong><small>{slate.provider.providers.length ? `${slate.provider.providers.length} source${slate.provider.providers.length === 1 ? "" : "s"} contributed` : readable ? "No source returned a slate" : "No stored response was read"}</small></div>
       </div>
       <dl>
         <div><dt>Fixtures</dt><dd>{value(slate.summary.fixturesFound)}</dd></div>
@@ -49,7 +53,7 @@ export function ProviderRunStrip({ slate }: { slate: SportsSlate }) {
         <div><dt>Watch</dt><dd>{value(slate.summary.watchlist)}</dd></div>
         <div><dt>Last run</dt><dd>{lastRun?.finishedAt ? <LocalTime iso={lastRun.finishedAt} /> : readable ? "Not completed" : "Not read"}</dd></div>
       </dl>
-      {slate.provider.errors.length ? <details><summary>{slate.provider.errors.length} provider or pipeline issue{slate.provider.errors.length === 1 ? "" : "s"}</summary><ul>{slate.provider.errors.map((error) => <li key={error}>{error}</li>)}</ul></details> : null}
+      {slate.provider.errors.length ? <p className="muted small">{toPublicReason(slate.provider.errors.join(" "))}</p> : null}
     </section>
   );
 }
@@ -441,7 +445,7 @@ export function HomepageIntelligencePanels({ daily, weekly, yesterday }: { daily
       <article className="panel homepage-product-card engine-card">
         <div className="panel-header"><div><span className="section-kicker">Engine Status</span><h2>{daily?.slate.provider.status ?? "Unavailable"}</h2></div><span className={`badge ${daily?.slate.provider.status === "completed" ? "positive" : "scheduled"}`}>{daily?.slate.provider.status ?? "offline"}</span></div>
         <div className="engine-rail" aria-hidden="true"><span style={{ width: `${daily?.summary.fixturesFound ? Math.min(100, (daily.summary.fixturesAnalysed / daily.summary.fixturesFound) * 100) : 0}%` }} /></div>
-        <div className="intelligence-home-metrics"><div><span>Odds snapshots</span><strong>{daily?.summary.oddsSnapshotsUsed ?? 0}</strong></div><div><span>Last run</span><strong>{daily?.slate.provider.lastRun?.finishedAt ? <LocalTime iso={daily.slate.provider.lastRun.finishedAt} /> : "Waiting"}</strong></div><div><span>Provider</span><strong>{daily?.slate.provider.providers.join(", ") || "No provider response"}</strong></div></div>
+        <div className="intelligence-home-metrics"><div><span>Odds snapshots</span><strong>{daily?.summary.oddsSnapshotsUsed ?? 0}</strong></div><div><span>Last run</span><strong>{daily?.slate.provider.lastRun?.finishedAt ? <LocalTime iso={daily.slate.provider.lastRun.finishedAt} /> : "Waiting"}</strong></div><div><span>Data sources</span><strong>{daily?.slate.provider.providers.length ? `${daily.slate.provider.providers.length} contributing` : "No response"}</strong></div></div>
       </article>
     </section>
   );
