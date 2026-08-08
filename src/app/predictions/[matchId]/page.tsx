@@ -158,7 +158,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
       name: market.name,
       selections: market.selections
         .filter((selection) => Number.isFinite(selection.decimalOdds) && selection.decimalOdds > 1)
-        .map((selection) => ({ id: selection.id, label: selection.label, decimalOdds: selection.decimalOdds }))
+        .map((selection) => ({ id: selection.id, label: selection.label, decimalOdds: selection.decimalOdds, bookmaker: selection.bookmaker?.name ?? null }))
     }));
 
   const matchUrl = `${siteUrl}/predictions/${encodeURIComponent(matchId)}`;

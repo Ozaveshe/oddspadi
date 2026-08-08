@@ -7,11 +7,13 @@ import { buildConsensusResearchReceipt, type ConsensusDistribution, type Consens
 import { LocalTime } from "@/components/odds/LocalTime";
 import { CommunityBody } from "@/components/community/CommunityBody";
 import { AccountBadge } from "@/components/community/AccountBadge";
+import { marketLineFromLabel } from "@/lib/sports/results/marketLine";
+import { communityTipStatus } from "@/lib/community/tipStatus";
 
 export type CommunityMarketOption = {
   id: string;
   name: string;
-  selections: Array<{ id: string; label: string; decimalOdds: number }>;
+  selections: Array<{ id: string; label: string; decimalOdds: number; bookmaker?: string | null }>;
 };
 
 type CommunityPoll = {
@@ -205,7 +207,9 @@ export function MatchCommunityDesk({ fixtureId, sport, homeTeam, awayTeam, kicko
           market: selectedMarket.id,
           selection: selectedSelection.id,
           selectionLabel: selectedSelection.label,
+          marketLine: marketLineFromLabel(selectedSelection.label),
           tippedOdds: selectedSelection.decimalOdds,
+          oddsSource: selectedSelection.bookmaker ? `${selectedSelection.bookmaker} via match odds board` : "match odds board",
           stakeUnits: Number(stakeUnits),
           rationale
         })
@@ -317,7 +321,7 @@ export function MatchCommunityDesk({ fixtureId, sport, homeTeam, awayTeam, kicko
                   <article className={`community-tip ${withdrawn ? "withdrawn" : ""}`} key={tip.id}>
                     <div className="community-tip-meta">
                       <div><span>{author ? <Link href={`/community/u/${encodeURIComponent(author.username)}`}>{author.display_name || `@${author.username}`}</Link> : "Community tipster"}<AccountBadge accountType={author?.account_type} /></span><LocalTime iso={tip.published_at} variant="daymonth" /></div>
-                      <span className={`community-tip-result ${settlement?.result ?? (withdrawn ? "void" : "pending")}`}>{withdrawn ? "withdrawn" : settlement?.result ?? "pending"}</span>
+                      <span className={`community-tip-result ${settlement?.result ?? (withdrawn ? "void" : "pending")}`}>{withdrawn ? "withdrawn" : communityTipStatus({ settlement, revisions: tip.revisions })}</span>
                     </div>
                     <div className="community-tip-pick"><span>{readableMarket(tip.market)}</span><strong>{tip.selection_label}</strong><b>{asNumber(tip.tipped_odds).toFixed(2)}</b></div>
                     <CommunityBody text={tip.rationale} />

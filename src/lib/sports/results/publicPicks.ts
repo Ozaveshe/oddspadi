@@ -94,12 +94,8 @@ function finite(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-export function marketLineFromLabel(label: string): number | null {
-  const match = label.match(/(?:over|under|\s)([+-]?\d+(?:\.\d+)?)\s*$/i);
-  if (!match) return null;
-  const value = Number(match[1]);
-  return Number.isFinite(value) ? value : null;
-}
+import { marketLineFromLabel } from "@/lib/sports/results/marketLine";
+export { marketLineFromLabel };
 
 export function buildPublicPickKey(input: Pick<PublicPickDraft, "fixtureId" | "market" | "selection" | "modelVersion" | "publishedDate">): string {
   return [input.fixtureId, input.market, input.selection, input.modelVersion, input.publishedDate].join("|");
