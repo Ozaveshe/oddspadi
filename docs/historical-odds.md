@@ -35,19 +35,27 @@ flag **before** converting, because the corpus importers were the only source
 of closing quotes before 2026-05-24 and reversing those steps would have
 dropped every one of them.
 
-## The line, and what could not be recovered
+## The line, and how it was recovered
 
-`line` was backfilled only from names that encode it — `over_under_25` yields
-2.5, `over_under_505` yields 50.5. Measured on production: **1,144 rows of
-1,898,349** carry a recoverable line.
+`line` was backfilled in two passes. Names that encode it came first —
+`over_under_25` yields 2.5. Then the presentation label in `metadata`, which
+the write path has always stored: "Toronto Raptors -2.5" ends in the line, and
+"Over 189.5" does too, generated per selection row by the same code that
+priced it. Pick-em spreads are written unsigned ("Atlanta Hawks 0") and needed
+their own pass.
 
-`spread`, `set_handicap` and `total_points` encode no line in either the market
-or the selection name. Those stay null and are **reported, never guessed**, via
-`op_odds_line_recoverability()`. A guessed line settles a claim against a
-number nobody quoted.
+The first backfill declared those markets unrecoverable. That declaration was
+made from the column names without reading the data, and it was wrong — worth
+recording because it is the same mistake as guessing, pointed the other way.
 
-This is a live limitation, not a solved problem: a claim on those markets
-cannot currently be matched to a historical quote by line.
+Measured after both passes: **every line-carrying quote in production has its
+line**; `op_odds_line_recoverability()` returns no rows. The function now
+excludes markets that carry no line at all, because counting a lineless
+match_winner row as "unrecoverable" buried the 44 real gaps under 1.9 million
+rows of non-problem.
+
+Still never guessed: a future label with no trailing number stays null and
+reappears in the report.
 
 ## Source depth
 

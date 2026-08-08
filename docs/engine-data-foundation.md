@@ -32,7 +32,7 @@ several of them are uncomfortable — which is the point of writing them down.
 |---|---|
 | Odds snapshots | 1,898,349 |
 | Of which `match_winner` | 1,888,379 (99.5%) |
-| Snapshots with a recoverable line | 1,144 |
+| Snapshots with a line, after the label backfill | all line-carrying markets; report empty |
 | Closing-window depth ≥ 3 books | 1.6% |
 | Closing-window depth = 1 book | 84.7% |
 | Depth ≥ 3 at six hours out | 31.6% |
