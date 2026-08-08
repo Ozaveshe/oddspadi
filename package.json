@@ -30,6 +30,7 @@
     "ops:settle": "node --env-file-if-exists=.env.local scripts/settle-market-decisions.mjs",
     "ops:calibration-report": "node --env-file-if-exists=.env.local scripts/calibration-report.mjs",
     "ops:closing-lines": "node --env-file-if-exists=.env.local scripts/mark-closing-odds.mjs",
+    "ops:closing-prices": "vite-node --config scripts/vite-node.config.ts scripts/backfill-closing-prices.ts",
     "ops:outcomes": "node --env-file-if-exists=.env.local scripts/backfill-prediction-outcomes.mjs",
     "training:football-corpus": "vite-node --config scripts/vite-node.config.ts scripts/football-corpus-training.ts",
     "ops:prune-odds": "node --env-file-if-exists=.env.local scripts/prune-stale-odds.mjs",

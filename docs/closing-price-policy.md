@@ -73,6 +73,53 @@ provider was late" (`rejected.lateAfterStart`) apart from "nobody priced it"
 (`rejected.outsideWindow`) apart from "the prices were old"
 (`rejected.stale`).
 
+## Where it is stored, and why not on the publication
+
+`op_closing_prices`, one current row per publication, never a column on
+`op_publications`.
+
+That is not a schema preference. `op_publications` is guarded by
+`guard_publication_immutability`, which refuses any change to
+`model_probability`, `odds_at_publication`, `implied_probability`, the market,
+the selection, the fixture, or the timestamps, unless the write is a proper
+revision carrying its prior state. A closing price is **new evidence attached to
+a claim after kickoff, not an edit of the claim**, so it does not belong inside
+the guarded row and does not need the guard relaxed to get there. The companion
+table takes the additive write and the published claim is never touched.
+
+Retries supersede rather than duplicate:
+`op_closing_prices_current_idx` allows exactly one current row per publication,
+so [`op_supersede_closing_price`](../supabase/migrations/20260808113550_closing_price_retry.sql)
+retires the old row and inserts the new one in a single statement, linking them
+through `superseded_by_closing_id`. Every attempt survives; only one is current.
+
+## What reads it
+
+[`readClosingPricesFor`](../src/lib/closing/publicationCloses.ts) resolves the
+current rows for a page of claims, and `canonicalReads` overlays them onto
+`OfficialPublicationDetail.closingOdds`, `closingCaptureStatus` and
+`closingMissingReason`. Everything downstream — the track record's coverage and
+CLV columns, the CSV export, `clvDistribution` in `advancedMetrics.ts` — reads
+that one field.
+
+A companion read rather than a PostgREST embed, matching `readPublicationReceipt`:
+foreign-key embeds across these tables have repeatedly returned silently empty
+arrays here, and a silently empty embed would reproduce the exact bug this path
+was built to close.
+
+Two rules the read layer keeps:
+
+- A claim whose capture came back absent keeps `closingOdds: null` and gains the
+  reason. It never inherits a substitute price and never a zero.
+- If the closing table cannot be read at all, the page degrades to `partial`
+  with a stated reason. An outage must not render as "nobody priced anything",
+  which is the same number honest zero coverage would produce.
+
+For claims written before the table existed, a `closingOdds` key in the
+publication's `metadata` is still honoured as a fallback. A captured close wins
+over it: the capture carries a policy version, a source count and an observation
+time, and the metadata number carries no provenance at all.
+
 ## Coverage
 
 Derived, not stored: an RPC joining published picks to closing prices, broken
@@ -82,6 +129,9 @@ with the rows it summarises; a view cannot.
 Failures write into `op_settlement_exceptions` under the `close_*` kinds, so
 improving coverage is worked from the same queue as settlement exceptions. See
 [settlement-exceptions.md](settlement-exceptions.md).
+
+Run the capture by hand with `npm run ops:closing-prices` (dry run) and
+`npm run ops:closing-prices -- --commit`.
 
 ## The measured reality, 2026-08-08
 
@@ -114,6 +164,73 @@ the one worth defending:
 Until that sweep runs on a schedule, expect most closes to record
 `insufficient_sources`. That is the honest reading of the data, and the
 coverage queue exists to make it visible rather than to hide it.
+
+## Capture against published claims, 2026-08-08
+
+The table above measures the market. This one measures the thing the track
+record actually reports: the 149 published claims whose kickoff has passed.
+
+| Capture status | Claims | Tennis | Football |
+|---|---|---|---|
+| `captured` | **0** | 0 | 0 |
+| `insufficient_sources` | 128 | 80 | 48 |
+| `no_quotes` | 21 | 0 | 21 |
+
+Every eligible claim now carries a capture attempt: `uncaptured_no_row` is 0.
+
+**Closing-line value is therefore not computable today**, and the reason is
+depth rather than plumbing. Distinct books quoting the same selection inside the
+90-minute window, per claim — taken over the 141 claims eligible when this was
+measured, a few minutes before the capture run above:
+
+| Books in window | Claims | After the 45-minute staleness filter |
+|---|---|---|
+| 3 | 4 | all four drop to 2 |
+| 2 | 35 | 20 keep 2, 15 drop to 1 |
+| 1 | 82 | 1 |
+| 0 | 20 | — |
+
+No claim reaches three fresh books. The maximum anywhere is two. Lowering
+`MIN_SOURCE_DEPTH` to 2 would make 24 claims (17%) capturable, and that remains
+refused for the reason in the previous section: a two-book median is not a
+consensus close, and a wrong close is invisible in a way a missing one is not.
+
+### Four defects found on the way to that number
+
+The 0 above is a real measurement. It was not, before this branch — the pipeline
+was producing confident and often false reasons.
+
+1. **Misses were frozen.** The sweep skipped any claim that already had a
+   current row, so the `no_quotes` written by the first run after kickoff was
+   the reason it never looked again. All 139 claims then eligible carried an
+   absent-capture row; 91 had qualifying quotes in the database at the moment
+   their miss was written. Absent statuses are now retried and superseded;
+   `captured` and `operator_unavailable` are terminal.
+2. **The read window was the wrong shape.** A chunk reads
+   `[min(kickoff) − 90m, max(kickoff)]`, bounded only by a 25-pick count, so a
+   quiet stretch of the calendar stretched one read across days — one chunk
+   spanned 74 hours and matched 12,966 rows. Chunks are now bounded by kickoff
+   span as well as count.
+3. **Tennis could never match.** A tennis claim's `home` resolves to
+   `tennis.match_winner.full_match.player_a`, while the odds snapshots store the
+   selection as `home`. The claim side went through `legacySelectionKey` and the
+   snapshot side through a local string tidy-up, so the two never met and all 80
+   eligible tennis claims were recorded as `no_quotes` — false, not merely
+   unhelpful, since every one had a fully priced market. Both sides now resolve
+   through the same resolver, keyed by sport.
+4. **The row cap was the server's, not ours.** PostgREST answers with at most
+   `db-max-rows` — 1,000 here — and does not say it truncated. The guard
+   compared the returned count against 6,000, so it never fired, and the sweep
+   proceeded on the newest 1,000 quotes in the window. Ordered by observation
+   time across a whole chunk, those belong to the latest kickoffs: a 21-fixture
+   chunk returned 1,000 rows covering 12 fixtures, and 9 claims were handed a
+   confident "nobody priced this". Reads are now paged at exactly the server's
+   page size, so a short page means there is nothing more.
+
+Before these fixes the ledger said `no_quotes` for 104 of 141 claims. After
+them it says `insufficient_sources` for 128 of 149. The coverage number barely
+moved; what changed is that the reasons are now true, which is what makes the
+depth table above worth acting on.
 
 Re-measure with:
 
