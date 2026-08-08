@@ -75,6 +75,28 @@ export default function SeasonOutlooksPage() {
     </section>
 
     <section className="section">
+      <div className="section-title"><div><span className="section-kicker">Versioned outlook</span><h2>Provenance &amp; corrections</h2></div></div>
+      <dl className="proof-list">
+        <div><dt>Competition · season</dt><dd>{premierLeague2026Baseline.competition} · {premierLeague2026Baseline.targetSeason}</dd></div>
+        <div><dt>Included factors</dt><dd>{premierLeague2026Baseline.includedFactors.join(", ")}</dd></div>
+        <div><dt>Missing factors</dt><dd>{premierLeague2026Baseline.missingFactors.join(", ")}</dd></div>
+        <div><dt>Next revision trigger</dt><dd>{premierLeague2026Baseline.nextRevisionTrigger}</dd></div>
+        <div><dt>Structural treatment</dt><dd>Promoted clubs are held outside the field as a separate research object ({premierLeague2026Baseline.structuralTreatment}); the complete league ranking is withheld until they are modelled.</dd></div>
+      </dl>
+      <p className="small"><strong>Correction history:</strong></p>
+      <ul className="hub-news-list">
+        {premierLeague2026Baseline.correctionHistory.map((entry) => (
+          <li key={entry.revision}>Revision {entry.revision} · published {entry.publishedAt} — {entry.change}</li>
+        ))}
+      </ul>
+      <p className="small">
+        This outlook is not a final ranking and never feeds standings. The{" "}
+        <Link className="inline-link" href="/predictions/league/premier-league/table">official table</Link> is a separate,
+        verified surface.
+      </p>
+    </section>
+
+    <section className="section">
       <div className="section-title"><div><span className="section-kicker">Coverage queue</span><h2>What updates next</h2></div></div>
       <div className="outlook-queue">{seasonCoverageQueue.map(item => <article key={item.competition}><span className={`badge ${item.status === "baseline-live" ? "positive" : "scheduled"}`}>{item.status.replaceAll("-", " ")}</span><h3>{item.competition}</h3><p>{item.sport} · {item.season}</p><small>Next evidence: {item.nextInput}</small></article>)}</div>
     </section>
