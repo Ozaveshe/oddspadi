@@ -11,12 +11,30 @@ import { buildAlertReport, SLA, type AlertInputs, type AlertReport, type Unreada
  * the two produce the same number and opposite conclusions.
  */
 
-type Counter = () => PromiseLike<{ count: number | null; error: { message: string } | null }>;
+type Counter = () => PromiseLike<{
+  count: number | null;
+  error: { message: string } | null;
+  status?: number;
+  statusText?: string;
+}>;
+
+/**
+ * PostgREST returns an empty `message` on some failures — a 401 from a stale
+ * key among them. The HTTP status is always present, so it stands in when the
+ * message does not: an unreadable source that cannot say why is barely more
+ * use than a wrong number.
+ */
+function describe(error: { message: string }, status?: number, statusText?: string): string {
+  const message = (error.message ?? "").trim();
+  if (message) return status ? `${message} (HTTP ${status})` : message;
+  if (status) return `HTTP ${status}${statusText ? ` ${statusText}` : ""}`;
+  return "read failed with no reported reason";
+}
 
 async function counted(source: string, run: Counter): Promise<{ value: number; error: UnreadableSource | null }> {
   try {
-    const { count, error } = await run();
-    if (error) return { value: 0, error: { source, error: error.message } };
+    const { count, error, status, statusText } = await run();
+    if (error) return { value: 0, error: { source, error: describe(error, status, statusText) } };
     if (count === null) return { value: 0, error: { source, error: "read returned no count" } };
     return { value: count, error: null };
   } catch (cause) {

@@ -31,11 +31,24 @@ const hoursAgo = (hours) => new Date(now.getTime() - hours * 3_600_000).toISOStr
 const head = { count: "exact", head: true };
 
 const couldNotCheck = [];
+/**
+ * PostgREST returns an empty `message` on some failures — a 401 from a stale
+ * key being the one that cost an operator ten minutes. The HTTP status is
+ * always there, so it is used when the message is not: "could not check" with
+ * no reason is barely better than a wrong number.
+ */
+function describe(error, status, statusText) {
+  const message = (error?.message ?? "").trim();
+  if (message) return status ? `${message} (HTTP ${status})` : message;
+  if (status) return `HTTP ${status}${statusText ? ` ${statusText}` : ""}`;
+  return "read failed with no reported reason";
+}
+
 async function counted(source, build) {
   try {
-    const { count, error } = await build();
+    const { count, error, status, statusText } = await build();
     if (error) {
-      couldNotCheck.push([source, error.message]);
+      couldNotCheck.push([source, describe(error, status, statusText)]);
       return 0;
     }
     if (count === null) {

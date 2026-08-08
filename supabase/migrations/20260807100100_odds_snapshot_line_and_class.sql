@@ -88,8 +88,17 @@ set line = case
 where line is null
   and selection ~ '^(?:over|under)_[0-9]+$';
 
+-- Shaped for the closing-capture read, which filters a set of fixture_ids over
+-- an observed_at range and discards live quotes. Keyed on fixture_id rather
+-- than fixture_external_id because that is the column the capture joins on —
+-- two write paths populate the text one, and an index the query cannot use is
+-- dead weight on a 1.9-million-row table.
+create index if not exists op_odds_snapshots_closing_capture_idx
+  on public.op_odds_snapshots (fixture_id, observed_at desc)
+  where is_live = false;
+
 create index if not exists op_odds_snapshots_class_idx
-  on public.op_odds_snapshots (fixture_external_id, market, selection, snapshot_class)
+  on public.op_odds_snapshots (fixture_id, market, selection, snapshot_class)
   where snapshot_class is not null;
 
 -- Report, rather than repair, what could not be recovered.
