@@ -145,7 +145,7 @@ describe("readCompetitionFixtures", () => {
 
     const read = await readCompetitionFixtures("39", { now: new Date("2026-08-09T12:00:00Z") });
     expect(read.availability).toBe("live");
-    expect(fixtures.eq).toHaveBeenCalledWith("league_external_id", "39");
+    expect(fixtures.in).toHaveBeenCalledWith("league_external_id", ["39", "api-football:39"]);
     const covered = [...read.upcoming, ...read.liveNow, ...read.results].filter((f) => f.hasModelCoverage);
     expect(covered.map((f) => f.fixtureId)).toEqual(["api-football:100"]);
   });

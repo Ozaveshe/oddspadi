@@ -70,6 +70,8 @@ const ROUTES = ["/", ...publicRoutes()].sort();
 const CONCRETE = (route: string) =>
   route
     .replace("[matchId]", "api-football-1234")
+    .replace("[teamId]", "api-football-33")
+    .replace("[playerId]", "api-tennis-501")
     .replace("[slug]", "premier-league")
     .replace("[handle]", "someone")
     .replace("[category]", "general")

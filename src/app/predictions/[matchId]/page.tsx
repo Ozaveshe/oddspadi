@@ -377,7 +377,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
           <div className="panel">
             <h2>Recent form</h2>
             <p>
-              <strong>{match.homeTeam.name}</strong>{homeStanding ? <span className="form-table-position"> · {homeStanding.position}{homeStanding.position === 1 ? "st" : homeStanding.position === 2 ? "nd" : homeStanding.position === 3 ? "rd" : "th"} · {homeStanding.points} pts</span> : null}
+              <strong><Link href={`/predictions/team/${encodeURIComponent(match.homeTeam.id)}`}>{match.homeTeam.name}</Link></strong>{homeStanding ? <span className="form-table-position"> · {homeStanding.position}{homeStanding.position === 1 ? "st" : homeStanding.position === 2 ? "nd" : homeStanding.position === 3 ? "rd" : "th"} · {homeStanding.points} pts</span> : null}
             </p>
             <FormGuide form={match.homeForm} />
             <p className="small muted">
@@ -385,7 +385,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
               {formatPercent(match.homeForm.attackStrength)}, defence {formatPercent(match.homeForm.defenseStrength)}
             </p>
             <p>
-              <strong>{match.awayTeam.name}</strong>{awayStanding ? <span className="form-table-position"> · {awayStanding.position}{awayStanding.position === 1 ? "st" : awayStanding.position === 2 ? "nd" : awayStanding.position === 3 ? "rd" : "th"} · {awayStanding.points} pts</span> : null}
+              <strong><Link href={`/predictions/team/${encodeURIComponent(match.awayTeam.id)}`}>{match.awayTeam.name}</Link></strong>{awayStanding ? <span className="form-table-position"> · {awayStanding.position}{awayStanding.position === 1 ? "st" : awayStanding.position === 2 ? "nd" : awayStanding.position === 3 ? "rd" : "th"} · {awayStanding.points} pts</span> : null}
             </p>
             <FormGuide form={match.awayForm} />
             <p className="small muted">

@@ -14,12 +14,8 @@ import { footballLeagueRegistry } from "@/lib/sports/footballLeagues";
  * Every entity resolves to a destination:
  *   competition → its table page
  *   fixture     → the canonical match route, the same one in every phase
- *   team        → its next upcoming fixture where one exists, else the live
- *                 board it would appear on
- *
- * The team compromise is stated rather than hidden: OddsPadi has no team page,
- * and inventing a route here would 404. When a team page exists this is the
- * one place to change.
+ *   team        → its team page when the row carries a canonical external id,
+ *                 else its next upcoming fixture, else the live board
  */
 
 export type CatalogueEntity = SearchableEntity & { href: string };
@@ -39,7 +35,7 @@ export function competitionEntities(): CatalogueEntity[] {
     name: league.name,
     context: league.country,
     prominence: TIER_PROMINENCE[league.tier] ?? 4,
-    href: `/predictions/league/${encodeURIComponent(league.slug)}/table`
+    href: `/predictions/league/${encodeURIComponent(league.slug)}`
   }));
 }
 
@@ -60,7 +56,11 @@ export function teamEntities(rows: TeamRow[]): CatalogueEntity[] {
       name: row.name,
       context: row.country,
       prominence: 6,
-      href: row.nextFixtureId ? fixtureRoute(row.nextFixtureId) : "/live-scores"
+      href: row.id.includes(":")
+        ? `/predictions/team/${encodeURIComponent(row.id)}`
+        : row.nextFixtureId
+          ? fixtureRoute(row.nextFixtureId)
+          : "/live-scores"
     }));
 }
 

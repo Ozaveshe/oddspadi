@@ -26,6 +26,8 @@ hub page, `ctx` = reached contextually (from fixture/competition/article), `SEO`
 | `/predictions/bet-slip` | **Bet Workspace** | My Padi | nav chip + hub | SEO | — | workspace store (localStorage) + private account sync | SlipCheckClient |
 | `/workspace/shared/[token]` | read-only shared workspace | My Padi | signed expiring share links only (never linked or indexed) | noindex | — | op_workspace_shares via verified token | shared workspace page |
 | `/predictions/league/[slug]` | competition intelligence hub | Explore | hub + ctx from fixture/table | SEO | — | standings + entity reads + ledger | competition hub page |
+| `/predictions/team/[teamId]` | team page (index gated on durable data) | Explore | ctx from fixtures/hub/search | SEO | — | entity reads + ledger | team page |
+| `/predictions/player/[playerId]` | player page (noindex unless durable tennis data) | Explore | ctx from fixtures/search | noindex-default | — | entity reads + tennis strength | player page |
 | `/predictions/league/[slug]/table` | competition table | Explore | hub + ctx from fixture | SEO | — | standings read | table page |
 | `/live-scores` | live board | Explore | hub + Today "Live now" | SEO | — | live fixtures read | live-scores page |
 | `/tips` | legacy alias (already 308s) | Today | — | — | → `/predictions/today` (`permanentRedirect` in `tips/page.tsx`) | — | — |

@@ -178,12 +178,18 @@ export async function readCompetitionFixtures(
 ): Promise<CompetitionFixtures> {
   if (!client) return { availability: "unavailable", upcoming: [], liveNow: [], results: [] };
   const nowIso = now.toISOString();
+  // Stored league ids are mixed-format: the live pipeline persists the
+  // provider-prefixed id ("api-football:39") while historical ingestion stores
+  // the bare provider id ("39"). Accept both so neither lane goes invisible.
+  const leagueIds = leagueExternalId.includes(":")
+    ? [leagueExternalId, leagueExternalId.split(":").pop() ?? leagueExternalId]
+    : [leagueExternalId, `api-football:${leagueExternalId}`];
   try {
     const [upcomingRead, liveRead, resultsRead] = await Promise.all([
       client
         .from("op_fixtures")
         .select(FIXTURE_SELECT)
-        .eq("league_external_id", leagueExternalId)
+        .in("league_external_id", leagueIds)
         .eq("status", "scheduled")
         .gte("kickoff_at", nowIso)
         .lte("kickoff_at", new Date(now.getTime() + 14 * DAY_MS).toISOString())
@@ -192,14 +198,14 @@ export async function readCompetitionFixtures(
       client
         .from("op_fixtures")
         .select(FIXTURE_SELECT)
-        .eq("league_external_id", leagueExternalId)
+        .in("league_external_id", leagueIds)
         .eq("status", "live")
         .order("kickoff_at", { ascending: true })
         .limit(20),
       client
         .from("op_fixtures")
         .select(FIXTURE_SELECT)
-        .eq("league_external_id", leagueExternalId)
+        .in("league_external_id", leagueIds)
         .in("status", ["finished", "abandoned"])
         .gte("kickoff_at", new Date(now.getTime() - 14 * DAY_MS).toISOString())
         .lte("kickoff_at", nowIso)
