@@ -9,6 +9,7 @@ import type { SlateFixture, SlatePublicStatus, SportsSlate } from "@/lib/sports/
 import type { DailyTipsProduct, WeeklyTipsDay, WeeklyTipsProduct, YesterdayResultsProduct } from "@/lib/sports/tips/product";
 import { buildPredictionPresentation, displayedSlateDecision, noPickExplanation } from "@/lib/sports/prediction/presentation";
 import { CountryFlag } from "@/components/odds/CountryFlag";
+import { footballLeagueById } from "@/lib/sports/footballLeagues";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { DecisionPriceSignal } from "@/components/odds/DecisionPriceSignal";
 import { marketPriorReceiptFor } from "@/lib/sports/prediction/marketPriorPresentation";
@@ -60,7 +61,16 @@ export function SlateFixtureCard({ row, compact = false, asOf, surface = "predic
   return (
     <article className={`intelligence-card status-${row.publicStatus}${compact ? " compact" : ""}`}>
       <div className="intelligence-card-topline">
-        <span className="intelligence-competition"><CountryFlag country={fixture.country} flag={fixture.leagueFlag} size={16} /><span>{fixture.sport} · {fixture.league} · {fixture.country}</span></span>
+        <span className="intelligence-competition"><CountryFlag country={fixture.country} flag={fixture.leagueFlag} size={16} />{(() => {
+          // fixture.leagueId is the provider-prefixed league id; link the
+          // competition hub only when it resolves to a prediction league.
+          const hubLeague = footballLeagueById(fixture.leagueId);
+          return hubLeague?.predictions ? (
+            <span>{fixture.sport} · <Link className="inline-link" href={`/predictions/league/${encodeURIComponent(hubLeague.slug)}`}>{fixture.league}</Link> · {fixture.country}</span>
+          ) : (
+            <span>{fixture.sport} · {fixture.league} · {fixture.country}</span>
+          );
+        })()}</span>
         {/* Two badges answering two different questions. The decision badge
             says what the engine concluded; this one says whether the match is
             still a match. Both were previously answered by "scheduled". */}

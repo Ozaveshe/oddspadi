@@ -174,9 +174,14 @@ export default async function MatchDetailPage({ params }: PageProps) {
       description: `${match.league.name} fixture — OddsPadi prediction, probabilities vs odds, value edge, confidence and risk.`,
       sport: match.sport === "football" ? "Soccer" : match.sport,
       startDate: match.kickoffTime,
-      eventStatus: "https://schema.org/EventScheduled",
-      homeTeam: { "@type": "SportsTeam", name: match.homeTeam.name },
-      awayTeam: { "@type": "SportsTeam", name: match.awayTeam.name },
+      eventStatus:
+        match.status === "postponed"
+          ? "https://schema.org/EventPostponed"
+          : match.status === "cancelled"
+            ? "https://schema.org/EventCancelled"
+            : "https://schema.org/EventScheduled",
+      homeTeam: { "@type": "SportsTeam", name: match.homeTeam.name, url: `${siteUrl}/predictions/team/${encodeURIComponent(match.homeTeam.id)}` },
+      awayTeam: { "@type": "SportsTeam", name: match.awayTeam.name, url: `${siteUrl}/predictions/team/${encodeURIComponent(match.awayTeam.id)}` },
       location: match.venue?.name
         ? {
             "@type": "Place",
