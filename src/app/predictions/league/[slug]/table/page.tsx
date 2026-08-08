@@ -101,8 +101,8 @@ export default async function LeagueTablePage({ params }: Props) {
       />
       <div className="page-heading">
         <div className="meta">
-          <Link className="inline-link" href="/predictions">
-            ← Predictions
+          <Link className="inline-link" href={`/predictions/league/${encodeURIComponent(slug)}`}>
+            ← {league.leagueName} hub
           </Link>
           <span className="country-inline">
             <CountryFlag country={league.country} size={16} />

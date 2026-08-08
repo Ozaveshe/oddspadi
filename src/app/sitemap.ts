@@ -94,5 +94,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7
   }));
   const standingsEntries: MetadataRoute.Sitemap = footballLeagues.map((league) => ({ url: `${siteUrl}/predictions/league/${league.slug}/table`, lastModified: now, changeFrequency: "daily", priority: 0.65 }));
-  return [...staticRoutes, ...standingsEntries, ...newsEntries, ...matchEntries];
+  const hubEntries: MetadataRoute.Sitemap = footballLeagues.map((league) => ({ url: `${siteUrl}/predictions/league/${league.slug}`, lastModified: now, changeFrequency: "daily", priority: 0.7 }));
+  return [...staticRoutes, ...hubEntries, ...standingsEntries, ...newsEntries, ...matchEntries];
 }
