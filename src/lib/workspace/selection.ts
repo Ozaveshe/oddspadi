@@ -68,6 +68,8 @@ export type CanonicalSelection = {
   marketSupported: boolean;
   /** Model uncertainty band, when the decision produced one. */
   modelInterval: { low: number; high: number } | null;
+  /** The user's own note on this selection. Private; stripped from shares. */
+  note?: string | null;
 };
 
 export type LegDiagnostic =

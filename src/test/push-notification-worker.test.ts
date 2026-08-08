@@ -137,10 +137,12 @@ describe("push notification worker", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ sent: 50, failed: 0 });
-    // Five source tables plus exactly one ledger read. The previous shape did
-    // one ledger query per pair, which is 50 here and 50,000 at real scale.
+    // Exactly two ledger reads per sweep — dedupe and the daily-cap count —
+    // regardless of how many subscription x fixture pairs exist. The previous
+    // shape did one ledger query per pair, which is 50 here and 50,000 at
+    // real scale.
     const ledgerReads = db.reads.filter((table) => table === "op_push_notification_deliveries");
-    expect(ledgerReads).toHaveLength(1);
+    expect(ledgerReads).toHaveLength(2);
   });
 
   it("never re-sends an event already in the delivery ledger", async () => {
