@@ -3,6 +3,7 @@ import { privateJson } from "@/lib/security/privateJson";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { readBoundedJson } from "@/lib/security/boundedJson";
+import { enforceGuestRateLimit, applyGuestRateContext } from "@/lib/security/guestRateLimit";
 import { readLatestDecisionSummary } from "@/lib/sports/intelligence/repository";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,8 @@ export async function POST(request: Request) {
   if (originError) return originError;
   const service = getSupabaseServerClient();
   if (!service) return privateJson({ error: "Recheck is not configured." }, { status: 503 });
+  const rate = await enforceGuestRateLimit(service, request, "workspace_compute");
+  if ("limited" in rate) return rate.limited;
 
   const parsed = await readBoundedJson<{ fixtureIds?: unknown }>(request, 16_000);
   if (!parsed.ok) return parsed.response;
@@ -62,22 +65,25 @@ export async function POST(request: Request) {
     }
   }
 
-  return privateJson({
-    fixtures: Object.fromEntries(
-      (fixtures ?? []).map((row) => [
-        String(row.external_id),
-        {
-          status: String(row.status ?? "unknown"),
-          kickoffAt: row.kickoff_at ?? null,
-          homeScore: row.home_score ?? null,
-          awayScore: row.away_score ?? null
-        }
-      ])
-    ),
-    officialPublications: Object.fromEntries(
-      (publications ?? []).map((row) => [String(row.fixture_external_id), row])
-    ),
-    decisionSummaries: summaries,
-    checkedAt: new Date().toISOString()
-  });
+  return applyGuestRateContext(
+    privateJson({
+      fixtures: Object.fromEntries(
+        (fixtures ?? []).map((row) => [
+          String(row.external_id),
+          {
+            status: String(row.status ?? "unknown"),
+            kickoffAt: row.kickoff_at ?? null,
+            homeScore: row.home_score ?? null,
+            awayScore: row.away_score ?? null
+          }
+        ])
+      ),
+      officialPublications: Object.fromEntries(
+        (publications ?? []).map((row) => [String(row.fixture_external_id), row])
+      ),
+      decisionSummaries: summaries,
+      checkedAt: new Date().toISOString()
+    }),
+    rate.ok
+  );
 }
