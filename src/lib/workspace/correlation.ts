@@ -98,7 +98,41 @@ export function detectCorrelations(legs: AnalysedLeg[]): CorrelationFinding[] {
       const right = selections[j]!;
       const pair = [left.legId, right.legId];
 
-      if (left.fixtureId !== right.fixtureId) continue;
+      if (left.fixtureId !== right.fixtureId) {
+        // The same event listed under two ids — cross-provider duplicates
+        // exist in this catalogue, and a duplicated event multiplied with
+        // itself is the same impossibility as a repeated leg.
+        if (
+          left.fixtureLabel &&
+          left.fixtureLabel === right.fixtureLabel &&
+          left.kickoffAt === right.kickoffAt
+        ) {
+          findings.push({
+            kind: "duplicate-fixture",
+            legIds: pair,
+            severity: "blocking",
+            detail: `${left.fixtureLabel} appears under two listings. These are the same event, not two independent ones.`
+          });
+          continue;
+        }
+
+        // Same competition, close kickoffs: results can share context —
+        // standings incentives, rotation, weather at shared venues. There is
+        // no number for this, so it is a note, not an adjustment.
+        if (
+          left.competition &&
+          left.competition === right.competition &&
+          Math.abs(Date.parse(left.kickoffAt) - Date.parse(right.kickoffAt)) <= 48 * 60 * 60_000
+        ) {
+          findings.push({
+            kind: "competition-dependency",
+            legIds: pair,
+            severity: "note",
+            detail: `${left.fixtureLabel} and ${right.fixtureLabel} are in the same competition round. Outcomes can share context (standings incentives, rotation), which independence does not capture.`
+          });
+        }
+        continue;
+      }
 
       if (areMutuallyExclusive(left, right)) {
         findings.push({

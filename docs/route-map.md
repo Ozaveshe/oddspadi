@@ -23,7 +23,8 @@ hub page, `ctx` = reached contextually (from fixture/competition/article), `SEO`
 | `/predictions/value-picks` | published value picks | Track Record | hub | SEO | — | published picks read | value-picks page |
 | `/predictions/history` | public results ledger | Track Record | hub (primary content) | SEO | — | public outcomes | history page |
 | `/predictions/decision-engine` | engine status (nerd area) | Track Record | hub | SEO | — | slate + gates + heartbeat | decision-engine page |
-| `/predictions/bet-slip` | **Bet Workspace** | My Padi | nav chip + hub | SEO | — | localStorage slip | SlipCheckClient |
+| `/predictions/bet-slip` | **Bet Workspace** | My Padi | nav chip + hub | SEO | — | workspace store (localStorage) + private account sync | SlipCheckClient |
+| `/workspace/shared/[token]` | read-only shared workspace | My Padi | signed expiring share links only (never linked or indexed) | noindex | — | op_workspace_shares via verified token | shared workspace page |
 | `/predictions/league/[slug]/table` | competition table | Explore | hub + ctx from fixture | SEO | — | standings read | table page |
 | `/live-scores` | live board | Explore | hub + Today "Live now" | SEO | — | live fixtures read | live-scores page |
 | `/tips` | legacy alias (already 308s) | Today | — | — | → `/predictions/today` (`permanentRedirect` in `tips/page.tsx`) | — | — |

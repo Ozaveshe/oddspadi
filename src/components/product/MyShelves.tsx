@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LocalTime } from "@/components/odds/LocalTime";
 import { useFollowedTeams } from "@/components/account/FollowedTeamsProvider";
-import { BET_SLIP_CHANGED_EVENT, readSlip, type SlipLeg } from "@/lib/sports/betSlip";
+import { BET_SLIP_CHANGED_EVENT } from "@/lib/sports/betSlip";
+import { WORKSPACE_CHANGED_EVENT, type StoredWorkspace } from "@/lib/workspace/store";
+import { readWorkspacesWithMigration } from "@/lib/workspace/clientState";
 import {
   FIXTURE_SHELF_CHANGED_EVENT,
   readRecentFixtures,
@@ -39,26 +41,31 @@ function FixtureRow({ fixture, onRemove }: { fixture: ShelfFixture; onRemove?: (
 
 export function MyShelves() {
   const [hydrated, setHydrated] = useState(false);
-  const [slip, setSlip] = useState<SlipLeg[]>([]);
+  const [workspaces, setWorkspaces] = useState<StoredWorkspace[]>([]);
   const [saved, setSaved] = useState<ShelfFixture[]>([]);
   const [recent, setRecent] = useState<ShelfFixture[]>([]);
   const followed = useFollowedTeams();
 
   useEffect(() => {
     const sync = () => {
-      setSlip(readSlip());
+      setWorkspaces(readWorkspacesWithMigration(new Date().toISOString()));
       setSaved(readSavedFixtures());
       setRecent(readRecentFixtures());
       setHydrated(true);
     };
     sync();
+    window.addEventListener(WORKSPACE_CHANGED_EVENT, sync);
     window.addEventListener(BET_SLIP_CHANGED_EVENT, sync);
     window.addEventListener(FIXTURE_SHELF_CHANGED_EVENT, sync);
     return () => {
+      window.removeEventListener(WORKSPACE_CHANGED_EVENT, sync);
       window.removeEventListener(BET_SLIP_CHANGED_EVENT, sync);
       window.removeEventListener(FIXTURE_SHELF_CHANGED_EVENT, sync);
     };
   }, []);
+
+  const activeWorkspaces = workspaces.filter((workspace) => !workspace.archivedAt);
+  const legCount = activeWorkspaces.reduce((sum, workspace) => sum + workspace.selections.length, 0);
 
   return (
     <div className="my-shelves">
@@ -66,20 +73,29 @@ export function MyShelves() {
         <div className="section-title">
           <div>
             <span className="section-kicker">Bet Workspace</span>
-            <h2 id="my-workspace-heading">{hydrated && slip.length ? `${slip.length} selection${slip.length === 1 ? "" : "s"} on your slip` : "Your slip is empty"}</h2>
+            <h2 id="my-workspace-heading">
+              {hydrated && legCount
+                ? `${legCount} selection${legCount === 1 ? "" : "s"} across ${activeWorkspaces.filter((workspace) => workspace.selections.length).length || 1} workspace${activeWorkspaces.filter((workspace) => workspace.selections.length).length === 1 ? "" : "s"}`
+                : "Your workspace is empty"}
+            </h2>
           </div>
           <Link className="button primary" href="/predictions/bet-slip">Open workspace</Link>
         </div>
-        {hydrated && slip.length ? (
+        {hydrated && legCount ? (
           <ul className="shelf-fixture-list">
-            {slip.slice(0, 6).map((leg) => (
-              <li key={leg.id} className="shelf-fixture-row">
-                <Link href={`/predictions/${encodeURIComponent(leg.matchId)}`}>
-                  <strong>{leg.matchLabel}</strong>
-                  <small>{leg.selection} · odds {leg.decimalOdds.toFixed(2)} · <LocalTime iso={leg.kickoffTime} variant="kickoff" /></small>
-                </Link>
-              </li>
-            ))}
+            {activeWorkspaces
+              .flatMap((workspace) => workspace.selections.map((leg) => ({ workspace, leg })))
+              .slice(0, 6)
+              .map(({ workspace, leg }) => (
+                <li key={leg.legId} className="shelf-fixture-row">
+                  <Link href={`/predictions/${encodeURIComponent(leg.fixtureId)}`}>
+                    <strong>{leg.fixtureLabel}</strong>
+                    <small>
+                      {workspace.name} · {leg.label} · odds {leg.userOdds.toFixed(2)} · <LocalTime iso={leg.kickoffAt} variant="kickoff" />
+                    </small>
+                  </Link>
+                </li>
+              ))}
           </ul>
         ) : (
           <p className="muted small">Add a market from any fixture page — analysis only, nothing is staked. Selections stay on this device.</p>

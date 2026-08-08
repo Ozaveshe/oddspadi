@@ -20,6 +20,13 @@ export type WorkspaceAnalysis = {
   combinedBookmakerOdds: number | null;
   /** Naive product of the legs' implied probabilities, margin included. */
   naiveImpliedProbability: number | null;
+  /**
+   * Product of the legs' de-vigged market probabilities. Margin removed, but
+   * the product still assumes independence — so it is withheld whenever the
+   * workspace contains a blocking contradiction, and read alongside the
+   * combination basis otherwise. Null when any leg lacks a de-vigged view.
+   */
+  deViggedMarketProbability: number | null;
   /** Only present when the combination basis supports a number. */
   combinedModelProbability: number | null;
   /** Range rather than a point estimate; correlation widens it. */
@@ -102,10 +109,17 @@ export function analyseWorkspace(selections: CanonicalSelection[], nowMs = Date.
     (finding) => finding.kind === "mutually-exclusive" || finding.kind === "opposing-selections"
   );
 
+  const hasBlockingFinding = correlations.some((finding) => finding.severity === "blocking");
+  const deViggedMarketProbability =
+    !hasBlockingFinding && legs.length && legs.every((leg) => leg.noVigProbability !== null)
+      ? roundProbability(legs.reduce((product, leg) => product * leg.noVigProbability!, 1))
+      : null;
+
   return {
     legs,
     combinedBookmakerOdds: combinedBookmakerOdds ? Math.round(combinedBookmakerOdds * 100) / 100 : null,
     naiveImpliedProbability: naiveImplied === null ? null : roundProbability(naiveImplied),
+    deViggedMarketProbability,
     combinedModelProbability,
     combinedModelRange,
     combinationBasis: basis,
@@ -142,6 +156,22 @@ function resolveEvidenceQuality(
  * what the analysis said *before* the result was known, and a snapshot that
  * moves afterwards is worthless as a record of judgement.
  */
+/**
+ * Personal settlement vocabulary — the canonical settlement outcomes plus
+ * `pending`. Asian quarter lines half-win and half-lose for a user's slip
+ * exactly as they do for an official pick; a personal ledger that cannot say
+ * "half won" would grade the same result differently from the official one.
+ */
+export type PersonalLegOutcome =
+  | "won"
+  | "half_won"
+  | "lost"
+  | "half_lost"
+  | "push"
+  | "void"
+  | "needs_review"
+  | "pending";
+
 export type WorkspaceSnapshot = {
   snapshotId: string;
   takenAt: string;
@@ -149,7 +179,7 @@ export type WorkspaceSnapshot = {
   analysis: WorkspaceAnalysis;
   /** Set once the fixtures resolve. Never alters the analysis above. */
   settlement: {
-    legOutcomes: Array<{ legId: string; outcome: "won" | "lost" | "push" | "void" | "pending" }>;
+    legOutcomes: Array<{ legId: string; outcome: PersonalLegOutcome; detail?: string }>;
     settledAt: string | null;
   } | null;
 };
@@ -169,7 +199,7 @@ export function freezeWorkspace(analysis: WorkspaceAnalysis, snapshotId: string,
  */
 export function settleSnapshot(
   snapshot: WorkspaceSnapshot,
-  legOutcomes: WorkspaceSnapshot["settlement"] extends null ? never : Array<{ legId: string; outcome: "won" | "lost" | "push" | "void" | "pending" }>,
+  legOutcomes: Array<{ legId: string; outcome: PersonalLegOutcome; detail?: string }>,
   settledAt: string
 ): WorkspaceSnapshot {
   return {

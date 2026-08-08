@@ -115,7 +115,20 @@ describe("multi-leg analysis", () => {
     expect(analysis.combinationBasis).toBe("independently-modelled");
     expect(analysis.combinedBookmakerOdds).toBeCloseTo(5, 10);
     expect(analysis.combinedModelProbability).toBeCloseTo(0.248, 3);
+    // Same competition, same round: a shared-context note is recorded, but a
+    // note does not change the combination basis — only warnings and blocks do.
+    expect(analysis.correlations).toEqual([
+      expect.objectContaining({ kind: "competition-dependency", severity: "note" })
+    ]);
+  });
+
+  it("keeps cross-competition legs free of findings", () => {
+    const analysis = analyseWorkspace(
+      [selection(), { ...differentMatch, competition: "La Liga" }],
+      NOW
+    );
     expect(analysis.correlations).toEqual([]);
+    expect(analysis.combinationBasis).toBe("independently-modelled");
   });
 
   it("shows a range rather than a single false-precision figure", () => {

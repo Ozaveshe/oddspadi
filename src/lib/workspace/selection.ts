@@ -11,18 +11,49 @@ import type { DecisionStatus, FixtureStatus } from "@/lib/domain/states";
  * A leg in this workspace is a *user's* selection. It is never an OddsPadi
  * pick, and adding one must never write to the publication ledger.
  */
+
+/** Where the leg entered the workspace from. A closed list, not free text. */
+export type LegEntryPoint =
+  | "today"
+  | "explore"
+  | "match_intelligence"
+  | "official_publication"
+  | "watchlist"
+  | "manual"
+  | "import";
+
 export type CanonicalSelection = {
   legId: string;
   fixtureId: string;
   marketId: string;
   selectionId: string;
+  /**
+   * The canonical selection key (`football.1x2.regulation.home`), resolved at
+   * add time via the legacy bridge. Null when the legacy market id has no
+   * canonical mapping — such a leg is carried and displayed, but platform
+   * conversion and canonical settlement are unavailable for it, and the
+   * interface says so rather than guessing.
+   */
+  canonicalSelectionKey?: string | null;
+  /** Sport, when the entry point knew it. Needed for canonical resolution. */
+  sport?: "football" | "basketball" | "tennis" | null;
+  /** Line for handicap/totals markets, when the leg carries one. */
+  marketLine?: number | null;
   /** Human label for the leg, e.g. "Arsenal to win". */
   label: string;
   fixtureLabel: string;
   competition: string;
   /** Where the price came from: a bookmaker name, "manual", or an import. */
   source: string;
+  /** Which surface the leg was added from. Defaults to "manual" when absent. */
+  entryPoint?: LegEntryPoint;
   userOdds: number;
+  /**
+   * De-vigged market probability for this selection at the time the leg was
+   * added, from the same odds snapshot as `oddsObservedAt`. Null when the
+   * entry point had no full market to de-vig (manual entry, imports).
+   */
+  marketNoVigProbability?: number | null;
   /** When the user's price was observed, if known. Manual entry has none. */
   oddsObservedAt: string | null;
   /** Null when OddsPadi has no model for this market. Never substituted. */
@@ -51,10 +82,25 @@ export type LegDiagnostic =
 export type AnalysedLeg = {
   selection: CanonicalSelection;
   impliedProbability: number;
+  /** De-vigged market probability carried from the add-time snapshot. */
+  noVigProbability: number | null;
   /** Model's fair price. Null whenever the model probability is null. */
   modelFairOdds: number | null;
   /** userOdds implied vs model probability. Null without a model. */
   modelMarketDifference: number | null;
+  /**
+   * The cautious read: the lower bound of the model interval when one exists,
+   * otherwise the smaller of model and de-vigged market probability. Null when
+   * neither view exists — a conservative number invented from nothing would
+   * not be conservative, it would be fiction.
+   */
+  conservativeProbability: number | null;
+  /** Expected value per unit stake at the user's odds, on the model view. */
+  expectedValue: number | null;
+  /** Width of the model interval; null when the model gave no band. */
+  uncertaintyWidth: number | null;
+  /** True when OddsPadi published an official pick on this exact selection. */
+  isOfficialPick: boolean;
   diagnostics: LegDiagnostic[];
   /** True when this leg can contribute to a combined model probability. */
   usableForCombination: boolean;
@@ -87,6 +133,18 @@ export function analyseLeg(selection: CanonicalSelection, nowMs = Date.now()): A
   const implied = impliedProbability(selection.userOdds);
   const modelFairOdds = selection.modelProbability ? 1 / selection.modelProbability : null;
   const difference = selection.modelProbability === null ? null : selection.modelProbability - implied;
+  const noVig = selection.marketNoVigProbability ?? null;
+  const interval = selection.modelInterval;
+
+  const conservativeProbability =
+    interval !== null && interval !== undefined
+      ? interval.low
+      : selection.modelProbability !== null && noVig !== null
+        ? Math.min(selection.modelProbability, noVig)
+        : null;
+
+  const expectedValue =
+    selection.modelProbability === null ? null : selection.modelProbability * selection.userOdds - 1;
 
   // A leg only contributes to a combined model number when it has a current
   // model on a supported market. Anything else would be filled in with an
@@ -100,8 +158,13 @@ export function analyseLeg(selection: CanonicalSelection, nowMs = Date.now()): A
   return {
     selection,
     impliedProbability: implied,
+    noVigProbability: noVig,
     modelFairOdds,
     modelMarketDifference: difference,
+    conservativeProbability,
+    expectedValue,
+    uncertaintyWidth: interval ? Math.max(0, interval.high - interval.low) : null,
+    isOfficialPick: selection.publicationId !== null,
     diagnostics,
     usableForCombination,
     note: legNote(selection, diagnostics, difference)

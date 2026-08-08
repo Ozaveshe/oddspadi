@@ -1,5 +1,6 @@
 import type { CanonicalSelection } from "@/lib/workspace/selection";
 import type { WorkspaceSnapshot } from "@/lib/workspace/analysis";
+import type { UnresolvedEntry } from "@/lib/workspace/resolve";
 
 /**
  * Guest-first workspace persistence.
@@ -20,8 +21,14 @@ export type StoredWorkspace = {
   createdAt: string;
   updatedAt: string;
   selections: CanonicalSelection[];
+  /** Free-text entries awaiting resolution. Displayed, never analysed. */
+  unresolvedEntries?: UnresolvedEntry[];
   /** Frozen once the first leg kicks off. Never edited afterwards. */
   snapshot: WorkspaceSnapshot | null;
+  /** Archived workspaces stay readable but leave the active list. */
+  archivedAt?: string | null;
+  /** The last issued share link, kept so it can be shown and revoked. */
+  share?: { token: string; expiresAt: string } | null;
 };
 
 function isSelection(value: unknown): value is CanonicalSelection {
@@ -117,6 +124,55 @@ export function duplicateWorkspace(workspace: StoredWorkspace, workspaceId: stri
     selections: workspace.selections.map((entry) => ({ ...entry })),
     // A copy starts unfrozen: it is a new analysis, not a second copy of a
     // historical record.
-    snapshot: null
+    snapshot: null,
+    archivedAt: null
   };
+}
+
+export function renameWorkspace(workspace: StoredWorkspace, name: string, now: string): StoredWorkspace {
+  const trimmed = name.trim().slice(0, 80);
+  if (!trimmed) return workspace;
+  // Renaming is allowed on frozen workspaces: the name is the user's label,
+  // not part of the analytical record.
+  return { ...workspace, name: trimmed, updatedAt: now };
+}
+
+export function archiveWorkspace(workspace: StoredWorkspace, now: string): StoredWorkspace {
+  return { ...workspace, archivedAt: now, updatedAt: now };
+}
+
+export function unarchiveWorkspace(workspace: StoredWorkspace, now: string): StoredWorkspace {
+  return { ...workspace, archivedAt: null, updatedAt: now };
+}
+
+export function addUnresolvedEntry(workspace: StoredWorkspace, entry: UnresolvedEntry, now: string): StoredWorkspace {
+  if (isFrozen(workspace)) return workspace;
+  const existing = workspace.unresolvedEntries ?? [];
+  if (existing.length >= MAX_LEGS) return workspace;
+  return { ...workspace, unresolvedEntries: [...existing, entry], updatedAt: now };
+}
+
+export function removeUnresolvedEntry(workspace: StoredWorkspace, entryId: string, now: string): StoredWorkspace {
+  return {
+    ...workspace,
+    unresolvedEntries: (workspace.unresolvedEntries ?? []).filter((entry) => entry.entryId !== entryId),
+    updatedAt: now
+  };
+}
+
+/**
+ * A portable export of one workspace: the stored record plus a provenance
+ * header. Deliberately JSON — a format the user can read, keep and re-import,
+ * with nothing account-related inside.
+ */
+export function exportWorkspace(workspace: StoredWorkspace, exportedAt: string): string {
+  return JSON.stringify(
+    {
+      format: "oddspadi-workspace-export-v1",
+      exportedAt,
+      workspace
+    },
+    null,
+    2
+  );
 }

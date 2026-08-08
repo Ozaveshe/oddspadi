@@ -8,6 +8,7 @@ export type AuthenticatedWriteAction =
   | "community_post"
   | "community_comment"
   | "community_like"
+  | "workspace_sync"
   | "community_poll_vote"
   | "community_tip"
   | "forum_thread"
