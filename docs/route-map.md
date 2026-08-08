@@ -34,6 +34,7 @@ hub page, `ctx` = reached contextually (from fixture/competition/article), `SEO`
 | `/engine/performance` | performance dashboard | Track Record | hub | SEO | — | outcomes analytics | performance page |
 | `/community` | community feed | Explore | hub + ctx from fixture desk | SEO | — | community tables | community page |
 | `/community/u/[handle]` | profile | Explore | ctx | SEO | — | community tables | profile page |
+| `/community/moderation` | moderator queue (staff-only, noindex) | Explore | ctx from community | noindex | — | moderation tables | moderation queue page |
 | `/forums` | forum index | Explore | hub + More sheet | SEO | — | community tables | forums page |
 | `/forums/[category]` | category | Explore | ctx | SEO | — | community tables | category page |
 | `/forums/[category]/[thread]` | thread | Explore | ctx | SEO | — | community tables | thread page |

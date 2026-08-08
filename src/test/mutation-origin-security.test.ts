@@ -75,7 +75,14 @@ describe("cookie mutation origin security", () => {
       "src/app/api/community/likes/route.ts",
       "src/app/api/community/comments/route.ts",
       "src/app/api/community/threads/route.ts",
-      "src/app/api/community/replies/route.ts"
+      "src/app/api/community/replies/route.ts",
+      "src/app/api/community/polls/route.ts",
+      "src/app/api/community/tips/route.ts",
+      "src/app/api/community/tips/revisions/route.ts",
+      "src/app/api/community/reports/route.ts",
+      "src/app/api/community/blocks/route.ts",
+      "src/app/api/community/moderation/route.ts",
+      "src/app/api/community/appeals/route.ts"
     ];
 
     for (const route of routes) {

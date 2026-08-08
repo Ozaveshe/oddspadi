@@ -62,6 +62,7 @@ describe("fixture status union parity", () => {
       market: "match_winner",
       selection: "home",
       selectionLabel: "Arsenal",
+      marketLine: null,
       tippedOdds: 2,
       stakeUnits: 1,
       withdrawnAt: null
