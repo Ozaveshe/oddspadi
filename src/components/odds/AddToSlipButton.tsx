@@ -93,12 +93,12 @@ export function AddToSlipButton({
       setNote("Could not save to your workspace on this device.");
       return;
     }
+    // No selection label or odds: a personal slip's contents are private and
+    // never enter marketing analytics.
     trackEvent("betslip_pick_added", {
       match_id: match.id,
       sport: match.sport,
       league: match.league.name,
-      selection: resolved.selection.label,
-      decimal_odds: resolved.selection.userOdds,
       source: entryPoint
     });
   }
