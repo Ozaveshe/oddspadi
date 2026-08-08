@@ -6,6 +6,7 @@ import { isUuid } from "@/lib/security/inputValidation";
 import { readBoundedJson } from "@/lib/security/boundedJson";
 import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
 import { prepareCommunityText } from "@/lib/community/textContent";
+import { assessCommunityText } from "@/lib/community/contentSafety";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,8 @@ export async function POST(request: Request) {
   if (!isUuid(categoryId)) return privateJson({ error: "Missing category." }, { status: 400 });
   if (title.length < 3 || title.length > 160) return privateJson({ error: "Title must be 3–160 characters." }, { status: 400 });
   if (body.length < 1 || body.length > 8000) return privateJson({ error: "Post must be 1–8000 characters." }, { status: 400 });
+  const safety = assessCommunityText(`${title}\n${body}`);
+  if (!safety.allowed) return privateJson({ error: safety.reasons[0] }, { status: 400 });
 
   const { data, error } = await supabase
     .from("op_forum_threads")

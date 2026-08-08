@@ -7,6 +7,7 @@ import { cleanExternalIdentifier, isIsoTimestampCursor, isUuid } from "@/lib/sec
 import { readBoundedJson } from "@/lib/security/boundedJson";
 import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
 import { prepareCommunityText } from "@/lib/community/textContent";
+import { assessCommunityText } from "@/lib/community/contentSafety";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,18 @@ export async function GET(request: Request) {
       reportDatabaseError("community posts read", error);
       return privateJson({ posts: [], note: COMMUNITY_READ_UNAVAILABLE_NOTE });
     }
-    const rows = data ?? [];
+    let rows = data ?? [];
+    // A signed-in viewer never sees authors they blocked.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: blocks } = await supabase
+        .from("op_user_blocks")
+        .select("blocked_id")
+        .eq("blocker_id", user.id)
+        .limit(500);
+      const blocked = new Set((blocks ?? []).map((block) => String(block.blocked_id)));
+      if (blocked.size) rows = rows.filter((row) => !blocked.has(String(row.author_id)));
+    }
     return privateJson({ posts: rows.slice(0, 20), nextCursor: rows.length > 20 ? rows[19]?.created_at : null });
   } catch {
     return privateJson({ posts: [], note: COMMUNITY_READ_UNAVAILABLE_NOTE });
@@ -72,6 +84,8 @@ export async function POST(request: Request) {
   if (!body || body.length > 2000) {
     return privateJson({ error: "A post must be between 1 and 2000 characters." }, { status: 400 });
   }
+  const safety = assessCommunityText(body);
+  if (!safety.allowed) return privateJson({ error: safety.reasons[0] }, { status: 400 });
   const matchId = cleanExternalIdentifier(payload.matchId);
 
   // RLS enforces author_id = auth.uid() on insert.

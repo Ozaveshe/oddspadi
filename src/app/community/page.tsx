@@ -37,6 +37,12 @@ export default async function CommunityPage({ searchParams }: PageProps) {
     ]);
     const rows = (data as CommunityPost[] | null) ?? []; posts = rows.slice(0, 20); nextCursor = rows.length > 20 ? rows[19]?.created_at ?? null : null;
     leaderboard = (leaderboardData as TipsterLeaderboardRow[] | null) ?? [];
+    // A signed-in viewer never sees authors they blocked.
+    if (user) {
+      const { data: blocks } = await supabase.from("op_user_blocks").select("blocked_id").eq("blocker_id", user.id).limit(500);
+      const blocked = new Set((blocks ?? []).map((block) => String(block.blocked_id)));
+      if (blocked.size) posts = posts.filter((post) => !blocked.has(post.author_id));
+    }
   }
   // The composer needs 30 fixture labels for a <select>. It used to get them
   // from getCachedPredictionsPageData, which fans out to live providers on a

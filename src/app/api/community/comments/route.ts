@@ -6,6 +6,7 @@ import { isIsoTimestampCursor, isUuid } from "@/lib/security/inputValidation";
 import { readBoundedJson } from "@/lib/security/boundedJson";
 import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
 import { prepareCommunityText } from "@/lib/community/textContent";
+import { assessCommunityText } from "@/lib/community/contentSafety";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +44,21 @@ export async function GET(request: Request) {
   }
 
   const rows = data ?? [];
-  const comments = rows.slice(0, COMMENT_PAGE_SIZE);
+  let comments = rows.slice(0, COMMENT_PAGE_SIZE);
+  // A signed-in viewer never sees authors they blocked.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    const { data: blocks } = await supabase
+      .from("op_user_blocks")
+      .select("blocked_id")
+      .eq("blocker_id", user.id)
+      .limit(500);
+    const blocked = new Set((blocks ?? []).map((block) => String(block.blocked_id)));
+    if (blocked.size) comments = comments.filter((comment) => !blocked.has(String(comment.author_id)));
+  }
   return privateJson({
     comments,
-    nextCursor: rows.length > COMMENT_PAGE_SIZE ? comments.at(-1)?.created_at ?? null : null
+    nextCursor: rows.length > COMMENT_PAGE_SIZE ? rows.slice(0, COMMENT_PAGE_SIZE).at(-1)?.created_at ?? null : null
   });
 }
 
@@ -65,6 +77,8 @@ export async function POST(request: Request) {
   const body = typeof payload.body === "string" ? prepareCommunityText(payload.body) : "";
   if (!isUuid(postId)) return privateJson({ error: "Missing post." }, { status: 400 });
   if (!body || body.length > 1000) return privateJson({ error: "A comment must be between 1 and 1000 characters." }, { status: 400 });
+  const safety = assessCommunityText(body);
+  if (!safety.allowed) return privateJson({ error: safety.reasons[0] }, { status: 400 });
 
   // RLS enforces author_id = auth.uid() on insert.
   const { data, error } = await supabase

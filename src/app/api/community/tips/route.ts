@@ -7,6 +7,7 @@ import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
 import { parseCommunityTipDraft, boundedCommunityText } from "@/lib/community/predictionContracts";
 import { prepareCommunityText } from "@/lib/community/textContent";
+import { assessCommunityText } from "@/lib/community/contentSafety";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,8 @@ export async function POST(request: Request) {
   if (!parsed.ok) return parsed.response;
   const draft = parseCommunityTipDraft(parsed.value);
   if (!draft.ok) return privateJson({ error: draft.error }, { status: 400 });
+  const safety = assessCommunityText(draft.value.rationale);
+  if (!safety.allowed) return privateJson({ error: safety.reasons[0] }, { status: 400 });
   const { data, error } = await supabase.from("op_community_tips").insert({ author_id: user.id, ...draft.value }).select("id").single();
   if (error) return databaseUnavailable("community tip publish", error, "Could not publish that community tip right now.");
   return privateJson({ id: data.id, truthLane: "community-opinion" }, { status: 201 });
