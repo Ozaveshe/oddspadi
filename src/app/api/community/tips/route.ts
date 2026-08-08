@@ -9,7 +9,7 @@ import { parseCommunityTipDraft } from "@/lib/community/predictionContracts";
 
 export const dynamic = "force-dynamic";
 
-const TIP_SELECT = "id,author_id,fixture_id,sport,home_team,away_team,kickoff_at,market,selection,selection_label,tipped_odds,stake_units,rationale,published_at,author:op_profiles!op_community_tips_author_id_fkey(username,display_name,avatar_url),revisions:op_community_tip_revisions(revision_kind,reason,created_at),settlement:op_community_tip_settlements(result,net_units,reason,settled_at)";
+const TIP_SELECT = "id,author_id,fixture_id,sport,home_team,away_team,kickoff_at,market,selection,selection_label,tipped_odds,stake_units,rationale,published_at,author:op_profiles!op_community_tips_author_id_fkey(username,display_name,avatar_url,account_type),revisions:op_community_tip_revisions(revision_kind,reason,created_at),settlement:op_community_tip_settlements(result,net_units,reason,settled_at)";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);

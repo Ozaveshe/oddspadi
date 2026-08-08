@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { LocalTime } from "@/components/odds/LocalTime";
 import { CommunityBody } from "@/components/community/CommunityBody";
+import { AccountBadge } from "@/components/community/AccountBadge";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ handle: string }> };
@@ -30,6 +31,7 @@ type Profile = {
   bio: string | null;
   favourite_team: string | null;
   avatar_url: string | null;
+  account_type?: string | null;
 };
 
 type Performance = {
@@ -78,7 +80,7 @@ export default async function CommunityProfilePage({ params }: Props) {
 
   const { data: profileData } = await supabase
     .from("op_profiles")
-    .select("id,username,display_name,bio,favourite_team,avatar_url")
+    .select("id,username,display_name,bio,favourite_team,avatar_url,account_type")
     .eq("username", handle)
     .maybeSingle<Profile>();
   if (!profileData) notFound();
@@ -102,7 +104,7 @@ export default async function CommunityProfilePage({ params }: Props) {
     <main id="main" className="container community-profile-page">
       <div className="page-heading community-profile-heading">
         <span className="section-kicker">Community tipster</span>
-        <h1>{profile.display_name || `@${profile.username}`}</h1>
+        <h1>{profile.display_name || `@${profile.username}`}<AccountBadge accountType={profile.account_type} /></h1>
         <p>@{profile.username}{profile.favourite_team ? ` · Supports ${profile.favourite_team}` : ""}</p>
       </div>
 

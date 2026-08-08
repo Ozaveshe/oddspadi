@@ -6,6 +6,7 @@ import type { CommunityPollChoice } from "@/lib/community/predictionContracts";
 import { buildConsensusResearchReceipt, type ConsensusDistribution, type ConsensusSide } from "@/lib/community/consensusResearch";
 import { LocalTime } from "@/components/odds/LocalTime";
 import { CommunityBody } from "@/components/community/CommunityBody";
+import { AccountBadge } from "@/components/community/AccountBadge";
 
 export type CommunityMarketOption = {
   id: string;
@@ -36,7 +37,7 @@ type CommunityTip = {
   stake_units: number;
   rationale: string;
   published_at: string;
-  author: { username: string; display_name: string | null; avatar_url: string | null } | Array<{ username: string; display_name: string | null; avatar_url: string | null }> | null;
+  author: { username: string; display_name: string | null; avatar_url: string | null; account_type?: string | null } | Array<{ username: string; display_name: string | null; avatar_url: string | null; account_type?: string | null }> | null;
   revisions: Array<{ revision_kind: "correction" | "withdrawal" | "moderation_note"; reason: string; created_at: string }> | null;
   settlement: { result: "won" | "lost" | "push" | "void"; net_units: number; reason: string; settled_at: string } | Array<{ result: "won" | "lost" | "push" | "void"; net_units: number; reason: string; settled_at: string }> | null;
 };
@@ -315,7 +316,7 @@ export function MatchCommunityDesk({ fixtureId, sport, homeTeam, awayTeam, kicko
                 return (
                   <article className={`community-tip ${withdrawn ? "withdrawn" : ""}`} key={tip.id}>
                     <div className="community-tip-meta">
-                      <div><span>{author ? <Link href={`/community/u/${encodeURIComponent(author.username)}`}>{author.display_name || `@${author.username}`}</Link> : "Community tipster"}</span><LocalTime iso={tip.published_at} variant="daymonth" /></div>
+                      <div><span>{author ? <Link href={`/community/u/${encodeURIComponent(author.username)}`}>{author.display_name || `@${author.username}`}</Link> : "Community tipster"}<AccountBadge accountType={author?.account_type} /></span><LocalTime iso={tip.published_at} variant="daymonth" /></div>
                       <span className={`community-tip-result ${settlement?.result ?? (withdrawn ? "void" : "pending")}`}>{withdrawn ? "withdrawn" : settlement?.result ?? "pending"}</span>
                     </div>
                     <div className="community-tip-pick"><span>{readableMarket(tip.market)}</span><strong>{tip.selection_label}</strong><b>{asNumber(tip.tipped_odds).toFixed(2)}</b></div>

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 // op_feed_post_likes doubles as a many-to-many join between posts and profiles,
 // so the author embed must name its FK or PostgREST rejects it as ambiguous.
-const POST_SELECT = "id, author_id, body, match_id, created_at, author:op_profiles!op_feed_posts_author_id_fkey(username, display_name, avatar_url), likes:op_feed_post_likes(user_id), comments:op_feed_comments!op_feed_comments_post_id_fkey(count)";
+const POST_SELECT = "id, author_id, body, match_id, created_at, author:op_profiles!op_feed_posts_author_id_fkey(username, display_name, avatar_url, account_type), likes:op_feed_post_likes(user_id), comments:op_feed_comments!op_feed_comments_post_id_fkey(count)";
 const COMMUNITY_READ_UNAVAILABLE_NOTE = "Community posts are temporarily unavailable. Please try again shortly.";
 
 export async function GET(request: Request) {

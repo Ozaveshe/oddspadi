@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 // The author embed must name its FK: op_feed_comments carries FKs to both
 // op_feed_posts and op_profiles, so bare embeds are ambiguous to PostgREST.
-const COMMENT_SELECT = "id, post_id, author_id, body, created_at, author:op_profiles!op_feed_comments_author_id_fkey(username, display_name)";
+const COMMENT_SELECT = "id, post_id, author_id, body, created_at, author:op_profiles!op_feed_comments_author_id_fkey(username, display_name, account_type)";
 
 const COMMENT_PAGE_SIZE = 100;
 

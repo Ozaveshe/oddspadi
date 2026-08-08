@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NewThreadForm } from "@/components/community/ForumComposers";
+import { AccountBadge } from "@/components/community/AccountBadge";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 import { isIsoTimestampCursor } from "@/lib/security/inputValidation";
@@ -17,7 +18,7 @@ function categoryPath(slug: string): string {
 type PageProps = { params: Promise<{ category: string }>; searchParams?: Promise<{ cursor?: string }> };
 
 type Category = { id: string; name: string; description: string | null };
-type AuthorRaw = { username?: string | null };
+type AuthorRaw = { username?: string | null; account_type?: string | null };
 type Thread = {
   id: string;
   title: string;
@@ -30,6 +31,11 @@ type Thread = {
 function authorName(author: Thread["author"]): string {
   const a = Array.isArray(author) ? author[0] : author;
   return a?.username ?? "padi";
+}
+
+function authorAccountType(author: Thread["author"]): string | null {
+  const a = Array.isArray(author) ? author[0] : author;
+  return a?.account_type ?? null;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -75,7 +81,7 @@ export default async function ForumCategoryPage({ params, searchParams }: PagePr
 
   let threadQuery = supabase
       .from("op_forum_threads")
-      .select("id, title, reply_count, last_activity_at, is_pinned, author:op_profiles!op_forum_threads_author_id_fkey(username)")
+      .select("id, title, reply_count, last_activity_at, is_pinned, author:op_profiles!op_forum_threads_author_id_fkey(username, account_type)")
       .eq("category_id", category.id)
       .order("is_pinned", { ascending: false })
       .order("last_activity_at", { ascending: false }).limit(21);
@@ -136,7 +142,7 @@ export default async function ForumCategoryPage({ params, searchParams }: PagePr
                     {thread.is_pinned ? "📌 " : ""}
                     {thread.title}
                   </strong>
-                  <span className="muted small">by @{authorName(thread.author)}</span>
+                  <span className="muted small">by @{authorName(thread.author)}<AccountBadge accountType={authorAccountType(thread.author)} /></span>
                 </span>
                 <span className="forum-meta">{thread.reply_count} repl{thread.reply_count === 1 ? "y" : "ies"}</span>
               </Link>

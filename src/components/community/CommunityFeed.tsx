@@ -6,11 +6,12 @@ import type { ComposerMatch } from "./FeedComposer";
 import { PostComments } from "./PostComments";
 import { RelativeTime } from "./RelativeTime";
 import { CommunityBody } from "./CommunityBody";
+import { AccountBadge } from "./AccountBadge";
 import { trackEvent } from "@/lib/analytics/events";
 
 export type CommunityPost = {
   id: string; author_id: string; body: string; match_id: string | null; created_at: string;
-  author: { username?: string | null; display_name?: string | null } | Array<{ username?: string | null; display_name?: string | null }> | null;
+  author: { username?: string | null; display_name?: string | null; account_type?: string | null } | Array<{ username?: string | null; display_name?: string | null; account_type?: string | null }> | null;
   likes: Array<{ user_id: string }> | null;
   comments?: Array<{ count: number }> | null;
 };
@@ -60,7 +61,7 @@ export function CommunityFeed({ initialPosts, initialCursor, userId, matches }: 
   return <div className="feed-list">
     {posts.map((post) => { const profile = author(post); const handle = profile?.username ?? "padi"; const liked = Boolean(post.likes?.some((like) => like.user_id === userId)); const threadOpen = openThread === post.id; const comments = commentCount(post) + (countAdjust[post.id] ?? 0); return (
       <article className="panel feed-post" key={post.id}>
-        <div className="feed-post-head"><Link href={`/community/u/${encodeURIComponent(handle)}`}><strong>@{handle}</strong></Link>{profile?.display_name ? <span className="muted small">{profile.display_name}</span> : null}<span className="muted small" style={{ marginLeft: "auto" }}><RelativeTime iso={post.created_at} /></span></div>
+        <div className="feed-post-head"><Link href={`/community/u/${encodeURIComponent(handle)}`}><strong>@{handle}</strong></Link><AccountBadge accountType={profile?.account_type} />{profile?.display_name ? <span className="muted small">{profile.display_name}</span> : null}<span className="muted small" style={{ marginLeft: "auto" }}><RelativeTime iso={post.created_at} /></span></div>
         <div style={{ marginTop: 8 }}><CommunityBody text={post.body} /></div>
         {post.match_id ? <Link className="community-match-chip" href={`/predictions/${encodeURIComponent(post.match_id)}`}>⚽ {labels.get(post.match_id) ?? "Match discussion"}</Link> : null}
         <div className="feed-actions">

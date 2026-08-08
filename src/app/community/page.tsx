@@ -27,7 +27,7 @@ export default async function CommunityPage({ searchParams }: PageProps) {
   if (supabase) {
     const [{ data }, { data: leaderboardData }] = await Promise.all([
       supabase.from("op_feed_posts")
-        .select("id, author_id, body, match_id, created_at, author:op_profiles!op_feed_posts_author_id_fkey(username, display_name), likes:op_feed_post_likes(user_id), comments:op_feed_comments!op_feed_comments_post_id_fkey(count)")
+        .select("id, author_id, body, match_id, created_at, author:op_profiles!op_feed_posts_author_id_fkey(username, display_name, account_type), likes:op_feed_post_likes(user_id), comments:op_feed_comments!op_feed_comments_post_id_fkey(count)")
         .order("created_at", { ascending: false }).limit(21),
       supabase.from("op_public_tipster_leaderboard")
         .select("rank_position,author_id,username,display_name,published_tips,settled_tips,wins,losses,pushes,net_units,yield_percent,ranking_score,eligible")

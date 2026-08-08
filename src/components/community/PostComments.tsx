@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { trackEvent } from "@/lib/analytics/events";
 import { RelativeTime } from "./RelativeTime";
 import { CommunityBody } from "./CommunityBody";
+import { AccountBadge } from "./AccountBadge";
 
 export type FeedComment = {
   id: string;
@@ -12,7 +13,7 @@ export type FeedComment = {
   author_id: string;
   body: string;
   created_at: string;
-  author: { username?: string | null; display_name?: string | null } | Array<{ username?: string | null; display_name?: string | null }> | null;
+  author: { username?: string | null; display_name?: string | null; account_type?: string | null } | Array<{ username?: string | null; display_name?: string | null; account_type?: string | null }> | null;
 };
 
 function author(comment: FeedComment) {
@@ -129,6 +130,7 @@ export function PostComments({ postId, userId, onCountChange }: { postId: string
             <div className="feed-comment" key={comment.id}>
               <div className="feed-comment-head">
                 <Link href={`/community/u/${encodeURIComponent(handle)}`}><strong>@{handle}</strong></Link>
+                <AccountBadge accountType={profile?.account_type} />
                 <span className="muted small"><RelativeTime iso={comment.created_at} /></span>
                 {userId === comment.author_id ? (
                   <button type="button" className="feed-comment-delete" onClick={() => void remove(comment.id)} aria-label="Delete comment">×</button>
