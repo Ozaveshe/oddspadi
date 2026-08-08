@@ -88,8 +88,31 @@ reports thin folds rather than dropping them. Brier, log loss, ECE and skill
 score already existed in
 [`advancedMetrics.ts`](../src/lib/performance/advancedMetrics.ts).
 
-**Not built:** the candidate models themselves, the ensemble, calibration
-method selection, uncertainty estimation, the model registry states, and shadow
-deployment. This document describes the frame those will be judged in, and
-stating the gap here is the point — a lab document that reads as a description
-of a working lab is worse than no document.
+**Built since (2026-08-08):** the candidate models and their first honest
+runs. Dixon–Coles Poisson and Davidson-draw Elo for football 1X2
+(`src/lib/model/poissonDixonColes.ts`, `eloFootball.ts`), surface Elo with
+rank-prior cold starts and de-canonicalised orientation for tennis
+(`tennisElo.ts`), calibration selection on validation only with a 2,000-sample
+floor for isotonic (`calibrationFit.ts`), a log-opinion-pool ensemble whose
+grid includes "market alone", and paired-bootstrap evaluation
+(`evalMetrics.ts`). Harnesses: `scripts/model-lab-run.ts` and
+`scripts/tennis-lab-run.ts`.
+
+**The results, as found:** neither sport's model beats the de-vigged market on
+its untouched 2026 holdout — football ΔBrier +0.0238 [0.0131, 0.0343] vs the
+close, tennis +0.0451 [0.0368, 0.0533] vs the consensus, and both ensembles
+collapse toward the market (w=0.00 and w=0.15). Full numbers and findings:
+[model-evaluation-report.md](model-evaluation-report.md) and
+[model-evaluation-report-tennis.md](model-evaluation-report-tennis.md).
+
+**Registry:** both candidates are registered in `op_model_registry`
+(migration `20260808120000`) and sit in **shadow** — the lifecycle table
+enforces the state paths of `src/lib/model/registry.ts` in Postgres, with
+append-only history and evidence demanded at every transition. Neither may
+publish; that is the finding operating as policy.
+
+**Not built:** a production feature pipeline that would let these models score
+live fixtures from stored point-in-time features (the lab runs on the
+versioned training corpus), and uncertainty-aware abstention wired into the
+runtime decision path. Stating the gap here is the point — a lab document that
+reads as a description of a working lab is worse than no document.
