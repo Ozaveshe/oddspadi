@@ -1,5 +1,12 @@
 # Community: accounts, feed & forums — build plan
 
+> **Superseded (2026-08-08):** the community system has grown well past this
+> plan. Current documentation: [community-system.md](community-system.md),
+> [community-tip-ledger.md](community-tip-ledger.md),
+> [community-moderation.md](community-moderation.md),
+> [demo-and-staff-content.md](demo-and-staff-content.md). This file stays as
+> the historical build record of the v1 accounts/feed/forums foundation.
+
 This documents the accounts/feed/forums feature. The **data model + security (RLS)
 foundation and application layer are ready against the live OddsPadi Supabase
 project**. The remaining production step is to rebuild and deploy the local app;
