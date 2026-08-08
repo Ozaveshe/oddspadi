@@ -17,8 +17,20 @@ export const CLOSING_POLICY_VERSION = "close.v1";
 
 /** The window a quote must fall inside to be eligible at all. */
 export const WINDOW_MINUTES = 90;
-/** Inside the window, a book's latest quote older than this is stale. */
-export const MAX_AGE_MINUTES = 45;
+/**
+ * How far behind the newest qualifying quote a book may be and still count.
+ *
+ * Measured relative to the close itself, not to kickoff. The first version of
+ * this policy measured staleness from kickoff at 45 minutes inside a 90-minute
+ * window — which meant the window never bound on anything, the effective window
+ * was 45 minutes, and the "90-minute window" in the documentation described a
+ * rule that could not fire. Two constraints where one silently dominated.
+ *
+ * Relative is also the right semantics. A consensus close is books priced at
+ * roughly the same moment; a book quoting 40 minutes out is only stale if the
+ * others quoted at 5.
+ */
+export const MAX_LAG_MINUTES = 45;
 /** Distinct books required after staleness filtering. */
 export const MIN_SOURCE_DEPTH = 3;
 
@@ -153,9 +165,17 @@ export function captureClose(input: ClosingCaptureInput): ClosingCapture {
     if (!held || quote.observedAt > held.observedAt) latestByBook.set(quote.bookmaker, quote);
   }
 
+  // Staleness is judged against the newest quote in the window, so a book that
+  // priced 40 minutes out counts when the others did too, and is dropped only
+  // when the rest of the market moved after it.
+  const newestObservedAt = [...latestByBook.values()].reduce(
+    (latest, quote) => (quote.observedAt > latest ? quote.observedAt : latest),
+    ""
+  );
   const fresh: EligibleQuote[] = [];
   for (const quote of latestByBook.values()) {
-    if (minutesBefore(input.kickoffAt, quote.observedAt) > MAX_AGE_MINUTES) {
+    const lagMinutes = (new Date(newestObservedAt).getTime() - new Date(quote.observedAt).getTime()) / 60_000;
+    if (lagMinutes > MAX_LAG_MINUTES) {
       rejected.stale += 1;
       continue;
     }
@@ -165,7 +185,7 @@ export function captureClose(input: ClosingCaptureInput): ClosingCapture {
   if (fresh.length === 0) {
     return absent(
       "stale",
-      `All ${rejected.stale} book quotes inside the window were older than ${MAX_AGE_MINUTES} minutes before kickoff.`,
+      `All ${rejected.stale} book quotes inside the window lagged the newest by more than ${MAX_LAG_MINUTES} minutes.`,
       rejected
     );
   }

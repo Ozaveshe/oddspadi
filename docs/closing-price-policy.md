@@ -19,8 +19,16 @@ downstream, and a CLV average quietly includes fixtures nobody ever priced.
    claim's canonical market, selection and line, `observed_at` inside
    `[kickoff − 90min, kickoff]`.
 2. **One quote per book** — the latest inside the window.
-3. **Maximum age.** A book's latest quote older than 45 minutes before kickoff
-   is dropped as stale, even though it lies inside the window.
+3. **Maximum lag.** A book's latest quote is dropped when it lags the newest
+   qualifying quote by more than 45 minutes. Measured against the close, not
+   against kickoff: a consensus close is books priced at roughly the same
+   moment, and a book quoting 40 minutes out is only stale if the others quoted
+   at five.
+
+   The first version measured this from kickoff, which made the 90-minute
+   window unreachable — 45 is stricter than 90, so the window never bound and
+   the documented rule could not fire. Two constraints where one silently
+   dominated.
 4. **Minimum depth.** Three distinct books after step 3. Below that the status
    is `insufficient_sources` and **no odds are stored**.
 5. **Closing odds** are the median decimal price across qualifying books.
@@ -75,13 +83,48 @@ Failures write into `op_settlement_exceptions` under the `close_*` kinds, so
 improving coverage is worked from the same queue as settlement exceptions. See
 [settlement-exceptions.md](settlement-exceptions.md).
 
-## Outstanding measurement
+## The measured reality, 2026-08-08
 
-**The minimum depth of three books is an assumption, not a measured figure.**
-If real per-selection book coverage is typically two, this policy will report
-`insufficient_sources` across the board and coverage will look broken when it is
-the threshold that is wrong.
+Depth per (fixture, market, selection), by how far before kickoff the quote was
+observed. Production, all sports:
 
-Measure the distribution of distinct books per (fixture, market, selection) in
-the closing window against production before treating any coverage number from
-this policy as a fact about the market rather than about the threshold.
+| Window before kickoff | 1 book | 2 books | ≥3 books |
+|---|---|---|---|
+| Last 90 min | 84.7% | 13.7% | **1.6%** |
+| 90 min – 6 h | 43.2% | 25.1% | **31.6%** |
+| 6 h – 24 h | 27.7% | 20.5% | **51.8%** |
+
+Fifteen bookmakers quote OddsPadi's fixtures, Pinnacle among them. The market
+is there. **It stops being captured near kickoff.**
+
+So the low number is a fact about the odds sweep's cadence, not about the
+market and not about the threshold. Three conclusions follow, and the second is
+the one worth defending:
+
+1. `MIN_SOURCE_DEPTH` stays at 3. Lowering it to 2 reaches 15.2% — a weaker
+   number bought for almost nothing.
+2. **The window is not widened to make coverage look better.** A price from six
+   hours out is not a closing price. Relabelling one corrupts every CLV figure
+   that reads it, and unlike a missing close, a wrong close is invisible.
+3. The fix is collection, not definition: see
+   [`closingWindowRefresh.ts`](../src/lib/closing/closingWindowRefresh.ts) and
+   the `refresh-closing-odds` cron, which poll only fixtures inside their
+   closing window carrying a published claim.
+
+Until that sweep runs on a schedule, expect most closes to record
+`insufficient_sources`. That is the honest reading of the data, and the
+coverage queue exists to make it visible rather than to hide it.
+
+Re-measure with:
+
+```sql
+select depth, count(*) from (
+  select count(distinct o.bookmaker) as depth
+  from public.op_odds_snapshots o
+  join public.op_fixtures f on f.id = o.fixture_id
+  where o.is_live = false
+    and o.observed_at <= f.kickoff_at
+    and o.observed_at >= f.kickoff_at - interval '90 minutes'
+  group by o.fixture_id, o.market, o.selection
+) t group by depth order by depth;
+```

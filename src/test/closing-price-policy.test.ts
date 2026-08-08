@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   captureClose,
-  MAX_AGE_MINUTES,
+  MAX_LAG_MINUTES,
   MIN_SOURCE_DEPTH,
   operatorUnavailable,
   WINDOW_MINUTES,
@@ -93,19 +93,23 @@ describe("what is refused, and why", () => {
     expect(result.rejected.lateAfterStart).toBe(0);
   });
 
-  it("refuses stale books inside the window", () => {
-    const result = capture([
-      quote("a", MAX_AGE_MINUTES + 1),
-      quote("b", MAX_AGE_MINUTES + 5),
-      quote("c", MAX_AGE_MINUTES + 10)
-    ]);
-    expect(result.captureStatus).toBe("stale");
-    expect(result.rejected.stale).toBe(3);
-    expect(result.closingOdds).toBeNull();
+  it("keeps books that all priced early together, because none of them is behind the market", () => {
+    // Under the old absolute rule these were all "stale" for being more than
+    // 45 minutes from kickoff, which made the 90-minute window unreachable.
+    const result = capture([quote("a", 70), quote("b", 68), quote("c", 66)]);
+    expect(result.captureStatus).toBe("captured");
+    expect(result.rejected.stale).toBe(0);
+  });
+
+  it("refuses a book the rest of the market has moved past", () => {
+    const result = capture([quote("a", 5), quote("b", 4), quote("c", 3), quote("d", 5 + MAX_LAG_MINUTES + 1)]);
+    expect(result.captureStatus).toBe("captured");
+    expect(result.rejected.stale).toBe(1);
+    expect(result.sourceBookmakers).not.toContain("d");
   });
 
   it("drops a stale book and then fails on depth rather than capturing on two", () => {
-    const result = capture([quote("a", 10), quote("b", 10), quote("c", MAX_AGE_MINUTES + 1)]);
+    const result = capture([quote("a", 10), quote("b", 10), quote("c", 10 + MAX_LAG_MINUTES + 1)]);
     expect(result.captureStatus).toBe("insufficient_sources");
     expect(result.sourceCount).toBe(2);
     expect(result.closingOdds).toBeNull();
@@ -128,7 +132,7 @@ describe("what is refused, and why", () => {
     const inputs = [
       capture([]),
       capture([quote("a", 5)]),
-      capture([quote("a", MAX_AGE_MINUTES + 1)]),
+      capture([quote("a", WINDOW_MINUTES + 1)]),
       capture([quote("a", 5)], { marketUnmapped: true }),
       capture([quote("a", 5)], { identityFailure: true }),
       operatorUnavailable("any reason")
