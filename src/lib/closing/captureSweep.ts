@@ -165,39 +165,67 @@ export async function runClosingCapture({
     return { status: persist ? "completed" : "preview", generatedAt, totals, byStatus, exceptions, errors };
   }
 
-  const earliestWindow = new Date(
-    Math.min(...pending.map((row) => new Date(row.kickoff_at).getTime())) - WINDOW_MINUTES * 60_000
-  ).toISOString();
+  /**
+   * Quotes are read per chunk of kickoff-adjacent picks, never through one
+   * global window.
+   *
+   * The first live run proved why: 126 pending picks spanning five days
+   * produced a single window that matched 77,382 rows — sailing past the
+   * 20k PostgREST cap and the 8-second statement timeout, so the sweep
+   * honestly refused to write anything. The refusal worked; the read design
+   * was the defect, and it is the same over-fetch shape that once truncated
+   * this product's odds away. Sorting by kickoff keeps each chunk's window
+   * tight, is_live is filtered in SQL where the partial index lives, and the
+   * order is DESCENDING so any truncation sheds the oldest quotes — the ones
+   * the capture would reject anyway — rather than the closes.
+   */
+  const ordered = [...pending].sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at));
+  const CHUNK = 25;
+  const CHUNK_ROW_LIMIT = 6000;
+  const snapshotRows: SnapshotRow[] = [];
+  const truncatedFixtureIds = new Set<string>();
 
-  const { data: snapshotData, error: snapshotError } = await client
-    .from("op_odds_snapshots")
-    .select("fixture_id,bookmaker,market,selection,line,decimal_odds,observed_at,is_live")
-    // Joined on the uuid foreign key, not on fixture_external_id. Both tables
-    // carry that text column and two different write paths populate it, so a
-    // namespace mismatch would silently report no_quotes against every claim —
-    // a wrong reason, permanently, in a row that reads as a finding.
-    .in(
-      "fixture_id",
-      [...new Set(pending.map((row) => row.fixture_id).filter((value): value is string => Boolean(value)))]
-    )
-    .gte("observed_at", earliestWindow)
-    .order("observed_at", { ascending: true })
-    .limit(20_000);
-  if (snapshotError) {
-    // Proceeding here would record `no_quotes` against every claim in the batch
-    // — a permanent, wrong reason written into a row that reads as a finding.
-    return { status: "unavailable", generatedAt, totals, byStatus, exceptions, errors: [snapshotError.message] };
+  for (let index = 0; index < ordered.length; index += CHUNK) {
+    const chunk = ordered.slice(index, index + CHUNK);
+    const fixtureIds = [...new Set(chunk.map((row) => row.fixture_id).filter((value): value is string => Boolean(value)))];
+    if (!fixtureIds.length) continue;
+    const from = new Date(Math.min(...chunk.map((row) => new Date(row.kickoff_at).getTime())) - WINDOW_MINUTES * 60_000).toISOString();
+    const to = new Date(Math.max(...chunk.map((row) => new Date(row.kickoff_at).getTime()))).toISOString();
+
+    const { data, error } = await client
+      .from("op_odds_snapshots")
+      .select("fixture_id,bookmaker,market,selection,line,decimal_odds,observed_at,is_live")
+      .in("fixture_id", fixtureIds)
+      .eq("is_live", false)
+      .gte("observed_at", from)
+      .lte("observed_at", to)
+      .order("observed_at", { ascending: false })
+      .limit(CHUNK_ROW_LIMIT);
+    if (error) {
+      // Proceeding would record no_quotes against every claim in the chunk —
+      // a permanent, wrong reason written into a row that reads as a finding.
+      return { status: "unavailable", generatedAt, totals, byStatus, exceptions, errors: [error.message] };
+    }
+    const rows = (data ?? []) as unknown as SnapshotRow[];
+    if (rows.length >= CHUNK_ROW_LIMIT) {
+      // No silent caps: a truncated chunk cannot honestly say "nobody priced
+      // this", so its picks are skipped this run and the truncation reported.
+      for (const id of fixtureIds) truncatedFixtureIds.add(id);
+      errors.push(`Snapshot read for a ${fixtureIds.length}-fixture chunk hit the ${CHUNK_ROW_LIMIT}-row cap; its picks are deferred rather than mis-captured.`);
+      continue;
+    }
+    snapshotRows.push(...rows);
   }
 
   const snapshotsByFixture = new Map<string, SnapshotRow[]>();
-  for (const row of (snapshotData ?? []) as unknown as SnapshotRow[]) {
-    if (row.is_live) continue;
+  for (const row of snapshotRows) {
     const held = snapshotsByFixture.get(row.fixture_id) ?? [];
     held.push(row);
     snapshotsByFixture.set(row.fixture_id, held);
   }
 
   for (const publication of pending) {
+    if (publication.fixture_id && truncatedFixtureIds.has(publication.fixture_id)) continue;
     const selectionKey = legacySelectionKey({
       sport: publication.sport as CanonicalSport,
       market: publication.market,

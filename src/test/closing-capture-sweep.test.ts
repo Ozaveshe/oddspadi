@@ -28,10 +28,13 @@ function stubClient({
     rpc,
     from: vi.fn((table: string) => {
       const chain: Record<string, unknown> = {};
-      for (const method of ["select", "eq", "lt", "gte", "order"]) chain[method] = vi.fn(() => chain);
+      for (const method of ["select", "eq", "lt", "gte", "lte", "order"]) chain[method] = vi.fn(() => chain);
       chain.limit = vi.fn(async () => {
         if (table === "op_publications") return { data: publications, error: null };
-        if (table === "op_odds_snapshots") return { data: snapshots, error: snapshotError };
+        // is_live moved from a JS filter into the SQL query (where the
+        // partial index lives), so the stub models the database honouring it.
+        if (table === "op_odds_snapshots")
+          return { data: snapshots.filter((row) => row.is_live !== true), error: snapshotError };
         return { data: [], error: null };
       });
       chain.in = vi.fn(() => {
