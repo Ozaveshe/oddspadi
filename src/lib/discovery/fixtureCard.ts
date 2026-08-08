@@ -167,7 +167,14 @@ export function buildFixtureCard(input: CardInput): FixtureCardView {
       ? { decimal: input.decimalOdds, label: input.decimalOdds.toFixed(2) }
       : null;
 
-  const supplied = input.reason?.trim();
+  /**
+   * A supplied reason is a pre-kickoff rationale, written in the present
+   * tense: "the model sees value at the current price". Once the match has
+   * started that sentence is history, and rendering it beside a final score
+   * asserts something about a market that closed hours ago. So live and result
+   * states take the state's own sentence and ignore what the decision said.
+   */
+  const supplied = showsResult || state === "live" ? null : input.reason?.trim();
   const summary = supplied && isReaderFacing(supplied) ? supplied : DEFAULT_SUMMARY[state];
 
   return {

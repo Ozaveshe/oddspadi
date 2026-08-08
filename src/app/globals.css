@@ -4321,3 +4321,94 @@ a.score-row:active,
 .ticket-legs { list-style: none; margin: 0; padding: 10px 0 0; border-top: 1px solid var(--border); display: grid; gap: 6px; }
 .ticket-legs li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
 .ticket-legs li span { font-weight: 700; flex: 0 0 auto; }
+
+/* ---------- Shared fixture card (Today, Explore, Live) ---------- */
+/* One card for three surfaces. The state tone is driven by data-state, set
+   from the view-model, so a colour can never disagree with the label beside
+   it. */
+.fixture-card {
+  border-left: 3px solid var(--border);
+}
+
+.fixture-card.is-pick { border-left-color: var(--green-strong); }
+.fixture-card.is-watch { border-left-color: var(--amber); }
+.fixture-card.is-live { border-left-color: var(--red-strong); }
+/* Pass, waiting and unavailable stay neutral on purpose. A pass is a complete
+   analysis, not a warning, and colouring it amber would read as a near-miss. */
+.fixture-card.is-pass,
+.fixture-card.is-waiting,
+.fixture-card.is-unavailable { border-left-color: var(--border); }
+.fixture-card.is-finished,
+.fixture-card.is-verifying { border-left-color: var(--border-strong); }
+
+.fixture-card.is-compact { gap: 10px; padding: 14px 16px; }
+.fixture-card.is-compact .teams { font-size: 16px; }
+
+.fixture-card-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 750;
+  color: var(--text);
+}
+
+.is-pick .fixture-card-state { color: var(--green-strong); }
+.is-watch .fixture-card-state { color: var(--amber-ink); }
+.is-live .fixture-card-state { color: var(--red-strong); }
+
+.fixture-card-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--red-strong);
+  animation: fixture-card-pulse 1.8s var(--ease) infinite;
+}
+
+@keyframes fixture-card-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Respect a stated preference before an aesthetic one. */
+@media (prefers-reduced-motion: reduce) {
+  .fixture-card-live-dot { animation: none; }
+  .match-card:hover { transform: none; }
+}
+
+.fixture-card-time { margin-left: auto; color: var(--faint); }
+
+.fixture-card-link { text-decoration: none; color: inherit; }
+.fixture-card-link:hover { color: var(--green-strong); }
+
+.fixture-card-score {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.fixture-card-odds {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.fixture-card-odds-value { font-size: 18px; font-weight: 750; }
+.fixture-card-odds-note { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; }
+/* Historical prices are labelled, never presented as something to act on. */
+.fixture-card-odds.is-historical { font-size: 12px; color: var(--faint); font-weight: 600; }
+
+.fixture-card-summary { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+.fixture-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Mobile: the card must not force the page to scroll sideways. */
+@media (max-width: 560px) {
+  .fixture-card .match-main { grid-template-columns: 1fr; gap: 8px; }
+  .fixture-card-odds { justify-items: start; }
+  .fixture-card .teams { font-size: 17px; }
+}
