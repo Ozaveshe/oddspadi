@@ -114,6 +114,28 @@ export default function ResponsibleUsePage() {
           prohibit sports betting entirely. Betting law is local: it is your responsibility to know what applies where
           you are. OddsPadi does not accept bets, does not hold money, and is not a bookmaker.
         </p>
+        <p className="muted small">
+          If you are under 18, this site is not for you. Nothing here should be read as encouragement to bet.
+        </p>
+      </section>
+
+      <section className="section" aria-labelledby="ru-tools-heading">
+        <div className="section-title"><div><span className="section-kicker">Tools that create distance</span><h2 id="ru-tools-heading">Limits, breaks and self-exclusion</h2></div></div>
+        <p className="muted">
+          OddsPadi holds no funds and runs no betting account, so these tools live with your bookmaker, your bank, or a
+          national scheme — not here. If betting is becoming hard to control, use them early; they work best before a
+          losing run, not during one.
+        </p>
+        <ul className="muted responsible-use-list">
+          <li><strong>Deposit, loss and session limits.</strong> Most licensed bookmakers let you cap how much you can deposit or lose in a day, week or month, and how long a session runs. Set them once and they hold.</li>
+          <li><strong>Reality checks and take-a-break.</strong> A timed reminder, or a short cooling-off period (a day to a few weeks) that locks you out, breaks the momentum that chasing feeds on.</li>
+          <li><strong>Self-exclusion.</strong> A longer, harder stop — from a single operator, or across many at once through a national register where one exists (for example a country&apos;s licensed self-exclusion scheme). Ask your bookmaker or gambling regulator which register covers you.</li>
+          <li><strong>Blocking software.</strong> Tools such as Gamban, GamBlock or BetBlocker block gambling sites and apps across your devices, independently of any operator.</li>
+        </ul>
+        <p className="muted small">
+          Not sure where you stand? The support organisations below publish short, free self-assessment questionnaires —
+          a few minutes, private, and a clearer answer than a gut feeling.
+        </p>
       </section>
 
       <section className="section" aria-labelledby="ru-limits-heading">

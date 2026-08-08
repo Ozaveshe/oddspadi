@@ -86,6 +86,18 @@ describe("responsible-use support is not single-country", () => {
     expect(source).toContain("risk of losing money");
   });
 
+  it("is a full responsible-use centre: limits, breaks, self-exclusion and self-assessment", async () => {
+    const source = (await readFile("src/app/responsible-use/page.tsx", "utf8")).toLowerCase();
+    expect(source).toContain("self-exclusion");
+    expect(source, "deposit/session limit tooling").toMatch(/deposit.*limit|session limit/);
+    expect(source, "cooling-off / take-a-break").toMatch(/cooling-off|take-a-break/);
+    expect(source, "blocking software").toMatch(/gamban|betblocker|blocking software/);
+    expect(source, "self-assessment pointer").toContain("self-assessment");
+    expect(source, "explicit minors notice").toContain("under 18");
+    // The boundary stays accurate — OddsPadi holds no funds.
+    expect(source).toContain("does not accept bets");
+  });
+
   it("is reachable from the footer of every page", async () => {
     const footer = await readFile("src/components/site/SiteFooter.tsx", "utf8");
     expect(footer).toContain("/responsible-use");
