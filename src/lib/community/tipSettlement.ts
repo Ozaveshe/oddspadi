@@ -17,6 +17,8 @@ export type SettleableCommunityTip = {
   market: string;
   selection: string;
   selectionLabel: string;
+  /** The explicit line posted with the tip; the label regex is only a legacy fallback. */
+  marketLine: number | null;
   tippedOdds: number;
   stakeUnits: number;
   withdrawnAt: string | null;
@@ -165,7 +167,7 @@ export function resolveCommunityTipSettlement(
     selection: tip.selection,
     homeScore: fixture.homeScore,
     awayScore: fixture.awayScore,
-    line: marketLineFromLabel(tip.selectionLabel),
+    line: tip.marketLine ?? marketLineFromLabel(tip.selectionLabel),
     odds: tip.tippedOdds,
     settledAt: now.toISOString(),
     source: "community-tip-settlement"
@@ -202,6 +204,7 @@ function rowToCandidate(row: CommunityTipRow): { tip: SettleableCommunityTip; fi
       market: String(row.market),
       selection: String(row.selection),
       selectionLabel: String(row.selection_label),
+      marketLine: finiteNumber(row.market_line),
       tippedOdds,
       stakeUnits,
       withdrawnAt: text(withdrawal?.created_at)
@@ -233,7 +236,10 @@ export async function runCommunityTipSettlement({
   const safeLimit = Math.max(1, Math.min(1000, Math.trunc(limit)));
   const { data, error } = await client
     .from("op_community_tips")
-    .select("id,fixture_id,sport,kickoff_at,market,selection,selection_label,tipped_odds,stake_units,fixture:op_fixtures!op_community_tips_fixture_db_id_fkey(provider,status,home_score,away_score,last_synced_at,updated_at),revisions:op_community_tip_revisions(revision_kind,created_at),settlement:op_community_tip_settlements(tip_id)")
+    // Deliberately no deleted_at/moderated_at filter: deleted or moderated
+    // tips still settle, so a validly posted result is never erased from the
+    // accountable record (the tombstone rule).
+    .select("id,fixture_id,sport,kickoff_at,market,selection,selection_label,market_line,tipped_odds,stake_units,fixture:op_fixtures!op_community_tips_fixture_db_id_fkey(provider,status,home_score,away_score,last_synced_at,updated_at),revisions:op_community_tip_revisions(revision_kind,created_at),settlement:op_community_tip_settlements(tip_id)")
     .order("kickoff_at", { ascending: true })
     .limit(safeLimit);
   if (error && isMissingDatabaseRelation(error)) return { status: "not_enabled", generatedAt, totals, errors: [], items: [] };

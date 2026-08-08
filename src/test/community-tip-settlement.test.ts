@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveCommunityTipSettlement, type CommunitySettlementFixture, type SettleableCommunityTip } from "@/lib/community/tipSettlement";
 
@@ -10,6 +12,7 @@ const TIP: SettleableCommunityTip = {
   market: "match_winner",
   selection: "home",
   selectionLabel: "Lagos United",
+  marketLine: null,
   tippedOdds: 2.2,
   stakeUnits: 2,
   withdrawnAt: null
@@ -52,6 +55,24 @@ describe("community tip settlement", () => {
     expect(resolveCommunityTipSettlement(TIP, { ...FIXTURE, provider: "manual" }, NOW).status).toBe("waiting");
     expect(resolveCommunityTipSettlement(TIP, null, new Date("2026-07-19T18:00:00.000Z")).status).toBe("manual_review");
   });
+
+  it("grades with the stored market line even when the label carries no number", () => {
+    const decision = resolveCommunityTipSettlement(
+      { ...TIP, market: "over_under_25", selection: "over", selectionLabel: "Over on the main line", marketLine: 2.5 },
+      FIXTURE,
+      NOW
+    );
+    expect(decision.status).toBe("settled");
+    expect(decision.result).toBe("won");
+  });
+
+  it("still settles a deleted tip — the tombstone keeps the result", () => {
+    // Deletion is display-level. The settlement sweep must not filter
+    // deleted_at, so a validly posted loss is never erased from the record.
+    const source = readFileSync(join(process.cwd(), "src", "lib", "community", "tipSettlement.ts"), "utf8");
+    expect(source).not.toMatch(/\.is\("deleted_at"/);
+    expect(source).not.toMatch(/\.is\("moderated_at"/);
+  });
 });
 
 describe("community tip settlement — non-final provider states", () => {
@@ -63,6 +84,7 @@ describe("community tip settlement — non-final provider states", () => {
     market: "match_winner",
     selection: "home",
     selectionLabel: "Arsenal",
+    marketLine: null,
     tippedOdds: 2,
     stakeUnits: 1,
     withdrawnAt: null
