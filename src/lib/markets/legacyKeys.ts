@@ -72,7 +72,23 @@ export function legacySelectionKey(claim: LegacyClaim): string | null {
   }
 
   if (market === "double_chance") {
-    return has(`football.double_chance.regulation.${selection}`);
+    // The stored vocabulary is `home_or_draw`, not `1x`. Measured against
+    // production: 1,692 rows, every one of which resolved to unknown_market
+    // until this mapping existed. The canonical spelling was chosen from the
+    // brief's examples; the database had already chosen a different one.
+    const spellings: Record<string, string> = {
+      home_or_draw: "1x",
+      draw_or_home: "1x",
+      home_or_away: "12",
+      away_or_home: "12",
+      draw_or_away: "x2",
+      away_or_draw: "x2",
+      "1x": "1x",
+      "12": "12",
+      x2: "x2"
+    };
+    const canonical = spellings[selection];
+    return canonical ? has(`football.double_chance.regulation.${canonical}`) : null;
   }
 
   if (market === "draw_no_bet") {

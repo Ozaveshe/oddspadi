@@ -78,6 +78,18 @@ describe("legacy claim resolution", () => {
     expect(legacySelectionKey({ sport: "football", market: "double_chance", selection: "1x" })).toBe(
       "football.double_chance.regulation.1x"
     );
+    // The spelling production actually stores, measured: 1,692 rows.
+    expect(legacySelectionKey({ sport: "football", market: "double_chance", selection: "home_or_draw" })).toBe(
+      "football.double_chance.regulation.1x"
+    );
+    expect(legacySelectionKey({ sport: "football", market: "double_chance", selection: "home_or_away" })).toBe(
+      "football.double_chance.regulation.12"
+    );
+    expect(legacySelectionKey({ sport: "football", market: "double_chance", selection: "draw_or_away" })).toBe(
+      "football.double_chance.regulation.x2"
+    );
+    // A spelling neither vocabulary uses stays unmapped rather than guessed.
+    expect(legacySelectionKey({ sport: "football", market: "double_chance", selection: "home_or_nothing" })).toBeNull();
     expect(legacySelectionKey({ sport: "football", market: "draw_no_bet", selection: "home" })).toBe(
       "football.draw_no_bet.regulation.home"
     );
