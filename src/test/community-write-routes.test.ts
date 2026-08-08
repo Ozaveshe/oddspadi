@@ -63,7 +63,7 @@ describe("community write routes", () => {
   });
 
   it.each([
-    ["post", createPost, "/api/community/posts", { body: "  Hello fans  ", matchId: "match-1" }, "op_feed_posts", { author_id: "user-1", body: "Hello fans", match_id: "match-1" }],
+    ["post", createPost, "/api/community/posts", { body: "  Hello fans  ", matchId: "match-1" }, "op_feed_posts", { author_id: "user-1", body: "Hello fans", match_id: "match-1", subject_type: "fixture", subject_id: "match-1" }],
     ["thread", createThread, "/api/community/threads", { categoryId: CATEGORY_ID, title: "  Match talk  ", body: "  Opening post  " }, "op_forum_threads", { category_id: CATEGORY_ID, author_id: "user-1", title: "Match talk", body: "Opening post" }],
     ["reply", createReply, "/api/community/replies", { threadId: THREAD_ID, body: "  Good point  " }, "op_forum_replies", { thread_id: THREAD_ID, author_id: "user-1", body: "Good point" }]
   ])("creates a valid %s", async (_name, handler, route, body, table, inserted) => {

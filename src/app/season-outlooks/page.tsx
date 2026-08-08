@@ -5,6 +5,7 @@ import { TeamCrest } from "@/components/odds/TeamCrest";
 import { buildPremierLeague2026Projection, premierLeague2026Baseline, seasonCoverageQueue } from "@/lib/sports/prediction/seasonOutlooks";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
+import { subjectHref } from "@/lib/community/subjects";
 
 export const revalidate = 21_600;
 
@@ -79,6 +80,10 @@ export default function SeasonOutlooksPage() {
     </section>
 
     <section className="story-cta"><strong>Ready for match-level analysis?</strong><p>Fixture predictions take over when teams, kickoff times and usable prices are confirmed.</p><Link className="button primary" href="/predictions">Open today&apos;s predictions</Link></section>
+
+    {/* Static link only: this page is ISR-cached, so the live discussion reads
+        happen on /community rather than forcing this page dynamic. */}
+    <section className="section"><div className="community-empty-compact"><strong>Talk season outlooks</strong><p>Disagree with the projection? <Link className="inline-link" href={subjectHref("season_outlook", "premier-league-2026")}>Take it to the community</Link> — outlook talk is opinion, never a model input.</p></div></section>
     {/* Season-long probabilities are still predictions, and carried no
         responsible-use framing at all. */}
     <section className="section"><ResponsibleUseNotice /></section>

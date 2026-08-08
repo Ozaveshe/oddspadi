@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { LocalTimeText } from "@/components/odds/LocalTime";
+import { CommunitySubjectPanel } from "@/components/community/CommunitySubjectPanel";
 import { pageMetadata, siteUrl } from "@/lib/seo/pageMetadata";
 import { getCachedFootballLeagueTable } from "@/lib/sports/cachedLeagueTable";
 import { buildOfficialTable } from "@/lib/discovery/tableState";
@@ -206,6 +207,7 @@ export default async function LeagueTablePage({ params }: Props) {
           <Link className="button primary" href="/predictions">Browse match predictions</Link>
         </div>
       )}
+      <CommunitySubjectPanel subjectType="competition" subjectId={league.slug} title={`${league.name} talk`} />
     </main>
   );
 }

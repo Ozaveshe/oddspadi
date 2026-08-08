@@ -7,6 +7,8 @@ import { TipsterLeaderboard, type TipsterLeaderboardRow } from "@/components/com
 import { readProjectionList, todayScope } from "@/lib/readmodel/publicProjection";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
+import { parseSubjectParam } from "@/lib/community/subjects";
+import { CommunitySubjectPanel } from "@/components/community/CommunitySubjectPanel";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = pageMetadata({
@@ -16,10 +18,11 @@ export const metadata: Metadata = pageMetadata({
   socialTitle: "OddsPadi community feed",
   socialDescription: "Fan reads, matchday reactions and tipster records, all in one feed."
 });
-type PageProps = { searchParams?: Promise<{ match?: string; prompt?: string }> };
+type PageProps = { searchParams?: Promise<{ match?: string; prompt?: string; subject?: string }> };
 
 export default async function CommunityPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
+  const subject = parseSubjectParam(params.subject);
   const supabase = await createSupabaseServerClient();
   const user = supabase ? (await supabase.auth.getUser()).data.user : null;
   let posts: CommunityPost[] = []; let nextCursor: string | null = null;
@@ -61,7 +64,10 @@ export default async function CommunityPage({ searchParams }: PageProps) {
   return <main id="main" className="container">
     <div className="page-heading"><span className="section-kicker">Community</span><h1>The <span className="accent">padi</span> feed</h1><p>Fan takes and matchday talk. These are community opinions — not OddsPadi analysis.</p></div>
     <TipsterLeaderboard rows={leaderboard} />
-    {!supabase ? <div className="notice">The community feed isn&apos;t switched on for this environment yet.</div> : user ? <FeedComposer matches={matches} initialMatchId={params.match ?? ""} initialBody={params.prompt ?? ""} /> : <div className="notice"><Link className="inline-link" href="/account">Sign in</Link> to post to the feed.</div>}
+    {subject && subject.subjectType !== "fixture" ? (
+      <CommunitySubjectPanel subjectType={subject.subjectType} subjectId={subject.subjectId} title={`On ${subject.subjectId.replaceAll("-", " ")}`} />
+    ) : null}
+    {!supabase ? <div className="notice">The community feed isn&apos;t switched on for this environment yet.</div> : user ? <FeedComposer matches={matches} initialMatchId={subject?.subjectType === "fixture" ? subject.subjectId : params.match ?? ""} initialBody={params.prompt ?? ""} subjectType={subject?.subjectType} subjectId={subject?.subjectId} /> : <div className="notice"><Link className="inline-link" href="/account">Sign in</Link> to post to the feed.</div>}
     <section className="section" style={{ paddingTop: 20 }}><CommunityFeed initialPosts={posts} initialCursor={nextCursor} userId={user?.id ?? null} matches={matches} /></section>
     {/* Member-authored tips get less scrutiny than the engine's, not more, so
         the responsible-use framing matters at least as much here. */}

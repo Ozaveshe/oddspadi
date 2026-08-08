@@ -8,6 +8,7 @@ import { readBoundedJson } from "@/lib/security/boundedJson";
 import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
 import { prepareCommunityText } from "@/lib/community/textContent";
 import { assessCommunityText } from "@/lib/community/contentSafety";
+import { parseCommunitySubject } from "@/lib/community/subjects";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +78,7 @@ export async function POST(request: Request) {
   if (!user) return privateJson({ error: "Sign in to post." }, { status: 401 });
   const rateLimit = await enforceUserRateLimit(supabase, "community_post"); if (rateLimit) return rateLimit;
 
-  const parsed = await readBoundedJson<{ body?: unknown; matchId?: unknown }>(request, 8_192);
+  const parsed = await readBoundedJson<{ body?: unknown; matchId?: unknown; subjectType?: unknown; subjectId?: unknown }>(request, 8_192);
   if (!parsed.ok) return parsed.response;
   const payload = parsed.value;
   const body = typeof payload.body === "string" ? prepareCommunityText(payload.body) : "";
@@ -87,11 +88,21 @@ export async function POST(request: Request) {
   const safety = assessCommunityText(body);
   if (!safety.allowed) return privateJson({ error: safety.reasons[0] }, { status: 400 });
   const matchId = cleanExternalIdentifier(payload.matchId);
+  // Canonical context: an explicit subject wins; a match id is a fixture subject.
+  const subject =
+    parseCommunitySubject({ subjectType: payload.subjectType, subjectId: payload.subjectId }) ??
+    (matchId ? ({ subject_type: "fixture", subject_id: matchId } as const) : null);
 
   // RLS enforces author_id = auth.uid() on insert.
   const { data, error } = await supabase
     .from("op_feed_posts")
-    .insert({ author_id: user.id, body, match_id: matchId })
+    .insert({
+      author_id: user.id,
+      body,
+      match_id: subject?.subject_type === "fixture" ? subject.subject_id : matchId,
+      subject_type: subject?.subject_type ?? null,
+      subject_id: subject?.subject_id ?? null
+    })
     .select("id")
     .single();
 
