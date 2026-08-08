@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { safeTokenMatches } from "./_shared/scheduleAuth";
 import type { Context } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 
@@ -10,11 +10,6 @@ function clean(value: string | null | undefined): string | null {
 }
 
 /** Constant-time compare: a length-or-content oracle is still an oracle. */
-function tokenMatches(expected: string, supplied: string): boolean {
-  const left = Buffer.from(expected);
-  const right = Buffer.from(supplied);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
 
 /**
  * Rebuild every public projection.
@@ -36,7 +31,7 @@ function tokenMatches(expected: string, supplied: string): boolean {
 export default async function projectionRefreshWorker(request: Request, _context: Context): Promise<Response> {
   const scheduleToken = clean(Netlify.env.get("ODDSPADI_ADMIN_TOKEN"));
   const supplied = clean(request.headers.get("x-oddspadi-schedule-token"));
-  if (!scheduleToken || !supplied || !tokenMatches(scheduleToken, supplied)) {
+  if (!scheduleToken || !supplied || !safeTokenMatches(scheduleToken, supplied)) {
     // Deliberately terse: an unauthenticated caller learns nothing about what
     // this endpoint does, which job it drives, or why it refused.
     return Response.json({ success: false }, { status: 401 });

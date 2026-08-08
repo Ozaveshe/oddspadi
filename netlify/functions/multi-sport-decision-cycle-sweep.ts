@@ -1,4 +1,4 @@
-import type { Context } from "@netlify/functions";
+import type { Config, Context } from "@netlify/functions";
 
 declare const Netlify: {
   env: {
@@ -52,6 +52,11 @@ export async function runMultiSportDecisionCycleSweep({
     );
   }
 }
+
+// Basketball/tennis decision cycle, offset from the football cycle. Declaring a
+// schedule makes this a scheduled entrypoint (platform-invoked, no public
+// caller) instead of an anonymously-invocable HTTP function.
+export const config: Config = { schedule: "20,50 * * * *" };
 
 export default async function multiSportDecisionCycleSweep(_request: Request, context: Context): Promise<Response> {
   return runMultiSportDecisionCycleSweep({

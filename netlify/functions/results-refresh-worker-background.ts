@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { safeTokenMatches } from "./_shared/scheduleAuth";
 import type { Context } from "@netlify/functions";
 
 declare const Netlify: { env: { get(name: string): string | undefined } };
@@ -8,11 +8,6 @@ function clean(value: string | null | undefined): string | null {
   return normalized ? normalized : null;
 }
 
-function tokenMatches(expected: string, supplied: string): boolean {
-  const left = Buffer.from(expected);
-  const right = Buffer.from(supplied);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
 
 /**
  * The authorized half. The sweep receives no headers and cannot check a token;
@@ -23,7 +18,7 @@ export default async function resultsRefreshWorker(request: Request, context: Co
   const token = clean(Netlify.env.get("ODDSPADI_ADMIN_TOKEN"));
   const supplied = clean(request.headers.get("x-oddspadi-schedule-token"));
   if (!siteUrl || !token) return Response.json({ success: false, error: "Results refresh worker configuration is incomplete." }, { status: 503 });
-  if (!supplied || !tokenMatches(token, supplied)) return Response.json({ success: false, error: "Results refresh worker authorization failed." }, { status: 401 });
+  if (!supplied || !safeTokenMatches(token, supplied)) return Response.json({ success: false, error: "Results refresh worker authorization failed." }, { status: 401 });
   try {
     const endpoint = new URL("/api/cron/refresh-results", siteUrl);
     endpoint.searchParams.set("lookbackDays", clean(Netlify.env.get("ODDSPADI_RESULTS_LOOKBACK_DAYS")) ?? "3");

@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { safeTokenMatches } from "./_shared/scheduleAuth";
 import type { Context } from "@netlify/functions";
 
 declare const Netlify: {
@@ -21,11 +21,6 @@ function clean(value: string | null | undefined): string | null {
   return normalized ? normalized : null;
 }
 
-function tokenMatches(expected: string, supplied: string): boolean {
-  const expectedBytes = Buffer.from(expected);
-  const suppliedBytes = Buffer.from(supplied);
-  return expectedBytes.length === suppliedBytes.length && timingSafeEqual(expectedBytes, suppliedBytes);
-}
 
 export async function runFootballSettlementWorker({
   siteUrl,
@@ -39,7 +34,7 @@ export async function runFootballSettlementWorker({
   if (!baseUrl || !token) {
     return Response.json({ success: false, error: "Settlement worker configuration is incomplete." }, { status: 503 });
   }
-  if (!suppliedToken || !tokenMatches(token, suppliedToken)) {
+  if (!suppliedToken || !safeTokenMatches(token, suppliedToken)) {
     return Response.json({ success: false, error: "Settlement worker authorization failed." }, { status: 401 });
   }
 

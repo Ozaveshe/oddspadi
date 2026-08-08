@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { safeTokenMatches } from "./_shared/scheduleAuth";
 import type { Context } from "@netlify/functions";
 import { generateWeeklyPredictions, importFixtures, refreshOdds, runDailyEngine } from "../../src/lib/sports/intelligence/pipeline";
 import { readLatestProviderRun } from "../../src/lib/sports/intelligence/repository";
@@ -11,11 +11,6 @@ function clean(value: string | null | undefined): string | null {
   return normalized ? normalized : null;
 }
 
-function tokenMatches(expected: string, supplied: string): boolean {
-  const left = Buffer.from(expected);
-  const right = Buffer.from(supplied);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
 
 type PipelineOperation = () => Promise<PipelineRunResult>;
 type PipelineOperations = {
@@ -130,7 +125,7 @@ export default async function sportsIntelligenceWorker(request: Request, _contex
   const token = clean(Netlify.env.get("ODDSPADI_ADMIN_TOKEN"));
   const supplied = clean(request.headers.get("x-oddspadi-schedule-token"));
   if (!token) return Response.json({ success: false, error: "Sports intelligence worker configuration is incomplete." }, { status: 503 });
-  if (!supplied || !tokenMatches(token, supplied)) return Response.json({ success: false, error: "Sports intelligence worker authorization failed." }, { status: 401 });
+  if (!supplied || !safeTokenMatches(token, supplied)) return Response.json({ success: false, error: "Sports intelligence worker authorization failed." }, { status: 401 });
 
   const requestedFullCycle = new URL(request.url).searchParams.get("full") === "1";
   const configuredFullRunHour = Number(Netlify.env.get("ODDSPADI_INTELLIGENCE_FULL_RUN_HOUR_UTC") ?? "2");

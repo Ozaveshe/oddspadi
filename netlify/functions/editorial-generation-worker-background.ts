@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { safeTokenMatches } from "./_shared/scheduleAuth";
 import { createClient } from "@supabase/supabase-js";
 import { generateEditorialStories, type EditorialOutcome, type GeneratedEditorialStory } from "../../src/lib/editorial/generatedStories";
 import { polishEditorialStories } from "../../src/lib/editorial/aiPolish";
@@ -11,7 +11,6 @@ import {
 } from "../../src/lib/editorial/currentSlateStories";
 declare const Netlify: { env: { get(name: string): string | undefined } };
 const clean = (value?: string | null) => value?.trim() || null;
-const tokenMatches = (a: string, b: string) => { const aa = Buffer.from(a); const bb = Buffer.from(b); return aa.length === bb.length && timingSafeEqual(aa, bb); };
 type Existing = { slug: string; generator: GeneratedEditorialStory["generator"]; revision: number; data_fingerprint: string };
 type PublicPickEditorialRow = {
   id: string;
@@ -54,7 +53,7 @@ export function publicPickEditorialOutcome(row: PublicPickEditorialRow): Editori
 }
 
 export async function runEditorialGeneration({ scheduleToken, adminToken, supabaseUrl, supabaseKey, openaiKey = null, openaiModel = null, now = new Date() }: { scheduleToken: string | null; adminToken: string | null; supabaseUrl: string | null; supabaseKey: string | null; openaiKey?: string | null; openaiModel?: string | null; now?: Date }) {
-  if (!adminToken || !scheduleToken || !tokenMatches(adminToken, scheduleToken)) return Response.json({ success: false, error: "Editorial worker authorization failed." }, { status: 401 });
+  if (!adminToken || !scheduleToken || !safeTokenMatches(adminToken, scheduleToken)) return Response.json({ success: false, error: "Editorial worker authorization failed." }, { status: 401 });
   if (!supabaseUrl || !supabaseKey) return Response.json({ success: false, error: "Editorial worker database configuration is incomplete." }, { status: 503 });
   const db = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const freshnessStart = new Date(now.getTime() - 6 * 60 * 60_000).toISOString();
