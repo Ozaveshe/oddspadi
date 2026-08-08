@@ -1,6 +1,12 @@
 const { spawnSync } = require("node:child_process");
 
-const nextArgs = ["node_modules/next/dist/bin/next", "build", ...process.argv.slice(2)];
+// Resolved, not a cwd-relative path. Worktrees resolve their modules upward to
+// the primary checkout's node_modules, which every other tool here already
+// benefits from — a hardcoded "node_modules/next/…" made the build the one
+// command that broke in every worktree by construction.
+const nextBin = require.resolve("next/dist/bin/next");
+
+const nextArgs = [nextBin, "build", ...process.argv.slice(2)];
 const env = { ...process.env, NEXT_TELEMETRY_DISABLED: process.env.NEXT_TELEMETRY_DISABLED || "1" };
 const major = Number(process.versions.node.split(".")[0]);
 
