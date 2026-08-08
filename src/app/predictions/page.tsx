@@ -3,6 +3,8 @@ import { pageMetadata } from "@/lib/seo/pageMetadata";
 import Link from "next/link";
 import { DailyDecisionOverview, DailyTipsSections, ProviderRunStrip } from "@/components/odds/IntelligenceSlate";
 import { PredictionDisclaimer } from "@/components/odds/PredictionDisclaimer";
+import { RankedFixtureBoard } from "@/components/product/RankedFixtureBoard";
+import { readViewerContext } from "@/lib/discovery/viewerContext";
 import { getCachedTodayTipsProduct } from "@/lib/sports/tips/publicReads";
 import { filterDailyTipsProductBySport } from "@/lib/sports/tips/product";
 import { readNavigationContext, withNavigationContext } from "@/lib/navigation/context";
@@ -40,6 +42,7 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
   const fullProduct = await getCachedTodayTipsProduct(await readTimezonePreference());
   const product = requestedSport ? filterDailyTipsProductBySport(fullProduct, requestedSport) : fullProduct;
   const sportLabel = requestedSport ? requestedSport[0].toUpperCase() + requestedSport.slice(1) : null;
+  const viewer = readViewerContext({ preferredSports: requestedSport ? [requestedSport] : [] });
   return (
     <main id="main" className="container">
       <header className="page-heading predictions-heading prediction-desk-heading">
@@ -67,6 +70,18 @@ export default async function PredictionsPage({ searchParams }: PageProps) {
         </nav>
       </div>
       <DailyDecisionOverview product={product} />
+
+      {/* Ranked first, then the full sectioned board below. The ranking
+          engine, the diversity caps and the today/results/archive split had no
+          consumer until here — every one of them tested and none of them
+          affecting a pixel. */}
+      <RankedFixtureBoard
+        rows={product.sections.schedule}
+        viewer={viewer}
+        viewAllHref={requestedSport ? `/predictions?sport=${requestedSport}` : "/predictions"}
+        heading={sportLabel ? `${sportLabel}: what matters now` : "What matters now"}
+      />
+
       <DailyTipsSections product={product} context={carried} />
       <section className="prediction-receipt">
         <div><span className="section-kicker">Data receipt</span><h2>How this slate was built</h2></div>

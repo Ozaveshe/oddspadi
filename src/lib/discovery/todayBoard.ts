@@ -51,7 +51,10 @@ export function buildTodayBoard(board: CuratedBoard, options: TodayBoardOptions 
   const recentResults: RankedFixture[] = [];
   const evidenceArchive: RankedFixture[] = [];
 
-  for (const entry of board.items) {
+  // Classified from the full ranked set, not the capped one. The diversity
+  // caps protect the primary board's first screen; applying them here would
+  // silently shrink the recent-results and archive counts.
+  for (const entry of board.ranked) {
     if (CURRENT_STATUSES.has(entry.fixture.status)) {
       primary.push(entry);
       continue;

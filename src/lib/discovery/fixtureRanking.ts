@@ -160,6 +160,15 @@ export type CurationOptions = {
 
 export type CuratedBoard = {
   items: RankedFixture[];
+  /**
+   * Every fixture, ranked, before the diversity caps.
+   *
+   * The caps exist to protect the first screen. Classification and counting
+   * must read this instead: capping before the board split shrinks the
+   * evidence-archive count, which under-reports how much the engine analysed —
+   * and a wrong count is worse than a long list, because it reads as a fact.
+   */
+  ranked: RankedFixture[];
   /** What the diversity caps held back, so nothing disappears silently. */
   heldBack: { competition: Record<string, number>; sport: Record<string, number>; total: number };
   /** Total catalogue size, so the UI can offer "see all". */
@@ -224,6 +233,7 @@ export function curateBoard(
 
   return {
     items,
+    ranked,
     heldBack: { competition: heldBackCompetition, sport: heldBackSport, total },
     catalogueSize: fixtures.length
   };

@@ -31,6 +31,9 @@ function entry(overrides: Partial<RankedFixture["fixture"]> = {}, score = 50): R
 function board(items: RankedFixture[], overrides: Partial<CuratedBoard> = {}): CuratedBoard {
   return {
     items,
+    // Classification reads the uncapped set; the capped `items` is only what
+    // the first screen would have room for.
+    ranked: items,
     heldBack: { competition: {}, sport: {}, total: 0 },
     catalogueSize: items.length,
     ...overrides
@@ -101,6 +104,20 @@ describe("capping without hiding", () => {
   it("says nothing when nothing is hidden", () => {
     const result = buildTodayBoard(board([entry({ status: "scheduled" })]));
     expect(boardDisclosure(result)).toBeNull();
+  });
+
+  it("counts the archive from the uncapped set, not the capped one", () => {
+    // The caps protect the first screen. Applying them to the archive count
+    // under-reports how much the engine analysed, and a wrong count reads as a
+    // fact.
+    const archived = Array.from({ length: 40 }, (_, index) => entry({ status: "finished" }, index));
+    const result = buildTodayBoard({
+      items: archived.slice(0, 3),
+      ranked: archived,
+      heldBack: { competition: { epl: 37 }, sport: {}, total: 37 },
+      catalogueSize: 40
+    });
+    expect(result.counts.evidenceArchive).toBe(40);
   });
 
   it("still discloses diversity holdbacks on an uncapped board", () => {
