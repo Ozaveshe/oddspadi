@@ -19,7 +19,12 @@ export type StandingRow = {
   lost: number;
   goalsFor: number;
   goalsAgainst: number;
+  /** Net points as the competition records them — deductions already applied. */
   points: number;
+  /** A points deduction/award, display-only: ranking always uses net `points`. */
+  pointsAdjustment?: number | null;
+  /** Why the adjustment exists, e.g. "points deduction". */
+  adjustmentNote?: string | null;
 };
 
 export type OfficialTable =
@@ -95,6 +100,25 @@ export function buildOfficialTable(
     .map((row, index) => ({ ...row, position: index + 1 }));
 
   return { state: "in-progress", rows: ranked, label: "Official table", matchesPlayed, verifiedAt };
+}
+
+const TABLE_FRESHNESS_MS = 24 * 3600_000;
+
+export type TableFreshness = { status: "current" | "delayed" | "unavailable"; note: string | null };
+
+/**
+ * How old the provider table is, stated rather than hidden. The provider path
+ * stamps fetch time and sits behind two caches, so a reader deserves to know
+ * when "current standings" stopped being current.
+ */
+export function classifyTableFreshness(updatedAt: string | null, now = new Date()): TableFreshness {
+  if (!updatedAt || !Number.isFinite(Date.parse(updatedAt))) {
+    return { status: "unavailable", note: "No update time is available for this table." };
+  }
+  if (now.getTime() - Date.parse(updatedAt) > TABLE_FRESHNESS_MS) {
+    return { status: "delayed", note: "Provider standings have not refreshed for over 24 hours." };
+  }
+  return { status: "current", note: null };
 }
 
 /** Copy for the projection block, so no surface invents its own wording. */

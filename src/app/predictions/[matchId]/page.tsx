@@ -148,8 +148,11 @@ export default async function MatchDetailPage({ params }: PageProps) {
 
   const publicRisks = presentBlockers([...(displayedDecision?.blockers ?? []), ...canonical.auditSummary.blockers]);
   const leagueTableSlug = leagueSlugFromProviderId(match.league.id);
-  const homeStanding = match.leagueTable?.rows.find((row) => row.teamId === match.homeTeam.id || row.teamName.toLowerCase() === match.homeTeam.name.toLowerCase());
-  const awayStanding = match.leagueTable?.rows.find((row) => row.teamId === match.awayTeam.id || row.teamName.toLowerCase() === match.awayTeam.name.toLowerCase());
+  // A pre-season table has identical zero records: printing "1st · 0 pts" from
+  // it would imply a rank that does not exist yet (seasonNotStarted guard).
+  const tableHasPlay = (match.leagueTable?.rows ?? []).some((row) => row.played > 0);
+  const homeStanding = tableHasPlay ? match.leagueTable?.rows.find((row) => row.teamId === match.homeTeam.id || row.teamName.toLowerCase() === match.homeTeam.name.toLowerCase()) : undefined;
+  const awayStanding = tableHasPlay ? match.leagueTable?.rows.find((row) => row.teamId === match.awayTeam.id || row.teamName.toLowerCase() === match.awayTeam.name.toLowerCase()) : undefined;
   const communitySport = match.sport === "football" || match.sport === "basketball" || match.sport === "tennis" ? match.sport : null;
   const communityMarkets = match.oddsMarkets
     .filter((market) => market.selections.some((selection) => Number.isFinite(selection.decimalOdds) && selection.decimalOdds > 1))
