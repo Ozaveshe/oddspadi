@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { LiveBoardFixture, LiveScoreBoard } from "@/lib/sports/liveScoreBoard";
+import type { FixtureStatus } from "@/lib/domain/states";
 import { LocalTime } from "@/components/odds/LocalTime";
+import { FixtureCard } from "@/components/product/FixtureCard";
 
 function sportLabel(fixture: LiveBoardFixture): string {
   if (fixture.sport === "football") return "Football";
@@ -28,24 +30,51 @@ function coverageLabel(fixture: LiveBoardFixture): string {
   return `${source} · analysis not published`;
 }
 
+/** The live board's phase vocabulary, in the fixture-status terms the card speaks. */
+function fixtureStatusFor(phase: LiveBoardFixture["phase"]): FixtureStatus {
+  if (phase === "live") return "live";
+  if (phase === "finished") return "finished";
+  return "scheduled";
+}
+
+/**
+ * The live board's fixture, rendered by the shared card.
+ *
+ * This used to be its own card markup, which meant the live board and the
+ * prediction list disagreed about how a fixture looks and — worse — about what
+ * its state is called. The card is now the same object every discovery surface
+ * renders; only the mapping into it lives here.
+ *
+ * No decision is passed: this is the *fallback* path, shown precisely when no
+ * publishable analysis exists. The card resolves that to "Analysis
+ * unavailable" on its own rather than this file inventing a label for it.
+ */
 export function MatchdayFixtureCard({ fixture, featured = false }: { fixture: LiveBoardFixture; featured?: boolean }) {
   const hasScore = fixture.goals.home !== null && fixture.goals.away !== null;
   return (
-    <article className={`matchday-fallback-card${featured ? " featured" : ""}`}>
-      <div className="matchday-fallback-topline">
-        <span>{sportLabel(fixture)} &middot; {fixture.league.name}</span>
-        <strong className={fixture.phase === "live" ? "is-live" : undefined}><FixtureMoment fixture={fixture} /></strong>
-      </div>
-      <div className="matchday-fallback-teams">
-        <span>{fixture.home.name}</span>
-        <b>{hasScore ? `${fixture.goals.home} - ${fixture.goals.away}` : "vs"}</b>
-        <span>{fixture.away.name}</span>
-      </div>
-      <div className="matchday-fallback-footer">
-        <span>{coverageLabel(fixture)}</span>
-        <Link className="text-link" href="/live-scores">Follow match &rarr;</Link>
-      </div>
-    </article>
+    <div className={featured ? "matchday-fallback-featured" : undefined}>
+      <FixtureCard
+        fixtureId={String(fixture.id)}
+        href={fixture.analysis ? `/predictions/${fixture.matchId}` : "/live-scores"}
+        homeTeam={fixture.home.name}
+        awayTeam={fixture.away.name}
+        competition={`${sportLabel(fixture)} · ${fixture.league.name}`}
+        kickoffLabel={<FixtureMoment fixture={fixture} />}
+        score={hasScore ? { home: fixture.goals.home!, away: fixture.goals.away! } : null}
+        variant="compact"
+        card={{
+          fixtureStatus: fixtureStatusFor(fixture.phase),
+          decision: null,
+          hasOfficialPick: false,
+          settlement: null,
+          oddsAreCurrent: false,
+          hasHistoricalOdds: false,
+          decimalOdds: null,
+          modelProbability: null,
+          reason: coverageLabel(fixture)
+        }}
+      />
+    </div>
   );
 }
 

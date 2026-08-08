@@ -21,8 +21,13 @@ export type FixtureCardProps = {
   homeTeam: string;
   awayTeam: string;
   competition: string;
-  /** Already formatted in the viewer's timezone by the caller. */
-  kickoffLabel: string;
+  /**
+   * A node, not a string. A server component formatting a time itself pins
+   * every kickoff to the deploy host's clock — which is UTC — so callers pass
+   * `<LocalTime>` and the visitor sees their own. Typing this as a string
+   * would have made that mistake the path of least resistance.
+   */
+  kickoffLabel: React.ReactNode;
   score: { home: number; away: number } | null;
   /** Compact drops the summary line and the odds block for dense lists. */
   variant?: "full" | "compact";
