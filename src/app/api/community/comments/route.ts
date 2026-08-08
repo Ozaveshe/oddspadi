@@ -5,6 +5,7 @@ import { databaseUnavailable, reportDatabaseError } from "@/lib/security/databas
 import { isIsoTimestampCursor, isUuid } from "@/lib/security/inputValidation";
 import { readBoundedJson } from "@/lib/security/boundedJson";
 import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
+import { prepareCommunityText } from "@/lib/community/textContent";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
   if (!parsed.ok) return parsed.response;
   const payload = parsed.value;
   const postId = typeof payload.postId === "string" ? payload.postId : "";
-  const body = typeof payload.body === "string" ? payload.body.trim() : "";
+  const body = typeof payload.body === "string" ? prepareCommunityText(payload.body) : "";
   if (!isUuid(postId)) return privateJson({ error: "Missing post." }, { status: 400 });
   if (!body || body.length > 1000) return privateJson({ error: "A comment must be between 1 and 1000 characters." }, { status: 400 });
 

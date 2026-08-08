@@ -6,6 +6,7 @@ import { databaseUnavailable, reportDatabaseError } from "@/lib/security/databas
 import { cleanExternalIdentifier, isIsoTimestampCursor, isUuid } from "@/lib/security/inputValidation";
 import { readBoundedJson } from "@/lib/security/boundedJson";
 import { enforceUserRateLimit } from "@/lib/security/userRateLimit";
+import { prepareCommunityText } from "@/lib/community/textContent";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
   const parsed = await readBoundedJson<{ body?: unknown; matchId?: unknown }>(request, 8_192);
   if (!parsed.ok) return parsed.response;
   const payload = parsed.value;
-  const body = typeof payload.body === "string" ? payload.body.trim() : "";
+  const body = typeof payload.body === "string" ? prepareCommunityText(payload.body) : "";
   if (!body || body.length > 2000) {
     return privateJson({ error: "A post must be between 1 and 2000 characters." }, { status: 400 });
   }

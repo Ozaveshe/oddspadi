@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { trackEvent } from "@/lib/analytics/events";
 import { RelativeTime } from "./RelativeTime";
+import { CommunityBody } from "./CommunityBody";
 
 export type FeedComment = {
   id: string;
@@ -133,7 +134,7 @@ export function PostComments({ postId, userId, onCountChange }: { postId: string
                   <button type="button" className="feed-comment-delete" onClick={() => void remove(comment.id)} aria-label="Delete comment">×</button>
                 ) : null}
               </div>
-              <p>{comment.body}</p>
+              <CommunityBody text={comment.body} />
             </div>
           );
         })

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CommunityPollChoice } from "@/lib/community/predictionContracts";
 import { buildConsensusResearchReceipt, type ConsensusDistribution, type ConsensusSide } from "@/lib/community/consensusResearch";
 import { LocalTime } from "@/components/odds/LocalTime";
+import { CommunityBody } from "@/components/community/CommunityBody";
 
 export type CommunityMarketOption = {
   id: string;
@@ -318,7 +319,7 @@ export function MatchCommunityDesk({ fixtureId, sport, homeTeam, awayTeam, kicko
                       <span className={`community-tip-result ${settlement?.result ?? (withdrawn ? "void" : "pending")}`}>{withdrawn ? "withdrawn" : settlement?.result ?? "pending"}</span>
                     </div>
                     <div className="community-tip-pick"><span>{readableMarket(tip.market)}</span><strong>{tip.selection_label}</strong><b>{asNumber(tip.tipped_odds).toFixed(2)}</b></div>
-                    <p>{tip.rationale}</p>
+                    <CommunityBody text={tip.rationale} />
                     <footer><span>{asNumber(tip.stake_units).toFixed(1)}u recorded</span>{settlement ? <strong className={asNumber(settlement.net_units) >= 0 ? "positive" : "negative"}>{asNumber(settlement.net_units) >= 0 ? "+" : ""}{asNumber(settlement.net_units).toFixed(2)}u</strong> : <span>Awaiting settlement</span>}</footer>
                   </article>
                 );

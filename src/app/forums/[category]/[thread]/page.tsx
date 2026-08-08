@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ReplyForm } from "@/components/community/ForumComposers";
+import { CommunityBody } from "@/components/community/CommunityBody";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 import { isIsoTimestampCursor, isUuid } from "@/lib/security/inputValidation";
@@ -135,7 +136,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
       </div>
 
       <article className="panel feed-post">
-        <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{thread.body}</p>
+        <CommunityBody text={thread.body} />
       </article>
 
       <section className="section" style={{ paddingTop: 20 }}>
@@ -150,7 +151,7 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
               <div className="feed-post-head">
                 <strong>@{authorName(reply.author)}</strong>
               </div>
-              <p style={{ margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{reply.body}</p>
+              <div style={{ marginTop: 8 }}><CommunityBody text={reply.body} /></div>
             </article>
           ))}
         </div>

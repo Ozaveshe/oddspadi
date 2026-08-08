@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { ComposerMatch } from "./FeedComposer";
 import { PostComments } from "./PostComments";
 import { RelativeTime } from "./RelativeTime";
+import { CommunityBody } from "./CommunityBody";
 import { trackEvent } from "@/lib/analytics/events";
 
 export type CommunityPost = {
@@ -60,7 +61,7 @@ export function CommunityFeed({ initialPosts, initialCursor, userId, matches }: 
     {posts.map((post) => { const profile = author(post); const handle = profile?.username ?? "padi"; const liked = Boolean(post.likes?.some((like) => like.user_id === userId)); const threadOpen = openThread === post.id; const comments = commentCount(post) + (countAdjust[post.id] ?? 0); return (
       <article className="panel feed-post" key={post.id}>
         <div className="feed-post-head"><Link href={`/community/u/${encodeURIComponent(handle)}`}><strong>@{handle}</strong></Link>{profile?.display_name ? <span className="muted small">{profile.display_name}</span> : null}<span className="muted small" style={{ marginLeft: "auto" }}><RelativeTime iso={post.created_at} /></span></div>
-        <p style={{ margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{post.body}</p>
+        <div style={{ marginTop: 8 }}><CommunityBody text={post.body} /></div>
         {post.match_id ? <Link className="community-match-chip" href={`/predictions/${encodeURIComponent(post.match_id)}`}>⚽ {labels.get(post.match_id) ?? "Match discussion"}</Link> : null}
         <div className="feed-actions">
           <button type="button" className={liked ? "liked" : ""} aria-pressed={liked} onClick={() => toggleLike(post)}>♥ {post.likes?.length ?? 0}</button>
