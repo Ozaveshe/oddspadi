@@ -65,8 +65,8 @@ export function CommunityFeed({ initialPosts, initialCursor, userId, matches }: 
         <div style={{ marginTop: 8 }}><CommunityBody text={post.body} /></div>
         {post.match_id ? <Link className="community-match-chip" href={`/predictions/${encodeURIComponent(post.match_id)}`}>⚽ {labels.get(post.match_id) ?? "Match discussion"}</Link> : null}
         <div className="feed-actions">
-          <button type="button" className={liked ? "liked" : ""} aria-pressed={liked} onClick={() => toggleLike(post)}>♥ {post.likes?.length ?? 0}</button>
-          <button type="button" aria-expanded={threadOpen} onClick={() => setOpenThread(threadOpen ? null : post.id)}>💬 {comments}</button>
+          <button type="button" className={liked ? "liked" : ""} aria-pressed={liked} aria-label={`${liked ? "Unlike" : "Like"} this post (${post.likes?.length ?? 0} likes)`} onClick={() => toggleLike(post)}>♥ {post.likes?.length ?? 0}</button>
+          <button type="button" aria-expanded={threadOpen} aria-label={`${threadOpen ? "Hide" : "Show"} comments (${comments})`} onClick={() => setOpenThread(threadOpen ? null : post.id)}>💬 {comments}</button>
           {userId === post.author_id ? <button type="button" disabled={busy === post.id} onClick={() => remove(post.id)}>Delete</button> : null}
         </div>
         {threadOpen ? <PostComments postId={post.id} userId={userId} onCountChange={(delta) => setCountAdjust((current) => ({ ...current, [post.id]: (current[post.id] ?? 0) + delta }))} /> : null}
