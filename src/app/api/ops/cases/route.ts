@@ -18,6 +18,8 @@ import {
   type CaseWorkspace
 } from "@/lib/ops/cases";
 import { classifyCaseSla } from "@/lib/ops/serviceLevels";
+import type { CaseCategory } from "@/lib/ops/caseCategories";
+import { isEscalationPath, escalationPathForCategory } from "@/lib/ops/escalation";
 import { guardCaseAction, assertProductionWriteAllowed, opsMode } from "@/lib/ops/trainingMode";
 
 export const dynamic = "force-dynamic";
@@ -91,6 +93,7 @@ export async function GET(request: Request): Promise<Response> {
 type CaseRow = {
   id: string;
   workspace: CaseWorkspace;
+  category: CaseCategory | null;
   severity: CaseSeverity;
   state: CaseState;
   escalated_at: string | null;
@@ -115,6 +118,7 @@ export async function POST(request: Request): Promise<Response> {
     note?: unknown;
     assignee?: unknown;
     toSeverity?: unknown;
+    escalationPath?: unknown;
   }>(request, 4_096);
   if (!parsed.ok) return parsed.response;
   const body = parsed.value;
@@ -131,7 +135,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const { data: found, error: readError } = await client
     .from("op_operational_cases")
-    .select("id, workspace, severity, state, escalated_at, resolved_by")
+    .select("id, workspace, category, severity, state, escalated_at, resolved_by")
     .eq("id", caseId)
     .maybeSingle();
   if (readError) return databaseUnavailable("ops case read", readError, "Could not load that case right now.");
@@ -139,9 +143,9 @@ export async function POST(request: Request): Promise<Response> {
   const current = found as CaseRow;
 
   const now = new Date();
-  const stampedAt = now.toISOString();
   const caseUpdate: Record<string, unknown> = {};
   let toState: CaseState | null = null;
+  let escalationTarget: string | null = null;
 
   // Compute the change up front so an illegal transition fails before any write.
   if (action === "claim") {
@@ -171,8 +175,16 @@ export async function POST(request: Request): Promise<Response> {
       caseUpdate.resolution = note;
       caseUpdate.resolved_by = gate.actorFingerprint;
     }
-    if (action === "escalate" && (body.toSeverity === "critical" || body.toSeverity === "warning" || body.toSeverity === "info")) {
-      caseUpdate.severity = higherSeverity(current.severity, body.toSeverity as CaseSeverity);
+    if (action === "escalate") {
+      // The escalation path is the caller's choice if valid, else the default
+      // suggested by the case category. Naming it routes the case to a known
+      // owner with an audit trail — the whole point of escalating in-product.
+      escalationTarget = isEscalationPath(body.escalationPath)
+        ? (body.escalationPath as string)
+        : escalationPathForCategory(current.category);
+      if (body.toSeverity === "critical" || body.toSeverity === "warning" || body.toSeverity === "info") {
+        caseUpdate.severity = higherSeverity(current.severity, body.toSeverity as CaseSeverity);
+      }
     }
   }
 
@@ -197,7 +209,10 @@ export async function POST(request: Request): Promise<Response> {
     from_state: toState ? current.state : null,
     to_state: toState,
     body: note,
-    detail: action === "escalate" ? { toSeverity: caseUpdate.severity ?? current.severity } : {}
+    detail:
+      action === "escalate"
+        ? { toSeverity: caseUpdate.severity ?? current.severity, escalationPath: escalationTarget }
+        : {}
   });
   if (eventError) return databaseUnavailable("ops case event", eventError, "The action applied but the timeline write failed; retry.");
 
@@ -205,9 +220,12 @@ export async function POST(request: Request): Promise<Response> {
     actorFingerprint: gate.actorFingerprint,
     action: `case_${action}`,
     target: caseId,
-    detail: { workspace: current.workspace, toState },
+    detail: { workspace: current.workspace, toState, escalationPath: escalationTarget },
     outcome: "applied"
   });
 
-  return privateJson({ id: caseId, action, state: toState ?? current.state }, { status: 201 });
+  return privateJson(
+    { id: caseId, action, state: toState ?? current.state, escalationPath: escalationTarget },
+    { status: 201 }
+  );
 }

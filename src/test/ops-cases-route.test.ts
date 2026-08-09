@@ -58,7 +58,7 @@ function caseRow(overrides: Record<string, unknown> = {}) {
   return chain(
     { data: [], error: null },
     {
-      data: { id: CASE_ID, workspace: "market_ops", severity: "warning", state: "in_progress", escalated_at: null, resolved_by: null, ...overrides },
+      data: { id: CASE_ID, workspace: "market_ops", category: "market_mismatch", severity: "warning", state: "in_progress", escalated_at: null, resolved_by: null, ...overrides },
       error: null
     }
   );
@@ -136,6 +136,22 @@ describe("ops case actions", () => {
     expect(update.severity).toBe("critical");
     const event = (events.insert as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>;
     expect(event.event_type).toBe("escalate");
+    // A market_mismatch case has no default path; the event records that honestly.
+    expect((event.detail as Record<string, unknown>).escalationPath).toBeNull();
+  });
+
+  it("routes escalation to the category's default owner and records it", async () => {
+    staffCookie();
+    const cases = caseRow({ category: "identity_mismatch", state: "in_progress" });
+    const events = chain();
+    adminClient({ op_operational_cases: cases, op_operational_case_events: events, op_operator_audit: chain() });
+    const response = await caseAction(
+      jsonRequest("/api/ops/cases", { caseId: CASE_ID, action: "escalate", note: "duplicate identity across providers" })
+    );
+    expect(response.status).toBe(201);
+    expect((await response.json()).escalationPath).toBe("data_corruption");
+    const event = (events.insert as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>;
+    expect((event.detail as Record<string, unknown>).escalationPath).toBe("data_corruption");
   });
 
   it("refuses a quality review by the same person who resolved the case", async () => {
