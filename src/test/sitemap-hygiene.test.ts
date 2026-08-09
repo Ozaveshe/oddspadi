@@ -18,7 +18,7 @@ const read = (relative: string) => readFileSync(join(process.cwd(), ...relative.
 
 // The private/thin routes that must never be crawled — the noindex set plus the
 // operator/API surfaces. Kept in sync with route-canonical-contract's NOINDEX.
-const FORBIDDEN_PREFIXES = ["/my", "/account", "/offline", "/tips", "/community/u/", "/community/moderation", "/workspace/shared/", "/api/", "/live"];
+const FORBIDDEN_PREFIXES = ["/my", "/account", "/offline", "/tips", "/community/u/", "/community/moderation", "/workspace/shared/", "/api/", "/live", "/ops"];
 
 describe("sitemap hygiene", () => {
   afterEach(() => vi.clearAllMocks());
@@ -43,7 +43,7 @@ describe("sitemap hygiene", () => {
     const rules = robots();
     const rule = Array.isArray(rules.rules) ? rules.rules[0] : rules.rules;
     const disallow = Array.isArray(rule?.disallow) ? rule?.disallow : [rule?.disallow];
-    for (const prefix of ["/api/", "/account", "/offline", "/tips"]) {
+    for (const prefix of ["/api/", "/account", "/offline", "/tips", "/ops"]) {
       expect(disallow).toContain(prefix);
     }
     expect(rules.sitemap).toMatch(/\/sitemap\.xml$/);
