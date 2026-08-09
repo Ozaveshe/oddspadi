@@ -2,7 +2,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const appRoot = dirname(fileURLToPath(import.meta.url));
-const contentSecurityPolicy = "base-uri 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src-attr 'none'; upgrade-insecure-requests";
+const contentSecurityPolicy = "base-uri 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src-attr 'none'; connect-src 'self' https:; img-src 'self' data: https:; font-src 'self' data:; upgrade-insecure-requests";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
