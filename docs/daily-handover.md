@@ -5,6 +5,8 @@ in `src/lib/ops/handover.ts` computes it (pure, tested).
 
 ## What it shows
 
+**Headline figures:**
+
 - **Open by severity** — critical / warning / info, active cases only.
 - **Breached now** — active cases past their resolution deadline
   (`classifyCaseSla === "breached"`).
@@ -13,6 +15,14 @@ in `src/lib/ops/handover.ts` computes it (pure, tested).
 - **Status** — a single headline: `clear`, `attention`, or `degraded`.
 
 `attention` fires when anything is breached, escalated, or open at critical.
+
+**Structured sections** (the nine the brief names): incidents (active critical
+cases), publication status, unresolved cases, important fixtures, provider
+health, settlement backlog, closing gaps, content scheduled, and moderation
+risks. Case-derived sections (incidents, unresolved cases, settlement backlog,
+closing gaps, moderation risks) are computed from the board; the rest come from
+optional signals the page supplies and render `—` (unread) when a source is not
+wired, never a false zero.
 
 ## The honesty rule: degraded, not zero
 
