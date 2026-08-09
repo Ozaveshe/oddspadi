@@ -4,8 +4,10 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isStaffViewer } from "@/lib/ops/pageGate";
 import { readCaseRows, readOpenCount } from "@/lib/ops/serverReads";
 import { openCasesBySeverity } from "@/lib/ops/dashboardMetrics";
+import { bucketCasesByQueue, COMMUNITY_QUEUES } from "@/lib/ops/queues";
 import { classifyMetric } from "@/lib/observability/metrics";
 import { OpsDashboard, type DashboardTile } from "@/components/ops/OpsDashboard";
+import { QueueSummary } from "@/components/ops/QueueSummary";
 import { CaseBoard } from "@/components/ops/CaseBoard";
 import { ModerationQueue } from "@/components/community/ModerationQueue";
 
@@ -51,6 +53,7 @@ export default async function CommunityOpsPage() {
         <p>Moderation and community cases. Community growth is measured on organic accounts only — demo and staff never count.</p>
       </div>
       <OpsDashboard title="Community operations" tiles={tiles} />
+      <QueueSummary title="Queues" queues={bucketCasesByQueue(rows, COMMUNITY_QUEUES)} />
 
       <section className="panel" aria-label="Moderation queue">
         <h2>Moderation queue</h2>

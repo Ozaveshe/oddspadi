@@ -3,7 +3,7 @@ import Link from "next/link";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isStaffViewer } from "@/lib/ops/pageGate";
-import { readCaseRows } from "@/lib/ops/serverReads";
+import { readCaseRows, readOpenCount } from "@/lib/ops/serverReads";
 import { buildHandover } from "@/lib/ops/handover";
 import { isTrainingMode } from "@/lib/ops/trainingMode";
 import { DailyHandover } from "@/components/ops/DailyHandover";
@@ -30,8 +30,10 @@ export default async function OpsHomePage() {
     );
   }
 
-  const { rows, couldNotRead } = await readCaseRows(getSupabaseServerClient());
-  const handover = buildHandover({ cases: rows, couldNotRead }, new Date());
+  const client = getSupabaseServerClient();
+  const { rows, couldNotRead } = await readCaseRows(client);
+  const moderationBacklog = await readOpenCount(client, "op_content_reports", "status");
+  const handover = buildHandover({ cases: rows, couldNotRead, signals: { moderationBacklog } }, new Date());
   const training = isTrainingMode(process.env);
 
   return (

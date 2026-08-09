@@ -55,6 +55,16 @@ export function DailyHandover({ handover }: { handover: Handover }) {
           <dd>{handover.resolvedLast24h}</dd>
         </div>
       </dl>
+
+      <h3>Handover</h3>
+      <dl className="stat-grid">
+        {handover.sections.map((section) => (
+          <div key={section.id}>
+            <dt>{section.label}</dt>
+            <dd>{section.value === null ? "—" : section.value}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }

@@ -5,8 +5,10 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isStaffViewer } from "@/lib/ops/pageGate";
 import { readCaseRows, readOpenCount } from "@/lib/ops/serverReads";
 import { openCasesBySeverity, slaCompliancePercent } from "@/lib/ops/dashboardMetrics";
+import { bucketCasesByQueue, MARKET_QUEUES } from "@/lib/ops/queues";
 import { classifyMetric } from "@/lib/observability/metrics";
 import { OpsDashboard, type DashboardTile } from "@/components/ops/OpsDashboard";
+import { QueueSummary } from "@/components/ops/QueueSummary";
 import { CaseBoard } from "@/components/ops/CaseBoard";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +65,7 @@ export default async function MarketOpsPage() {
         </p>
       </div>
       <OpsDashboard title="Market operations" tiles={tiles} />
+      <QueueSummary title="Queues" queues={bucketCasesByQueue(rows, MARKET_QUEUES)} />
       <CaseBoard workspace="market_ops" />
     </main>
   );

@@ -12,11 +12,13 @@
  */
 
 import type { CaseSeverity, CaseState, CaseWorkspace } from "@/lib/ops/cases";
+import type { CaseCategory } from "@/lib/ops/caseCategories";
 import { classifyCaseSla } from "@/lib/ops/serviceLevels";
 import { classifyMetric } from "@/lib/observability/metrics";
 
 export type CaseRow = {
   workspace: CaseWorkspace;
+  category?: CaseCategory | null;
   severity: CaseSeverity;
   state: CaseState;
   openedAt: string;

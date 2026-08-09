@@ -13,6 +13,7 @@ export type CaseRead = { rows: CaseRow[]; couldNotRead: string[] };
 function toCaseRow(row: Record<string, unknown>): CaseRow {
   return {
     workspace: row.workspace as CaseWorkspace,
+    category: (row.category as CaseRow["category"]) ?? null,
     severity: row.severity as CaseSeverity,
     state: row.state as CaseState,
     openedAt: String(row.opened_at),
@@ -25,7 +26,7 @@ export async function readCaseRows(client: SupabaseClient | null, workspace?: Ca
   const couldNotRead: string[] = [];
   if (!client) return { rows: [], couldNotRead: ["storage"] };
   try {
-    let query = client.from("op_operational_cases").select("workspace,severity,state,opened_at,due_at,resolved_at");
+    let query = client.from("op_operational_cases").select("workspace,category,severity,state,opened_at,due_at,resolved_at");
     if (workspace) query = query.eq("workspace", workspace);
     const { data, error } = await query.limit(1000);
     if (error) return { rows: [], couldNotRead: ["op_operational_cases"] };
