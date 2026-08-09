@@ -42,6 +42,9 @@ hub page, `ctx` = reached contextually (from fixture/competition/article), `SEO`
 | `/forums/[category]` | category | Explore | ctx | SEO | — | community tables | category page |
 | `/forums/[category]/[thread]` | thread | Explore | ctx | SEO | — | community tables | thread page |
 | `/account` | account & profile settings | My Padi | hub | noindex | — | Supabase auth | account page |
+| `/ops` | **new** staff operations overview + daily handover (staff-only) | — | staff-only, not linked publicly | noindex | — | op_operational_cases | `ops/page.tsx` |
+| `/ops/market` | **new** Market Ops Analyst workspace (cases + SLA dashboard) | — | ctx from `/ops` | noindex | — | op_operational_cases, op_settlement_exceptions | `ops/market/page.tsx` |
+| `/ops/community` | **new** Social/Community Manager workspace (moderation + community cases) | — | ctx from `/ops` | noindex | — | op_content_reports, op_operational_cases | `ops/community/page.tsx` |
 | `/daily-double` | two-leg accumulator product | Today | footer + Today hub | SEO | — | calibrated bands + slate | daily-double page |
 | `/about`, `/privacy`, `/terms` | unchanged | footer | footer | SEO | — | static | static pages |
 | `/responsible-use` | responsible-use & support centre | footer | footer | SEO | — | static | responsible-use page |
