@@ -61,6 +61,9 @@ export default async function OpsHomePage() {
           <li>
             <Link href="/ops/community">Social / Community Manager</Link> — moderation queue and community cases.
           </li>
+          <li>
+            <Link href="/ops/training">Training sandbox</Link> — synthetic scenarios for new staff, never touches production.
+          </li>
         </ul>
       </nav>
     </main>
