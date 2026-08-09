@@ -136,3 +136,72 @@ export function applyTransition(current: CaseTransitionInput, to: CaseState, now
     escalatedAt: to === "escalated" ? now.toISOString() : current.escalatedAt ?? null
   };
 }
+
+// ------------------------------------------------------------------- actions
+
+/** The actions a staff member can take on a case from the workspace. */
+export type CaseActionName =
+  | "claim"
+  | "assign"
+  | "note"
+  | "acknowledge"
+  | "start"
+  | "wait"
+  | "resolve"
+  | "dismiss"
+  | "escalate"
+  | "quality_review";
+
+export const CASE_ACTIONS: readonly CaseActionName[] = [
+  "claim",
+  "assign",
+  "note",
+  "acknowledge",
+  "start",
+  "wait",
+  "resolve",
+  "dismiss",
+  "escalate",
+  "quality_review"
+];
+
+export function isCaseAction(value: unknown): value is CaseActionName {
+  return typeof value === "string" && (CASE_ACTIONS as readonly string[]).includes(value);
+}
+
+/** The target state an action moves the case to, or null when it changes no state. */
+export const CASE_ACTION_TARGET: Record<CaseActionName, CaseState | null> = {
+  claim: null,
+  assign: null,
+  note: null,
+  quality_review: null,
+  acknowledge: "acknowledged",
+  start: "in_progress",
+  wait: "waiting",
+  resolve: "resolved",
+  dismiss: "dismissed",
+  escalate: "escalated"
+};
+
+export type CaseEventType =
+  | "opened"
+  | "note"
+  | "assign"
+  | "unassign"
+  | "state_change"
+  | "escalate"
+  | "quality_review"
+  | "link";
+
+export function actionEventType(action: CaseActionName): CaseEventType {
+  if (action === "claim" || action === "assign") return "assign";
+  if (action === "note") return "note";
+  if (action === "escalate") return "escalate";
+  if (action === "quality_review") return "quality_review";
+  return "state_change";
+}
+
+/** Actions that must carry a note/reason — a resolution or judgement with no words is not accountable. */
+export function actionRequiresNote(action: CaseActionName): boolean {
+  return action === "note" || action === "resolve" || action === "dismiss" || action === "escalate" || action === "quality_review";
+}
