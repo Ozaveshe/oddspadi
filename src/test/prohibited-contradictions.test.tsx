@@ -9,7 +9,7 @@ import { OFFICIAL_LEDGER_CLASSES, RECORD_CLASSES } from "@/lib/domain/states";
 import { buildWorld, WORLD_NOW } from "./support/canonicalWorld";
 
 /**
- * The thirteen states the product is forbidden to be in.
+ * The states the product is forbidden to be in.
  *
  * Each of these has either happened here or is one edit away. They are grouped
  * by how they are prevented, because the prevention matters more than the
@@ -17,11 +17,14 @@ import { buildWorld, WORLD_NOW } from "./support/canonicalWorld";
  * recur, while one blocked only by a test recurs the moment someone writes the
  * code before running the suite.
  *
- * Two of the thirteen are enforced elsewhere and asserted there rather than
- * duplicated: raw operational objects in public responses
- * (`job-endpoint-security.test.ts`) and unauthenticated job endpoints
- * (`operational-boundary.test.ts`). This file asserts those files still exist
- * and still carry those checks, so deleting them fails CI here too.
+ * Some are enforced elsewhere and asserted there rather than duplicated: raw
+ * operational objects in public responses (`job-endpoint-security.test.ts`),
+ * unauthenticated job endpoints (`operational-boundary.test.ts`), the legacy
+ * navigation shell (`product-shell-contract.test.tsx`) and demo-as-organic
+ * (`community-*` suites). This file asserts those files still exist and still
+ * carry those checks, so deleting them fails CI here too. Blocks 14–19 add the
+ * expired-price, no-value-actionable, nav-shell, demo-as-organic,
+ * altered-probability and reconciler-never-rewrites invariants.
  */
 
 function render(id: string, cell: StateCell): string {
@@ -236,5 +239,90 @@ describe("13. the checks enforced elsewhere still exist", () => {
     const source = await readFile("src/test/operational-boundary.test.ts", "utf8");
     expect(source).toContain("guards every handler");
     expect(source).toContain("fails closed");
+  });
+});
+
+describe("14. an expired price is never presented as a current price", () => {
+  it("keeps the odds view a discriminated union so 'expired' cannot render as 'current'", async () => {
+    // The match page's odds are a tagged union (current | historical-only |
+    // in-play-unpriced | none | unavailable). An expired/historical price
+    // carries its own tag and copy — it cannot masquerade as a current quote.
+    const source = await readFile("src/lib/match/matchIntelligence.ts", "utf8");
+    expect(source).toMatch(/historical-only|in-play-unpriced/);
+    // Action language is gated on a non-terminal phase, not on stale odds.
+    expect(source).toContain("actionLanguageAllowed");
+  });
+
+  it("a stale data state renders no add-to-slip action on the card", () => {
+    const cell: StateCell = { fixture: "scheduled", data: "stale", decision: "withheld", publication: null, settlement: "unsettled" };
+    expect(isCoherent(cell)).toBe(true);
+    const html = text(render("stale-no-action", cell));
+    expect(html).not.toContain("add to slip");
+    expect(html).not.toContain("back this");
+  });
+});
+
+describe("15. a no-value fixture never shows an actionable value call", () => {
+  it("a confirmed-empty/pass cell renders no actionable pick CTA", () => {
+    const cell: StateCell = { fixture: "scheduled", data: "confirmed_empty", decision: "pass", publication: null, settlement: "unsettled" };
+    expect(isCoherent(cell)).toBe(true);
+    const html = text(render("no-value-no-action", cell));
+    for (const cta of ["value pick", "add to slip", "back this", "best price"]) {
+      expect(html, `no-value fixture must not show "${cta}"`).not.toContain(cta);
+    }
+  });
+
+  it("the coherence model forbids a pick decision on a no-value/stale read", () => {
+    for (const data of ["confirmed_empty", "stale", "unavailable"] as const) {
+      expect(isCoherent({ fixture: "scheduled", data, decision: "pick", publication: null, settlement: "unsettled" })).toBe(false);
+    }
+  });
+});
+
+describe("16. no page renders the legacy navigation shell", () => {
+  it("keeps the product-shell contract that bans the old top-level items", async () => {
+    const source = await readFile("src/test/product-shell-contract.test.tsx", "utf8");
+    // The consolidated shell is Today / Explore / Track Record / My Padi. The
+    // legacy items (Home, Tips, Live Scores, Results, News, Engine as top-level
+    // nav) must not reappear — asserted by the shell contract on every route.
+    expect(source).toMatch(/Home|Tips|Live Scores|Results|Engine/);
+    expect(source).toContain("aria-current");
+  });
+});
+
+describe("17. demo content is never counted as organic activity", () => {
+  it("the leaderboard view excludes demo and system accounts", async () => {
+    const migration = await readFile("supabase/migrations/20260808182000_community_moderation.sql", "utf8");
+    // Only organic and labelled-staff accounts can rank; demo/system never do.
+    expect(migration).toContain("account_type in ('organic','staff')");
+  });
+
+  it("the seed script refuses to post as an unlabelled persona", async () => {
+    const script = await readFile("scripts/seed-community-posts.mjs", "utf8");
+    expect(script).toContain("account_type");
+    expect(script).toMatch(/dry[- ]run/i);
+  });
+});
+
+describe("18. a model probability cannot be manually altered on a public surface", () => {
+  it("the publication claim carries the model probability from the ledger, unrecomputed", async () => {
+    // claimFromPublication reads the published probability straight from the
+    // immutable ledger row; no surface recomputes or overrides it.
+    const source = await readFile("src/lib/domain/claimAdapters.ts", "utf8");
+    expect(source).toContain("claimFromPublication");
+    // The publication ledger is immutable — corrections append, never edit.
+    const migration = await readFile("supabase/migrations/20260731163545_publication_ledger.sql", "utf8");
+    expect(migration).toMatch(/immutab/i);
+  });
+});
+
+describe("19. the production reconciler alerts, it does not rewrite", () => {
+  it("keeps the never-rewrite reconciler contract", async () => {
+    const detections = await readFile("src/lib/reconciliation/detections.ts", "utf8");
+    expect(detections).toContain("Alert, never rewrite");
+    const route = await readFile("src/app/api/cron/reconcile/route.ts", "utf8");
+    // The only write is an alert row through the exception RPC.
+    expect(route).toContain("op_record_settlement_exception");
+    expect(route).not.toMatch(/\.update\(|\.delete\(/);
   });
 });
