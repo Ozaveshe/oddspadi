@@ -2,6 +2,7 @@ import { requireStaff } from "@/lib/ops/staffAuth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { privateJson } from "@/lib/security/privateJson";
 import { caseFromException, humanizeKind, type CaseSeverity, type ExceptionRow } from "@/lib/ops/cases";
+import { categoryForReport } from "@/lib/ops/caseCategories";
 import { slaDueAt } from "@/lib/ops/serviceLevels";
 import { opsMode } from "@/lib/ops/trainingMode";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -79,17 +80,24 @@ export async function POST(request: Request): Promise<Response> {
     )
   );
   const reportCases = reports.map((row) => {
-    const category = String(row.category);
-    const severity = REPORT_SEVERITY[category] ?? "info";
+    const reportCategory = String(row.category);
+    const severity = REPORT_SEVERITY[reportCategory] ?? "info";
     return {
       workspace: "community" as const,
       source: "content_report" as const,
-      kind: `report_${category}`,
+      kind: `report_${reportCategory}`,
+      category: categoryForReport(reportCategory),
       severity,
-      title: `Report: ${humanizeKind(category)}`,
+      title: `Report: ${humanizeKind(reportCategory)}`,
       reportId: String(row.id),
       dueAt: slaDueAt("community", severity, now).toISOString(),
-      detail: { contentType: row.content_type, contentId: row.content_id, category }
+      detail: {
+        contentType: row.content_type,
+        contentId: row.content_id,
+        category: reportCategory,
+        affectedEntities: row.content_id ? [String(row.content_id)] : [],
+        evidence: `${reportCategory} report on ${row.content_type}`
+      }
     };
   });
 
@@ -112,6 +120,7 @@ export async function POST(request: Request): Promise<Response> {
       p_kind: c.kind,
       p_severity: c.severity,
       p_title: c.title,
+      p_category: c.category,
       p_exception_id: c.exceptionId,
       p_report_id: null,
       p_due_at: c.dueAt,
@@ -128,6 +137,7 @@ export async function POST(request: Request): Promise<Response> {
       p_kind: c.kind,
       p_severity: c.severity,
       p_title: c.title,
+      p_category: c.category,
       p_exception_id: null,
       p_report_id: c.reportId,
       p_due_at: c.dueAt,

@@ -23,7 +23,7 @@ import { guardCaseAction, assertProductionWriteAllowed, opsMode } from "@/lib/op
 export const dynamic = "force-dynamic";
 
 const CASE_COLUMNS =
-  "id, workspace, source, kind, severity, title, state, assignee_fingerprint, due_at, opened_at, escalated_at, resolved_at, resolution, resolved_by";
+  "id, workspace, source, kind, category, severity, title, state, assignee_fingerprint, due_at, opened_at, escalated_at, resolved_at, resolution, resolved_by";
 
 const SEVERITY_RANK: Record<CaseSeverity, number> = { critical: 0, warning: 1, info: 2 };
 const ACTIVE_STATES: CaseState[] = ["open", "acknowledged", "in_progress", "waiting", "escalated"];
@@ -62,6 +62,7 @@ export async function GET(request: Request): Promise<Response> {
       workspace: row.workspace as CaseWorkspace,
       source: String(row.source),
       kind: String(row.kind),
+      category: (row.category as string | null) ?? null,
       severity: row.severity as CaseSeverity,
       title: String(row.title),
       state: row.state as CaseState,

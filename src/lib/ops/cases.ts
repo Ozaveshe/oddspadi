@@ -9,6 +9,8 @@
  * of the case rows a server route then writes.
  */
 
+import { categoryForExceptionKind, type CaseCategory } from "@/lib/ops/caseCategories";
+
 export type CaseSeverity = "critical" | "warning" | "info";
 export type CaseWorkspace = "market_ops" | "community";
 export type CaseSource = "reconciler_exception" | "settlement_exception" | "content_report" | "manual";
@@ -26,6 +28,7 @@ export type NewCase = {
   workspace: CaseWorkspace;
   source: CaseSource;
   kind: string;
+  category: CaseCategory;
   severity: CaseSeverity;
   title: string;
   exceptionId: string | null;
@@ -73,17 +76,26 @@ export function caseFromException(row: ExceptionRow, now: Date, dueAtFor: DueAtF
   const workspace = workspaceForExceptionKind(row.kind);
   const detail = row.detail ?? {};
   const message = typeof detail.message === "string" && detail.message.length > 0 ? detail.message : null;
+  const entity = typeof detail.entity === "string" && detail.entity.length > 0 ? detail.entity : null;
   const dueAt = dueAtFor(workspace, row.severity, now);
   return {
     workspace,
     source: row.kind.startsWith("reconciler_") ? "reconciler_exception" : "settlement_exception",
     kind: row.kind,
+    category: categoryForExceptionKind(row.kind),
     severity: row.severity,
     title: message ?? humanizeKind(row.kind),
     exceptionId: row.id,
     reportId: null,
     dueAt: dueAt ? dueAt.toISOString() : null,
-    detail: { ...detail, exceptionKind: row.kind }
+    // Affected entities and evidence are first-class case fields; they live in
+    // detail (jsonb) so a case never loses the trail back to the alert.
+    detail: {
+      ...detail,
+      exceptionKind: row.kind,
+      affectedEntities: entity ? [entity] : [],
+      evidence: message ?? humanizeKind(row.kind)
+    }
   };
 }
 
