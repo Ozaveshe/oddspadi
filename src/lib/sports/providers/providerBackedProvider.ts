@@ -1,5 +1,5 @@
 import { firstConfiguredEnv } from "@/lib/env";
-import { personNamesAlign, teamNamesAlign } from "@/lib/sports/providers/teamNameAlignment";
+import { personNamesAlign, squadQualifiersMoveTogether, teamNamesAlign } from "@/lib/sports/providers/teamNameAlignment";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
 import { fetchOpenMeteoForecast } from "@/lib/sports/providers/openMeteo";
 import {
@@ -1537,8 +1537,48 @@ function firstOddsEventForFixture(events: OddsApiEvent[], homeName: string, away
   );
 }
 
-function matchEventKeys(match: Match): string[] {
+function matchEventKeys(match: { homeTeam: { name: string }; awayTeam: { name: string }; kickoffTime: string }): string[] {
   return eventKeys(match.homeTeam.name, match.awayTeam.name, match.kickoffTime);
+}
+
+type FixtureIdentity = { kickoffTime: string; homeTeam: { name: string }; awayTeam: { name: string } };
+
+/**
+ * The odds-only entries worth appending to a fixture provider's list.
+ *
+ * Odds-only entries exist to cover matches the fixture provider does not list,
+ * so one is dropped only when it duplicates a fixture already being published —
+ * never merely because the competition is covered, which would hide a genuinely
+ * missing match. Exact keys catch the common case; the aligner catches providers
+ * spelling the same club differently ("Sutjeska" vs "FK Sutjeska Nikšić") at the
+ * same kickoff.
+ *
+ * The qualifier check is what keeps the aligner honest across squads. The Odds
+ * API never states "W" and API-Sports always does, so a WNBA game arrives as
+ * "Valkyries/Tempo" against "Valkyries W/Tempo W" — one match, and the marker
+ * moves on both sides together. A marker on one side only is two different
+ * matches, and appending that odds event is the correct outcome.
+ *
+ * `namesAlign` is a parameter because tennis joins on people: the club matcher
+ * discards tokens under three characters, which makes every "Zverev" the same
+ * player.
+ */
+export function oddsOnlyMatchesToAppend<T extends FixtureIdentity>(
+  fixtureMatches: FixtureIdentity[],
+  oddsBackedMatches: T[],
+  namesAlign: (left: string, right: string) => boolean
+): T[] {
+  const fixtureKeys = new Set(fixtureMatches.flatMap(matchEventKeys));
+  return oddsBackedMatches.filter((match) => {
+    if (matchEventKeys(match).some((key) => fixtureKeys.has(key))) return false;
+    return !fixtureMatches.some(
+      (fixture) =>
+        kickoffsAlign(fixture.kickoffTime, match.kickoffTime) &&
+        namesAlign(fixture.homeTeam.name, match.homeTeam.name) &&
+        namesAlign(fixture.awayTeam.name, match.awayTeam.name) &&
+        squadQualifiersMoveTogether(fixture.homeTeam.name, match.homeTeam.name, fixture.awayTeam.name, match.awayTeam.name)
+    );
+  });
 }
 
 function matchesByEventKey(matches: Match[]): Map<string, Match> {
@@ -3254,23 +3294,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       ];
     });
 
-    const apiFootballKeys = new Set(matches.flatMap(matchEventKeys));
-    // Odds-only entries exist to cover matches the fixture provider does not
-    // list, so they are dropped only when they duplicate a fixture we already
-    // publish — never merely because the competition is covered, which would
-    // hide a genuinely missing match. Exact keys catch the common case; the
-    // aligner catches providers spelling the same club differently
-    // ("Sutjeska" vs "FK Sutjeska Nikšić") at the same kickoff.
-    const unmatchedOddsBackedMatches = oddsBackedMatches.filter((match) => {
-      if (matchEventKeys(match).some((key) => apiFootballKeys.has(key))) return false;
-      return !matches.some(
-        (fixture) =>
-          kickoffsAlign(fixture.kickoffTime, match.kickoffTime) &&
-          teamNamesAlign(fixture.homeTeam.name, match.homeTeam.name) &&
-          teamNamesAlign(fixture.awayTeam.name, match.awayTeam.name)
-      );
-    });
-    const mergedMatches = [...matches, ...unmatchedOddsBackedMatches];
+    const mergedMatches = [...matches, ...oddsOnlyMatchesToAppend(matches, oddsBackedMatches, teamNamesAlign)];
 
     return mergedMatches.length ? mergedMatches : this.fallback.getFixtures(date, sport);
   }
@@ -3383,9 +3407,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       ];
     });
 
-    const apiBasketballKeys = new Set(matches.flatMap(matchEventKeys));
-    const unmatchedOddsBackedMatches = oddsBackedMatches.filter((match) => !matchEventKeys(match).some((key) => apiBasketballKeys.has(key)));
-    const mergedMatches = [...matches, ...unmatchedOddsBackedMatches];
+    const mergedMatches = [...matches, ...oddsOnlyMatchesToAppend(matches, oddsBackedMatches, teamNamesAlign)];
 
     return mergedMatches.length ? mergedMatches : this.fallback.getFixtures(date, "basketball");
   }
@@ -3509,9 +3531,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       ];
     });
 
-    const apiTennisKeys = new Set(matches.flatMap(matchEventKeys));
-    const unmatchedOddsBackedMatches = oddsBackedMatches.filter((match) => !matchEventKeys(match).some((key) => apiTennisKeys.has(key)));
-    const mergedMatches = [...matches, ...unmatchedOddsBackedMatches];
+    const mergedMatches = [...matches, ...oddsOnlyMatchesToAppend(matches, oddsBackedMatches, personNamesAlign)];
     return mergedMatches.length ? mergedMatches : this.fallback.getFixtures(date, "tennis");
   }
 

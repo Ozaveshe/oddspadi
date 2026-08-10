@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DecisionSummary, Match } from "@/lib/sports/types";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { refreshCanonicalDecision } from "@/lib/sports/prediction/canonicalDecision";
+import { findDuplicateFixtures } from "./duplicateFixtures";
 import {
   buildSportsSlate,
   DEFAULT_STORED_FIXTURE_IDENTITY_MAX_AGE_MS,
@@ -938,9 +939,45 @@ export async function readStoredSlate({
   const identityMaxAgeMs = Math.max(maxFixtureAgeMs, DEFAULT_STORED_FIXTURE_IDENTITY_MAX_AGE_MS);
   const expiredIdentityRows = eligibleRows.filter((row) => !isStoredFixtureFresh(text(row.last_synced_at), now, identityMaxAgeMs));
   const fixtureRows = eligibleRows.filter((row) => isStoredFixtureFresh(text(row.last_synced_at), now, identityMaxAgeMs));
-  const databaseFixtureIds = fixtureRows.map((row) => String(row.id));
-  const teamExternalIds = [...new Set(fixtureRows.flatMap((row) => [text(row.home_team_external_id), text(row.away_team_external_id)]).filter((value): value is string => Boolean(value)))];
-  const leagueExternalIds = [...new Set(fixtureRows.map((row) => text(row.league_external_id)).filter((value): value is string => Boolean(value)))];
+
+  // One real match held by two providers is two rows here, because `op_fixtures`
+  // is keyed on `(provider, sport, external_id)`. Publishing both counts the
+  // match twice and splits its prices, so the slate keeps the canonical row and
+  // reads the other one's odds against it. The duplicate is dropped from the
+  // board but not from the odds read: measured 2026-08-03, 39 of 200 groups had
+  // every stored bookmaker on the row being dropped.
+  const { groups: duplicateGroups } = findDuplicateFixtures(
+    fixtureRows.map((row) => ({
+      id: String(row.id),
+      sport: String(row.sport),
+      provider: String(row.provider),
+      externalId: String(row.external_id),
+      status: String(row.status),
+      kickoffAt: String(row.kickoff_at),
+      homeTeamName: text(row.home_team_name) ?? "",
+      awayTeamName: text(row.away_team_name) ?? "",
+      homeScore: number(row.home_score),
+      awayScore: number(row.away_score)
+    }))
+  );
+  const canonicalExternalIdByFixtureId = new Map<string, string>();
+  const canonicalExternalIdByExternalId = new Map<string, string>();
+  const mergedAwayFixtureIds = new Set<string>();
+  for (const group of duplicateGroups) {
+    for (const duplicate of group.duplicates) {
+      mergedAwayFixtureIds.add(duplicate.id);
+      canonicalExternalIdByFixtureId.set(duplicate.id, group.canonical.externalId);
+      canonicalExternalIdByExternalId.set(duplicate.externalId, group.canonical.externalId);
+    }
+  }
+  const slateFixtureRows = fixtureRows.filter((row) => !mergedAwayFixtureIds.has(String(row.id)));
+
+  const databaseFixtureIds = slateFixtureRows.map((row) => String(row.id));
+  // Decisions, summaries and identity belong to the rows that publish; odds are
+  // read across the merged-away rows too, then attributed to their canonical.
+  const oddsFixtureIds = [...databaseFixtureIds, ...mergedAwayFixtureIds];
+  const teamExternalIds = [...new Set(slateFixtureRows.flatMap((row) => [text(row.home_team_external_id), text(row.away_team_external_id)]).filter((value): value is string => Boolean(value)))];
+  const leagueExternalIds = [...new Set(slateFixtureRows.map((row) => text(row.league_external_id)).filter((value): value is string => Boolean(value)))];
   const [
     { data: odds, error: oddsError },
     { data: decisions, error: decisionsError },
@@ -949,8 +986,8 @@ export async function readStoredSlate({
     { data: leagues, error: leaguesError },
     lastRun
   ] = await Promise.all([
-    databaseFixtureIds.length
-      ? client.rpc("op_latest_odds_for_fixtures", { p_fixture_ids: databaseFixtureIds })
+    oddsFixtureIds.length
+      ? client.rpc("op_latest_odds_for_fixtures", { p_fixture_ids: oddsFixtureIds })
       : Promise.resolve({ data: [], error: null }),
     databaseFixtureIds.length
       ? readRowsInChunks(databaseFixtureIds, (idChunk) => client.from("op_market_decisions").select("id,fixture_id,fixture_external_id,market,selection,odds_snapshot_id,model_version,engine_version,model_probability,implied_probability,no_vig_probability,value_edge,expected_value,confidence,risk,data_quality,evidence_quality,decision_status,public_status,reason,generated_at,expires_at,superseded_by,settlement_status,is_preliminary,provider,market_prior_weight,market_prior_applied").in("fixture_id", idChunk).is("superseded_by", null).limit(10000))
@@ -977,8 +1014,16 @@ export async function readStoredSlate({
   // here is the *external* id, which can repeat across providers — so pick the
   // newest explicitly rather than trusting arrival order.
   for (const row of (odds ?? []) as Array<Record<string, unknown>>) {
-    const key = `${row.fixture_external_id}:${row.market}:${row.selection}`;
-    const snapshot = canonicalOddsSnapshotFromRow(row);
+    const read = canonicalOddsSnapshotFromRow(row);
+    // A price quoted against a merged-away row is re-filed under the fixture
+    // that publishes. Only the fixture it belongs to changes: the bookmaker,
+    // provider and capture time still say exactly who quoted it and when.
+    const canonicalFixtureId =
+      canonicalExternalIdByFixtureId.get(String(row.fixture_id)) ??
+      canonicalExternalIdByExternalId.get(read.fixtureId) ??
+      read.fixtureId;
+    const snapshot = canonicalFixtureId === read.fixtureId ? read : { ...read, fixtureId: canonicalFixtureId };
+    const key = `${canonicalFixtureId}:${snapshot.market}:${snapshot.selection}`;
     const seen = latestOdds.get(key);
     if (seen && Date.parse(seen.capturedAt) >= Date.parse(snapshot.capturedAt)) continue;
     latestOdds.set(key, snapshot);
@@ -1015,7 +1060,7 @@ export async function readStoredSlate({
 
   const teamRows = (teams ?? []) as StoredIdentityRow[];
   const leagueRows = (leagues ?? []) as StoredIdentityRow[];
-  const fixtures: CanonicalFixture[] = fixtureRows.map((row) => {
+  const fixtures: CanonicalFixture[] = slateFixtureRows.map((row) => {
     const artwork = storedFixtureArtwork({ fixture: row, teams: teamRows, leagues: leagueRows });
     return {
       fixtureId: String(row.external_id),
@@ -1050,6 +1095,13 @@ export async function readStoredSlate({
   const expiredReason = expiredIdentityRows.length
     ? `${expiredIdentityRows.length} stored fixture identit${expiredIdentityRows.length === 1 ? "y was" : "ies were"} excluded because provider sync exceeded ${Math.round(identityMaxAgeMs / 60_000)} minutes.`
     : null;
+  // Stated, not silent. A board that quietly shrinks is indistinguishable from
+  // a provider that stopped covering those matches.
+  const duplicateReason = mergedAwayFixtureIds.size
+    ? `${mergedAwayFixtureIds.size} stored fixture${mergedAwayFixtureIds.size === 1 ? " was" : "s were"} merged into ${duplicateGroups.length} canonical row${duplicateGroups.length === 1 ? "" : "s"} as cross-provider duplicates; their stored prices are read against the canonical fixture.`
+    : null;
+  // A duplicate is a storage artefact, not a provider failure, so it never
+  // downgrades the run status.
   const providerStatus = staleRows.length || expiredIdentityRows.length
     ? fixtures.length ? "partial" : "failed"
     : lastRun?.status ?? (fixtures.length ? "completed" : "empty");
@@ -1061,7 +1113,12 @@ export async function readStoredSlate({
     decisionSummariesByFixture,
     range: { from: from.slice(0, 10), to: new Date(new Date(toExclusive).getTime() - 1).toISOString().slice(0, 10) },
     providerStatus,
-    providerErrors: [...(lastRun?.errors ?? []), ...(staleReason ? [staleReason] : []), ...(expiredReason ? [expiredReason] : [])],
+    providerErrors: [
+      ...(lastRun?.errors ?? []),
+      ...(staleReason ? [staleReason] : []),
+      ...(expiredReason ? [expiredReason] : []),
+      ...(duplicateReason ? [duplicateReason] : [])
+    ],
     lastRun
   });
 }

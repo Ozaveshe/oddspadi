@@ -49,6 +49,42 @@ export function teamNamesAlign(left: string, right: string): boolean {
   return fewer.every((token) => more.some((candidate) => teamNameTokenMatches(token, candidate)));
 }
 
+/**
+ * Squad qualifiers a name states: the women's, youth, and reserve markers that
+ * separate one squad of a club from another.
+ *
+ * `teamNamesAlign` discards them — "W" is below its three-character floor and
+ * "Women" is simply a token the shorter spelling lacks. That is right for
+ * pricing a fixture from a differently spelled event and wrong for deciding two
+ * stored rows are the same match, where it would fold a women's fixture into the
+ * men's one.
+ */
+const SQUAD_QUALIFIER_TOKENS = new Set(["w", "women", "u19", "u21", "u23", "ii"]);
+
+export function squadQualifiers(value: string): string {
+  const tokens = value
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => SQUAD_QUALIFIER_TOKENS.has(token));
+  return [...new Set(tokens)].sort().join("+");
+}
+
+/**
+ * True when a qualifier difference describes the provider rather than the match.
+ *
+ * The Odds API never states the qualifier; API-Sports always does, so its whole
+ * fixture shifts together: "Valkyries/Tempo" against "Valkyries W/Tempo W" is one
+ * WNBA game. A shift on one side only — "Lanus W/Instituto" against
+ * "Lanus/Instituto" — is two different matches, and must not align.
+ */
+export function squadQualifiersMoveTogether(leftHome: string, rightHome: string, leftAway: string, rightAway: string): boolean {
+  return (
+    `${squadQualifiers(leftHome)}>${squadQualifiers(rightHome)}` === `${squadQualifiers(leftAway)}>${squadQualifiers(rightAway)}`
+  );
+}
+
 /** Single letters in a name, folded and lowercased: the initials it states. */
 function statedInitials(value: string): Set<string> {
   return new Set(

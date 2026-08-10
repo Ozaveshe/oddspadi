@@ -4,7 +4,7 @@ Running counter of concrete, useful improvements made in the deep-work session (
 Each entry is one real change: a bug fix, accessibility improvement, mobile/UX polish, performance
 gain, SEO enhancement, or new user-facing capability. No padding — only changes that stand on their own.
 
-**Counter: 111**
+**Counter: 115**
 
 Baseline before work: typecheck clean, 550 tests green. Approach: four parallel read-only audits
 (a11y, SEO, mobile, bugs) surfaced concrete findings; fixed in verified batches.
@@ -289,3 +289,48 @@ page look dead.
   news index shows clean dates + Updated badges; llms.txt served; `Cache-Control: public,
   s-maxage=60, stale-while-revalidate=300` confirmed on the predictions API; /predictions streams
   (loading h1 followed by the real slate in one response).
+
+## Sweep 11 — One match, two provider rows
+
+Measured 2026-08-03 with `npm run ops:duplicate-fixtures`: 28,300 stored fixtures held **200
+duplicate groups (206 droppable rows)** — one real match filed twice because `op_fixtures` is keyed
+on `(provider, sport, external_id)`. `Lanus vs Instituto de Córdoba` (the-odds-api-events,
+`abandoned`, no result reachable) sat beside `Lanus vs Instituto Cordoba` (api-football, `finished`
+0-1). Today-forward the rate is 38 groups in 1,160 rows (3.3% of the live board).
+
+112. `scripts/diagnose-duplicate-fixtures.ts` (`npm run ops:duplicate-fixtures`) — read-only sweep
+     reporting duplicate groups by sport, provider pair and evidence tier, which row actually holds
+     the result, crest coverage per provider, how much bookmaker depth a merge recovers, and the
+     clusters it refuses to resolve.
+113. `duplicateFixtures.ts` — cross-provider duplicate detection: same sport, kickoffs within the
+     15-minute tolerance the odds join already uses, both team names aligned by `teamNamesAlign`,
+     and squad qualifiers that move on both sides together. Refuses any cluster a single provider
+     covers more than once, so a club fielding two squads at one kickoff is reported, not merged.
+     Canonical row prefers a results-backed provider, then a row carrying a final score, then
+     external id for determinism.
+114. `readStoredSlate` merges then excludes: the duplicate is dropped from the board, but its odds
+     are still read and attributed to the canonical fixture. Measured, 39 of 200 groups had **every**
+     stored bookmaker on the row being dropped — `api-football | Nashville SC vs Atlanta United`
+     carried no prices while its Odds API twin carried six — so a bare exclusion would have deleted
+     pricing rather than consolidated it. Bookmaker, provider and capture time are never rewritten,
+     and the slate states how many rows it merged instead of quietly shrinking.
+115. Ingest guard extended to basketball and tennis. Football already refused an odds-only event
+     that aligned with a fixture it held; basketball and tennis compared exact event keys only,
+     which is why every WNBA game arrived twice (`Golden State Valkyries W vs Toronto Tempo W`
+     against `Golden State Valkyries vs Toronto Tempo`, four minutes apart). All three sports now
+     share `oddsOnlyMatchesToAppend`, with tennis passing the person matcher because the club
+     matcher's three-character floor makes every "Zverev" the same player.
+
+### Known gaps (not closed by this sweep)
+
+- The **SQL projection builder** `op_refresh_projection_daily_slate` reads `op_fixtures` directly,
+  so the `daily_fixture_slate` projection still counts duplicates. Only the TypeScript slate read
+  is de-duplicated.
+- The 206 stored duplicate rows are **hidden at read time, not removed**. No backfill was run.
+- `the-odds-api-scores` does supply results: in 4 groups it holds the only final score, in 6 it is
+  the only row that reached `finished`, and it disagrees with api-basketball twice
+  (`80-102/abandoned` vs `88-110/finished`). The canonical row never inherits a score — these are
+  reported for a source-side fix, not silently merged.
+- A separate `api_football` lane (underscore, 2,662 rows, 380 future-dated, last synced 2026-07-13)
+  stores `api-football:*` external ids with **null team names**. It is invisible to both duplicate
+  tests and stays off the board only because the freshness filter drops it.

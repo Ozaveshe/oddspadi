@@ -37,6 +37,7 @@
     "ops:reconcile-ledger": "node --env-file-if-exists=.env.local scripts/reconcile-publication-ledger.mjs",
     "ops:loadtest": "node --env-file-if-exists=.env.local scripts/load-test-public-reads.mjs",
     "ops:reconcile-truth": "node --env-file-if-exists=.env.local scripts/reconcile-truth.mjs",
+    "ops:duplicate-fixtures": "node --env-file-if-exists=.env.local node_modules/vite-node/vite-node.mjs --config scripts/vite-node.config.ts scripts/diagnose-duplicate-fixtures.ts",
     "docs:state-matrix": "vite-node --config scripts/vite-node.config.ts scripts/generate-state-matrix-doc.ts",
     "gate:release": "node scripts/release-gate.mjs",
     "ops:publish": "node --env-file-if-exists=.env.local scripts/publish-picks.mjs",
