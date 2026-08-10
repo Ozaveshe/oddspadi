@@ -79,6 +79,7 @@ type ExistingCaptureRow = {
   publication_id: string;
   capture_status: CaptureStatus;
   closing_odds: number | null;
+  source_count: number | null;
 };
 
 /**
@@ -201,7 +202,7 @@ export async function runClosingCapture({
   // the data available at a moment, and provider data arrives late.
   const { data: existingData, error: existingError } = await client
     .from("op_closing_prices")
-    .select("publication_id,capture_status,closing_odds")
+    .select("publication_id,capture_status,closing_odds,source_count")
     .eq("is_current", true)
     .in(
       "publication_id",
@@ -371,7 +372,16 @@ export async function runClosingCapture({
     const prior = existingByPublication.get(publication.id);
     // An hourly sweep re-reading an unchanged market must not write a new
     // revision every hour. Only an outcome that actually moved is worth a row.
-    if (prior && prior.capture_status === capture.captureStatus && numeric(prior.closing_odds) === capture.closingOdds) {
+    //
+    // Source count is part of "moved" because the reason quotes it: a claim
+    // that goes from one book to two is still `insufficient_sources`, but
+    // "Only 1 book priced this selection" has become false.
+    if (
+      prior &&
+      prior.capture_status === capture.captureStatus &&
+      numeric(prior.closing_odds) === capture.closingOdds &&
+      (prior.source_count ?? 0) === capture.sourceCount
+    ) {
       continue;
     }
 

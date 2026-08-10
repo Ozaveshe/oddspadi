@@ -393,7 +393,7 @@ describe("closing capture sweep", () => {
       client: stubClient({
         publications: [publication()],
         snapshots: [],
-        existing: [{ publication_id: "pub-1", capture_status: "no_quotes", closing_odds: null }],
+        existing: [{ publication_id: "pub-1", capture_status: "no_quotes", closing_odds: null, source_count: 0 }],
         insert,
         rpc
       })
@@ -402,6 +402,25 @@ describe("closing capture sweep", () => {
     expect(run.byStatus.no_quotes).toBe(1);
     expect(insert).not.toHaveBeenCalled();
     expect(supersedeCalls(rpc)).toHaveLength(0);
+  });
+
+  it("rewrites an absent outcome when the book count moved under it", async () => {
+    // Still `insufficient_sources`, but "Only 1 book priced this selection" is
+    // no longer true once a second book has quoted.
+    const rpc = vi.fn().mockResolvedValue({ error: null });
+    await runClosingCapture({
+      persist: true,
+      now: NOW,
+      client: stubClient({
+        publications: [publication()],
+        snapshots: [...quoteRows("a", 20, 1.9), ...quoteRows("b", 15, 2.0)],
+        existing: [{ publication_id: "pub-1", capture_status: "insufficient_sources", closing_odds: null, source_count: 1 }],
+        rpc
+      })
+    });
+    const [call] = supersedeCalls(rpc);
+    expect(call?.[1]).toMatchObject({ p_capture_status: "insufficient_sources", p_source_count: 2 });
+    expect(call?.[1].p_missing_reason).toContain("Only 2 books");
   });
 
   it("rewrites nothing when a captured close is re-derived unchanged", async () => {
