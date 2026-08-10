@@ -44,19 +44,37 @@ it exists to catch.
 | `stale-projection` | warning | Older than 3× the refresh interval. |
 | `orphaned-community-fixture` | warning | A member tip against a fixture that does not exist. |
 
-## Measured state, 2026-08-03
+## Measured state
 
 Run against production. These are results, not targets.
+
+**2026-08-03**, hours before the first publisher run:
 
 ```
 scope: 0 publications, 28,214 fixtures, 16 stories, 7 projections, 0 community tips
 no findings
 ```
 
-**The official ledger holds zero publications.** Every ledger check therefore
-passed vacuously, and the job says so in as many words rather than printing a
-clean report. An empty finding list against an empty ledger is not evidence of
+The official ledger held zero publications, so every ledger check passed
+vacuously — and the job said so in as many words rather than printing a clean
+report. An empty finding list against an empty ledger is not evidence of
 correctness.
+
+**2026-08-07T06:17Z**, after 230 publications and the void repair:
+
+```
+scope: 230 publications, 29,948 fixtures, 36 stories, 11 projections, 0 community tips
+no findings
+```
+
+Same output, different meaning. The vacuous-pass note did not print this time,
+because the branch that prints it is `if (!result.scope.publications)` — the
+checks ran against rows. This is the first run of this job that is evidence of
+anything.
+
+It is also a narrow pass. `missing-settlement` is the check most likely to fire
+next: 146 of the 230 claims are unsettled, and the check fires 60 minutes after
+a fixture goes terminal. A clean report today is not a promise about tomorrow.
 
 ### Incident: projections frozen for 8.5 hours
 
@@ -95,12 +113,12 @@ rather than the target claimed.
 
 | Target | Measured | Honest status |
 |---|---|---|
-| 100% cross-page reconciliation for official publication IDs | 0 publications exist | **Unmeasurable.** Vacuously true. The machinery is in place and tested against synthetic worlds. |
+| 100% cross-page reconciliation for official publication IDs | 230 publications, 0 findings | **Met** at 2026-08-07, on real rows rather than vacuously. |
 | Zero finished-match contradictions | 1 found and fixed (`ABD`) | **Now enforced** by `cross-surface-consistency.test.tsx`. |
 | Zero raw operational objects exposed | 0 on the probed surfaces | Enforced by `job-endpoint-security.test.ts` and `operational-boundary.test.ts`. |
 | Zero failed reads shown as confirmed empty | 0 in tests | Enforced by the coherence model and the cross-surface suite. |
-| Zero official picks without pre-kickoff evidence | 0 publications | **Unmeasurable**, enforced by a Postgres constraint. |
-| Settlement within 60 min of a final result | no settled publications | **Unmeasurable.** The reconciler will report it once the ledger fills. |
+| Zero official picks without pre-kickoff evidence | 230 publications, 0 `publication-after-kickoff` findings | **Met**, and enforced by a Postgres constraint rather than by the check. |
+| Settlement within 60 min of a final result | 84 settled, 0 `missing-settlement` findings at 2026-08-07 | **Met so far.** 146 claims are still unsettled, so this is the target most likely to break next. |
 | Closing-line capture above the gate | not measured here | See the engine audit. |
 | ≥99.5% public read availability | not instrumented | **Not measured.** No availability metric is collected. |
 | No unbounded public database queries | keyset pagination in the read paths | Partially enforced; no test fails a build on an unbounded query. |
@@ -145,6 +163,11 @@ For the signals that exist:
 ## Scheduling
 
 The reconciler is not yet scheduled. Running it hourly alongside the outcome
-ledger sweep is the intended shape; it is deliberately left manual until the
-ledger holds publications, because an hourly job that reports "0 publications,
+ledger sweep is the intended shape; it was deliberately left manual until the
+ledger held publications, because an hourly job that reports "0 publications,
 no findings" trains operators to ignore it.
+
+That condition cleared on 2026-08-03. The reason for leaving it manual no longer
+applies, and scheduling it is now outstanding work rather than a deliberate
+choice — a monitor nobody has to remember to run is the only kind that catches
+the thing you were not watching for.

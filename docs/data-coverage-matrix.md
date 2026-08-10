@@ -19,15 +19,21 @@ so much effort avoiding elsewhere.
 | `op_calibration_runs` | 154 | Calibration snapshots |
 | `op_backtest_runs` | 25 | Stored replays |
 | `op_public_projections` | 6 | Public read model |
-| **`op_publications`** | **0** | **The official ledger** |
-| `op_publication_revisions` | 0 | Corrections |
-| `op_publication_settlements` | 0 | Graded publications |
+| **`op_publications`** † | **0** | **The official ledger** |
+| `op_publication_revisions` † | 0 | Corrections |
+| `op_publication_settlements` † | 0 | Graded publications |
 | `op_calibration_promotions` | 0 | Promoted calibrators |
 | `op_community_tips` | 0 | Member selections |
 
+† **Superseded.** Publication opened on 2026-08-03. Re-measured 2026-08-07, the
+three ledger tables hold **230**, **50** and **134** rows. The rest of this
+table is left at its 2026-08-02 values; a snapshot with mixed dates is worse
+than a stale one, because nothing in it tells you which rows are which.
+
 ## The number that matters
 
-**628,755 decisions. 2,028 graded outcomes. 0 official publications.**
+**628,755 decisions. 2,028 graded outcomes. 230 official publications** — of
+which 84 are settled, as of 2026-08-07.
 
 Raw volume is not usable training data, and the brief is explicit about not
 treating it as such. The chain from a stored decision to evidence about model
@@ -36,13 +42,16 @@ quality has three narrowings:
 1. **Decisions → outcomes: 2,028 / 628,755 ≈ 0.32%.** Almost every decision the
    engine has ever made is ungraded. A decision without a settled outcome
    contributes nothing to calibration.
-2. **Outcomes → official publications: 0 / 2,028.** Nothing has ever entered the
-   official ledger. The graded outcomes are internal decisions and shadow runs
-   — legitimate training evidence, but not a public track record, and the
-   record-class allowlist is what keeps them out.
-3. **Publications → closing-line evidence: 0.** No publication means no
-   publication price, so closing-line value is currently unmeasurable for the
-   public product regardless of how many odds snapshots exist.
+2. **Outcomes → official publications: 230, settled 84.** The ledger opened on
+   2026-08-03 and the second narrowing is now the binding one: 84 graded public
+   claims against 2,028 graded internal outcomes. The other 1,944 are internal
+   decisions and shadow runs — legitimate training evidence, but not a public
+   track record, and the record-class allowlist is what keeps them out.
+3. **Publications → closing-line evidence.** Every publication carries an odds
+   snapshot id at publication time, so closing-line value is measurable for the
+   public product for the first time — on 230 rows, which is far too few to
+   conclude anything yet. It is no longer structurally unmeasurable, which is a
+   different statement from being measured.
 
 ## What this implies for the engine brief
 
@@ -62,7 +71,7 @@ measurement. Against the measured state:
 | Calibration (8) | **Partly** | 154 calibration runs exist; segment-level calibrators would be over-fitted at this sample size. |
 | Uncertainty (9) | **Yes** | Does not depend on sample size. |
 | Decision policy (10) | **Yes** — already versioned | Thresholds exist and are configurable per sport. |
-| Closing-line value (11) | **No** | Requires publications. Currently zero. |
+| Closing-line value (11) | **Partly** | Unblocked 2026-08-03. All 230 publications carry an odds snapshot id and price at publication; 230 rows is too thin to conclude from. |
 | Backtest realism (12) | **Partly** | Odds history supports it; void/settlement realism needs the graded set. |
 | Model evaluation (13) | **Blocked on 5–8** | |
 | Promotion and shadow (16) | **Machinery exists**, nothing promoted | `op_calibration_promotions` is empty. |
@@ -70,13 +79,14 @@ measurement. Against the measured state:
 ## Honest conclusion
 
 The measurement infrastructure is real and the odds corpus is substantial. The
-*evaluation* corpus is not: 2,028 graded outcomes across three sports, and zero
-official publications, is not enough to claim a promoted model beat a baseline.
+*evaluation* corpus is not: 2,028 graded outcomes across three sports, and 84
+settled public claims, is not enough to claim a promoted model beat a baseline.
 
-The correct next step is not to build a bigger model. It is to raise the
-graded-outcome count — settle more decisions, widen the outcome backfill — and
-to publish through the ledger so closing-line value becomes measurable at all.
-Any promotion decision taken before that would be made on a sample that cannot
-support it.
+Publication opening on 2026-08-03 changed the shape of the problem without
+changing that conclusion. Closing-line value went from unmeasurable to
+measurable-on-230-rows, which is progress in kind rather than in quantity. The
+correct next step is still to raise the graded count — settle more decisions,
+widen the outcome backfill, keep publishing — and any promotion decision taken
+before that would be made on a sample that cannot support it.
 
 Regenerate the store sizes before quoting them; they move daily.
