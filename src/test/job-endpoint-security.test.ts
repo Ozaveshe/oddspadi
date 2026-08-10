@@ -37,7 +37,8 @@ describe("scheduled jobs cannot be triggered anonymously", () => {
       if (!touchesDatabaseDirectly && !isWorker) continue;
       const verifiesIncoming =
         source.includes("request.headers.get(\"x-oddspadi-schedule-token\")") || source.includes("scheduleToken");
-      const comparesSafely = source.includes("timingSafeEqual") || source.includes("tokenMatches");
+      const comparesSafely =
+        source.includes("timingSafeEqual") || source.includes("tokenMatches") || source.includes("safeTokenMatches");
       if (!verifiesIncoming || !comparesSafely) unauthenticated.push(file);
     }
     expect(unauthenticated, "every function that reaches the database must verify a secret in code").toEqual([]);
@@ -63,6 +64,36 @@ describe("scheduled jobs cannot be triggered anonymously", () => {
       expect(rejection, `401 body must not mention ${leak}`).not.toContain(leak);
     }
     expect(rejection).toContain("401");
+  });
+});
+
+describe("every sweep is a scheduled entrypoint, never an anonymous public function", () => {
+  it("declares a schedule (or is registered in netlify.toml) for every *-sweep", async () => {
+    const toml = await readFile(join(process.cwd(), "netlify.toml"), "utf8");
+    const orphans: string[] = [];
+    for (const file of await functionFiles()) {
+      if (!file.endsWith("-sweep.ts")) continue;
+      const source = await readFile(join(FUNCTIONS_DIR, file), "utf8");
+      const scheduledInCode = /export const config[^=]*=\s*\{[^}]*schedule/.test(source);
+      const base = file.replace(/\.ts$/, "");
+      const scheduledInToml = toml.includes(base);
+      if (!scheduledInCode && !scheduledInToml) orphans.push(file);
+    }
+    // An unscheduled sweep is an ordinary HTTP function: anyone can invoke it and
+    // drive the worker it forwards to. Every sweep must be a scheduled entrypoint.
+    expect(orphans, "these sweeps are anonymously invocable").toEqual([]);
+  });
+});
+
+describe("token comparison never branches on secret length", () => {
+  it("uses the shared constant-time verifier, not a length-first compare", async () => {
+    const offenders: string[] = [];
+    for (const file of await functionFiles()) {
+      const source = await readFile(join(FUNCTIONS_DIR, file), "utf8");
+      if (/\.length\s*===\s*\w+\.length\s*&&\s*timingSafeEqual/.test(source)) offenders.push(file);
+    }
+    // A length check before timingSafeEqual leaks the secret's length by timing.
+    expect(offenders, "replace length-first compares with safeTokenMatches").toEqual([]);
   });
 });
 

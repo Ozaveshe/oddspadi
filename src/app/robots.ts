@@ -9,8 +9,8 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
         // `/offline` is the service worker's fallback shell and `/tips` is a
         // permanent alias for `/predictions/today`; neither should be crawled
-        // as a page in its own right.
-        disallow: ["/api/", "/account", "/offline", "/tips"]
+        // as a page in its own right. `/ops` is the staff operations workspace.
+        disallow: ["/api/", "/account", "/offline", "/tips", "/ops"]
       }
     ],
     sitemap: `${siteUrl}/sitemap.xml`,

@@ -1,4 +1,5 @@
 import { getPublicPredictionHistory } from "@/lib/sports/prediction/history";
+import { toPublicReason, toPublicStatusLabel } from "@/lib/security/publicErrorText";
 import { getDailyTipsProduct } from "@/lib/sports/tips/product";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { siteUrl } from "@/lib/seo/pageMetadata";
@@ -351,9 +352,10 @@ export async function getEnginePerformanceReport() {
   return {
     generatedAt: new Date().toISOString(),
     source: ledger.source,
-    sourceReason: ledger.reason ?? null,
+    // Public: a coarse reason, never the raw repository error text.
+    sourceReason: ledger.reason ? toPublicReason(ledger.reason) : null,
     methodology: {
-      ledger: "op_public_picks only",
+      ledger: "the official published-pick record",
       stake: "One unit per settled public pick; pushes return the unit and voids are excluded from stake.",
       accuracy: "Wins divided by wins plus losses. Pending, push and void results are excluded.",
       brier: "Binary published-selection Brier score. Lower is better; pending, push and void results are excluded.",
@@ -362,8 +364,9 @@ export async function getEnginePerformanceReport() {
     verdict,
     engineHealth: {
       latestRunTime: daily.slate.provider.lastRun?.finishedAt ?? null,
-      providerHealth: daily.slate.provider.status,
-      providers: daily.slate.provider.providers,
+      providerHealth: toPublicStatusLabel(daily.slate.provider.status),
+      // Count of contributing sources, never their private slugs.
+      sourceCount: daily.slate.provider.providers.length,
       fixturesAnalysed: daily.summary.fixturesAnalysed,
       decisionsGenerated: daily.slate.summary.predictionsGenerated,
       // Today's value-pick count from the slate, NOT a published-pick count.

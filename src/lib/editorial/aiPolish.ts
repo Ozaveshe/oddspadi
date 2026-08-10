@@ -1,4 +1,5 @@
 import type { GeneratedEditorialStory } from "./generatedStories";
+import { makesProhibitedClaim } from "./bannedClaims";
 
 /**
  * Optional OpenAI rewrite pass for generated editorial stories. The
@@ -90,6 +91,11 @@ export async function polishEditorialStory(
     ) {
       return story;
     }
+    // Model output is held to the same standard as hand-written copy: if the
+    // polish makes any prohibited outcome claim, discard it and keep the
+    // deterministic story. The prompt instruction is not trusted on its own.
+    const combined = `${parsed.title}\n${parsed.excerpt}\n${parsed.body.join("\n")}`;
+    if (makesProhibitedClaim(combined)) return story;
     return {
       ...story,
       title: parsed.title.slice(0, 140),

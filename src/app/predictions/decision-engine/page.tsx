@@ -8,6 +8,7 @@ import { readPromotionGateStatus } from "@/lib/sports/promotionGateStatus";
 import { AutomationHeartbeatBoard } from "@/components/odds/AutomationHeartbeatBoard";
 import { readAutomationHeartbeat } from "@/lib/sports/automationHeartbeat";
 import { getHistoricalEngineEvidence } from "@/lib/sports/performance/report";
+import { toPublicReason, toPublicStatusLabel } from "@/lib/security/publicErrorText";
 import { getDailyTipsProduct } from "@/lib/sports/tips/product";
 
 export const revalidate = 60;
@@ -156,8 +157,8 @@ export default async function DecisionEnginePage() {
           <p className="muted">{providerReadable ? <>{product.summary.fixturesFound} provider-backed fixtures found. {providerGaps ? `${providerGaps} still need data or provider recovery.` : "No fixture is currently blocked by a provider gap."}</> : "The stored slate repository is unavailable. Zero coverage is not inferred, and this page does not invoke live providers."}</p>
           <div className={`engine-rail${coverage === null ? " is-unavailable" : ""}`} role="img" aria-label={coverage === null ? "Fixture coverage unavailable" : `${coverage}% fixture coverage`}><span style={{ width: `${coverage ?? 0}%` }} /></div>
           <ul className="engine-dashboard-list">
-            <li><span>Provider health</span><strong>{slate.provider.status}</strong></li>
-            <li><span>Provider source</span><strong>{slate.provider.providers.join(", ") || "No provider response"}</strong></li>
+            <li><span>Data health</span><strong>{toPublicStatusLabel(slate.provider.status)}</strong></li>
+            <li><span>Data sources</span><strong>{slate.provider.providers.length ? `${slate.provider.providers.length} contributing` : "No response"}</strong></li>
             <li><span>Markets analysed</span><strong>{currentValue(marketsAnalysed)}</strong></li>
             <li><span>Average data quality</span><strong>{providerReadable ? `${Math.round(averageDataQuality * 100)}%` : "Not read"}</strong></li>
           </ul>
@@ -173,9 +174,9 @@ export default async function DecisionEnginePage() {
 
       <section className="section engine-dashboard-grid" aria-label="Errors and calibration">
         <article className="panel engine-dashboard-panel">
-          <span className="section-kicker">Last errors</span>
-          <h2>{runErrors.length ? `${runErrors.length} issue${runErrors.length === 1 ? "" : "s"} need attention` : "No provider errors in the latest public run"}</h2>
-          {runErrors.length ? <ul className="engine-error-list">{runErrors.map((error) => <li key={error}>{error}</li>)}</ul> : <p className="muted">A clean error list does not imply complete coverage; the coverage panel above remains the source of truth.</p>}
+          <span className="section-kicker">Data condition</span>
+          <h2>{runErrors.length ? "Some data was delayed in the latest run" : "No data issues in the latest public run"}</h2>
+          {runErrors.length ? <p className="muted">{toPublicReason(runErrors.join(" "))}</p> : <p className="muted">A clean condition does not imply complete coverage; the coverage panel above remains the source of truth.</p>}
         </article>
 
         <article className="panel engine-dashboard-panel">
@@ -184,7 +185,7 @@ export default async function DecisionEnginePage() {
           <p className="muted">Model chance is compared with the bookmaker&apos;s margin-free fair chance. A pick is published only after edge, expected value, data quality, confidence and freshness gates all pass.</p>
           <ul className="engine-dashboard-list">
             <li><span>Public invariants</span><strong>{providerReadable ? slate.fixtures.every((row) => row.decisionSummary.auditSummary.publicInvariantPassed) ? "Passing" : "Review required" : "Not read"}</strong></li>
-            <li><span>Value threshold</span><strong>{providerReadable ? slate.fixtures[0] ? `${Math.round(slate.fixtures[0].decisionSummary.auditSummary.thresholds.minimumValueEdge * 100)}% minimum edge` : "Sport-specific" : "Not read"}</strong></li>
+            <li><span>Value threshold</span><strong>{providerReadable ? "A sport-specific minimum edge applies" : "Not read"}</strong></li>
           </ul>
         </article>
       </section>
@@ -195,7 +196,7 @@ export default async function DecisionEnginePage() {
 
         <details className="fold engine-operator-details">
           <summary>Operator run details</summary>
-          <div className="fold-body"><p className="muted small">Manual reruns are protected POST operations. Operator instructions live in <code>docs/automations.md</code>.</p><Link className="button small-btn" href="/api/cron/run-daily-engine">View latest run endpoint</Link></div>
+          <div className="fold-body"><p className="muted small">Manual reruns are protected, authenticated operations run by the OddsPadi team.</p></div>
         </details>
       </section>
 

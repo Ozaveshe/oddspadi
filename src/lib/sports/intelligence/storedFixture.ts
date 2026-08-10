@@ -52,7 +52,7 @@ export async function readStoredFixtureAnalysis(
     .eq("external_id", fixtureId)
     .limit(1)
     .maybeSingle();
-  if (error) return { status: "unavailable", analysis: null, reason: `Stored fixture analysis could not be read: ${error.message}` };
+  if (error) return { status: "unavailable", analysis: null, reason: "This analysis is temporarily unavailable. Nothing has been substituted." };
   if (!data) return { status: "missing", analysis: null, reason: "No stored provider fixture exists for this analysis link." };
 
   const row = data as Record<string, unknown>;

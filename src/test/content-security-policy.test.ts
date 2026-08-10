@@ -17,6 +17,12 @@ describe("production content security policy", () => {
       "frame-ancestors 'none'",
       "form-action 'self'",
       "script-src-attr 'none'",
+      // Connect/image/font sources are now bounded (was: unset, so anything).
+      // script-src stays UNSET on purpose so Next's inline hydration runs
+      // without 'unsafe-inline'; tightening scripts needs nonces (follow-up).
+      "connect-src 'self' https:",
+      "img-src 'self' data: https:",
+      "font-src 'self' data:",
       "upgrade-insecure-requests"
     ];
     for (const policy of [netlifyPolicy, nextPolicy]) {

@@ -6,7 +6,7 @@ import { trackEvent } from "@/lib/analytics/events";
 
 export type ComposerMatch = { id: string; label: string; kickoff: string };
 
-export function FeedComposer({ matches = [], initialMatchId = "", initialBody = "" }: { matches?: ComposerMatch[]; initialMatchId?: string; initialBody?: string }) {
+export function FeedComposer({ matches = [], initialMatchId = "", initialBody = "", subjectType, subjectId }: { matches?: ComposerMatch[]; initialMatchId?: string; initialBody?: string; subjectType?: string; subjectId?: string }) {
   const router = useRouter();
   const [body, setBody] = useState(initialBody);
   const [matchId, setMatchId] = useState(initialMatchId);
@@ -23,7 +23,11 @@ export function FeedComposer({ matches = [], initialMatchId = "", initialBody = 
       const response = await fetch("/api/community/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: text, matchId: matchId || null })
+        body: JSON.stringify({
+          body: text,
+          matchId: matchId || null,
+          ...(subjectType && subjectId ? { subjectType, subjectId } : {})
+        })
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error ?? "Could not post.");

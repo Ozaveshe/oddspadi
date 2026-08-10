@@ -126,10 +126,22 @@ for (const result of results) {
 
 const publicRead = results[0];
 const BUDGET_MS = 800;
-console.log(
-  `\nbudget: public read p95 < ${BUDGET_MS}ms — ${publicRead.p95 !== null && publicRead.p95 < BUDGET_MS ? "MET" : "MISSED"} (${publicRead.p95?.toFixed(1)}ms)`
-);
+const budgetMet = publicRead.p95 !== null && publicRead.p95 < BUDGET_MS;
+console.log(`\nbudget: public read p95 < ${BUDGET_MS}ms — ${budgetMet ? "MET" : "MISSED"} (${publicRead.p95?.toFixed(1)}ms)`);
 if (publicRead.failures) {
   console.error(`${publicRead.failures} public read(s) failed during the run.`);
   process.exitCode = 1;
+}
+// A p95 budget MISS fails the build too — a slow public read is a real
+// regression, not just an FYI. The one escape hatch is an explicit operator
+// waiver, so a critical reliability fix is never blocked on a cosmetic budget
+// alone; the waiver is printed so it is never silent.
+const waiver = process.env.ODDSPADI_PERF_WAIVER?.trim();
+if (!budgetMet) {
+  if (waiver) {
+    console.warn(`p95 budget missed but waived via ODDSPADI_PERF_WAIVER="${waiver}".`);
+  } else {
+    console.error(`p95 budget missed and no ODDSPADI_PERF_WAIVER is set.`);
+    process.exitCode = 1;
+  }
 }

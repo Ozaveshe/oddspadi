@@ -5,7 +5,8 @@ export function PredictionDisclaimer({ sport = "sport" }: { sport?: string }) {
   return (
     <div className="notice">
       <strong>Real talk:</strong> {sport} is unpredictable — that&apos;s why we love it. OddsPadi predictions are
-      statistical opinions, not guarantees. Use them to think clearly, not to bet blindly. 18+ where betting applies.
+      statistical opinions, not guarantees. Use them to think clearly, not to bet blindly. 18+ where betting applies.{" "}
+      <Link className="inline-link" href="/responsible-use">Limits and support</Link>.
     </div>
   );
 }

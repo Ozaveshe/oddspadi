@@ -37,9 +37,12 @@ describe("public results ledger", () => {
     expect(reason).not.toContain("522");
   });
 
-  it("keeps unexpected repository failures concise", () => {
+  it("keeps unexpected repository failures coarse, never echoing the raw message", () => {
     const reason = publicHistoryRepositoryFailureReason({ message: `Unexpected upstream failure ${"x".repeat(400)}` });
-    expect(reason).toContain("Unexpected upstream failure");
+    // The raw repository text must not reach the public: only a fixed coarse
+    // phrase is returned.
+    expect(reason).not.toContain("Unexpected upstream failure");
+    expect(reason).toMatch(/temporarily unavailable/i);
     expect(reason.length).toBeLessThan(300);
   });
 

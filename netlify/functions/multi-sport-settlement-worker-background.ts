@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { safeTokenMatches } from "./_shared/scheduleAuth";
 import type { Context } from "@netlify/functions";
 
 declare const Netlify: { env: { get(name: string): string | undefined } };
@@ -23,11 +23,6 @@ function bounded(value: string | null | undefined): number {
   return Number.isInteger(parsed) ? Math.max(1, Math.min(250, parsed)) : 100;
 }
 
-function tokenMatches(expected: string, supplied: string): boolean {
-  const left = Buffer.from(expected);
-  const right = Buffer.from(supplied);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
 
 async function call(fetchImpl: FetchLike, endpoint: URL, token: string) {
   try {
@@ -53,7 +48,7 @@ export async function runMultiSportSettlementWorker({
   const token = clean(adminToken);
   const supplied = clean(scheduleToken);
   if (!baseUrl || !token) return Response.json({ success: false, error: "Multi-sport settlement worker configuration is incomplete." }, { status: 503 });
-  if (!supplied || !tokenMatches(token, supplied)) return Response.json({ success: false, error: "Multi-sport settlement worker authorization failed." }, { status: 401 });
+  if (!supplied || !safeTokenMatches(token, supplied)) return Response.json({ success: false, error: "Multi-sport settlement worker authorization failed." }, { status: 401 });
 
   const safeLimit = bounded(limit);
   const sports: LiveSport[] = ["basketball", "tennis"];

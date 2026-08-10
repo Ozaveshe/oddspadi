@@ -76,14 +76,33 @@ describe("calibration promotion route", () => {
     expect(approveCalibrationCandidate).not.toHaveBeenCalled();
   });
 
-  it("approves only a named candidate with an operator rationale", async () => {
+  it("refuses approval without step-up, even with the admin token", async () => {
     isTrainingAdminAuthorized.mockReturnValue(true);
+    process.env.ODDSPADI_ADMIN_STEPUP_TOKEN = "stepup-secret-123456";
+    const response = await POST(
+      new Request("http://localhost/api/sports/decision/training/calibration-promotion", {
+        method: "POST",
+        headers: { "x-oddspadi-admin-token": "admin-token" },
+        // No step-up token, no confirm: model promotion is a destructive action.
+        body: JSON.stringify({ action: "approve", candidateId: "candidate-1", rationale: "checked" })
+      })
+    );
+    expect(response.status).toBe(403);
+    expect(approveCalibrationCandidate).not.toHaveBeenCalled();
+    delete process.env.ODDSPADI_ADMIN_STEPUP_TOKEN;
+  });
+
+  it("approves only a named candidate with step-up, confirmation and an operator rationale", async () => {
+    isTrainingAdminAuthorized.mockReturnValue(true);
+    process.env.ODDSPADI_ADMIN_TOKEN = "admin-token";
+    process.env.ODDSPADI_ADMIN_STEPUP_TOKEN = "stepup-secret-123456";
     approveCalibrationCandidate.mockResolvedValue({ status: "approved", configured: true, table: "op_calibration_promotions", id: "promotion-1" });
 
     const response = await POST(
       new Request("http://localhost/api/sports/decision/training/calibration-promotion", {
         method: "POST",
-        body: JSON.stringify({ action: "approve", candidateId: "candidate-1", comparisonReceiptId: "comparison-1", approvedBy: "risk-operator", rationale: "Validated prospective cohort." })
+        headers: { "x-oddspadi-admin-token": "admin-token", "x-oddspadi-stepup-token": "stepup-secret-123456" },
+        body: JSON.stringify({ action: "approve", candidateId: "candidate-1", comparisonReceiptId: "comparison-1", approvedBy: "risk-operator", rationale: "Validated prospective cohort.", confirm: "promote_calibration" })
       })
     );
 
@@ -95,5 +114,7 @@ describe("calibration promotion route", () => {
       expiresAt: null,
       comparisonReceiptId: "comparison-1"
     });
+    delete process.env.ODDSPADI_ADMIN_TOKEN;
+    delete process.env.ODDSPADI_ADMIN_STEPUP_TOKEN;
   });
 });

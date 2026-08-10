@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { safeTokenMatches } from "./_shared/scheduleAuth";
 import type { Context } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
@@ -14,11 +14,6 @@ import {
 declare const Netlify: { env: { get(name: string): string | undefined } };
 
 const clean = (value?: string | null) => value?.trim() || null;
-const tokenMatches = (a: string, b: string) => {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  return left.length === right.length && timingSafeEqual(left, right);
-};
 
 // `op_fixtures.status` stores the normalised MatchStatus union, not the raw
 // provider string. The previous filters also listed "not_started", "ft" and
@@ -110,7 +105,7 @@ export async function runPushNotificationWorker({
   vapidSubject: string | null;
   now?: Date;
 }) {
-  if (!adminToken || !scheduleToken || !tokenMatches(adminToken, scheduleToken)) {
+  if (!adminToken || !scheduleToken || !safeTokenMatches(adminToken, scheduleToken)) {
     return Response.json({ success: false, error: "Push worker authorization failed." }, { status: 401 });
   }
   if (!supabaseUrl || !supabaseKey || !vapidPublicKey || !vapidPrivateKey || !vapidSubject) {

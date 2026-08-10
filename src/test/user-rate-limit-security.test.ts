@@ -51,7 +51,11 @@ describe("authenticated write rate limits", () => {
       "src/app/api/community/tips/route.ts",
       "src/app/api/community/tips/revisions/route.ts",
       "src/app/api/community/threads/route.ts",
-      "src/app/api/community/replies/route.ts"
+      "src/app/api/community/replies/route.ts",
+      "src/app/api/community/reports/route.ts",
+      "src/app/api/community/blocks/route.ts",
+      "src/app/api/community/moderation/route.ts",
+      "src/app/api/community/appeals/route.ts"
     ]) {
       const source = await readFile(route, "utf8");
       const mutations = source.match(/export async function (?:POST|PUT|PATCH|DELETE)\(/g) ?? [];

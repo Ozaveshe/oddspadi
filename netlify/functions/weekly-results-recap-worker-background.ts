@@ -1,8 +1,7 @@
-import { timingSafeEqual } from "node:crypto";
+import { safeTokenMatches } from "./_shared/scheduleAuth";
 import { createClient } from "@supabase/supabase-js";
 declare const Netlify: { env: { get(name: string): string | undefined } };
 const clean = (value?: string | null) => value?.trim() || null;
-const tokenMatches = (a: string, b: string) => { const aa = Buffer.from(a); const bb = Buffer.from(b); return aa.length === bb.length && timingSafeEqual(aa, bb); };
 /**
  * A row of the weekly recap now means one settled OFFICIAL publication.
  *
@@ -21,7 +20,7 @@ export function buildWeeklyRecap(rows: WeeklyRecapOutcome[], start: Date, end: D
   return { week_start: start.toISOString().slice(0, 10), week_end: end.toISOString().slice(0, 10), graded_count: rows.length, wins: wins.length, losses: losses.length, pushes: rows.filter((row) => row.result === "push").length, voids: rows.filter((row) => row.result === "void").length, accuracy: decided ? wins.length / decided : null, roi: decided ? (returns - decided) / decided : null, best_call: best ? `${best.home_team ?? "Match"} vs ${best.away_team ?? "opponent"}: ${best.recommended_selection ?? best.selection}` : null, best_call_odds: best ? Number(best.odds) : null, generated_at: generatedAt.toISOString() };
 }
 export async function runWeeklyRecap({ scheduleToken, adminToken, supabaseUrl, supabaseKey, now = new Date() }: { scheduleToken: string | null; adminToken: string | null; supabaseUrl: string | null; supabaseKey: string | null; now?: Date }) {
-  if (!adminToken || !scheduleToken || !tokenMatches(adminToken, scheduleToken)) return Response.json({ success: false, error: "Weekly recap authorization failed." }, { status: 401 });
+  if (!adminToken || !scheduleToken || !safeTokenMatches(adminToken, scheduleToken)) return Response.json({ success: false, error: "Weekly recap authorization failed." }, { status: 401 });
   if (!supabaseUrl || !supabaseKey) return Response.json({ success: false, error: "Weekly recap database configuration is incomplete." }, { status: 503 });
   const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())); const start = new Date(end); start.setUTCDate(start.getUTCDate() - 7);
   const db = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });

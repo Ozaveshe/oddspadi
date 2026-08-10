@@ -3,6 +3,7 @@ import { privateJson } from "@/lib/security/privateJson";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { readBoundedJson } from "@/lib/security/boundedJson";
+import { enforceGuestRateLimit, applyGuestRateContext } from "@/lib/security/guestRateLimit";
 import { convertSelection, platformTarget, PLATFORM_TARGETS } from "@/lib/markets/conversion";
 import type { MarketAlias } from "@/lib/markets/alias";
 
@@ -25,6 +26,8 @@ export async function POST(request: Request) {
   if (originError) return originError;
   const service = getSupabaseServerClient();
   if (!service) return privateJson({ error: "Conversion is not configured." }, { status: 503 });
+  const rate = await enforceGuestRateLimit(service, request, "workspace_compute");
+  if ("limited" in rate) return rate.limited;
 
   const parsed = await readBoundedJson<{ platformId?: unknown; selectionKeys?: unknown }>(request, 16_000);
   if (!parsed.ok) return parsed.response;
@@ -56,9 +59,12 @@ export async function POST(request: Request) {
   const aliases = (data ?? []) as unknown as MarketAlias[];
 
   const asOf = new Date().toISOString();
-  return privateJson({
-    platform: { id: platform.id, displayName: platform.displayName },
-    conversions: Object.fromEntries(keys.map((key) => [key, convertSelection(key, { platform, aliases, asOf })])),
-    asOf
-  });
+  return applyGuestRateContext(
+    privateJson({
+      platform: { id: platform.id, displayName: platform.displayName },
+      conversions: Object.fromEntries(keys.map((key) => [key, convertSelection(key, { platform, aliases, asOf })])),
+      asOf
+    }),
+    rate.ok
+  );
 }

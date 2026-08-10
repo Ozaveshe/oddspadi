@@ -1,6 +1,9 @@
 import { apiError, apiSuccess, parseSportsQuery } from "@/app/api/sports/_utils";
 import { runDecisionAutonomousCycle } from "@/lib/sports/prediction/decisionAutonomousCycle";
 import { isTrainingAdminAuthorized, requireTrainingAdmin, trainingUnauthorized } from "@/lib/sports/training/adminAuth";
+import { requireStepUp, actorTokenFingerprint } from "@/lib/security/adminStepUp";
+import { writeOperatorAudit } from "@/lib/security/operatorAudit";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 600;
@@ -54,14 +57,33 @@ export async function POST(request: Request) {
   const query = parseSportsQuery(request);
   if ("error" in query) return apiError(query.error);
   if (!isTrainingAdminAuthorized(request)) return trainingUnauthorized();
+  const resolved = options(request);
+  // A persisting production model run is in the destructive class: step-up
+  // secret + typed confirmation on top of the admin token. A non-persisting
+  // run stays a routine admin action.
+  if (resolved.persist) {
+    const confirm = new URL(request.url).searchParams.get("confirm");
+    const stepUp = requireStepUp(request, "run_production_cycle", confirm);
+    if (stepUp) return stepUp;
+  }
   try {
     const cycle = await runDecisionAutonomousCycle({
       date: query.date,
       sport: query.sport,
       runRequested: true,
       adminAuthorized: true,
-      ...options(request)
+      ...resolved
     });
+    if (resolved.persist) {
+      const audit = getSupabaseServerClient();
+      if (audit) await writeOperatorAudit(audit, {
+        actorFingerprint: actorTokenFingerprint(request),
+        action: "run_production_cycle",
+        target: `${query.sport ?? "all"}:${query.date ?? "today"}`,
+        detail: { fixtureLimit: resolved.fixtureLimit, runAi: resolved.runAi },
+        outcome: cycle.status === "failed" ? "failed" : "applied"
+      });
+    }
     return apiSuccess(cycle, { status: cycle.status === "failed" ? 502 : 200 });
   } catch (error) {
     return apiError(error instanceof Error ? error.message : "Autonomous decision execution failed.", 502);

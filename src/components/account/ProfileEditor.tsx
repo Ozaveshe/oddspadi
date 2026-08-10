@@ -42,7 +42,7 @@ export function ProfileEditor({ displayName: initialName, bio: initialBio, favou
       const response = await fetch("/api/account/followed-teams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ teamId: team.id }) });
       if (!response.ok) return false;
       window.dispatchEvent(new Event("oddspadi:follows-changed"));
-      if (!alreadyFollowed) trackEvent("team_followed", { team_id: team.id, team_name: team.name, sport: team.sport, country: team.country ?? "unknown" });
+      if (!alreadyFollowed) trackEvent("team_followed", { sport: team.sport });
       return true;
     } catch {
       return false;
@@ -53,7 +53,7 @@ export function ProfileEditor({ displayName: initialName, bio: initialBio, favou
       const response = await fetch(`/api/account/followed-teams?teamId=${encodeURIComponent(team.id)}`, { method: "DELETE" });
       if (!response.ok) { setMessage("That team could not be unfollowed. Check your connection and try again."); return; }
       window.dispatchEvent(new Event("oddspadi:follows-changed"));
-      trackEvent("team_unfollowed", { team_id: team.id, team_name: team.name, sport: team.sport, country: team.country ?? "unknown" });
+      trackEvent("team_unfollowed", { sport: team.sport });
     } catch {
       setMessage("That team could not be unfollowed. Check your connection and try again.");
     }

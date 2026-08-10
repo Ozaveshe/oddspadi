@@ -30,7 +30,7 @@ export function FollowTeamButton({ teamName, sport }: { teamName: string; sport:
         return;
       }
       window.dispatchEvent(new Event("oddspadi:follows-changed"));
-      trackEvent("team_unfollowed", { team_id: team.id, team_name: team.name, sport: team.sport, country: team.country ?? "unknown" });
+      trackEvent("team_unfollowed", { sport: team.sport });
     } catch {
       setNote("Could not unfollow — try again");
     } finally {
@@ -65,7 +65,7 @@ export function FollowTeamButton({ teamName, sport }: { teamName: string; sport:
         return;
       }
       window.dispatchEvent(new Event("oddspadi:follows-changed"));
-      trackEvent("team_followed", { team_id: team.id, team_name: team.name, sport: team.sport, country: team.country ?? "unknown" });
+      trackEvent("team_followed", { sport: team.sport });
     } catch {
       setNote("Could not follow — try again");
     } finally {

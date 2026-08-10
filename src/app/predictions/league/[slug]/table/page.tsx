@@ -4,15 +4,17 @@ import { notFound } from "next/navigation";
 import { CountryFlag } from "@/components/odds/CountryFlag";
 import { TeamCrest } from "@/components/odds/TeamCrest";
 import { LocalTimeText } from "@/components/odds/LocalTime";
+import { CommunitySubjectPanel } from "@/components/community/CommunitySubjectPanel";
 import { pageMetadata, siteUrl } from "@/lib/seo/pageMetadata";
 import { getCachedFootballLeagueTable } from "@/lib/sports/cachedLeagueTable";
-import { buildOfficialTable } from "@/lib/discovery/tableState";
+import { buildOfficialTable, classifyTableFreshness } from "@/lib/discovery/tableState";
 import {
   featuredFootballLeagueTables,
   currentFootballSeason,
   leagueBySlug,
   resolveVerifiedLeagueTable,
   storedLeagueTable,
+  toStandingRows,
 } from "@/lib/sports/leagueStandings";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 
@@ -67,23 +69,18 @@ export default async function LeagueTablePage({ params }: Props) {
       ? (leagueSlug, season) => getCachedFootballLeagueTable(leagueSlug, season)
       : undefined,
   );
-  // A table where nobody has played is not a ranking. buildOfficialTable
-  // returns rows without positions in that case, so the page cannot print a
-  // 1st and a 20th derived purely from the sort order.
-  const officialTable = buildOfficialTable(
-    table ? table.rows.map((row) => ({
-      teamId: row.teamId,
-      teamName: row.teamName,
-      played: row.played,
-      won: row.wins,
-      drawn: row.draws,
-      lost: row.losses,
-      goalsFor: row.goalsFor,
-      goalsAgainst: row.goalsAgainst,
-      points: row.points
-    })) : null
-  );
+  // A table where nobody has played is not a ranking. buildOfficialTable is
+  // the single authority for ordering and labelling: its rows are what render,
+  // so pre-season tables are alphabetical with no positions, and in-season
+  // positions come from net points rather than raw provider order.
+  const officialTable = buildOfficialTable(table ? toStandingRows(table) : null, {
+    verifiedAt: table?.updatedAt ?? null
+  });
   const seasonNotStarted = officialTable.state === "season-not-started";
+  const freshness = classifyTableFreshness(table?.updatedAt ?? null);
+  // Display-only extras (crest, form, movement) come from the raw row by id.
+  const rawById = new Map((table?.rows ?? []).map((row) => [row.teamId, row]));
+  const displayRows = officialTable.state === "unavailable" ? [] : officialTable.rows;
   const url = `${siteUrl}/predictions/league/${slug}/table`;
   const jsonLd = {
     "@context": "https://schema.org",
@@ -104,8 +101,8 @@ export default async function LeagueTablePage({ params }: Props) {
       />
       <div className="page-heading">
         <div className="meta">
-          <Link className="inline-link" href="/predictions">
-            ← Predictions
+          <Link className="inline-link" href={`/predictions/league/${encodeURIComponent(slug)}`}>
+            ← {league.leagueName} hub
           </Link>
           <span className="country-inline">
             <CountryFlag country={league.country} size={16} />
@@ -139,8 +136,13 @@ export default async function LeagueTablePage({ params }: Props) {
         ))}
       </nav>
 
-      {table?.rows.length ? (
+      {table?.rows.length && officialTable.state !== "unavailable" ? (
         <>
+          {seasonNotStarted && officialTable.state === "season-not-started" ? (
+            <p className="notice">
+              <strong>{officialTable.label}.</strong> {officialTable.note}
+            </p>
+          ) : null}
           <div className="standings-scroll">
             <table className="standings-table">
               <thead>
@@ -157,37 +159,51 @@ export default async function LeagueTablePage({ params }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {table.rows.map((row) => (
-                  <tr
-                    key={row.teamId}
-                    className={seasonNotStarted ? undefined : row.position <= 4 ? "zone-top" : row.position > table.rows.length - 3 ? "zone-bottom" : undefined}
-                  >
-                    <td>
-                      <span className="position-cell">
-                        {seasonNotStarted ? "—" : row.position}
-                        {row.movement ? (
-                          <small className={row.movement > 0 ? "up" : "down"}>
-                            {row.movement > 0 ? "▲" : "▼"}
-                            {Math.abs(row.movement)}
+                {officialTable.rows.map((row) => {
+                  const raw = rawById.get(row.teamId);
+                  const position = "position" in row ? row.position : null;
+                  const goalDifference = row.goalsFor - row.goalsAgainst;
+                  return (
+                    <tr
+                      key={row.teamId}
+                      className={position === null ? undefined : position <= 4 ? "zone-top" : position > displayRows.length - 3 ? "zone-bottom" : undefined}
+                    >
+                      <td>
+                        <span className="position-cell">
+                          {position ?? "—"}
+                          {position !== null && raw?.movement ? (
+                            <small className={raw.movement > 0 ? "up" : "down"}>
+                              {raw.movement > 0 ? "▲" : "▼"}
+                              {Math.abs(raw.movement)}
+                            </small>
+                          ) : null}
+                        </span>
+                      </td>
+                      <th scope="row">
+                        <span className="standings-team">
+                          <TeamCrest name={row.teamName} logo={raw?.teamLogo} size={26} />
+                          <span>{row.teamName}</span>
+                        </span>
+                      </th>
+                      <td>{row.played}</td>
+                      <td>{row.won}</td>
+                      <td>{row.drawn}</td>
+                      <td>{row.lost}</td>
+                      <td>{goalDifference > 0 ? `+${goalDifference}` : goalDifference}</td>
+                      <td>
+                        <strong>{row.points}</strong>
+                        {row.pointsAdjustment ? (
+                          <small className="muted">
+                            {" "}
+                            ({row.pointsAdjustment > 0 ? `+${row.pointsAdjustment}` : row.pointsAdjustment} pts
+                            {row.adjustmentNote ? `: ${row.adjustmentNote}` : ""})
                           </small>
                         ) : null}
-                      </span>
-                    </td>
-                    <th scope="row">
-                      <span className="standings-team">
-                        <TeamCrest name={row.teamName} logo={row.teamLogo} size={26} />
-                        <span>{row.teamName}</span>
-                      </span>
-                    </th>
-                    <td>{row.played}</td>
-                    <td>{row.wins}</td>
-                    <td>{row.draws}</td>
-                    <td>{row.losses}</td>
-                    <td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td>
-                    <td><strong>{row.points}</strong></td>
-                    <td><Form value={row.form} /></td>
-                  </tr>
-                ))}
+                      </td>
+                      <td><Form value={raw?.form ?? ""} /></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -195,6 +211,7 @@ export default async function LeagueTablePage({ params }: Props) {
             {historicalFallback ? "Latest verified final table. " : ""}
             Source: {table.source === "api-football-standings" ? "API-Football" : "latest stored OddsPadi snapshot"}. Updated{" "}
             <LocalTimeText iso={table.updatedAt} variant="datetime" />.
+            {freshness.note ? <> {freshness.note}</> : null}
           </p>
         </>
       ) : (
@@ -206,6 +223,7 @@ export default async function LeagueTablePage({ params }: Props) {
           <Link className="button primary" href="/predictions">Browse match predictions</Link>
         </div>
       )}
+      <CommunitySubjectPanel subjectType="competition" subjectId={league.slug} title={`${league.name} talk`} />
     </main>
   );
 }

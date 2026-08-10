@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { safeTokenMatches } from "./_shared/scheduleAuth";
 import type { Context } from "@netlify/functions";
 
 declare const Netlify: {
@@ -49,11 +49,6 @@ function boundedInteger(value: string | null | undefined, fallback: number, mini
   return Math.max(minimum, Math.min(maximum, parsed));
 }
 
-function tokenMatches(expected: string, supplied: string): boolean {
-  const expectedBytes = Buffer.from(expected);
-  const suppliedBytes = Buffer.from(supplied);
-  return expectedBytes.length === suppliedBytes.length && timingSafeEqual(expectedBytes, suppliedBytes);
-}
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -136,7 +131,7 @@ export async function runDecisionCycleWorker({
   const token = clean(adminToken);
   const suppliedToken = clean(scheduleToken);
   if (!baseUrl || !token) return Response.json({ success: false, error: "Decision cycle worker configuration is incomplete." }, { status: 503 });
-  if (!suppliedToken || !tokenMatches(token, suppliedToken)) {
+  if (!suppliedToken || !safeTokenMatches(token, suppliedToken)) {
     return Response.json({ success: false, error: "Decision cycle worker authorization failed." }, { status: 401 });
   }
 

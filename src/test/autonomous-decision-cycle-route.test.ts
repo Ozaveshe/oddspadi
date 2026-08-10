@@ -12,11 +12,13 @@ describe("autonomous decision cycle route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.ODDSPADI_ADMIN_TOKEN = "test-admin-token";
+    process.env.ODDSPADI_ADMIN_STEPUP_TOKEN = "test-stepup-token";
     runDecisionAutonomousCycleMock.mockResolvedValue({ status: "completed", mode: "autonomous-decision-cycle" });
   });
 
   afterEach(() => {
     delete process.env.ODDSPADI_ADMIN_TOKEN;
+    delete process.env.ODDSPADI_ADMIN_STEPUP_TOKEN;
   });
 
   it("refuses an anonymous preview", async () => {
@@ -50,11 +52,27 @@ describe("autonomous decision cycle route", () => {
     expect(runDecisionAutonomousCycleMock).not.toHaveBeenCalled();
   });
 
-  it("runs bounded AI and persistence through authenticated POST", async () => {
+  it("refuses a persisting POST without step-up, even with the admin token", async () => {
+    // A production model run is destructive: the admin token alone is not enough.
     const response = await POST(
       new Request(
-        "http://127.0.0.1:3025/api/sports/decision/autonomous-cycle?date=2026-08-21&limit=6&aiLimit=1&runAi=1&persist=1",
+        "http://127.0.0.1:3025/api/sports/decision/autonomous-cycle?date=2026-08-21&persist=1",
         { method: "POST", headers: { "x-oddspadi-admin-token": "test-admin-token" } }
+      )
+    );
+
+    expect(response.status).toBe(403);
+    expect(runDecisionAutonomousCycleMock).not.toHaveBeenCalled();
+  });
+
+  it("runs a persisting POST with step-up token and typed confirmation", async () => {
+    const response = await POST(
+      new Request(
+        "http://127.0.0.1:3025/api/sports/decision/autonomous-cycle?date=2026-08-21&limit=6&aiLimit=1&runAi=1&persist=1&confirm=run_production_cycle",
+        {
+          method: "POST",
+          headers: { "x-oddspadi-admin-token": "test-admin-token", "x-oddspadi-stepup-token": "test-stepup-token" }
+        }
       )
     );
 

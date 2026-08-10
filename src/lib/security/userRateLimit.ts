@@ -12,7 +12,11 @@ export type AuthenticatedWriteAction =
   | "community_poll_vote"
   | "community_tip"
   | "forum_thread"
-  | "forum_reply";
+  | "forum_reply"
+  | "community_report"
+  | "community_block"
+  | "community_appeal"
+  | "community_moderation";
 
 type RateLimitRow = {
   allowed?: unknown;

@@ -18,14 +18,14 @@ export const dynamic = "force-dynamic";
 
 const CATALOGUE_TTL_MS = 5 * 60_000;
 
-let cached: { at: number; teams: TeamRow[]; fixtures: FixtureRow[]; missing: string[] } | null = null;
+let cached: { at: number; teams: TeamRow[]; fixtures: Array<FixtureRow & { homeTeamExternalId: string | null; awayTeamExternalId: string | null }>; missing: string[] } | null = null;
 
-async function readCatalogue(): Promise<{ teams: TeamRow[]; fixtures: FixtureRow[]; missing: string[] }> {
+async function readCatalogue(): Promise<{ teams: TeamRow[]; fixtures: Array<FixtureRow & { homeTeamExternalId: string | null; awayTeamExternalId: string | null }>; missing: string[] }> {
   if (cached && Date.now() - cached.at < CATALOGUE_TTL_MS) return cached;
 
   const missing: string[] = [];
   let teams: TeamRow[] = [];
-  let fixtures: FixtureRow[] = [];
+  let fixtures: Array<FixtureRow & { homeTeamExternalId: string | null; awayTeamExternalId: string | null }> = [];
 
   const client = getSupabaseServerClient();
   if (!client) {
@@ -40,7 +40,7 @@ async function readCatalogue(): Promise<{ teams: TeamRow[]; fixtures: FixtureRow
 
   const { data: fixtureData, error: fixtureError } = await client
     .from("op_fixtures")
-    .select("id,home_team_name,away_team_name,league_name,kickoff_at,status")
+    .select("id,external_id,home_team_name,away_team_name,home_team_external_id,away_team_external_id,league_name,kickoff_at,status")
     .gte("kickoff_at", dayBack)
     .lte("kickoff_at", weekOut)
     .order("kickoff_at", { ascending: true })
@@ -52,11 +52,13 @@ async function readCatalogue(): Promise<{ teams: TeamRow[]; fixtures: FixtureRow
     fixtures = ((fixtureData ?? []) as Array<Record<string, unknown>>)
       .filter((row) => row.home_team_name && row.away_team_name)
       .map((row) => ({
-        id: String(row.id),
+        id: String(row.external_id ?? row.id),
         homeTeam: String(row.home_team_name),
         awayTeam: String(row.away_team_name),
         league: String(row.league_name ?? ""),
-        kickoffAt: String(row.kickoff_at)
+        kickoffAt: String(row.kickoff_at),
+        homeTeamExternalId: row.home_team_external_id ? String(row.home_team_external_id) : null,
+        awayTeamExternalId: row.away_team_external_id ? String(row.away_team_external_id) : null
       }));
 
     // Teams are derived from the same window rather than read from op_teams:
@@ -64,9 +66,11 @@ async function readCatalogue(): Promise<{ teams: TeamRow[]; fixtures: FixtureRow
     // supplies both the name and the destination in one read.
     const seen = new Map<string, TeamRow>();
     for (const fixture of fixtures) {
-      for (const name of [fixture.homeTeam, fixture.awayTeam]) {
+      for (const side of ["home", "away"] as const) {
+        const name = side === "home" ? fixture.homeTeam : fixture.awayTeam;
+        const externalId = side === "home" ? fixture.homeTeamExternalId : fixture.awayTeamExternalId;
         if (!seen.has(name)) {
-          seen.set(name, { id: name, name, country: fixture.league || null, nextFixtureId: fixture.id });
+          seen.set(name, { id: externalId ?? name, name, country: fixture.league || null, nextFixtureId: fixture.id });
         }
       }
     }

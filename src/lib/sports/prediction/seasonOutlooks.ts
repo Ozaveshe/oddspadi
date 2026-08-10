@@ -29,6 +29,30 @@ export const premierLeague2026Baseline = {
   model: "returning-team Monte Carlo baseline v1",
   simulations: 20_000,
   caveat: "Returning-team results baseline only. Promoted-team strength, transfers, injuries, manager effects, schedule strength and opening prices are not included in the probabilities yet.",
+  includedFactors: [
+    "2025/26 returning-team results",
+    "points-per-game strength",
+    "goal-difference strength",
+    "season-level volatility"
+  ],
+  missingFactors: [
+    "promoted-team strength",
+    "transfers",
+    "injuries",
+    "manager effects",
+    "schedule strength",
+    "opening prices"
+  ],
+  nextRevisionTrigger:
+    "Calibrated Championship strength for the three promoted clubs, or any confirmed first-team transfer materially changing a returning club's rating.",
+  // Promoted teams get a structural treatment rather than silent omission: the
+  // complete league ranking is withheld and this object is a returning-team
+  // research baseline, never a final table.
+  structuralTreatment: "returning-team-baseline",
+  correctionHistory: [
+    { revision: 4, publishedAt: "2026-07-16", change: "Refreshed the manager-change log; probabilities unchanged." },
+    { revision: 3, publishedAt: "2026-07-15", change: "Initial public baseline with promoted clubs excluded from the probability field." }
+  ],
   confirmedPromoted: ["Coventry City", "Ipswich Town", "Hull City"],
   confirmedRelegated: ["Wolverhampton Wanderers", "Burnley", "West Ham United"],
   seasonStarts: "2026-08-21",

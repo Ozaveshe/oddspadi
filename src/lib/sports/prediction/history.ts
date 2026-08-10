@@ -241,8 +241,9 @@ export function publicHistoryRepositoryFailureReason(error: unknown): string {
   if (/connection (?:closed|terminated)|fetch failed/i.test(message)) {
     return "The public pick repository connection closed before returning a response.";
   }
-  const detail = message.length > 240 ? `${message.slice(0, 240)}...` : message;
-  return `The public pick repository could not be read: ${detail}`;
+  // Never surface the raw repository error to the public — a coarse condition
+  // only. The specific text stays in server logs.
+  return "The public pick record is temporarily unavailable. Nothing has been substituted.";
 }
 
 function cacheTtl(env: Record<string, string | undefined>): number {

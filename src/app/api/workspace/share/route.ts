@@ -7,6 +7,7 @@ import { databaseUnavailable } from "@/lib/security/databaseError";
 import { readBoundedJson } from "@/lib/security/boundedJson";
 import { isSyncableWorkspace, sanitizeForShare } from "@/lib/workspaceSync/sanitize";
 import { shareSecret, signShareToken, verifyShareToken } from "@/lib/workspaceSync/shareToken";
+import { enforceGuestRateLimit, applyGuestRateContext } from "@/lib/security/guestRateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,9 @@ export async function POST(request: Request) {
   if (!secret) return privateJson({ error: "Sharing is not configured on this deployment." }, { status: 503 });
   const service = getSupabaseServerClient();
   if (!service) return privateJson({ error: "Sharing is not configured on this deployment." }, { status: 503 });
+
+  const rate = await enforceGuestRateLimit(service, request, "workspace_share");
+  if ("limited" in rate) return rate.limited;
 
   const parsed = await readBoundedJson<{ workspace?: unknown; expiresInDays?: unknown }>(request, 256_000);
   if (!parsed.ok) return parsed.response;
@@ -63,15 +67,18 @@ export async function POST(request: Request) {
   if (error) return databaseUnavailable("workspace share create", error, "Could not create a share link right now.");
 
   const token = signShareToken(shareId, expiresAt.getTime(), secret);
-  return privateJson(
-    {
-      token,
-      path: `/workspace/shared/${token}`,
-      expiresAt: expiresAt.toISOString(),
-      // Stated, not implied: the reader sees the frozen analysis, nothing else.
-      note: "The link shows a read-only copy of this analysis as it is now. It expires automatically and can be revoked."
-    },
-    { status: 201 }
+  return applyGuestRateContext(
+    privateJson(
+      {
+        token,
+        path: `/workspace/shared/${token}`,
+        expiresAt: expiresAt.toISOString(),
+        // Stated, not implied: the reader sees the frozen analysis, nothing else.
+        note: "The link shows a read-only copy of this analysis as it is now. It expires automatically and can be revoked."
+      },
+      { status: 201 }
+    ),
+    rate.ok
   );
 }
 
@@ -86,17 +93,22 @@ export async function DELETE(request: Request) {
   const parsed = await readBoundedJson<{ token?: unknown; shareId?: unknown }>(request, 4_096);
   if (!parsed.ok) return parsed.response;
 
-  // Path 1: possession of the token proves the right to revoke (guest path).
+  // Path 1: possession of a validly-signed token proves the right to revoke.
   const token = typeof parsed.value.token === "string" ? parsed.value.token : null;
   if (token) {
     const verdict = verifyShareToken(token, secret, Date.now());
-    // An expired token may still revoke — revoking something already dead is
-    // an idempotent success, and refusing it just confuses the owner.
-    const shareId = verdict.ok ? verdict.shareId : /^([a-z0-9-]{8,64})\./.exec(token)?.[1];
-    if (!verdict.ok && verdict.reason === "bad_signature") {
-      return privateJson({ error: "That link could not be verified." }, { status: 403 });
+    // A valid signature is REQUIRED. An expired-but-validly-signed token may
+    // still revoke (idempotent), recovered by re-verifying with expiry ignored.
+    // A malformed or bad-signature token is rejected outright — never fall
+    // through to raw id extraction, which let anyone revoke any share by uuid.
+    let shareId: string | null = null;
+    if (verdict.ok) {
+      shareId = verdict.shareId;
+    } else if (verdict.reason === "expired") {
+      const signed = verifyShareToken(token, secret, 0);
+      shareId = signed.ok ? signed.shareId : null;
     }
-    if (!shareId) return privateJson({ error: "That link could not be read." }, { status: 400 });
+    if (!shareId) return privateJson({ error: "That link could not be verified." }, { status: 403 });
     const { error } = await service
       .from("op_workspace_shares")
       .update({ revoked_at: new Date().toISOString() })

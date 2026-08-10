@@ -66,7 +66,7 @@ export default async function StoryPage({ params }: { params: Promise<{ slug: st
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }} />
     <Link className="text-link" href="/news">← Back to the Matchday Desk</Link>
     <article className="story-article">
-      <div className="story-meta"><span>{story.category}</span><span>{story.sport}</span><time dateTime={story.publishedAt}>{story.publishedAt.slice(0, 10)}</time><span>{story.readMinutes} min read</span>{story.revision ? <span>Revision {story.revision}</span> : null}</div>
+      <div className="story-meta"><span>{story.category}</span><Link className="inline-link" href={`/predictions?sport=${encodeURIComponent(story.sport)}`}>{story.sport}</Link><time dateTime={story.publishedAt}>{story.publishedAt.slice(0, 10)}</time><span>{story.readMinutes} min read</span>{story.revision ? <span>Revision {story.revision}</span> : null}</div>
       <h1>{story.title}</h1><p className="story-dek">{story.excerpt}</p>
       {story.sourceAsOf ? <p className="small muted">Engine evidence checked <LocalTime iso={story.sourceAsOf} variant="datetime" />.</p> : null}
       {claimVerification?.notice ? (
