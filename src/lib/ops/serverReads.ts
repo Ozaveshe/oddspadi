@@ -54,3 +54,40 @@ export async function readOpenCount(
     return null;
   }
 }
+
+/** Count rows where a column equals a value, or null when unreadable. */
+export async function readCountEq(client: SupabaseClient | null, table: string, column: string, value: string): Promise<number | null> {
+  if (!client) return null;
+  try {
+    const { count, error } = await client.from(table).select("*", { count: "exact", head: true }).eq(column, value);
+    if (error) return null;
+    return count ?? 0;
+  } catch {
+    return null;
+  }
+}
+
+/** Count rows where a column is one of several values, or null when unreadable. */
+export async function readCountIn(client: SupabaseClient | null, table: string, column: string, values: string[]): Promise<number | null> {
+  if (!client) return null;
+  try {
+    const { count, error } = await client.from(table).select("*", { count: "exact", head: true }).in(column, values);
+    if (error) return null;
+    return count ?? 0;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Correction rate: superseding/corrected publications as a percent of the
+ * publications that could be corrected. Null when either count is unreadable,
+ * or 0% when there are eligible publications but none corrected. Sourced from
+ * op_publications.publication_status — the same column the reconciler reads.
+ */
+export async function readCorrectionRatePercent(client: SupabaseClient | null): Promise<number | null> {
+  const corrected = await readCountEq(client, "op_publications", "publication_status", "corrected");
+  const eligible = await readCountIn(client, "op_publications", "publication_status", ["published", "corrected", "retracted"]);
+  if (corrected === null || eligible === null || eligible === 0) return corrected === null || eligible === null ? null : 0;
+  return (corrected / eligible) * 100;
+}

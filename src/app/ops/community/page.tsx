@@ -2,11 +2,10 @@ import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isStaffViewer } from "@/lib/ops/pageGate";
-import { readCaseRows, readOpenCount } from "@/lib/ops/serverReads";
-import { openCasesBySeverity } from "@/lib/ops/dashboardMetrics";
+import { readCaseRows, readOpenCount, readCorrectionRatePercent } from "@/lib/ops/serverReads";
+import { buildCommunityTiles } from "@/lib/ops/dashboardTiles";
 import { bucketCasesByQueue, COMMUNITY_QUEUES } from "@/lib/ops/queues";
-import { classifyMetric } from "@/lib/observability/metrics";
-import { OpsDashboard, type DashboardTile } from "@/components/ops/OpsDashboard";
+import { OpsDashboard } from "@/components/ops/OpsDashboard";
 import { QueueSummary } from "@/components/ops/QueueSummary";
 import { CaseBoard } from "@/components/ops/CaseBoard";
 import { ModerationQueue } from "@/components/community/ModerationQueue";
@@ -36,14 +35,16 @@ export default async function CommunityOpsPage() {
   const client = getSupabaseServerClient();
   const { rows } = await readCaseRows(client, "community");
   const moderationBacklog = await readOpenCount(client, "op_content_reports", "status");
-  const open = openCasesBySeverity(rows);
+  const correctionRate = await readCorrectionRatePercent(client);
 
-  const tiles: DashboardTile[] = [
-    { label: "Moderation backlog", value: moderationBacklog, status: classifyMetric("moderation_backlog", moderationBacklog) },
-    { label: "Open community cases · critical", value: open.critical },
-    { label: "Open community cases · warning", value: open.warning },
-    { label: "Open community cases · info", value: open.info }
-  ];
+  // The full named community metric set. Backlog and correction rate are
+  // computed; the rest are named with their target and render "—" until wired.
+  const tiles = buildCommunityTiles({
+    moderationBacklog,
+    correctionRatePercent: correctionRate,
+    unsupportedClaimRatePercent: null,
+    organicGrowthPercent: null
+  });
 
   return (
     <main id="main" className="container">

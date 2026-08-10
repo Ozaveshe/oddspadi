@@ -79,6 +79,33 @@ A staff member escalates a product defect **through the case**, on one of six
 never an informal message and never a direct database edit. Direct database
 edits are a target-zero metric precisely because the escalation path exists.
 
+## Known gaps (named, not silently pending)
+
+The dashboards **enumerate every named metric** so the roles see their full
+scorecard, but some are named-and-targeted without an instrumented source yet —
+they render `—` (unknown), never a false zero:
+
+- **Market**: stale-card rate, verified-result SLA, settlement SLA, mapping
+  accuracy. (Closing-price coverage and reconciliation completion are wired;
+  unresolved-high-priority and reconciliation-errors are computed.)
+- **Community**: canonical-content usage, unsupported-claim rate (a log signal
+  with no queryable source), referral traffic, response time, community growth.
+  (Moderation backlog and correction rate are computed.)
+
+Each unwired metric already has its target in `serviceTargets.ts` /
+`OBSERVABILITY_METRICS`; wiring it is a read against its source, not a new
+contract. Related infrastructure gaps (no CI end-to-end tests, no real-DOM axe
+run, no visual-regression baseline, no push-based APM emitter, and the
+reconciler's `route_error_spike` having no source table yet) are tracked in
+[release-gates.md](release-gates.md) and
+[production-observability.md](production-observability.md).
+
+**Deployment**: the case tables (`op_operational_cases`, `op_operational_case_events`,
+`op_quality_reviews`) and the `category` column ship as file-only migrations
+(`supabase/migrations/2026080917*–19*`) applied through the normal pipeline
+(`supabase db push`). Until they are live, the workspace reads degrade honestly —
+a missing table is reported, never rendered as a clear queue.
+
 ## Acceptance criteria, mapped
 
 - Each hire has a focused workspace → `/ops/market`, `/ops/community`.

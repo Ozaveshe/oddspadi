@@ -1,11 +1,7 @@
-export type DashboardTile = {
-  label: string;
-  /** null renders as "—" (unread/unknown), never a misleading zero. */
-  value: number | string | null;
-  unit?: string;
-  status?: "ok" | "warn" | "page" | "unknown";
-  target?: number | null;
-};
+import type { OpsTile } from "@/lib/ops/dashboardTiles";
+
+/** A dashboard tile. null value renders as "—" (unread/unknown), never a misleading zero. */
+export type DashboardTile = OpsTile;
 
 const STATUS_LABEL: Record<NonNullable<DashboardTile["status"]>, string> = {
   ok: "OK",

@@ -4,10 +4,10 @@ import { pageMetadata } from "@/lib/seo/pageMetadata";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isStaffViewer } from "@/lib/ops/pageGate";
 import { readCaseRows, readOpenCount } from "@/lib/ops/serverReads";
-import { openCasesBySeverity, slaCompliancePercent } from "@/lib/ops/dashboardMetrics";
+import { openCasesBySeverity } from "@/lib/ops/dashboardMetrics";
+import { buildMarketTiles } from "@/lib/ops/dashboardTiles";
 import { bucketCasesByQueue, MARKET_QUEUES } from "@/lib/ops/queues";
-import { classifyMetric } from "@/lib/observability/metrics";
-import { OpsDashboard, type DashboardTile } from "@/components/ops/OpsDashboard";
+import { OpsDashboard } from "@/components/ops/OpsDashboard";
 import { QueueSummary } from "@/components/ops/QueueSummary";
 import { CaseBoard } from "@/components/ops/CaseBoard";
 
@@ -37,22 +37,15 @@ export default async function MarketOpsPage() {
   const { rows } = await readCaseRows(client, "market_ops");
   const reconciliationErrors = await readOpenCount(client, "op_settlement_exceptions", "state", "reconciler_");
   const open = openCasesBySeverity(rows);
-  const compliance = slaCompliancePercent(rows, new Date());
 
-  const tiles: DashboardTile[] = [
-    { label: "Open · critical", value: open.critical },
-    { label: "Open · warning", value: open.warning },
-    { label: "Open · info", value: open.info },
-    { label: "Resolved in SLA", value: compliance === null ? null : Math.round(compliance), unit: "%" },
-    {
-      label: "Open reconciliation errors",
-      value: reconciliationErrors,
-      status: classifyMetric("reconciliation_errors", reconciliationErrors),
-      target: 0
-    },
-    // No cheap source for out-of-band edits; shown as unknown, target zero.
-    { label: "Direct database edits", value: null, status: "unknown", target: 0 }
-  ];
+  // The full named operations metric set. Cases + reconciliation errors are
+  // computed; the rest are named with their target and render "—" until wired.
+  const tiles = buildMarketTiles({
+    openCritical: open.critical,
+    reconciliationErrorsOpen: reconciliationErrors,
+    reconciliationComplete: reconciliationErrors === null ? null : reconciliationErrors === 0,
+    directDatabaseEdits: null
+  });
 
   return (
     <main id="main" className="container">
