@@ -347,9 +347,8 @@ export default async function TrackRecordPage({ searchParams }: PageProps) {
           </li>
         </ul>
         <p className="muted small">
-          Source of truth: <code>op_publications</code>, <code>op_publication_settlements</code> and{" "}
-          <code>op_publication_revisions</code>. Documented in <code>docs/track-record.md</code> and{" "}
-          <code>docs/publication-ledger.md</code>.
+          Every figure above comes from the official published-pick ledger: the exact claim, price and timestamp of
+          each pick, and everything that has happened to it since. Nothing is estimated or back-filled.
         </p>
       </section>
 

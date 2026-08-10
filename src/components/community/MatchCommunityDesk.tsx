@@ -5,11 +5,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CommunityPollChoice } from "@/lib/community/predictionContracts";
 import { buildConsensusResearchReceipt, type ConsensusDistribution, type ConsensusSide } from "@/lib/community/consensusResearch";
 import { LocalTime } from "@/components/odds/LocalTime";
+import { CommunityBody } from "@/components/community/CommunityBody";
+import { AccountBadge } from "@/components/community/AccountBadge";
+import { marketLineFromLabel } from "@/lib/sports/results/marketLine";
+import { communityTipStatus } from "@/lib/community/tipStatus";
 
 export type CommunityMarketOption = {
   id: string;
   name: string;
-  selections: Array<{ id: string; label: string; decimalOdds: number }>;
+  selections: Array<{ id: string; label: string; decimalOdds: number; bookmaker?: string | null }>;
 };
 
 type CommunityPoll = {
@@ -35,7 +39,7 @@ type CommunityTip = {
   stake_units: number;
   rationale: string;
   published_at: string;
-  author: { username: string; display_name: string | null; avatar_url: string | null } | Array<{ username: string; display_name: string | null; avatar_url: string | null }> | null;
+  author: { username: string; display_name: string | null; avatar_url: string | null; account_type?: string | null } | Array<{ username: string; display_name: string | null; avatar_url: string | null; account_type?: string | null }> | null;
   revisions: Array<{ revision_kind: "correction" | "withdrawal" | "moderation_note"; reason: string; created_at: string }> | null;
   settlement: { result: "won" | "lost" | "push" | "void"; net_units: number; reason: string; settled_at: string } | Array<{ result: "won" | "lost" | "push" | "void"; net_units: number; reason: string; settled_at: string }> | null;
 };
@@ -203,7 +207,9 @@ export function MatchCommunityDesk({ fixtureId, sport, homeTeam, awayTeam, kicko
           market: selectedMarket.id,
           selection: selectedSelection.id,
           selectionLabel: selectedSelection.label,
+          marketLine: marketLineFromLabel(selectedSelection.label),
           tippedOdds: selectedSelection.decimalOdds,
+          oddsSource: selectedSelection.bookmaker ? `${selectedSelection.bookmaker} via match odds board` : "match odds board",
           stakeUnits: Number(stakeUnits),
           rationale
         })
@@ -314,11 +320,11 @@ export function MatchCommunityDesk({ fixtureId, sport, homeTeam, awayTeam, kicko
                 return (
                   <article className={`community-tip ${withdrawn ? "withdrawn" : ""}`} key={tip.id}>
                     <div className="community-tip-meta">
-                      <div><span>{author ? <Link href={`/community/u/${encodeURIComponent(author.username)}`}>{author.display_name || `@${author.username}`}</Link> : "Community tipster"}</span><LocalTime iso={tip.published_at} variant="daymonth" /></div>
-                      <span className={`community-tip-result ${settlement?.result ?? (withdrawn ? "void" : "pending")}`}>{withdrawn ? "withdrawn" : settlement?.result ?? "pending"}</span>
+                      <div><span>{author ? <Link href={`/community/u/${encodeURIComponent(author.username)}`}>{author.display_name || `@${author.username}`}</Link> : "Community tipster"}<AccountBadge accountType={author?.account_type} /></span><LocalTime iso={tip.published_at} variant="daymonth" /></div>
+                      <span className={`community-tip-result ${settlement?.result ?? (withdrawn ? "void" : "pending")}`}>{withdrawn ? "withdrawn" : communityTipStatus({ settlement, revisions: tip.revisions })}</span>
                     </div>
                     <div className="community-tip-pick"><span>{readableMarket(tip.market)}</span><strong>{tip.selection_label}</strong><b>{asNumber(tip.tipped_odds).toFixed(2)}</b></div>
-                    <p>{tip.rationale}</p>
+                    <CommunityBody text={tip.rationale} />
                     <footer><span>{asNumber(tip.stake_units).toFixed(1)}u recorded</span>{settlement ? <strong className={asNumber(settlement.net_units) >= 0 ? "positive" : "negative"}>{asNumber(settlement.net_units) >= 0 ? "+" : ""}{asNumber(settlement.net_units).toFixed(2)}u</strong> : <span>Awaiting settlement</span>}</footer>
                   </article>
                 );

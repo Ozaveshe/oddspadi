@@ -82,6 +82,8 @@ function publication(overrides: Partial<OfficialPublicationDetail> = {}): Offici
     publicCopyRef: null,
     supersedesPublicationId: null,
     closingOdds: null,
+    closingCaptureStatus: null,
+    closingMissingReason: null,
     ...overrides
   };
 }

@@ -67,7 +67,9 @@ Each of these is individually representable and jointly nonsense.
 
 ## Representative cells
 
-The cross-surface suite renders all ten public surfaces for each of these.
+The cross-surface suite renders the fixture-bearing surfaces for each of
+these — the slate card as it appears on Today, the prediction list, results
+and a competition hub, plus the match header — and reconciles their claims.
 Every dimension value appears at least once — enforced by a test, so the set
 cannot quietly stop exercising a state.
 

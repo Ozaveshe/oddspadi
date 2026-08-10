@@ -44,6 +44,15 @@ Both deploy commands verify the linked Netlify project. The online verification 
 
 ## API Routes
 
+> **Note — archived decision-engine "brain" endpoints.** Several routes described
+> in this section (`/api/sports/decision/ai-thought-episode`, `.../brain`,
+> `.../brain/memory`, `.../memory`, `.../outcomes`, `.../model-ensemble`, and the
+> related cognitive/thought-memory routes) were moved to
+> `src/_archived/api-sports-decision/` and are **not part of the current build**.
+> They do not respond in production. The live operational surface is the cron
+> jobs, the `sports/decision/training/*` routes, and the public read APIs
+> documented above. Security boundaries: see `docs/security-boundaries.md`.
+
 All API responses use:
 
 ```json

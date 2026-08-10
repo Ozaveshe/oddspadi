@@ -3,6 +3,7 @@ import { privateJson } from "@/lib/security/privateJson";
 import { rejectCrossSiteMutation } from "@/lib/security/mutationOrigin";
 import { databaseUnavailable } from "@/lib/security/databaseError";
 import { readBoundedJson } from "@/lib/security/boundedJson";
+import { enforceGuestRateLimit, applyGuestRateContext } from "@/lib/security/guestRateLimit";
 import { toCanonicalResult } from "@/lib/publication/canonicalSettlement";
 import { gradePersonalLeg, combinePersonalOutcomes, PERSONAL_RECORD_COPY } from "@/lib/workspace/personalSettlement";
 import type { CanonicalResult } from "@/lib/results/canonicalResult";
@@ -49,6 +50,8 @@ export async function POST(request: Request) {
   if (originError) return originError;
   const service = getSupabaseServerClient();
   if (!service) return privateJson({ error: "Settlement reads are not configured." }, { status: 503 });
+  const rate = await enforceGuestRateLimit(service, request, "workspace_compute");
+  if ("limited" in rate) return rate.limited;
 
   const parsed = await readBoundedJson<{ legs?: unknown }>(request, 64_000);
   if (!parsed.ok) return parsed.response;
@@ -111,12 +114,15 @@ export async function POST(request: Request) {
     )
   );
 
-  return privateJson({
-    settlements,
-    combined: combinePersonalOutcomes(settlements),
-    // Live scores travel beside settlement, never inside it: the frozen
-    // analysis is not rewritten, the score is today's context.
-    fixtureStates: Object.fromEntries(fixtureStateByExternal),
-    recordNote: PERSONAL_RECORD_COPY
-  });
+  return applyGuestRateContext(
+    privateJson({
+      settlements,
+      combined: combinePersonalOutcomes(settlements),
+      // Live scores travel beside settlement, never inside it: the frozen
+      // analysis is not rewritten, the score is today's context.
+      fixtureStates: Object.fromEntries(fixtureStateByExternal),
+      recordNote: PERSONAL_RECORD_COPY
+    }),
+    rate.ok
+  );
 }

@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { safeTokenMatches } from "./_shared/scheduleAuth";
 import type { Context } from "@netlify/functions";
 import { finishProviderRun, startProviderRun } from "../../src/lib/sports/intelligence/repository";
 import type { ProviderRunClaim, ProviderRunLog, ProviderRunStatus } from "../../src/lib/sports/intelligence/types";
@@ -28,11 +28,6 @@ type ClaimLearningRun = (startedAt: string) => Promise<ProviderRunClaim>;
 type FinishLearningRun = (run: ProviderRunLog, status: ProviderRunStatus, errors: string[], finishedAt: string) => Promise<ProviderRunLog>;
 
 const clean = (value?: string | null) => value?.trim() || null;
-const tokenMatches = (expected: string, supplied: string) => {
-  const left = Buffer.from(expected);
-  const right = Buffer.from(supplied);
-  return left.length === right.length && timingSafeEqual(left, right);
-};
 
 const RUNTIME_REPLAY_MAX_AGE_MS = 7 * 24 * 60 * 60_000;
 
@@ -67,7 +62,7 @@ export async function runModelLearningCycle({
   runChampionChallengerComparisonSweep?: ChampionChallengerSweepOperation;
   now?: Date;
 }) {
-  if (!adminToken || !scheduleToken || !tokenMatches(adminToken, scheduleToken)) {
+  if (!adminToken || !scheduleToken || !safeTokenMatches(adminToken, scheduleToken)) {
     return Response.json({ success: false, error: "Model learning worker authorization failed." }, { status: 401 });
   }
 
@@ -187,7 +182,7 @@ export async function runSerializedModelLearningCycle({
   finishRun?: FinishLearningRun;
   cycle?: typeof runModelLearningCycle;
 }) {
-  if (!adminToken || !scheduleToken || !tokenMatches(adminToken, scheduleToken)) {
+  if (!adminToken || !scheduleToken || !safeTokenMatches(adminToken, scheduleToken)) {
     return Response.json({ success: false, error: "Model learning worker authorization failed." }, { status: 401 });
   }
 

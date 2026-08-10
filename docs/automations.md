@@ -74,24 +74,35 @@ the provider has no artwork.
 | `node scripts/site-health.mjs` | Read-only production sweep: page latency + size budgets, `/api/health`, per-sport prediction APIs, community feed non-empty. It also fails when live provider or private Supabase server configuration is incomplete. Exit 1 on any failure — use as the canary after every deploy. | optional `ODDSPADI_ADMIN_TOKEN` for the provider section |
 | `node scripts/warm-caches.mjs` | Hits the heavy pages/APIs once so the durable caches are primed and the first visitor is fast. Run right after a deploy. | nothing |
 | `node scripts/run-editorial-sweep.mjs` | Forces a News regeneration now (same worker the schedule calls). Use when the ledger changed and you don't want to wait for the next edition. | `ODDSPADI_ADMIN_TOKEN` |
-| `node scripts/seed-community-posts.mjs` | Posts one fresh feed item per seed persona (skips anyone who posted in the last 20h). Keeps the padi feed alive on quiet days. | `SUPABASE_URL` + `SUPABASE_SECRET_KEY` |
+| `node scripts/seed-community-posts.mjs` | Demo-content poster. Default is a dry-run; `--post` writes one labelled item per persona (skips anyone who posted in the last 20h) and refuses to run unless every persona is provenance-labelled (`demo`/`staff`), because demo content carries a visible "Demo account" label on the site and never counts toward leaderboards. An honest quiet feed is fine — the canary does not require posts. | `SUPABASE_URL` + `SUPABASE_SECRET_KEY` |
+| `npm run ops:audit-community` | Read-only provenance audit: accounts by type, content volume per cohort, unlabelled seed-domain accounts, stored encoding defects. | `SUPABASE_URL` + `SUPABASE_SECRET_KEY` |
+| `npm run ops:repair-community-encoding` | Dry-run report of mojibake in stored community text; `-- --run` repairs it via the same path the write side uses. | `SUPABASE_URL` + `SUPABASE_SECRET_KEY` |
 | `node scripts/oddspadi-doctor.cjs` | Pre-existing local env/readiness doctor. | local `.env.local` |
 | `npm run results:backfill` | Read-only summary of stale public picks and legacy internal duplicates. Add `-- --run` to tag legacy runs and attempt provider settlement. | local site URL; `ODDSPADI_ADMIN_TOKEN` for `--run` |
 
 ## Seed personas (one-off, already applied 2026-07-13)
 
 Eight accounts exist in Supabase auth + `op_profiles`:
-`oddspadi_desk` (admin), `kunle_lagos`, `ama_kotoko`, `tunde_united`,
+`oddspadi_desk` (staff, admin), `kunle_lagos`, `ama_kotoko`, `tunde_united`,
 `zainab_hoops`, `chidi_naija`, `mariam_casa`, `sipho_amakhosi` — all on
 `@community.oddspadi.com` emails with random unrecoverable passwords. 18
 backdated posts + likes seeded the feed. `seed-community-posts.mjs` reuses the
 same personas; if they're ever missing it exits with instructions instead of
 creating accounts.
 
+Since migration `20260808180000_community_provenance.sql` these accounts carry
+`account_type` (`staff` for the desk, `demo` for the fans): the site shows a
+visible "Demo account" / "OddsPadi staff" badge on everything they post, and
+demo/system accounts are excluded from the tipster leaderboard. The seed script
+refuses to post as an unlabelled persona. See `docs/demo-and-staff-content.md`.
+
 ## Suggested agent routine (daily)
 
-1. `node scripts/site-health.mjs` — stop and investigate on exit 1.
-2. `node scripts/seed-community-posts.mjs` — keep the feed moving.
+1. `node scripts/site-health.mjs` — stop and investigate on exit 1. An empty
+   community feed is healthy; do not treat quiet as a failure.
+2. Optional: `node scripts/seed-community-posts.mjs` (dry-run). Posting demo
+   content requires `--post` and provenance-labelled personas; every such post
+   is badged "Demo account" on the site. Prefer an honest quiet feed.
 3. If the ledger gained settled rows today: `node scripts/run-editorial-sweep.mjs`.
 4. After any deploy: `node scripts/warm-caches.mjs`, then re-run the health sweep.
 

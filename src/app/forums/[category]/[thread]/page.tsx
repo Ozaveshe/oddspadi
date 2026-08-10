@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ReplyForm } from "@/components/community/ForumComposers";
+import { CommunityBody } from "@/components/community/CommunityBody";
+import { AccountBadge } from "@/components/community/AccountBadge";
 import { createSupabaseServerClient } from "@/lib/supabase/serverAuthClient";
 import { serializeJsonLd } from "@/lib/security/jsonLd";
 import { isIsoTimestampCursor, isUuid } from "@/lib/security/inputValidation";
@@ -20,7 +22,7 @@ function prettifySlug(slug: string): string {
   return slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-type AuthorRaw = { username?: string | null };
+type AuthorRaw = { username?: string | null; account_type?: string | null };
 type ThreadRow = {
   id: string;
   title: string;
@@ -34,6 +36,11 @@ type Reply = { id: string; body: string; created_at: string; author: AuthorRaw |
 function authorName(author: AuthorRaw | AuthorRaw[] | null): string {
   const a = Array.isArray(author) ? author[0] : author;
   return a?.username ?? "padi";
+}
+
+function authorAccountType(author: AuthorRaw | AuthorRaw[] | null): string | null {
+  const a = Array.isArray(author) ? author[0] : author;
+  return a?.account_type ?? null;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -65,14 +72,14 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
 
   const { data: thread } = await supabase
     .from("op_forum_threads")
-    .select("id, title, body, is_locked, created_at, author:op_profiles!op_forum_threads_author_id_fkey(username)")
+    .select("id, title, body, is_locked, created_at, author:op_profiles!op_forum_threads_author_id_fkey(username, account_type)")
     .eq("id", threadId)
     .maybeSingle<ThreadRow>();
   if (!thread) notFound();
 
   let replyQuery = supabase
       .from("op_forum_replies")
-      .select("id, body, created_at, author:op_profiles!op_forum_replies_author_id_fkey(username)")
+      .select("id, body, created_at, author:op_profiles!op_forum_replies_author_id_fkey(username, account_type)")
       .eq("thread_id", threadId)
       .order("created_at", { ascending: true }).limit(51);
   // Validated like the community API's cursor: an arbitrary query-string value
@@ -131,11 +138,11 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
           </Link>
         </div>
         <h1>{thread.title}</h1>
-        <p className="muted small">by @{authorName(thread.author)}</p>
+        <p className="muted small">by @{authorName(thread.author)}<AccountBadge accountType={authorAccountType(thread.author)} /></p>
       </div>
 
       <article className="panel feed-post">
-        <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{thread.body}</p>
+        <CommunityBody text={thread.body} />
       </article>
 
       <section className="section" style={{ paddingTop: 20 }}>
@@ -149,8 +156,9 @@ export default async function ThreadPage({ params, searchParams }: PageProps) {
             <article className="panel feed-post" key={reply.id}>
               <div className="feed-post-head">
                 <strong>@{authorName(reply.author)}</strong>
+                <AccountBadge accountType={authorAccountType(reply.author)} />
               </div>
-              <p style={{ margin: "8px 0 0", whiteSpace: "pre-wrap" }}>{reply.body}</p>
+              <div style={{ marginTop: 8 }}><CommunityBody text={reply.body} /></div>
             </article>
           ))}
         </div>

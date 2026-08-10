@@ -148,8 +148,11 @@ export default async function MatchDetailPage({ params }: PageProps) {
 
   const publicRisks = presentBlockers([...(displayedDecision?.blockers ?? []), ...canonical.auditSummary.blockers]);
   const leagueTableSlug = leagueSlugFromProviderId(match.league.id);
-  const homeStanding = match.leagueTable?.rows.find((row) => row.teamId === match.homeTeam.id || row.teamName.toLowerCase() === match.homeTeam.name.toLowerCase());
-  const awayStanding = match.leagueTable?.rows.find((row) => row.teamId === match.awayTeam.id || row.teamName.toLowerCase() === match.awayTeam.name.toLowerCase());
+  // A pre-season table has identical zero records: printing "1st · 0 pts" from
+  // it would imply a rank that does not exist yet (seasonNotStarted guard).
+  const tableHasPlay = (match.leagueTable?.rows ?? []).some((row) => row.played > 0);
+  const homeStanding = tableHasPlay ? match.leagueTable?.rows.find((row) => row.teamId === match.homeTeam.id || row.teamName.toLowerCase() === match.homeTeam.name.toLowerCase()) : undefined;
+  const awayStanding = tableHasPlay ? match.leagueTable?.rows.find((row) => row.teamId === match.awayTeam.id || row.teamName.toLowerCase() === match.awayTeam.name.toLowerCase()) : undefined;
   const communitySport = match.sport === "football" || match.sport === "basketball" || match.sport === "tennis" ? match.sport : null;
   const communityMarkets = match.oddsMarkets
     .filter((market) => market.selections.some((selection) => Number.isFinite(selection.decimalOdds) && selection.decimalOdds > 1))
@@ -158,7 +161,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
       name: market.name,
       selections: market.selections
         .filter((selection) => Number.isFinite(selection.decimalOdds) && selection.decimalOdds > 1)
-        .map((selection) => ({ id: selection.id, label: selection.label, decimalOdds: selection.decimalOdds }))
+        .map((selection) => ({ id: selection.id, label: selection.label, decimalOdds: selection.decimalOdds, bookmaker: selection.bookmaker?.name ?? null }))
     }));
 
   const matchUrl = `${siteUrl}/predictions/${encodeURIComponent(matchId)}`;
@@ -171,9 +174,14 @@ export default async function MatchDetailPage({ params }: PageProps) {
       description: `${match.league.name} fixture — OddsPadi prediction, probabilities vs odds, value edge, confidence and risk.`,
       sport: match.sport === "football" ? "Soccer" : match.sport,
       startDate: match.kickoffTime,
-      eventStatus: "https://schema.org/EventScheduled",
-      homeTeam: { "@type": "SportsTeam", name: match.homeTeam.name },
-      awayTeam: { "@type": "SportsTeam", name: match.awayTeam.name },
+      eventStatus:
+        match.status === "postponed"
+          ? "https://schema.org/EventPostponed"
+          : match.status === "cancelled"
+            ? "https://schema.org/EventCancelled"
+            : "https://schema.org/EventScheduled",
+      homeTeam: { "@type": "SportsTeam", name: match.homeTeam.name, url: `${siteUrl}/predictions/team/${encodeURIComponent(match.homeTeam.id)}` },
+      awayTeam: { "@type": "SportsTeam", name: match.awayTeam.name, url: `${siteUrl}/predictions/team/${encodeURIComponent(match.awayTeam.id)}` },
       location: match.venue?.name
         ? {
             "@type": "Place",
@@ -374,7 +382,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
           <div className="panel">
             <h2>Recent form</h2>
             <p>
-              <strong>{match.homeTeam.name}</strong>{homeStanding ? <span className="form-table-position"> · {homeStanding.position}{homeStanding.position === 1 ? "st" : homeStanding.position === 2 ? "nd" : homeStanding.position === 3 ? "rd" : "th"} · {homeStanding.points} pts</span> : null}
+              <strong><Link href={`/predictions/team/${encodeURIComponent(match.homeTeam.id)}`}>{match.homeTeam.name}</Link></strong>{homeStanding ? <span className="form-table-position"> · {homeStanding.position}{homeStanding.position === 1 ? "st" : homeStanding.position === 2 ? "nd" : homeStanding.position === 3 ? "rd" : "th"} · {homeStanding.points} pts</span> : null}
             </p>
             <FormGuide form={match.homeForm} />
             <p className="small muted">
@@ -382,7 +390,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
               {formatPercent(match.homeForm.attackStrength)}, defence {formatPercent(match.homeForm.defenseStrength)}
             </p>
             <p>
-              <strong>{match.awayTeam.name}</strong>{awayStanding ? <span className="form-table-position"> · {awayStanding.position}{awayStanding.position === 1 ? "st" : awayStanding.position === 2 ? "nd" : awayStanding.position === 3 ? "rd" : "th"} · {awayStanding.points} pts</span> : null}
+              <strong><Link href={`/predictions/team/${encodeURIComponent(match.awayTeam.id)}`}>{match.awayTeam.name}</Link></strong>{awayStanding ? <span className="form-table-position"> · {awayStanding.position}{awayStanding.position === 1 ? "st" : awayStanding.position === 2 ? "nd" : awayStanding.position === 3 ? "rd" : "th"} · {awayStanding.points} pts</span> : null}
             </p>
             <FormGuide form={match.awayForm} />
             <p className="small muted">

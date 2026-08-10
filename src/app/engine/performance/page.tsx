@@ -100,7 +100,7 @@ export default async function EnginePerformancePage() {
       {sourceUnavailable ? <div className="notice warning"><strong>Public outcome evidence unavailable.</strong> {report.sourceReason} Accuracy, ROI, calibration and CLV are withheld; zero is not substituted for missing evidence.</div> : null}
 
       <section className="section" aria-labelledby="engine-health-heading">
-        <div className="section-title"><div><span className="section-kicker">01 / Engine Health</span><h2 id="engine-health-heading">Is the daily system operating?</h2></div><span className={`badge ${report.engineHealth.providerHealth === "completed" ? "positive" : "scheduled"}`}>{report.engineHealth.providerHealth}</span></div>
+        <div className="section-title"><div><span className="section-kicker">01 / Engine Health</span><h2 id="engine-health-heading">Is the daily system operating?</h2></div><span className={`badge ${report.engineHealth.providerHealth === "operational" ? "positive" : "scheduled"}`}>{report.engineHealth.providerHealth}</span></div>
         <div className="performance-health-strip">
           <div><span>Latest provider attempt</span><strong>{report.engineHealth.latestRunTime ? <LocalTime iso={report.engineHealth.latestRunTime} variant="datetime" /> : "No recorded attempt"}</strong></div>
           <div><span>Fixtures analysed</span><strong>{report.engineHealth.fixturesAnalysed}</strong></div>
@@ -110,7 +110,7 @@ export default async function EnginePerformancePage() {
           <div><span>Stale decisions</span><strong>{report.engineHealth.staleDecisions}</strong></div>
           <div><span>Settlement backlog</span><strong>{report.engineHealth.settlementBacklog}</strong></div>
         </div>
-        <p className="muted small">Provider sources: {report.engineHealth.providers.join(", ") || "no provider response"}. Recorded provider gaps: {report.engineHealth.providerGaps}.</p>
+        <p className="muted small">Data sources contributing: {report.engineHealth.sourceCount || "none in the latest run"}. Recorded data gaps: {report.engineHealth.providerGaps}.</p>
       </section>
 
       <section className="section historical-evidence" aria-labelledby="historical-evidence-heading">

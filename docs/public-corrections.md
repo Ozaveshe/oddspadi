@@ -138,7 +138,22 @@ class of problem the single ledger was built to end.
 
 ## Current state
 
-As of 2026-08-07 production holds **230 publications, 134 settlements and 0
-revisions**: nothing has ever been corrected, so the log is `confirmed_empty`.
-It is built now so that the first correction is visible on the day it is made
-rather than after somebody notices a number moved.
+As of 2026-08-07 production holds **230 publications, 134 settlements and 50
+revisions**. The log is no longer empty.
+
+All 50 revisions were written at 05:05 UTC on 2026-08-07 by a single repair,
+`op_repair_inference_expired_fixtures`, which withdrew 50 void verdicts that had
+been settled on inference rather than on a provider result. They carry revision
+1 and one shared reason: they are one operation, not fifty separate judgements.
+The withdrawal path, `op_unsettle_publication`, calls `op_correct_publication`
+rather than going around it, so these appear in this log on the same terms as an
+editorial correction would — which is the point of having one entry point.
+
+Nothing else has been corrected. No claim field has ever been amended and no
+publication has been retracted; every revision so far withdraws a verdict rather
+than changing what was claimed. That is why the won and lost counts in
+[publication-ledger.md](publication-ledger.md) are unchanged by all 50.
+
+The log was built so that the first correction would be visible on the day it
+was made rather than after somebody noticed a number had moved. That is what
+happened.

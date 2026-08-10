@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { safeTokenMatches } from "./_shared/scheduleAuth";
 import type { Context } from "@netlify/functions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerClient } from "../../src/lib/supabase/server";
@@ -11,11 +11,6 @@ function clean(value: string | null | undefined): string | null {
   return normalized ? normalized : null;
 }
 
-function tokenMatches(expected: string, supplied: string): boolean {
-  const left = Buffer.from(expected);
-  const right = Buffer.from(supplied);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
 
 export type PublicationWorkerOptions = {
   adminToken: string | null;
@@ -44,7 +39,7 @@ export async function runPublicationWorker({
   const expected = clean(adminToken);
   const supplied = clean(scheduleToken);
   if (!expected) return Response.json({ success: false, error: "Publication worker configuration is incomplete." }, { status: 503 });
-  if (!supplied || !tokenMatches(expected, supplied)) {
+  if (!supplied || !safeTokenMatches(expected, supplied)) {
     return Response.json({ success: false, error: "Publication worker authorization failed." }, { status: 401 });
   }
   if (!client) return Response.json({ success: false, error: "Publication worker has no database client." }, { status: 503 });

@@ -15,8 +15,8 @@ failures.
 |---|---|---|
 | Typecheck | App and test projects both compile | `npm run typecheck` (two passes) |
 | Unit + domain contracts | 1,500+ tests including the coherence model | `npx vitest run` |
-| Cross-surface consistency | Ten surfaces agree about one fixture | in the suite above |
-| Prohibited contradictions | The thirteen forbidden states | in the suite above |
+| Cross-surface consistency | The fixture-bearing surfaces agree about one fixture | in the suite above |
+| Prohibited contradictions | The nineteen forbidden states | in the suite above |
 | Generated docs current | `state-test-matrix.md` matches the model | `scripts/check-generated-docs.mjs` |
 | Build | A type-clean app can still fail to build | `npm run build` |
 | Production reconciliation | Ledger vs results vs projections vs editorial | `npm run ops:reconcile-truth` |
@@ -30,9 +30,9 @@ Claiming them would be worse than the gap.
 | Required | Status | What is missing |
 |---|---|---|
 | End-to-end tests | **Not implemented** | No browser driver in CI. The cross-surface suite renders real components server-side and asserts on their HTML, which covers rendered output but not navigation, hydration or client interaction. |
-| Accessibility checks | **Not implemented** | No automated axe run. Some a11y assertions exist in `src/test/` but nothing sweeps a rendered page. |
+| Accessibility checks | **Partial** | `src/test/accessibility-contract.test.ts` pins the matchday interactions (live-score announcer, reduced motion, 44px touch targets, status/alert roles, icon-button names) at the source level, but there is no browser axe run — CI has no DOM. The real-DOM axe pass is the documented follow-up in [seo-and-accessibility.md](seo-and-accessibility.md). |
 | Visual regression | **Not implemented** | No snapshot baseline. The deterministic world factory makes this feasible now — stable fixtures exist — but no baseline has been captured. |
-| Performance budget | **Partial** | `scripts/load-test-public-reads.mjs` measures p95, but no threshold fails a build. |
+| Performance budget | **Enforced (load test)** | `src/lib/performance/routeBudgets.ts` declares per-route p95/LCP/CLS/INP/bundle budgets; `scripts/load-test-public-reads.mjs` now sets a non-zero exit code when a route's p95 exceeds its budget, unless `ODDSPADI_PERF_WAIVER` is set. It gates the load-test job, not yet the unit `build`. |
 
 ## Cross-surface consistency, specifically
 

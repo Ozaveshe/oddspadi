@@ -35,7 +35,7 @@ const PAGES = [{ route: "/", file: `${APP}/page.tsx` }, ...pageFiles()];
 const source = (file: string) => readFileSync(file, "utf8");
 
 /** Routes deliberately kept out of the index. */
-const NOINDEX = ["/my", "/account", "/offline", "/tips", "/community/u/[handle]", "/workspace/shared/[token]"];
+const NOINDEX = ["/my", "/account", "/offline", "/tips", "/community/u/[handle]", "/community/moderation", "/workspace/shared/[token]", "/ops", "/ops/market", "/ops/community", "/ops/training"];
 
 describe("canonical URLs", () => {
   it("gives every indexable page a canonical, and every noindex page none", () => {

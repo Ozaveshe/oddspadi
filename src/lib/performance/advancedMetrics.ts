@@ -76,10 +76,21 @@ export type AdvancedPerformanceRecord = OfficialPublicationSummary & {
    */
   modelVersion?: string | null;
   /**
-   * Decimal odds for the same selection at market close. Sparse by nature —
-   * closing prices are captured by a separate job that does not always win the
-   * race with kickoff — so every CLV figure in this module is reported with
-   * its coverage attached.
+   * Decimal odds for the same selection at market close.
+   *
+   * Supplied by `OfficialPublicationDetail.closingOdds`, which resolves the
+   * current row in `op_closing_prices` — the capture table written under the
+   * `close.v1` policy — and falls back to the row's metadata for claims that
+   * predate it. It is deliberately not a column on `op_publications`: the
+   * published probability and odds are immutability-guarded, and a close is
+   * evidence attached after kickoff rather than an edit of the claim.
+   *
+   * Sparse by nature, and the sparsity is the honest kind. A claim whose close
+   * could not be captured carries `null` here and a stated reason on the
+   * detail row — never a substitute price and never a zero — so every CLV
+   * figure in this module is reported with its coverage attached. Measured on
+   * 2026-08-08 the capture rate was 0 of 149: the market depth required by the
+   * policy is not present in the data yet. See `docs/closing-price-policy.md`.
    */
   closingOdds?: number | null;
 };

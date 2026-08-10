@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { safeTokenMatches } from "./_shared/scheduleAuth";
 import type { Context } from "@netlify/functions";
 
 declare const Netlify: { env: { get(name: string): string | undefined } };
@@ -19,11 +19,6 @@ function clean(value: string | null | undefined): string | null {
   return normalized ? normalized : null;
 }
 
-function tokenMatches(expected: string, supplied: string): boolean {
-  const left = Buffer.from(expected);
-  const right = Buffer.from(supplied);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
 
 type SliceOutcome = {
   stage: string;
@@ -55,7 +50,7 @@ export async function runOutcomeLedgerWorker({
   const token = clean(adminToken);
   const supplied = clean(scheduleToken);
   if (!baseUrl || !token) return Response.json({ success: false, error: "Outcome ledger worker configuration is incomplete." }, { status: 503 });
-  if (!supplied || !tokenMatches(token, supplied)) return Response.json({ success: false, error: "Outcome ledger worker authorization failed." }, { status: 401 });
+  if (!supplied || !safeTokenMatches(token, supplied)) return Response.json({ success: false, error: "Outcome ledger worker authorization failed." }, { status: 401 });
 
   const safeDays = clean(days) ?? "14";
   const slices: SliceOutcome[] = [];

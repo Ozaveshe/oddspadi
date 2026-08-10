@@ -1,7 +1,7 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { predictionFootballLeagues, predictionLeagueBySlug, footballLeagueById } from "@/lib/sports/footballLeagues";
 
-export type LeagueStandingRow = { position: number; previousPosition: number | null; movement: number | null; teamId: string; teamName: string; teamLogo?: string | null; teamCountry?: string | null; played: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number; goalDifference: number; points: number; form: string };
+export type LeagueStandingRow = { position: number; previousPosition: number | null; movement: number | null; teamId: string; teamName: string; teamLogo?: string | null; teamCountry?: string | null; played: number; wins: number; draws: number; losses: number; goalsFor: number; goalsAgainst: number; goalDifference: number; points: number; pointsAdjustment?: number | null; adjustmentNote?: string | null; form: string };
 export type LeagueTable = { slug: string; leagueId: string; leagueName: string; country: string; season: string; source: "api-football-standings" | "supabase-standings-snapshot"; updatedAt: string; rows: LeagueStandingRow[] };
 export type ResolvedLeagueTable = { table: LeagueTable | null; requestedSeason: string; displaySeason: string; historicalFallback: boolean };
 export const footballLeagues = predictionFootballLeagues;
@@ -10,6 +10,27 @@ export function leagueBySlug(slug: string) { return predictionLeagueBySlug(slug)
 export function leagueSlugFromProviderId(id: string) { return footballLeagueById(id)?.predictions ? footballLeagueById(id)?.slug ?? null : null; }
 export function currentFootballSeason(now = new Date()) { return String(now.getUTCMonth() >= 6 ? now.getUTCFullYear() : now.getUTCFullYear() - 1); }
 export function previousFootballSeason(season: string) { return String(Number(season) - 1); }
+
+/**
+ * Bridge a provider/stored table row onto the official-table builder's shape,
+ * so pages rank and label through `buildOfficialTable` instead of trusting raw
+ * provider ordering.
+ */
+export function toStandingRows(table: LeagueTable): import("@/lib/discovery/tableState").StandingRow[] {
+  return table.rows.map((row) => ({
+    teamId: row.teamId,
+    teamName: row.teamName,
+    played: row.played,
+    won: row.wins,
+    drawn: row.draws,
+    lost: row.losses,
+    goalsFor: row.goalsFor,
+    goalsAgainst: row.goalsAgainst,
+    points: row.points,
+    pointsAdjustment: row.pointsAdjustment ?? null,
+    adjustmentNote: row.adjustmentNote ?? null
+  }));
+}
 
 export async function resolveVerifiedLeagueTable(
   slug: string,

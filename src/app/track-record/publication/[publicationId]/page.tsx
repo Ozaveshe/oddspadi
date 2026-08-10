@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LocalTimeText } from "@/components/odds/LocalTime";
 import { ResponsibleUseNotice } from "@/components/odds/PredictionDisclaimer";
+import { CommunitySubjectPanel } from "@/components/community/CommunitySubjectPanel";
 import { readPublicationReceipt, type PublicationReceipt } from "@/lib/domain/canonicalReads";
 import { canonicalSettlementBadgeClass, canonicalSettlementLabel } from "@/lib/product/vocabulary";
 import { publicationClosingLineValue, publicationUnitReturn } from "@/lib/performance/trackRecordSummary";
@@ -311,6 +312,12 @@ export default async function PublicationReceiptPage({ params }: PageProps) {
           </Link>
         </div>
       </section>
+
+      <CommunitySubjectPanel
+        subjectType="publication"
+        subjectId={receipt.publication.publicationId}
+        title="Discussion of this publication"
+      />
 
       <section className="section">
         <ResponsibleUseNotice />

@@ -98,13 +98,29 @@ in the product's history met the bar. That is no longer true, and a doc that
 says a product has never published anything while it is publishing daily is the
 same class of error the ledger exists to prevent.
 
+The first publisher run wrote all 230 rows on 2026-08-03, between 11:08:43 and
+11:09:34 UTC. Every one is a `match_winner` claim: 156 football, 74 tennis.
+
 Measured 2026-08-06: **230 official publications**. 134 settled — 35 won, 47
 lost, 52 void — and 96 unsettled.
 
-Re-measured 2026-08-07, after the repair below: **84 settled — 35 won, 47 lost,
-2 void — and 146 unsettled.** The won and lost counts did not move. The hit rate
-did not move. What moved is that the record no longer claims to know 50 things
-it does not.
+Re-measured 2026-08-07, after the repair below:
+
+| Table | Rows | Shape |
+|---|---:|---|
+| `op_publications` | 230 | 180 `published`, 50 `corrected` |
+| `op_publication_settlements` | 134 | 84 current — 35 won, 47 lost, 2 void — and 50 retired |
+| `op_publication_revisions` | 50 | all revision 1, all written by the repair below |
+
+So **84 settled — 35 won, 47 lost, 2 void — and 146 unsettled.** The won and
+lost counts did not move between the two measurements. The hit rate did not
+move. What moved is that the record no longer claims to know 50 things it does
+not.
+
+The 50 retired settlements and the 50 revisions are one set of withdrawals seen
+from either side — a verdict is superseded rather than deleted, and the same
+call writes the prior state to the revision table. They are not two disagreeing
+counts of how often the record has been corrected.
 
 **Why 50 voids were withdrawn.** The stale-fixture sweep wrote
 `op_fixtures.status = 'abandoned'` on any fixture past kickoff plus its sport's
@@ -120,6 +136,11 @@ and returns the claim to `unsettled` so a late result can still grade it. Every
 withdrawal is in the public correction log. The two remaining voids are genuine
 provider cancellations and were left alone. See
 [fixture-reconciliation.md](fixture-reconciliation.md).
+
+`npm run ops:reconcile-truth` against this state at 2026-08-07T06:17Z: 230
+publications, 29,948 fixtures, 36 stories, 11 projections, no findings. The
+ledger checks now pass against rows rather than vacuously against an empty
+table — see [reconciliation-monitoring.md](reconciliation-monitoring.md).
 
 **This section will go stale again.** It is a measurement with a date on it, not
 a property of the system. Re-measure before citing it; the live figures are what

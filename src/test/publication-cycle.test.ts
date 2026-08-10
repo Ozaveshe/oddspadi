@@ -301,8 +301,9 @@ describe("the publisher is actually scheduled", () => {
     // check on the sweep half froze the projection refresh for 8.5 hours.
     const sweep = await readFile(join("netlify/functions", "publication-sweep.ts"), "utf8");
     const worker = await readFile(join("netlify/functions", "publication-worker-background.ts"), "utf8");
-    expect(sweep).not.toContain("timingSafeEqual");
-    expect(worker).toContain("timingSafeEqual");
+    // The worker verifies via the shared constant-time verifier; the sweep does not.
+    expect(sweep).not.toMatch(/safeTokenMatches|timingSafeEqual/);
+    expect(worker).toMatch(/safeTokenMatches|timingSafeEqual/);
   });
 
   it("leaves no second copy of the gate outside the shared module", async () => {

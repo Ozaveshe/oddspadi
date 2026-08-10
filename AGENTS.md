@@ -20,6 +20,6 @@
 ## Product operations (automations)
 
 - The operator playbook lives at `docs/automations.md`: scheduled Netlify functions, required env, seed personas, and the daily agent routine.
-- Fast aliases: `npm run ops:health` (production canary, exit 1 on failure), `npm run ops:warm` (post-deploy cache priming), `npm run ops:editorial` (force a News regeneration; needs `ODDSPADI_ADMIN_TOKEN`), `npm run ops:seed-feed` (fresh persona posts; needs `SUPABASE_URL` + `SUPABASE_SECRET_KEY`).
+- Fast aliases: `npm run ops:health` (production canary, exit 1 on failure), `npm run ops:warm` (post-deploy cache priming), `npm run ops:editorial` (force a News regeneration; needs `ODDSPADI_ADMIN_TOKEN`), `npm run ops:seed-feed` (fresh persona posts; needs `SUPABASE_URL` + `SUPABASE_SECRET_KEY`), `npm run ops:duplicate-fixtures` (read-only: how many real matches `op_fixtures` holds twice across providers, and what a merge would recover).
 - PostgREST gotcha: embeds from `op_feed_posts`/`op_forum_threads` (and `op_feed_comments`) to `op_profiles` must name the FK (e.g. `op_profiles!op_feed_posts_author_id_fkey`) — the likes/replies tables double as many-to-many junctions, so bare embeds fail as ambiguous.
 - The public prediction APIs accept `view=summary`; prefer it unless the decision dossier is genuinely needed (full payloads are megabytes on busy days).

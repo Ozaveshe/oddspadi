@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { readClosingPricesFor } from "@/lib/closing/publicationCloses";
 import {
   countsTowardRecord,
   isDataAvailability,
@@ -186,16 +187,32 @@ export type OfficialPublicationDetail = OfficialPublicationSummary & {
   publicCopyRef: string | null;
   supersedesPublicationId: string | null;
   /**
-   * The closing price, when the ledger carries one.
+   * The closing price, when one was captured.
    *
-   * Closing odds are not a ledger column. They are captured after kickoff by a
-   * separate sweep and, when a publication has one, it is written into the
-   * row's `metadata`. Most rows do not have one, which is why every
-   * closing-line figure on the track record is reported with its coverage
-   * beside it rather than as a bare average over whatever happened to be
-   * present.
+   * Closing odds are not a column on `op_publications`, and deliberately so:
+   * the published probability and odds are immutability-guarded, and a close is
+   * evidence attached to a claim after kickoff rather than an edit of the claim.
+   * They live in `op_closing_prices`, one current row per publication, written
+   * by the capture sweep under a stated policy.
+   *
+   * Resolved from that table first and from the row's `metadata` only as a
+   * fallback, for rows written before the table existed. Most rows have no
+   * close at all, which is why every closing-line figure on the track record is
+   * reported with its coverage beside it rather than as a bare average over
+   * whatever happened to be present.
    */
   closingOdds: number | null;
+  /**
+   * Why a close is absent, when it is.
+   *
+   * The whole point of the capture table: "no close" is a finding with a
+   * reason — nobody priced it, too few books, the provider was late — not a
+   * blank. Null when the close was captured, and also null for rows the
+   * capture sweep has not reached, which is a different fact from a close it
+   * tried and failed to take.
+   */
+  closingCaptureStatus: string | null;
+  closingMissingReason: string | null;
 };
 
 const PUBLICATION_DETAIL_COLUMNS =
@@ -246,7 +263,49 @@ function rowToDetail(row: Record<string, unknown>): OfficialPublicationDetail {
     oddsSnapshotAt: textOrNull(row.odds_snapshot_at),
     publicCopyRef: textOrNull(row.public_copy_ref),
     supersedesPublicationId: textOrNull(row.supersedes_publication_id),
-    closingOdds: closingOddsFromMetadata(row.metadata)
+    // The metadata fallback only. `attachClosingPrices` overlays the captured
+    // close on top of this, so a row predating `op_closing_prices` keeps
+    // whatever its metadata carried.
+    closingOdds: closingOddsFromMetadata(row.metadata),
+    closingCaptureStatus: null,
+    closingMissingReason: null
+  };
+}
+
+/**
+ * Overlay captured closes onto detail rows.
+ *
+ * The captured close wins over the metadata fallback: it was produced by a
+ * stated policy with its source count and observation time recorded, where the
+ * metadata key is an unattributed number of unknown provenance.
+ *
+ * A row whose capture came back absent keeps `closingOdds: null` and gains the
+ * reason. It never inherits a substitute price — not the opening quote, not a
+ * neighbouring book, not zero. Missing stays missing, and now says why.
+ */
+async function attachClosingPrices(
+  items: OfficialPublicationDetail[],
+  client: SupabaseClient
+): Promise<{ items: OfficialPublicationDetail[]; degraded: boolean }> {
+  if (!items.length) return { items, degraded: false };
+  const lookup = await readClosingPricesFor(
+    items.map((item) => item.publicationId),
+    client
+  );
+  if (lookup.unavailable) return { items, degraded: true };
+
+  return {
+    items: items.map((item) => {
+      const close = lookup.byPublicationId.get(item.publicationId);
+      if (!close) return item;
+      return {
+        ...item,
+        closingOdds: close.closingOdds ?? item.closingOdds,
+        closingCaptureStatus: close.captureStatus,
+        closingMissingReason: close.missingReason
+      };
+    }),
+    degraded: false
   };
 }
 
@@ -368,11 +427,15 @@ export async function readOfficialPublicationPage({
   }
   const rows = (data ?? []).map((row) => rowToDetail(row as unknown as Record<string, unknown>));
   const hasMore = rows.length > bounded;
-  const items = hasMore ? rows.slice(0, bounded) : rows;
+  const trimmed = hasMore ? rows.slice(0, bounded) : rows;
+  const { items, degraded } = await attachClosingPrices(trimmed, client);
   const last = items[items.length - 1];
   return {
-    availability: items.length ? "complete" : "confirmed_empty",
-    unavailableReason: null,
+    // The claims read fine; only the closing overlay failed. That is a partial
+    // page rather than an unreadable one, and saying so keeps a closing-table
+    // outage from being reported as a market nobody priced.
+    availability: items.length ? (degraded ? "partial" : "complete") : "confirmed_empty",
+    unavailableReason: degraded ? "Closing prices could not be read; closing-line figures on this page are incomplete." : null,
     items,
     nextCursor: hasMore && last ? { publishedAt: last.publishedAt, id: last.publicationId } : null
   };
@@ -406,6 +469,12 @@ export async function readOfficialPublicationsInWindow({
   const items: OfficialPublicationDetail[] = [];
   let cursor: PublicationCursor | null = null;
   const cap = Math.max(1, maxRows);
+  // A page whose closing overlay failed comes back `partial`. That has to
+  // survive the walk: a summary computed over claims whose closes could not be
+  // read would otherwise report 0% closing coverage as a measurement, which is
+  // indistinguishable from a market nobody priced.
+  let degraded = false;
+  let degradedReason: string | null = null;
 
   while (items.length < cap) {
     const page: OfficialPublicationDetailPage = await readOfficialPublicationPage({
@@ -419,18 +488,22 @@ export async function readOfficialPublicationsInWindow({
     if (page.availability === "unavailable") {
       return { availability: "unavailable", unavailableReason: page.unavailableReason, items: [], truncated: false };
     }
+    if (page.availability === "partial") {
+      degraded = true;
+      degradedReason = degradedReason ?? page.unavailableReason;
+    }
     items.push(...page.items);
     if (!page.nextCursor) {
       return {
-        availability: items.length ? "complete" : "confirmed_empty",
-        unavailableReason: null,
+        availability: degraded ? "partial" : items.length ? "complete" : "confirmed_empty",
+        unavailableReason: degradedReason,
         items,
         truncated: false
       };
     }
     cursor = page.nextCursor;
   }
-  return { availability: "partial", unavailableReason: null, items, truncated: true };
+  return { availability: "partial", unavailableReason: degradedReason, items, truncated: true };
 }
 
 /**
@@ -576,7 +649,9 @@ export async function readPublicationReceipt(
   if (error) return empty("unavailable", error.message);
   const row = rows?.[0];
   if (!row) return empty("confirmed_empty", null);
-  const publication = rowToDetail(row as unknown as Record<string, unknown>);
+  const detail = rowToDetail(row as unknown as Record<string, unknown>);
+  const closing = await attachClosingPrices([detail], client);
+  const publication = closing.items[0] ?? detail;
 
   const [settlementResult, revisionResult] = await Promise.all([
     client
@@ -595,7 +670,7 @@ export async function readPublicationReceipt(
 
   // The claim itself read fine. A failed companion read degrades the receipt to
   // partial rather than throwing the whole page away.
-  const companionFailed = Boolean(settlementResult.error || revisionResult.error);
+  const companionFailed = Boolean(settlementResult.error || revisionResult.error || closing.degraded);
   return {
     availability: companionFailed ? "partial" : "complete",
     unavailableReason: settlementResult.error?.message ?? revisionResult.error?.message ?? null,

@@ -1,4 +1,6 @@
 import { cleanExternalIdentifier, isUuid } from "@/lib/security/inputValidation";
+import { legacySelectionKey } from "@/lib/markets/legacyKeys";
+import { canonicalSelection } from "@/lib/markets/canonicalMarkets";
 import type { Sport } from "@/lib/sports/types";
 
 export type CommunityPollChoice = "home" | "draw" | "away";
@@ -12,7 +14,11 @@ export type CommunityTipDraft = {
   market: string;
   selection: string;
   selection_label: string;
+  market_line: number | null;
   tipped_odds: number;
+  odds_source: string;
+  canonical_selection_key: string | null;
+  market_version: string | null;
   stake_units: number;
   rationale: string;
 };
@@ -23,6 +29,11 @@ function boundedText(value: unknown, minimum: number, maximum: number): string |
   if (typeof value !== "string") return null;
   const normalized = value.trim().replace(/\s+/g, " ");
   return normalized.length >= minimum && normalized.length <= maximum ? normalized : null;
+}
+
+/** The one bounded-text rule community routes share (trim + collapse + length). */
+export function boundedCommunityText(value: unknown, minimum: number, maximum: number): string | null {
+  return boundedText(value, minimum, maximum);
 }
 
 export function parseCommunityPollVote(payload: unknown): ContractResult<{ pollId: string; choice: CommunityPollChoice }> {
@@ -55,10 +66,30 @@ export function parseCommunityTipDraft(payload: unknown, now = new Date()): Cont
   if (!market || !selection || !selectionLabel) return { ok: false, error: "Market and selection are required." };
   const tippedOdds = typeof candidate.tippedOdds === "number" ? candidate.tippedOdds : Number.NaN;
   if (!Number.isFinite(tippedOdds) || tippedOdds <= 1 || tippedOdds > 1000) return { ok: false, error: "Enter valid decimal odds above 1.00." };
+  const marketLineRaw = candidate.marketLine;
+  let marketLine: number | null = null;
+  if (marketLineRaw !== undefined && marketLineRaw !== null) {
+    const invalid =
+      typeof marketLineRaw !== "number" ||
+      !Number.isFinite(marketLineRaw) ||
+      Math.abs(marketLineRaw) > 200 ||
+      Math.round(marketLineRaw * 4) !== marketLineRaw * 4;
+    if (invalid) return { ok: false, error: "Lines use quarter steps, for example 2.5 or -1.25." };
+    marketLine = marketLineRaw;
+  }
+  const oddsSource =
+    candidate.oddsSource === undefined || candidate.oddsSource === null
+      ? "user-entered"
+      : boundedText(candidate.oddsSource, 1, 120);
+  if (!oddsSource) return { ok: false, error: "Describe the odds source in 1 to 120 characters." };
   const stakeUnits = typeof candidate.stakeUnits === "number" ? candidate.stakeUnits : Number.NaN;
   if (!Number.isFinite(stakeUnits) || stakeUnits < 0.1 || stakeUnits > 10) return { ok: false, error: "Stake must be between 0.1 and 10 units." };
   const rationale = boundedText(candidate.rationale, 50, 2000);
   if (!rationale) return { ok: false, error: "Explain the match-specific reasoning in 50 to 2000 characters." };
+  // Canonical identity is resolved server-side through the same read-side
+  // bridge workspace legs use; an unmappable market stays null, never guessed.
+  const canonicalKey = legacySelectionKey({ sport, market, selection, marketLine });
+  const canonicalRef = canonicalKey ? canonicalSelection(canonicalKey) : null;
   return {
     ok: true,
     value: {
@@ -70,7 +101,11 @@ export function parseCommunityTipDraft(payload: unknown, now = new Date()): Cont
       market,
       selection,
       selection_label: selectionLabel,
+      market_line: marketLine,
       tipped_odds: tippedOdds,
+      odds_source: oddsSource,
+      canonical_selection_key: canonicalRef ? canonicalKey : null,
+      market_version: canonicalRef ? canonicalRef.market.version : null,
       stake_units: stakeUnits,
       rationale
     }

@@ -6,7 +6,7 @@ describe("league table identity", () => {
     const source = await readFile("src/app/predictions/league/[slug]/table/page.tsx", "utf8");
 
     expect(source).toContain("<CountryFlag country={league.country}");
-    expect(source).toContain("<TeamCrest name={row.teamName} logo={row.teamLogo}");
+    expect(source).toContain("<TeamCrest name={row.teamName} logo={raw?.teamLogo}");
     expect(source).toContain("aria-label=\"Major league tables\"");
     expect(source).toContain("featuredFootballLeagueTables.map");
     expect(source).toContain("export const dynamic = \"force-dynamic\"");

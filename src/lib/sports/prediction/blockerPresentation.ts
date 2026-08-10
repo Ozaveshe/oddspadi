@@ -60,7 +60,13 @@ export function presentBlockers(blockers: readonly string[], limit = 3): Present
     const topic = rule?.topic ?? `raw:${trimmed.toLowerCase()}`;
     if (seen.has(topic)) continue;
     seen.add(topic);
-    presented.push({ topic, text: rule?.text ?? trimmed });
+    // A mapped blocker has reader-facing text. An UNMAPPED blocker is shown
+    // only if it reads as prose; a raw internal token (snake_case, or an
+    // op_/gate-style marker, e.g. "calibration_support_missing") is redacted to
+    // a generic line so engine internals never reach the reader.
+    const looksInternal = /[a-z0-9]_[a-z0-9]/i.test(trimmed) || /\b(op_[a-z]|provider_[a-z]|quarantine|shadow_|calibration_support|evidence_score|needs_review)\b/i.test(trimmed);
+    const text = rule ? rule.text : looksInternal ? "Analysis withheld pending a data or model check." : trimmed;
+    presented.push({ topic, text });
     if (presented.length >= limit) break;
   }
 

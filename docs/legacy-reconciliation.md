@@ -45,11 +45,17 @@ we do not know beats inventing provenance.
 | Records requiring manual review | 0 |
 | Conflicting settlements | 0 |
 
-Zero recovered is not a failure of the tool. `op_public_picks` is empty and
-always has been: publication has never opened, because the model has never
-passed all seven promotion gates. The 144 rows that were appearing as a public
-track record were 143 paper-mode shadow runs and one developer smoke test,
-reaching an anon-readable table through a mirror trigger that used a denylist.
+Zero recovered is not a failure of the tool. `op_public_picks` was empty and
+always had been: publication had not opened at the time of the run. The 144 rows
+that were appearing as a public track record were 143 paper-mode shadow runs and
+one developer smoke test, reaching an anon-readable table through a mirror
+trigger that used a denylist.
+
+That result stands as history and does not change. Publication opened three days
+later, on 2026-08-03, and production held 230 official publications when
+re-measured on 2026-08-07 — none of them recovered from legacy data, which is
+the outcome this run predicted. See
+[publication-ledger.md](publication-ledger.md) for the current figures.
 
 The counts for the two largest stores are planner estimates, marked `≈` in the
 report: an exact count over 590k rows exceeds the API role's 8-second statement

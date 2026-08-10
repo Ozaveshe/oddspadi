@@ -17,7 +17,7 @@ describe("the searchable catalogue", () => {
     const catalogue = buildCatalogue([], []);
     const epl = catalogue.find((entity) => entity.kind === "competition" && entity.name === "Premier League");
     expect(epl).toBeDefined();
-    expect(epl!.href).toContain("/table");
+    expect(epl!.href).toBe("/predictions/league/premier-league");
   });
 
   it("weights competitions by tier so africa-primary sits near the top flight", () => {

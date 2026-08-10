@@ -30,12 +30,14 @@
     "ops:settle": "node --env-file-if-exists=.env.local scripts/settle-market-decisions.mjs",
     "ops:calibration-report": "node --env-file-if-exists=.env.local scripts/calibration-report.mjs",
     "ops:closing-lines": "node --env-file-if-exists=.env.local scripts/mark-closing-odds.mjs",
+    "ops:closing-prices": "vite-node --config scripts/vite-node.config.ts scripts/backfill-closing-prices.ts",
     "ops:outcomes": "node --env-file-if-exists=.env.local scripts/backfill-prediction-outcomes.mjs",
     "training:football-corpus": "vite-node --config scripts/vite-node.config.ts scripts/football-corpus-training.ts",
     "ops:prune-odds": "node --env-file-if-exists=.env.local scripts/prune-stale-odds.mjs",
     "ops:reconcile-ledger": "node --env-file-if-exists=.env.local scripts/reconcile-publication-ledger.mjs",
     "ops:loadtest": "node --env-file-if-exists=.env.local scripts/load-test-public-reads.mjs",
     "ops:reconcile-truth": "node --env-file-if-exists=.env.local scripts/reconcile-truth.mjs",
+    "ops:duplicate-fixtures": "node --env-file-if-exists=.env.local node_modules/vite-node/vite-node.mjs --config scripts/vite-node.config.ts scripts/diagnose-duplicate-fixtures.ts",
     "docs:state-matrix": "vite-node --config scripts/vite-node.config.ts scripts/generate-state-matrix-doc.ts",
     "gate:release": "node scripts/release-gate.mjs",
     "ops:publish": "node --env-file-if-exists=.env.local scripts/publish-picks.mjs",
@@ -47,7 +49,10 @@
     "ops:reconcile-lifecycles": "npx vite-node -c vitest.config.ts scripts/reconcile-fixture-lifecycles.ts",
     "docs:canonical-seed": "vite-node --config scripts/vite-node.config.ts scripts/generate-canonical-market-seed.ts",
     "ops:alerts": "node --env-file-if-exists=.env.local scripts/settlement-alerts.mjs",
-    "ops:resettle": "vite-node --config scripts/vite-node.config.ts scripts/resettle-publications.ts"
+    "ops:cases": "node --env-file-if-exists=.env.local scripts/ops-cases.mjs",
+    "ops:resettle": "vite-node --config scripts/vite-node.config.ts scripts/resettle-publications.ts",
+    "ops:repair-community-encoding": "vite-node --config scripts/vite-node.config.ts scripts/repair-community-encoding.ts",
+    "ops:audit-community": "vite-node --config scripts/vite-node.config.ts scripts/audit-community-provenance.ts"
   },
   "engines": {
     "node": "22.x"
