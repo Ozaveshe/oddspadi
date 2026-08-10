@@ -138,7 +138,7 @@ Pure aggregators over pre-fetched rows (no DB), composing `OBSERVABILITY_METRICS
 - **Sweep/worker** (schedule a clear minute, e.g. `12,42 * * * *`): sweep declares `config.schedule`, no DB, no inbound-token gate; worker verifies `x-oddspadi-schedule-token` with `safeTokenMatches` and calls `/api/ops/cases/sync`. Same discipline as the reconciler pair (`job-endpoint-security.test.ts`).
 - `scripts/ops-cases.mjs` (`ops:cases`): read-only SLA report — open cases by workspace/severity, breached list, unassigned-and-overdue. Exit 0 clean / 1 breaches present / 2 could-not-check. Never zero on failure.
 
-- [ ] **Step 1: Failing tests** — the security suite still passes with the new sweep listed (sweep has no token read/DB; worker verifies the token). 
+- [ ] **Step 1: Failing tests** — the security suite still passes with the new sweep listed (sweep has no token read/DB; worker verifies the token).
 - [ ] Steps 2-4: implement → pass.
 - [ ] **Step 5: Commit** — `feat(ops): scheduled case-sync (each open exception becomes a case) + ops:cases SLA report`.
 
