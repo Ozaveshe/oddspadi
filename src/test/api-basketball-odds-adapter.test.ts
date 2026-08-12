@@ -156,7 +156,7 @@ describe("API-Basketball odds adapter", () => {
       id: "match_winner",
       name: "Moneyline",
       priceMethod: "best-price-per-selection-v1",
-      consensus: expect.objectContaining({ method: "median-no-vig-v1", bookmakerCount: 2 })
+      consensus: expect.objectContaining({ method: "median-shin-no-vig-v2", bookmakerCount: 2 })
     }));
     expect(game?.oddsMarkets[0]?.bookmaker).toBeUndefined();
     expect(game?.oddsMarkets[0]?.selections).toEqual([
