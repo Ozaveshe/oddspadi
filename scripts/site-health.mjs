@@ -40,7 +40,7 @@ async function checkJson(path, validate, label = path, options = {}) {
   try {
     const { response, ms } = await timedFetch(path, options);
     const payload = await response.json();
-    const problem = validate(payload, response);
+    const problem = response.ok ? validate(payload, response) : `HTTP ${response.status}`;
     report(!problem, label, problem || `${response.status}, ${ms}ms`);
     return payload;
   } catch (error) {
@@ -119,13 +119,13 @@ function tipsIdentityProblem(payload) {
   return null;
 }
 
-async function checkLatestRun(path, maxAgeMs, label, acceptedStatuses = ["completed", "partial", "empty"]) {
+async function checkLatestRun(path, maxAgeMs, label) {
   return checkJson(path, (payload) => {
     const run = payload?.data;
-    if (!run) return "no stored run receipt";
-    if (!acceptedStatuses.includes(run.status)) return `latest status is ${run.status ?? "missing"}`;
-    const finishedAt = Date.parse(run.finishedAt ?? "");
-    if (!Number.isFinite(finishedAt)) return "latest run has no valid completion time";
+    if (!payload?.success || !run) return "no public run receipt";
+    if (run.status !== "operational") return `latest status is ${run.status ?? "missing"}`;
+    const finishedAt = Date.parse(run.lastSuccessAt ?? "");
+    if (!Number.isFinite(finishedAt)) return "latest run has no valid success time";
     const ageMs = Date.now() - finishedAt;
     return ageMs > maxAgeMs ? `latest completion is ${(ageMs / 3_600_000).toFixed(1)}h old` : null;
   }, label);
@@ -252,7 +252,7 @@ await checkJson("/api/cron/enrich-fixture-identities?view=coverage", (payload) =
   }
   return coverage.fixturesInspected > 0 ? null : "no stored future fixtures were inspected";
 }, "stored future-season identity and artwork coverage");
-await checkLatestRun("/api/cron/run-model-learning", 30 * 60 * 60_000, "serialized model learning receipt", ["completed"]);
+await checkLatestRun("/api/cron/run-model-learning", 30 * 60 * 60_000, "serialized model learning receipt");
 
 // Operator-only reads. These endpoints used to answer anonymously, which is
 // how the shadow model's key and full unpublished evaluation were public.
@@ -271,32 +271,35 @@ for (const sport of operatorRead ? ["football", "basketball", "tennis"] : []) {
   }, `governed ${sport} learning receipt`, operatorRead);
 }
 
-await checkJson("/api/sports/decision/training/multi-sport-backtest-run?sport=all&minSample=30&limit=50000", (payload) => {
-  if (!operatorRead) return null;
-  if (!payload?.success || !Array.isArray(payload?.data?.jobs)) return "runtime backtest preview is unavailable";
-  const jobs = payload.data.jobs;
-  const problems = [];
-  for (const sport of ["football", "basketball", "tennis"]) {
-    const backtest = jobs.find((job) => job?.sport === sport)?.latestBacktest;
-    if (!backtest) {
-      problems.push(`${sport}: no stored runtime replay`);
-      continue;
+if (!operatorRead) {
+  console.log("SKIP  weekly exact-runtime model evidence — set ODDSPADI_ADMIN_TOKEN to check it");
+} else {
+  await checkJson("/api/sports/decision/training/multi-sport-backtest-run?sport=all&minSample=30&limit=50000", (payload) => {
+    if (!payload?.success || !Array.isArray(payload?.data?.jobs)) return "runtime backtest preview is unavailable";
+    const jobs = payload.data.jobs;
+    const problems = [];
+    for (const sport of ["football", "basketball", "tennis"]) {
+      const backtest = jobs.find((job) => job?.sport === sport)?.latestBacktest;
+      if (!backtest) {
+        problems.push(`${sport}: no stored runtime replay`);
+        continue;
+      }
+      if (!backtest.exactRuntimeParity || !backtest.realDataOnly) {
+        problems.push(`${sport}: ${backtest.compatibility ?? "incompatible"}/${backtest.dataSource ?? "unknown source"}`);
+        continue;
+      }
+      const createdAt = Date.parse(backtest.createdAt ?? "");
+      if (!Number.isFinite(createdAt)) {
+        problems.push(`${sport}: invalid runtime replay timestamp`);
+        continue;
+      }
+      const ageMs = Date.now() - createdAt;
+      if (ageMs > 8 * 24 * 60 * 60_000) problems.push(`${sport}: runtime replay is ${(ageMs / 86_400_000).toFixed(1)}d old`);
+      if (backtest.sampleSize < 30) problems.push(`${sport}: runtime replay sample is ${backtest.sampleSize}`);
     }
-    if (!backtest.exactRuntimeParity || !backtest.realDataOnly) {
-      problems.push(`${sport}: ${backtest.compatibility ?? "incompatible"}/${backtest.dataSource ?? "unknown source"}`);
-      continue;
-    }
-    const createdAt = Date.parse(backtest.createdAt ?? "");
-    if (!Number.isFinite(createdAt)) {
-      problems.push(`${sport}: invalid runtime replay timestamp`);
-      continue;
-    }
-    const ageMs = Date.now() - createdAt;
-    if (ageMs > 8 * 24 * 60 * 60_000) problems.push(`${sport}: runtime replay is ${(ageMs / 86_400_000).toFixed(1)}d old`);
-    if (backtest.sampleSize < 30) problems.push(`${sport}: runtime replay sample is ${backtest.sampleSize}`);
-  }
-  return problems.length ? problems.join("; ") : null;
-}, "weekly exact-runtime model evidence", operatorRead ?? {});
+    return problems.length ? problems.join("; ") : null;
+  }, "weekly exact-runtime model evidence", operatorRead);
+}
 
 await checkJson(
   "/api/health",
