@@ -704,7 +704,15 @@ export async function getDailySlate({
       maxFixtureAgeMs,
       includeSuspended
     });
-    if (stored && (stored.summary.predictionsGenerated > 0 || !ensure)) return stored;
+    if (stored && (stored.summary.predictionsGenerated > 0 || !ensure)) {
+      // Storage selects UTC instants; the public daily range names the local
+      // calendar day, even when its fixtures span two UTC dates.
+      return {
+        ...stored,
+        range: { from: date, to: date },
+        groupedByDate: [{ date, fixtures: stored.fixtures }]
+      };
+    }
     if (!ensure) return buildReadOnlySlate({
       scope: "daily",
       dates: [date],
