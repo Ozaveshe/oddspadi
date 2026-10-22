@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LocalTime } from "@/components/odds/LocalTime";
+import { WorkspaceEntry } from "./WorkspaceEntry";
+import type { WorkspaceOption } from "@/lib/workspace/options";
 import { analyseWorkspace, freezeWorkspace, settleSnapshot, type PersonalLegOutcome } from "@/lib/workspace/analysis";
 import {
   addUnresolvedEntry,
+  addSelection,
+  replaceSelection,
   archiveWorkspace,
   duplicateWorkspace,
   exportWorkspace,
@@ -68,6 +72,11 @@ export function SlipCheckClient() {
   const [fixtureStates, setFixtureStates] = useState<Record<string, FixtureState>>({});
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const mounted = useRef(true);
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
@@ -121,8 +130,8 @@ export function SlipCheckClient() {
   const visible = workspaces.filter((workspace) => (showArchived ? true : !workspace.archivedAt));
   const selected = workspaces.find((workspace) => workspace.workspaceId === selectedId) ?? visible[0] ?? null;
   const analysis = useMemo(
-    () => (selected ? analyseWorkspace(selected.selections) : null),
-    [selected]
+    () => (selected ? analyseWorkspace(selected.selections, clock) : null),
+    [selected, clock]
   );
   const frozen = selected ? isFrozen(selected) : false;
   const anyStarted = (analysis?.startedLegCount ?? 0) > 0;
@@ -169,6 +178,7 @@ export function SlipCheckClient() {
       const body = (await response.json()) as {
         fixtures?: Record<string, { status?: string; homeScore?: number | null; awayScore?: number | null }>;
         officialPublications?: Record<string, { id?: string }>;
+        evidenceOptions?: Record<string, WorkspaceOption[]>;
       };
       if (!mounted.current) return;
       setFixtureStates(
@@ -186,7 +196,8 @@ export function SlipCheckClient() {
           ...selected,
           selections: selected.selections.map((leg) => {
             const fresh = body.fixtures?.[leg.fixtureId];
-            const publication = body.officialPublications?.[leg.fixtureId];
+            const publication = body.officialPublications?.[`${leg.fixtureId}:${leg.marketId}:${leg.selectionId}`];
+            const evidence = body.evidenceOptions?.[leg.fixtureId]?.find((row) => row.key === `${leg.marketId}:${leg.selectionId}`)?.input;
             const status = typeof fresh?.status === "string" ? fresh.status : leg.fixtureStatus;
             return {
               ...leg,
@@ -195,14 +206,19 @@ export function SlipCheckClient() {
               )
                 ? (status as typeof leg.fixtureStatus)
                 : leg.fixtureStatus,
-              publicationId: publication?.id ?? leg.publicationId
+              publicationId: publication?.id ?? null,
+              modelProbability: evidence?.modelProbability ?? null,
+              modelGeneratedAt: evidence?.modelGeneratedAt ?? null,
+              marketNoVigProbability: evidence?.marketNoVigProbability ?? null,
+              marketSupported: evidence?.marketSupported ?? false,
+              modelInterval: evidence?.modelInterval ?? null
             };
           }),
           updatedAt: new Date().toISOString()
         };
         commit(updated);
       }
-      setNote("Rechecked. Prices and model figures shown are still the ones captured when each leg was added.");
+      setNote(frozen ? "Current fixture states checked. Your frozen evidence is unchanged." : "Decision evidence refreshed. Your own price is unchanged; check it with your bookmaker before relying on it.");
     } catch {
       if (mounted.current) setNote("Recheck is unavailable right now.");
     } finally {
@@ -300,14 +316,15 @@ export function SlipCheckClient() {
 
   function freeze() {
     if (!selected || !analysis || frozen) return;
-    if (anyStarted) {
+    const currentAnalysis = analyseWorkspace(selected.selections);
+    if (currentAnalysis.startedLegCount > 0) {
       setNote("A leg has already started, so a pre-event snapshot can no longer be taken.");
       return;
     }
     const now = new Date().toISOString();
     commit({
       ...selected,
-      snapshot: freezeWorkspace(analysis, `snap-${Date.now().toString(36)}`, now),
+      snapshot: freezeWorkspace(currentAnalysis, `snap-${Date.now().toString(36)}`, now),
       updatedAt: now
     });
     setNote("Snapshot frozen. The analysis above is now the permanent pre-event record.");
@@ -337,6 +354,10 @@ export function SlipCheckClient() {
         <h2>Your workspace is empty</h2>
         <p className="muted">Add modelled selections from Today, Explore or any match page. Analysis only — no account needed, and your selections never become OddsPadi picks.</p>
         <Link className="button primary" href="/predictions">Browse predictions</Link>
+        <button className="button" type="button" onClick={() => {
+          const created = newWorkspace(`ws-${crypto.randomUUID()}`, "My workspace", new Date().toISOString());
+          commit(created); setSelectedId(created.workspaceId);
+        }}>Create workspace</button>
       </div>
     );
   }
@@ -346,6 +367,10 @@ export function SlipCheckClient() {
 
   return (
     <>
+      {!frozen ? <WorkspaceEntry onAdd={(selection) => {
+        if (selected.selections.length >= 20) { setNote("This workspace holds at most 20 selections."); return; }
+        commit(addSelection(selected, selection, new Date().toISOString()));
+      }} /> : null}
       <section className="panel slip-workspace-bar">
         <label className="small muted" htmlFor="workspace-picker">Workspace</label>
         <select
@@ -450,6 +475,14 @@ export function SlipCheckClient() {
                   {leg.uncertaintyWidth !== null ? ` · ±${((leg.uncertaintyWidth / 2) * 100).toFixed(1)}pt band` : ""}
                 </p>
                 <p className="muted small">{leg.note}</p>
+                <p className="muted small">Price observed: {leg.selection.oddsObservedAt ? <LocalTime iso={leg.selection.oddsObservedAt} variant="datetime" /> : "Unknown"}. Model evidence: {leg.selection.modelGeneratedAt ? <LocalTime iso={leg.selection.modelGeneratedAt} variant="datetime" /> : "Unavailable"}.</p>
+                {!frozen ? <label>Your decimal odds <input type="number" min="1.01" step="0.01" defaultValue={leg.selection.userOdds} onBlur={(event) => {
+                  const price = Number(event.target.value);
+                  if (price === leg.selection.userOdds) return;
+                  if (!Number.isFinite(price) || price <= 1) { setNote("Enter decimal odds above 1.00."); return; }
+                  const now = new Date().toISOString();
+                  commit(replaceSelection(selected, leg.selection.legId, { ...leg.selection, userOdds: price, oddsObservedAt: now, source: "User checked price" }, now));
+                }} /></label> : null}
                 {leg.isOfficialPick ? (
                   <p className="small"><span className="badge finished">OddsPadi official pick exists on this selection</span></p>
                 ) : null}
@@ -525,7 +558,7 @@ export function SlipCheckClient() {
       <section className="panel slip-workspace-actions">
         <div className="card-actions">
           <button className="button secondary" type="button" disabled={busy !== null} onClick={recheck}>
-            {busy === "recheck" ? "Rechecking…" : "Recheck fixtures"}
+            {busy === "recheck" ? "Rechecking…" : "Refresh evidence"}
           </button>
           {!frozen ? (
             <button className="button primary" type="button" disabled={anyStarted || !displayAnalysis.legs.length} onClick={freeze}>

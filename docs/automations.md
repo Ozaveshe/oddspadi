@@ -69,6 +69,21 @@ the provider has no artwork.
 
 ## Scripts (run from the repo root)
 
+`/api/health` is a readiness check: it returns HTTP 503 with `status: degraded`
+when configuration or the stored public daily slate is unavailable, failed,
+stale, or missing analysis. HTTP 200 requires a fresh completed slate with
+analysis, or an explicitly empty provider receipt. It never runs providers.
+Its stored-read deadline is five seconds and receipt freshness is 45 minutes.
+Admin configuration detail still requires the authorization header. The canary
+reads sanitized cron receipts (`operational` and `lastSuccessAt`), treats HTTP
+errors as failures, and skips private model checks when no admin token is set.
+
+Provider HTTP 200 responses with nonempty `errors` are failures, not empty
+schedules. Live prediction runs with no fixtures skip historical learning and
+calibration reads so failed provider access does not trigger unnecessary work.
+Provider account suspension/deactivation requires account restoration; never
+label cached data fresh or relax publication checks to conceal it.
+
 | Script | Purpose | Needs |
 | --- | --- | --- |
 | `node scripts/site-health.mjs` | Read-only production sweep: page latency + size budgets, `/api/health`, per-sport prediction APIs, community feed non-empty. It also fails when live provider or private Supabase server configuration is incomplete. Exit 1 on any failure — use as the canary after every deploy. | optional `ODDSPADI_ADMIN_TOKEN` for the provider section |

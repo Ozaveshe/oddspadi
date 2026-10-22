@@ -392,7 +392,7 @@ async function executePipeline({
     // charges +3% for one book, +1.5% for two) rather than being rejected for
     // being thin. The daily double has worked this way since it shipped; the
     // main decision path never received the bands.
-    const bandsBySport = await calibrationBandsForSports(sports);
+    const bandsBySport = await calibrationBandsForSports(collected.matches.map((match) => match.sport));
     for (const match of collected.matches) {
       const prediction = collected.predictionByFixture.get(match.id);
       if (!prediction) continue;

@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Match, MatchContextSignal } from "@/lib/sports/types";
 import { isRequiredProductionDataSignalBlocked } from "@/lib/sports/prediction/contextSignalPolicy";
 import { buildHistoricalResultsCoverageSignal } from "@/lib/sports/prediction/decisionHistoricalEvidence";
 import { buildPrediction } from "@/lib/sports/service";
 
 const NOW = new Date("2026-07-14T12:00:00.000Z");
+afterEach(() => vi.useRealTimers());
 
 function playerForm(
   publishedAt = "2026-07-10T12:00:00.000Z",
@@ -116,9 +117,11 @@ describe("decision historical evidence coverage", () => {
   });
 
   it("threads provider-backed historical evidence through the real prediction entrypoint", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
     const input = match();
     input.providerContextSignals = [playerForm()];
-    const prediction = buildPrediction(input);
+    const prediction = buildPrediction(input, { now: NOW });
     const history = prediction.decision.dataCoverage.signals.find((signal) => signal.id === "historical-results");
     expect(history).toMatchObject({ status: "provider-backed", freshness: "historical" });
     expect(prediction.decision.dataCoverage.requiredBeforeTrust.join(" ")).not.toContain("Chronological team and player history");

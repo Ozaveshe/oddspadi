@@ -77,6 +77,7 @@ export type LegDiagnostic =
   | "unsupported-market"
   | "stale-odds"
   | "stale-model"
+  | "no-model-timestamp"
   | "match-started"
   | "match-finished"
   | "no-odds-timestamp";
@@ -111,9 +112,9 @@ export type AnalysedLeg = {
 };
 
 /** Odds older than this are context, not a price you could take. */
-const STALE_ODDS_MS = 12 * 60 * 60_000;
+const STALE_ODDS_MS = 60 * 60_000;
 /** A model view older than this needs re-checking before it is leaned on. */
-const STALE_MODEL_MS = 12 * 60 * 60_000;
+const STALE_MODEL_MS = 60 * 60_000;
 
 export function impliedProbability(decimalOdds: number): number {
   return 1 / decimalOdds;
@@ -124,12 +125,16 @@ export function analyseLeg(selection: CanonicalSelection, nowMs = Date.now()): A
 
   if (!selection.marketSupported) diagnostics.push("unsupported-market");
   if (selection.modelProbability === null) diagnostics.push("no-model");
-  if (!selection.oddsObservedAt) diagnostics.push("no-odds-timestamp");
-  else if (nowMs - Date.parse(selection.oddsObservedAt) > STALE_ODDS_MS) diagnostics.push("stale-odds");
-  if (selection.modelGeneratedAt && nowMs - Date.parse(selection.modelGeneratedAt) > STALE_MODEL_MS) {
+  const maxAge = selection.sport === "basketball" ? 45 * 60_000 : STALE_MODEL_MS;
+  const oddsTime = Date.parse(selection.oddsObservedAt ?? "");
+  const modelTime = Date.parse(selection.modelGeneratedAt ?? "");
+  if (!Number.isFinite(oddsTime) || oddsTime > nowMs) diagnostics.push("no-odds-timestamp");
+  else if (nowMs - oddsTime > Math.min(STALE_ODDS_MS, maxAge)) diagnostics.push("stale-odds");
+  if (selection.modelProbability !== null && (!Number.isFinite(modelTime) || modelTime > nowMs)) diagnostics.push("no-model-timestamp");
+  if (Number.isFinite(modelTime) && nowMs - modelTime > maxAge) {
     diagnostics.push("stale-model");
   }
-  if (selection.fixtureStatus === "live") diagnostics.push("match-started");
+  if (selection.fixtureStatus === "live" || (selection.fixtureStatus !== "finished" && Date.parse(selection.kickoffAt) <= nowMs)) diagnostics.push("match-started");
   if (selection.fixtureStatus === "finished") diagnostics.push("match-finished");
 
   const implied = impliedProbability(selection.userOdds);
@@ -155,7 +160,11 @@ export function analyseLeg(selection: CanonicalSelection, nowMs = Date.now()): A
     selection.marketSupported &&
     selection.modelProbability !== null &&
     !diagnostics.includes("stale-model") &&
-    selection.fixtureStatus !== "finished";
+    !diagnostics.includes("no-model-timestamp") &&
+    !diagnostics.includes("stale-odds") &&
+    !diagnostics.includes("no-odds-timestamp") &&
+    !diagnostics.includes("match-started") &&
+    selection.fixtureStatus === "scheduled";
 
   return {
     selection,
@@ -192,7 +201,7 @@ function legNote(selection: CanonicalSelection, diagnostics: LegDiagnostic[], di
   if (diagnostics.includes("match-started")) {
     return "This match is already under way. The model view is pre-match and does not account for the current state.";
   }
-  const staleness = diagnostics.includes("stale-odds") ? " The price is more than 12 hours old and may have moved." : "";
+  const staleness = diagnostics.includes("stale-odds") ? " The price has passed its freshness window and needs checking." : "";
   if (difference === null) return `Analysis only.${staleness}`;
   if (difference > 0.02) {
     return `The model's probability is above the price's implied probability${selection.publicationId ? "; OddsPadi published an official pick on this selection" : ""}.${staleness}`;

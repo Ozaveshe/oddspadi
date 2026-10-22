@@ -131,11 +131,9 @@ describe("multi-leg analysis", () => {
     expect(analysis.combinationBasis).toBe("independently-modelled");
   });
 
-  it("shows a range rather than a single false-precision figure", () => {
+  it("does not invent an uncertainty interval when the model supplied none", () => {
     const analysis = analyseWorkspace([selection(), differentMatch], NOW);
-    expect(analysis.combinedModelRange).not.toBeNull();
-    expect(analysis.combinedModelRange!.low).toBeLessThan(analysis.combinedModelProbability!);
-    expect(analysis.combinedModelRange!.high).toBeGreaterThan(analysis.combinedModelProbability!);
+    expect(analysis.combinedModelRange).toBeNull();
     // At most three decimal places — the inputs do not support more.
     expect(String(analysis.combinedModelProbability).split(".")[1]?.length ?? 0).toBeLessThanOrEqual(3);
   });
@@ -203,13 +201,13 @@ describe("correlation is never assumed away", () => {
     expect(analysis.combinedModelProbability).toBeNull();
   });
 
-  it("uses the joint model where one is approved", () => {
+  it("withholds a joint probability when no joint distribution accompanies the legs", () => {
     const legs = [
       analyseLeg(selection({ marketId: "match_winner", selectionId: "home" }), NOW),
       analyseLeg(selection({ legId: "leg-2", marketId: "over_under_25", selectionId: "over_25", label: "Over 2.5" }), NOW)
     ];
     const basis = resolveCombinationBasis(legs, detectCorrelations(legs));
-    expect(basis).toBe("correlation-adjusted");
+    expect(basis).toBe("correlation-unknown");
   });
 
   it("refuses a precise figure for correlated legs with no joint model", () => {

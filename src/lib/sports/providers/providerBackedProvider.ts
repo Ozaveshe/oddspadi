@@ -2365,6 +2365,20 @@ async function fetchJsonOutcome(
       return { kind: "failed" };
     }
     const data = await response.json().catch(() => null);
+    // API-Sports reports suspended accounts and quota failures inside HTTP 200.
+    // They are failed reads, never evidence of an empty official schedule.
+    if (data && typeof data === "object" && "errors" in data) {
+      const errors = (data as { errors?: unknown }).errors;
+      if (errors && typeof errors === "object" && Object.keys(errors).length > 0) {
+        const categories = Object.keys(errors).map((key) => key.replace(/[^a-zA-Z0-9_-]/g, "").slice(0,40));
+        warnProviderIssue(url, `Provider rejected request (${categories.join(", ")})`, response);
+        return { kind: "failed" };
+      }
+    }
+    if (data === null) {
+      warnProviderIssue(url, "Invalid JSON response", response);
+      return { kind: "failed" };
+    }
     return { kind: "ok", data };
   } catch (error) {
     if (controller.signal.aborted && parentSignal?.aborted) {
@@ -3718,15 +3732,15 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   }
 
   private async getOddsBackedFootballFixtures(date: string): Promise<Match[]> {
-    const [events, historicalRatings] = await Promise.all([
-      this.getCurrentOddsEvents(date, "football"),
-      this.getHistoricalFootballRatings()
-    ]);
+    const events = await this.getCurrentOddsEvents(date, "football");
+    if (!events.length) return [];
+    const historicalRatings = await this.getHistoricalFootballRatings();
     return oddsBackedFootballFixturesFromEvents(date, events, historicalRatings);
   }
 
   private async getHistoricalFootballRatings(): Promise<HistoricalFootballEloMap> {
-    return this.options.historicalFootballEloLoader?.() ?? loadHistoricalFootballElo(this.env);
+    return settleOptionalEnrichment(this.options.historicalFootballEloLoader?.() ?? loadHistoricalFootballElo(this.env),
+      new Map(), providerRequestTimeoutMs(this.env), "Football historical strength");
   }
 
   private async getHistoricalBasketballStrengths(): Promise<HistoricalBasketballStrengthMap> {
@@ -3734,7 +3748,8 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   }
 
   private async getHistoricalTennisStrengths(): Promise<HistoricalTennisStrengthMap> {
-    return this.options.historicalTennisStrengthLoader?.() ?? loadHistoricalTennisStrength(this.env);
+    return settleOptionalEnrichment(this.options.historicalTennisStrengthLoader?.() ?? loadHistoricalTennisStrength(this.env),
+      new Map(), providerRequestTimeoutMs(this.env), "Tennis historical strength");
   }
 
   private async getRecentFootballFormByTeam(fixtures: ApiFootballFixture[]): Promise<Map<string, TeamForm>> {

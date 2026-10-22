@@ -334,16 +334,20 @@ export async function getPredictions(filters: PredictionFilters = {}) {
   const sport = filters.sport ?? "football";
   const fixtureProvider = filters.providerMode === "preview" ? mockSportsDataProvider : sportsProvider;
   const storageReadsEnabled = filters.storageMode !== "preview";
-  const [learningProfile, caseMemoryBank, matches, publicHistoricalTrainingEvidence] = await Promise.all([
+  // A provider failure/empty slate must finish without scanning historical
+  // learning tables. Previously these scans could outlive the worker even
+  // though there was no match to analyse.
+  const matches = filters.providerMode === "preview"
+    ? await mockSportsDataProvider.getFixtures(date, sport)
+    : await sportsProvider.getFixtures(date, sport, { storedEnrichment: storageReadsEnabled });
+  if (!matches.length && filters.providerMode === "live") return [];
+  const [learningProfile, caseMemoryBank, publicHistoricalTrainingEvidence] = await Promise.all([
     storageReadsEnabled ? getLearningProfileForSport(sport) : Promise.resolve(undefined),
     storageReadsEnabled
       ? getDecisionCaseMemoryBank({ sport }).catch((error: unknown) =>
           buildUnavailableCaseMemoryBank(error instanceof Error ? error.message : "unknown error")
         )
       : Promise.resolve(undefined),
-    filters.providerMode === "preview"
-      ? mockSportsDataProvider.getFixtures(date, sport)
-      : sportsProvider.getFixtures(date, sport, { storedEnrichment: storageReadsEnabled }),
     getPublicHistoricalTrainingEvidenceForPredictions({ ...filters, sport })
   ]);
   const now = new Date();

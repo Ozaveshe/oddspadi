@@ -215,8 +215,8 @@ export function detectCorrelations(legs: AnalysedLeg[]): CorrelationFinding[] {
 const APPROVED_JOINT_MODELS: ReadonlySet<string> = new Set<string>([
   // The Dixon-Coles score matrix produces match_winner and goal totals from
   // one joint distribution, so those two are genuinely jointly modelled.
-  "match_winner|over_under",
-  "over_under|match_winner"
+  // No joint probability is persisted on workspace legs yet. Sharing a model
+  // family does not supply P(A and B); never label P(A)*P(B) as adjusted.
 ]);
 
 export function hasApprovedJointModel(left: CanonicalSelection, right: CanonicalSelection): boolean {
@@ -226,6 +226,7 @@ export function hasApprovedJointModel(left: CanonicalSelection, right: Canonical
 }
 
 export function resolveCombinationBasis(legs: AnalysedLeg[], findings: CorrelationFinding[]): CombinationBasis {
+  if (!legs.length) return "combined-unavailable";
   if (findings.some((finding) => finding.severity === "blocking")) return "combined-unavailable";
   if (legs.some((leg) => !leg.usableForCombination)) return "combined-unavailable";
 

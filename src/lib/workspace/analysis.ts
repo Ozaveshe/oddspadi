@@ -73,25 +73,11 @@ export function analyseWorkspace(selections: CanonicalSelection[], nowMs = Date.
     const product = legs.reduce((accumulator, leg) => accumulator * (leg.selection.modelProbability ?? 0), 1);
     combinedModelProbability = roundProbability(product);
 
-    // Propagate each leg's own uncertainty. Where a leg has no interval, a
-    // modest ±3 points stands in for model noise — stated as a range so the
-    // reader sees a band rather than a false point estimate.
-    const low = legs.reduce(
-      (accumulator, leg) => accumulator * (leg.selection.modelInterval?.low ?? Math.max(0, (leg.selection.modelProbability ?? 0) - 0.03)),
-      1
-    );
-    const high = legs.reduce(
-      (accumulator, leg) => accumulator * (leg.selection.modelInterval?.high ?? Math.min(1, (leg.selection.modelProbability ?? 0) + 0.03)),
-      1
-    );
-    combinedModelRange = { low: roundProbability(low), high: roundProbability(high) };
-
-    // A jointly-modelled correlated combination is more uncertain than an
-    // independent one; widening the band records that honestly.
-    if (basis === "correlation-adjusted") {
+    // Only propagate supplied intervals. Missing uncertainty stays missing.
+    if (legs.every((leg) => leg.selection.modelInterval != null)) {
       combinedModelRange = {
-        low: roundProbability(Math.max(0, combinedModelRange.low * 0.85)),
-        high: roundProbability(Math.min(1, combinedModelRange.high * 1.15))
+        low: roundProbability(legs.reduce((product, leg) => product * leg.selection.modelInterval!.low, 1)),
+        high: roundProbability(legs.reduce((product, leg) => product * leg.selection.modelInterval!.high, 1))
       };
     }
   }
@@ -111,7 +97,7 @@ export function analyseWorkspace(selections: CanonicalSelection[], nowMs = Date.
 
   const hasBlockingFinding = correlations.some((finding) => finding.severity === "blocking");
   const deViggedMarketProbability =
-    !hasBlockingFinding && legs.length && legs.every((leg) => leg.noVigProbability !== null)
+    !hasBlockingFinding && !correlations.some((finding) => finding.severity === "warning") && legs.length && legs.every((leg) => leg.noVigProbability !== null && leg.usableForCombination)
       ? roundProbability(legs.reduce((product, leg) => product * leg.noVigProbability!, 1))
       : null;
 
@@ -142,7 +128,8 @@ function resolveEvidenceQuality(
 ): WorkspaceAnalysis["evidenceQuality"] {
   if (!legs.length) return "unusable";
   if (unsupportedCount === legs.length) return "unusable";
-  if (unsupportedCount === 0 && staleCount === 0) return "strong";
+  if (unsupportedCount === 0 && staleCount === 0 && legs.every((leg) => leg.usableForCombination)) return "strong";
+  if (legs.every((leg) => !leg.usableForCombination)) return "unusable";
   // Strictly more than half: exactly half the legs carrying a gap is a mixed
   // picture, not a thin one, and calling it thin understates what is usable.
   if (unsupportedCount + staleCount > legs.length / 2) return "thin";

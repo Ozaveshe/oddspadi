@@ -2,6 +2,7 @@ import { withApiHandler } from "@/app/api/sports/_utils";
 import { isConfiguredSecretValue } from "@/lib/env";
 import { isCronAuthorized } from "@/lib/sports/intelligence/auth";
 import { getSupabaseRuntimeStatus } from "@/lib/supabase/server";
+import { getDailySlate } from "@/lib/sports/intelligence/pipeline";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ function anyConfigured(...keys: string[]): boolean {
  */
 // Wrapped so a throw from the Supabase runtime probe returns a structured 500
 // rather than an unhandled crash — this is the endpoint uptime monitors poll.
-export const GET = withApiHandler((request: Request) => {
+export const GET = withApiHandler(async (request: Request) => {
   const supabaseRuntime = getSupabaseRuntimeStatus();
   const providers = {
     apiFootball: anyConfigured("API_FOOTBALL_KEY", "APISPORTS_KEY", "SPORTS_API_KEY"),
@@ -35,19 +36,40 @@ export const GET = withApiHandler((request: Request) => {
   // Provider credentials alone do not make the product live-data ready. The
   // prediction and corpus tables are protected by RLS, so the server also
   // needs its private Supabase credential before it can read or write them.
-  const liveDataReady = providerConfigured && storageConfigured;
+  const configurationReady = providerConfigured && storageConfigured;
+  let publicOutput = "unavailable";
+  if (configurationReady) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const slate = await Promise.race([
+        getDailySlate({ ensure: false }),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Readiness deadline")), 5000); })
+      ]);
+      const run = slate.provider.lastRun;
+      const finished = Date.parse(run?.finishedAt ?? "");
+      const fresh = Number.isFinite(finished) && Date.now() - finished >= 0 && Date.now() - finished <= 45 * 60_000;
+      publicOutput = !fresh ? "stale" :
+        slate.provider.status === "empty" && slate.fixtures.length === 0 ? "empty" :
+        slate.provider.status === "completed" && slate.fixtures.length > 0 && slate.summary.predictionsGenerated > 0 ? "ready" : "degraded";
+    } catch {
+      publicOutput = "unavailable";
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  const liveDataReady = configurationReady && ["ready", "empty"].includes(publicOutput);
 
   const authorized = isCronAuthorized(request);
 
   return Response.json(
     {
-      status: "ok",
+      status: liveDataReady ? "ok" : "degraded",
       time: new Date().toISOString(),
       liveDataReady,
       readiness: {
         provider: providerConfigured ? "configured" : "unconfigured",
         storage: storageConfigured ? "configured" : "unconfigured",
-        publicOutput: "not-checked"
+        publicOutput
       },
       ...(authorized
         ? {
@@ -60,6 +82,6 @@ export const GET = withApiHandler((request: Request) => {
           }
         : {})
     },
-    { headers: { "Cache-Control": "no-store" } }
+    { status: liveDataReady ? 200 : 503, headers: { "Cache-Control": "no-store" } }
   );
 });

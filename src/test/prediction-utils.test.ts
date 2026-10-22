@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+afterEach(() => vi.useRealTimers());
 import { confidenceFromEdgeAndProbability } from "@/lib/sports/prediction/confidence";
 import { runtimeModelIdentityReceipt, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 import { decisionCandidatePick } from "@/lib/sports/prediction/decisionCandidatePick";
@@ -15585,6 +15586,8 @@ describe("prediction utilities", () => {
   });
 
   it("loads featured football totals and capped event-level BTTS odds", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-21T12:00:00Z"));
     const calls: string[] = [];
     const fetchImpl = async (input: string | URL) => {
       const url = input.toString();
@@ -15656,6 +15659,7 @@ describe("prediction utilities", () => {
         ODDS_API_CORE_MARKETS: "h2h,totals",
         ODDS_API_FOOTBALL_EVENT_MARKETS: "btts,alternate_totals,double_chance,draw_no_bet"
       },
+      now: () => new Date("2026-08-21T12:00:00Z"),
       fetchImpl,
       historicalFootballEloLoader: async () => buildHistoricalFootballElo([])
     });

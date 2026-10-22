@@ -1,5 +1,21 @@
 # Bet Workspace
 
+## Live workflow
+
+Visitors can create a workspace at `/predictions/bet-slip`, search upcoming
+stored provider fixtures, select the exact market, and enter their bookmaker's
+decimal price. With no current decision evidence, match-winner selections still
+show the user's implied price probability, but model comparisons stay absent.
+The user confirms whether the price was checked now; unknown observation times
+remain unknown. Refresh evidence updates unfrozen model evidence and matches
+official publications by fixture, market and selection. Frozen records do not
+change. Prices and model evidence expire after 60 minutes (45 for basketball).
+
+Same-game legs have no combined model probability until an actual joint
+distribution is supplied. Sharing a model family is insufficient. Uncertainty
+intervals are shown only when every leg supplied one; none are fabricated.
+
+
 What the Slip Check became: an analytical workspace for a user's own
 selections, connected to the same canonical fixtures, markets, models and
 results as the rest of the product — and firmly outside the official ledger.

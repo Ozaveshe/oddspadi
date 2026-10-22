@@ -4102,6 +4102,17 @@ a.score-row:active,
   color: inherit;
   max-width: 150px;
 }
+.timezone-picker { min-width: 0; }
+@media (max-width: 700px) {
+  .timezone-picker { flex: 1 1 0; }
+  .timezone-picker select { width: 100%; min-width: 0; padding-inline: 6px; }
+}
+.slip-manual-entry { display: grid; gap: 12px; margin-bottom: 18px; }
+.slip-manual-entry form, .slip-manual-entry > div { display: grid; gap: 10px; }
+.slip-manual-entry input:not([type="checkbox"]), .slip-manual-entry select {
+  width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface); color: var(--text); font: inherit;
+}
 
 /* Match Intelligence. Mobile is the primary context: the hero sticks so the
    score and state stay visible while reading, and every wide element scrolls

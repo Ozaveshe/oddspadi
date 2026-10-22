@@ -5,6 +5,7 @@ import { databaseUnavailable } from "@/lib/security/databaseError";
 import { readBoundedJson } from "@/lib/security/boundedJson";
 import { enforceGuestRateLimit, applyGuestRateContext } from "@/lib/security/guestRateLimit";
 import { readLatestDecisionSummary } from "@/lib/sports/intelligence/repository";
+import { workspaceOptions, type WorkspaceOption } from "@/lib/workspace/options";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
 
   const { data: fixtures, error: fixtureError } = await service
     .from("op_fixtures")
-    .select("external_id,status,kickoff_at,home_score,away_score")
+    .select("external_id,sport,home_team_name,away_team_name,league_name,last_synced_at,status,kickoff_at,home_score,away_score")
     .in("external_id", unique);
   if (fixtureError) return databaseUnavailable("workspace recheck fixtures", fixtureError, "Recheck is temporarily unavailable.");
 
@@ -52,8 +53,18 @@ export async function POST(request: Request) {
   if (publicationError) return databaseUnavailable("workspace recheck publications", publicationError, "Recheck is temporarily unavailable.");
 
   const summaries: Record<string, unknown> = {};
+  const evidenceOptions: Record<string, WorkspaceOption[]> = {};
   for (const externalId of unique) {
     const summary = await readLatestDecisionSummary(externalId, service);
+    const fixture = fixtures?.find((row) => row.external_id === externalId);
+    if (fixture && ["football", "basketball", "tennis"].includes(fixture.sport)) {
+      evidenceOptions[externalId] = workspaceOptions({
+        id: externalId, sport: fixture.sport,
+        label: `${fixture.home_team_name} vs ${fixture.away_team_name}`,
+        competition: fixture.league_name, kickoffAt: fixture.kickoff_at,
+        lastSyncedAt: fixture.last_synced_at
+      }, summary);
+    }
     if (summary) {
       // Public fields only — the same boundary the fixture page draws.
       summaries[externalId] = {
@@ -79,9 +90,10 @@ export async function POST(request: Request) {
         ])
       ),
       officialPublications: Object.fromEntries(
-        (publications ?? []).map((row) => [String(row.fixture_external_id), row])
+        (publications ?? []).map((row) => [`${row.fixture_external_id}:${row.market}:${row.selection}`, row])
       ),
       decisionSummaries: summaries,
+      evidenceOptions,
       checkedAt: new Date().toISOString()
     }),
     rate.ok
