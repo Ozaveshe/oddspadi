@@ -6,7 +6,7 @@ import type { DecisionSummary } from "@/lib/sports/types";
 const now = new Date("2026-10-22T10:00:00Z");
 const fixture: WorkspaceFixture = { id: "api-football:123", sport: "football", label: "A vs B", competition: "League", kickoffAt: "2026-10-22T18:00:00Z", lastSyncedAt: now.toISOString() };
 const summary = {
-  generatedAt: "2026-10-22T09:45:00Z", expiresAt: "2026-10-22T10:30:00Z", auditSummary: { providerBacked: true },
+  fixtureId: fixture.id, generatedAt: "2026-10-22T09:45:00Z", expiresAt: "2026-10-22T10:30:00Z", auditSummary: { providerBacked: true, modelVersion: "verified-version", evidenceHash: "original-inputs" },
   allMarketAnalyses: [{ marketId: "match_winner", selectionId: "home", label: "Home", modelProbability: .6, noVigImpliedProbability: .55, expiresAt: "2026-10-22T10:30:00Z", analysisStatus: "watchlist" }]
 } as DecisionSummary;
 describe("workspace evidence", () => {
@@ -17,10 +17,12 @@ describe("workspace evidence", () => {
     if (leg.kind !== "leg") return;
     const result = analyseLeg(leg.selection, now.getTime());
     expect(result.expectedValue).toBeCloseTo(.2);
+    expect(leg.selection.evidence).toMatchObject({ modelVersion: "verified-version", evidenceHash: "original-inputs" });
+    expect(analyseLeg(leg.selection, Date.parse("2026-10-22T10:30:00Z")).usableForCombination).toBe(false);
     expect(result.isOfficialPick).toBe(false);
     expect(result.usableForCombination).toBe(true);
   });
-  it.each([null, { ...summary, generatedAt: "2026-10-21T00:00:00Z" }, { ...summary, auditSummary: { providerBacked: false } }])("withholds missing, stale and non-provider model evidence", (evidence) => {
+  it.each([null, { ...summary, fixtureId: "other-match" }, { ...summary, generatedAt: "2026-10-21T00:00:00Z" }, { ...summary, auditSummary: { providerBacked: false } }])("withholds missing, stale and non-provider model evidence", (evidence) => {
     const options = workspaceOptions(fixture, evidence as DecisionSummary | null, now);
     expect(options).toHaveLength(3);
     expect(options.every((row) => row.input.modelProbability === null && row.input.marketNoVigProbability === null)).toBe(true);

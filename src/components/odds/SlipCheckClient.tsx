@@ -139,7 +139,9 @@ export function SlipCheckClient() {
   const commit = useCallback(
     (updated: StoredWorkspace) => {
       const next = upsertWorkspace(readWorkspacesWithMigration(new Date().toISOString()), updated);
-      if (!writeWorkspaces(next)) setNote("Could not save on this device.");
+      const saved = writeWorkspaces(next);
+      if (!saved) setNote("Could not save on this device.");
+      return saved;
     },
     []
   );
@@ -209,6 +211,7 @@ export function SlipCheckClient() {
               publicationId: publication?.id ?? null,
               modelProbability: evidence?.modelProbability ?? null,
               modelGeneratedAt: evidence?.modelGeneratedAt ?? null,
+              evidence: evidence?.evidence ?? null,
               marketNoVigProbability: evidence?.marketNoVigProbability ?? null,
               marketSupported: evidence?.marketSupported ?? false,
               modelInterval: evidence?.modelInterval ?? null
@@ -316,12 +319,12 @@ export function SlipCheckClient() {
 
   function freeze() {
     if (!selected || !analysis || frozen) return;
-    const currentAnalysis = analyseWorkspace(selected.selections);
+    const now = new Date().toISOString();
+    const currentAnalysis = analyseWorkspace(selected.selections, Date.parse(now));
     if (currentAnalysis.startedLegCount > 0) {
       setNote("A leg has already started, so a pre-event snapshot can no longer be taken.");
       return;
     }
-    const now = new Date().toISOString();
     commit({
       ...selected,
       snapshot: freezeWorkspace(currentAnalysis, `snap-${Date.now().toString(36)}`, now),
@@ -348,29 +351,28 @@ export function SlipCheckClient() {
     setManualText("");
   }
 
-  if (!selected) {
-    return (
-      <div className="empty-state">
-        <h2>Your workspace is empty</h2>
-        <p className="muted">Add modelled selections from Today, Explore or any match page. Analysis only — no account needed, and your selections never become OddsPadi picks.</p>
-        <Link className="button primary" href="/predictions">Browse predictions</Link>
-        <button className="button" type="button" onClick={() => {
-          const created = newWorkspace(`ws-${crypto.randomUUID()}`, "My workspace", new Date().toISOString());
-          commit(created); setSelectedId(created.workspaceId);
-        }}>Create workspace</button>
-      </div>
-    );
-  }
+  const entry = <WorkspaceEntry key={selected?.workspaceId ?? "new"} onHold={(text) => {
+    const now = new Date().toISOString();
+    const workspace = selected ?? newWorkspace(`ws-${crypto.randomUUID()}`, "My workspace", now);
+    const saved = commit(addUnresolvedEntry(workspace, holdUnresolvedText(text, `note-${crypto.randomUUID()}`, now), now));
+    if (saved) setSelectedId(workspace.workspaceId);
+    return saved;
+  }} onAdd={(selection) => {
+    const now = new Date().toISOString();
+    const workspace = selected ?? newWorkspace(`ws-${crypto.randomUUID()}`, "My workspace", now);
+    if (workspace.selections.length >= 20) { setNote("This workspace holds at most 20 selections."); return false; }
+    const saved = commit(addSelection(workspace, selection, now));
+    if (saved) setSelectedId(workspace.workspaceId);
+    return saved;
+  }} />;
+  if (!selected) return <>{entry}{note && <p role="status">{note}</p>}</>;
 
   const snapshotSettlement = selected.snapshot?.settlement ?? null;
   const displayAnalysis = selected.snapshot ? selected.snapshot.analysis : analysis!;
 
   return (
     <>
-      {!frozen ? <WorkspaceEntry onAdd={(selection) => {
-        if (selected.selections.length >= 20) { setNote("This workspace holds at most 20 selections."); return; }
-        commit(addSelection(selected, selection, new Date().toISOString()));
-      }} /> : null}
+      {!frozen ? entry : null}
       <section className="panel slip-workspace-bar">
         <label className="small muted" htmlFor="workspace-picker">Workspace</label>
         <select

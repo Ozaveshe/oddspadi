@@ -47,6 +47,7 @@ export type StructuredLegInput = {
   marketNoVigProbability?: number | null;
   modelProbability?: number | null;
   modelGeneratedAt?: string | null;
+  evidence?: CanonicalSelection["evidence"];
   decisionState?: CanonicalSelection["decisionState"];
   publicationId?: string | null;
   kickoffAt: string;
@@ -108,6 +109,7 @@ export function resolveStructuredLeg(input: StructuredLegInput, legId: string): 
       marketNoVigProbability: input.marketNoVigProbability ?? null,
       modelProbability: input.modelProbability ?? null,
       modelGeneratedAt: input.modelGeneratedAt ?? null,
+      evidence: input.evidence ?? null,
       decisionState: input.decisionState ?? null,
       publicationId: input.publicationId ?? null,
       kickoffAt: input.kickoffAt,

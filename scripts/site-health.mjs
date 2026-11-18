@@ -133,6 +133,11 @@ async function checkLatestRun(path, maxAgeMs, label) {
 
 async function checkFixtureAnalysisLinks(payload, label) {
   const allFixtureIds = [...new Set(tipsFixtures(payload).map((row) => row?.fixture?.fixtureId).filter(Boolean))];
+  if (!allFixtureIds.length) {
+    if (tipsFixtures(payload).length) report(false, label, "fixture records have no usable IDs");
+    else console.log(`SKIP  ${label} - no fixtures to test`);
+    return;
+  }
   const fixtureIds = allFixtureIds.length <= MAX_ANALYSIS_LINK_CHECKS
     ? allFixtureIds
     : Array.from({ length: MAX_ANALYSIS_LINK_CHECKS }, (_, index) =>
@@ -220,7 +225,8 @@ const weeklyTips = await checkJson("/api/tips/week?view=summary", (payload) => {
   return tipsFixtures(payload).length ? null : "weekly product has no provider-backed fixtures";
 }, "api weekly tips freshness");
 const identityProblem = tipsIdentityProblem(weeklyTips);
-report(!identityProblem, "upcoming fixture identity coverage", identityProblem ?? `${tipsFixtures(weeklyTips).length} fixture(s) with team names, countries/flags, and crest fallbacks`);
+if (!tipsFixtures(weeklyTips).length) console.log("SKIP  upcoming fixture identity coverage - no fixtures to test");
+else report(!identityProblem, "upcoming fixture identity coverage", identityProblem ?? `${tipsFixtures(weeklyTips).length} fixture(s) with team names, countries/flags, and crest fallbacks`);
 checkTipsSurfaceConsistency(homePage, todayTips, "homepage matches today's tips API", homepagePreviewFixtures(todayTips));
 checkTipsSurfaceConsistency(predictionsPage, todayTips, "predictions page matches today's tips API");
 checkTipsSurfaceConsistency(todayPage, todayTips, "today page matches today's tips API");

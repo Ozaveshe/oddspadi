@@ -1,3 +1,4 @@
+import { reserveProviderRequest } from "../src/lib/sports/providers/requestBudget";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -82,6 +83,7 @@ function apiKey(): string {
 async function fetchProviderJson(endpoint: URL, key: string, attempts = 3): Promise<unknown> {
   let lastError = "Provider request failed.";
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    await reserveProviderRequest(endpoint, process.env);
     let rateLimited = false;
     try {
       const response = await fetch(endpoint, {

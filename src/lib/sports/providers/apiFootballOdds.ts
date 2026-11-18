@@ -454,6 +454,15 @@ function availableQuotaRequests(quota: ApiFootballOddsQuotaSnapshot, requestsRes
   return balances.length ? Math.min(...balances) : null;
 }
 
+function isQuotaFailure(page: ParsedPage): boolean {
+  return page.httpStatus === 429 || (!page.ok && /daily request limit|rate[ -]?limit|quota exceeded|request limit reached/i.test(page.error ?? ""));
+}
+
+function stopsPagination(page: ParsedPage): boolean {
+  return isQuotaFailure(page) || page.httpStatus === 401 || page.httpStatus === 403
+    || (!page.ok && /^(?:access|token|key):/i.test(page.error ?? ""));
+}
+
 function isTransientPageFailure(page: ParsedPage): boolean {
   if (page.ok) return false;
   return page.httpStatus === null
@@ -515,8 +524,8 @@ export async function fetchApiFootballMatchWinnerOdds({
   const firstAttempts = [await fetchPage({ ...shared, page: 1 })];
   let first = firstAttempts[0]!;
   let localQuotaAllowance = availableQuotaRequests(first.quota, requestsReserve, rateReserve);
-  let stoppedByQuota = first.httpStatus === 429;
-  if (isTransientPageFailure(first)) {
+  let stoppedByQuota = isQuotaFailure(first);
+  if (!stopsPagination(first) && isTransientPageFailure(first)) {
     if (localQuotaAllowance !== null && localQuotaAllowance > 0) {
       localQuotaAllowance -= 1;
       first = await fetchPage({ ...shared, page: 1 });
@@ -527,7 +536,7 @@ export async function fetchApiFootballMatchWinnerOdds({
         rateReserve
       );
       if (reportedAllowance !== null) localQuotaAllowance = Math.min(localQuotaAllowance, reportedAllowance);
-      if (first.httpStatus === 429) stoppedByQuota = true;
+      if (isQuotaFailure(first)) stoppedByQuota = true;
     } else {
       // A retry is still a provider request. Without proved headroom, preserve
       // the configured reserve instead of retrying blindly.
@@ -562,7 +571,8 @@ export async function fetchApiFootballMatchWinnerOdds({
     }
 
     const transientFailures = results.filter(isTransientPageFailure);
-    const retryCapacity = localQuotaAllowance === null
+    const stopAfterBatch = results.some(stopsPagination);
+    const retryCapacity = stopAfterBatch || localQuotaAllowance === null
       ? 0
       : Math.min(transientFailures.length, Math.max(0, localQuotaAllowance));
     const retryPages = transientFailures.slice(0, retryCapacity).map((page) => page.page);
@@ -575,14 +585,15 @@ export async function fetchApiFootballMatchWinnerOdds({
       reportedAllowance = availableQuotaRequests(conservativeQuota(allAttempts.map((page) => page.quota)), requestsReserve, rateReserve);
       if (reportedAllowance !== null) localQuotaAllowance = Math.min(localQuotaAllowance!, reportedAllowance);
     }
-    if (retryCapacity < transientFailures.length) stoppedByQuota = true;
+    if (!stopAfterBatch && retryCapacity < transientFailures.length) stoppedByQuota = true;
 
     pages.push(...results.map((page) => {
       const retry = retryResults.get(page.page);
       return { final: retry ?? page, attempts: retry ? [page, retry] : [page] };
     }));
-    if (results.some((page) => page.httpStatus === 429) || [...retryResults.values()].some((page) => page.httpStatus === 429)) {
-      stoppedByQuota = true;
+    const finalBatch = [...results, ...retryResults.values()];
+    if (finalBatch.some(stopsPagination)) {
+      stoppedByQuota ||= finalBatch.some(isQuotaFailure);
       break;
     }
   }

@@ -1,3 +1,4 @@
+import { decisionEvidence } from "./decisionEvidence";
 import type { DecisionSummary } from "@/lib/sports/types";
 import type { StructuredLegInput } from "./resolve";
 
@@ -12,7 +13,7 @@ export function workspaceOptions(fixture: WorkspaceFixture, summary: DecisionSum
   const maxAge = (fixture.sport === "basketball" ? 45 : 60) * 60_000;
   const generated = Date.parse(summary?.generatedAt ?? "");
   const expiry = Date.parse(summary?.expiresAt ?? "");
-  const fresh = Date.parse(fixture.kickoffAt) > now.getTime() && Boolean(summary?.auditSummary.providerBacked) && Number.isFinite(generated) &&
+  const fresh = summary?.fixtureId === fixture.id && Date.parse(fixture.kickoffAt) > now.getTime() && Boolean(summary?.auditSummary.providerBacked) && Number.isFinite(generated) &&
     generated <= now.getTime() && now.getTime() - generated <= maxAge &&
     Number.isFinite(expiry) && expiry > now.getTime();
   const candidates = fresh ? summary!.allMarketAnalyses.filter((row) =>
@@ -32,6 +33,7 @@ export function workspaceOptions(fixture: WorkspaceFixture, summary: DecisionSum
       label: row.label, fixtureLabel: fixture.label, competition: fixture.competition,
       source: "Your bookmaker", entryPoint: "manual", userOdds: 0, oddsObservedAt: null,
       modelProbability: row.modelProbability, modelGeneratedAt: candidates.length ? summary!.generatedAt : null,
+      evidence: summary && "analysisStatus" in row ? decisionEvidence(summary, row) : null,
       marketNoVigProbability: row.noVigImpliedProbability, decisionState: null, publicationId: null,
       kickoffAt: fixture.kickoffAt, fixtureStatus: "scheduled", marketSupported: true,
       modelInterval: null

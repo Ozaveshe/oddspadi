@@ -5,6 +5,29 @@ agent (Codex, Claude, or a cron box) can run. Production = https://oddspadi.com,
 Netlify site `oddspadi` (`3ba4bf38-60ec-4bc4-b49f-aca9495a9aa2`), Supabase
 project `wncwtzqipnoqwmqlznqn`.
 
+## Sports data budgets
+
+Apply the provider daily usage migration before setting `API_FOOTBALL_DAILY_REQUEST_CAP`
+or `ODDS_API_DAILY_CREDIT_CAP` on the site. The first caps football requests per UTC
+day. The second caps estimated credits per UTC day. Leave some of the subscription
+allowance for manual repairs and other applications using the same key. A blank
+value disables enforcement for that provider. Zero blocks billable dispatches.
+
+The runtime adapter, live football board, identity enrichment, training sync, and
+historical odds attachment jobs share one database counter per provider. Reservations
+happen before dispatch and remain charged locally on failures or empty results.
+The provider dashboard is authoritative for actual billing. A missing counter or
+unavailable database prevents covered paid calls when the cap is enabled.
+Player-history preparation and football result backfills also reserve units.
+Calls made outside the covered paths can still spend the same subscription. Inspect usage with:
+
+```sql
+select usage_day, provider, reserved_units
+from public.op_provider_daily_usage
+order by usage_day desc, provider
+limit 30;
+```
+
 ## Scheduled Netlify functions
 
 | Function | Schedule (UTC) | What it does |

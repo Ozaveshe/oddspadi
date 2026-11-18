@@ -59,6 +59,12 @@ export type CanonicalSelection = {
   /** Null when OddsPadi has no model for this market. Never substituted. */
   modelProbability: number | null;
   modelGeneratedAt: string | null;
+  evidence?: {
+    modelVersion: string | null;
+    evidenceHash: string | null;
+    oddsSnapshotId: string | null;
+    expiresAt: string | null;
+  } | null;
   decisionState: DecisionStatus | null;
   /** Set only when OddsPadi published an official pick on this selection. */
   publicationId: string | null;
@@ -131,7 +137,8 @@ export function analyseLeg(selection: CanonicalSelection, nowMs = Date.now()): A
   if (!Number.isFinite(oddsTime) || oddsTime > nowMs) diagnostics.push("no-odds-timestamp");
   else if (nowMs - oddsTime > Math.min(STALE_ODDS_MS, maxAge)) diagnostics.push("stale-odds");
   if (selection.modelProbability !== null && (!Number.isFinite(modelTime) || modelTime > nowMs)) diagnostics.push("no-model-timestamp");
-  if (Number.isFinite(modelTime) && nowMs - modelTime > maxAge) {
+  const expiry = selection.evidence?.expiresAt;
+  if ((Number.isFinite(modelTime) && nowMs - modelTime > maxAge) || (expiry != null && !(Date.parse(expiry) > nowMs))) {
     diagnostics.push("stale-model");
   }
   if (selection.fixtureStatus === "live" || (selection.fixtureStatus !== "finished" && Date.parse(selection.kickoffAt) <= nowMs)) diagnostics.push("match-started");

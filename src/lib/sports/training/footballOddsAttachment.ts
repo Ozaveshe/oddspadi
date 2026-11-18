@@ -1,3 +1,4 @@
+import { budgetedProviderFetch } from "@/lib/sports/providers/requestBudget";
 import { firstConfiguredEnv } from "@/lib/env";
 import { getSupabaseRuntimeStatus, getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -536,7 +537,7 @@ export async function attachFootballHistoricalOdds({
   if (!request.date || !isValidIsoTimestamp(request.date)) {
     return { ...baseResult, status: "failed", reason: "Football historical odds attachment requires date=ISO_TIMESTAMP." };
   }
-  const { data, error } = await fetchJson(fetchImpl, endpoint);
+  const { data, error } = await fetchJson(budgetedProviderFetch(env, fetchImpl), endpoint);
   if (error) return { ...baseResult, status: "provider-error", reason: error };
   const response = data as OddsApiHistoricalResponse;
   const snapshotAt = toIsoTimestamp(response.timestamp) ?? oddsApiTimestamp(request.date);

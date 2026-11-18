@@ -1,3 +1,4 @@
+import { reserveProviderRequest } from "@/lib/sports/providers/requestBudget";
 /**
  * Lightweight real-time live-score board backed by API-Football.
  *
@@ -236,6 +237,7 @@ async function fetchApiFootball(path: string, params: Record<string, string>, ke
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), LIVE_BOARD_REQUEST_TIMEOUT_MS);
   try {
+    await reserveProviderRequest(endpoint, process.env);
     const response = await fetch(endpoint, {
       headers: { "x-apisports-key": key },
       cache: "no-store",

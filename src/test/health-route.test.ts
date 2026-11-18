@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+const refreshRead = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/sports/intelligence/repository", () => ({ readLatestProviderRun: refreshRead }));
 const slateRead = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/sports/intelligence/pipeline", () => ({ getDailySlate: slateRead }));
 import { GET } from "@/app/api/health/route";
@@ -20,6 +22,7 @@ const ENV_KEYS = [
 const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 
 afterEach(() => {
+  refreshRead.mockReset();
   slateRead.mockReset();
   for (const key of ENV_KEYS) {
     const value = originalEnv[key];
@@ -44,6 +47,7 @@ describe("health route live-data readiness", () => {
     process.env.API_FOOTBALL_KEY = "configured-provider-key";
     process.env.SUPABASE_URL = "https://wncwtzqipnoqwmqlznqn.supabase.co";
     process.env.SUPABASE_SECRET_KEY = "sb_secret_configured_server_key";
+    refreshRead.mockResolvedValue({ status: "empty", finishedAt: new Date().toISOString(), errors: [] });
     slateRead.mockResolvedValue({
       provider: { status, lastRun: { finishedAt: new Date(Date.now() - Number(ageMinutes) * 60000).toISOString() } },
       fixtures: Array(Number(fixtures)).fill({}), summary: { predictionsGenerated: predictions }
@@ -52,6 +56,19 @@ describe("health route live-data readiness", () => {
     expect(response.status).toBe(http);
     expect(await response.json()).toMatchObject({ liveDataReady: http === 200, readiness: { publicOutput: output } });
     expect(slateRead).toHaveBeenCalledWith({ ensure: false });
+  });
+  it("returns 503 when a fresh empty engine run follows a failed odds refresh", async () => {
+    clearReadinessEnv();
+    process.env.API_FOOTBALL_KEY = "configured-provider-key";
+    process.env.SUPABASE_URL = "https://wncwtzqipnoqwmqlznqn.supabase.co";
+    process.env.SUPABASE_SECRET_KEY = "sb_secret_configured_server_key";
+    const finishedAt = new Date().toISOString();
+    refreshRead.mockResolvedValue({ status: "failed", finishedAt, errors: ["access denied"] });
+    slateRead.mockResolvedValue({ provider: { status: "empty", lastRun: { finishedAt } }, fixtures: [], summary: { predictionsGenerated: 0 } });
+    const response = await GET(new Request("https://oddspadi.example/api/health"));
+    expect(refreshRead).toHaveBeenCalledWith(["refresh-odds"]);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ liveDataReady: false, readiness: { publicOutput: "degraded" } });
   });
   it("does not call provider credentials alone live-data ready", async () => {
     clearReadinessEnv();

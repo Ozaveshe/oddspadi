@@ -1,3 +1,4 @@
+import { reserveProviderRequest } from "./requestBudget";
 import { firstConfiguredEnv } from "@/lib/env";
 import { personNamesAlign, squadQualifiersMoveTogether, teamNamesAlign } from "@/lib/sports/providers/teamNameAlignment";
 import { mockSportsDataProvider } from "@/lib/sports/providers/mockProvider";
@@ -2601,6 +2602,7 @@ const unavailableSportsDataProvider: SportsDataProvider = {
 
 export class ProviderBackedSportsDataProvider implements SportsDataProvider {
   private readonly oddsEventsCache = new Map<string, OddsEventCacheEntry>();
+  private readonly settlementScoresCache = new Map<string, OddsEventCacheEntry>();
   private readonly oddsRawFeedCache = new Map<string, OddsEventCacheEntry>();
   private readonly oddsEventCatalogCache = new Map<string, OddsEventCatalogCacheEntry>();
   private readonly oddsEventIdentityCache = new Map<string, OddsEventIdentityCacheEntry>();
@@ -2656,6 +2658,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     for (let attempt = 1; ; attempt += 1) {
       if (init?.signal?.aborted) return null;
       if (limiter) await limiter.acquire();
+      await reserveProviderRequest(url, this.env);
       const outcome = await fetchJsonOutcome(this.fetchImpl, url, init, timeoutMs);
       if (outcome.kind === "ok") return outcome.data;
       if (outcome.kind === "failed") return null;
@@ -2693,6 +2696,7 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
         if (limiter) await limiter.acquire();
+        await reserveProviderRequest(new URL(String(input)), this.env);
         const response = await this.fetchImpl(input, { ...init, signal: controller.signal });
         if (response.status === 429 && limiter) {
           limiter.penalise(parseRetryAfterMs(response.headers.get("retry-after"), Date.now()) ?? 0, 1);
@@ -3913,10 +3917,22 @@ export class ProviderBackedSportsDataProvider implements SportsDataProvider {
     endpoint.searchParams.set("apiKey", apiKey);
     endpoint.searchParams.set("daysFrom", "3");
     endpoint.searchParams.set("dateFormat", "iso");
-    const scores = (await this.limitedFetch(endpoint)) as OddsApiEvent[] | null;
-    return Array.isArray(scores)
-      ? scores.filter((event) => cleanText(event.commence_time).startsWith(date) && cleanText(event.home_team) && cleanText(event.away_team))
-      : [];
+    // The upstream response covers every date in the window. Share the request
+    // before filtering, including when concurrent settlement jobs ask for different days.
+    let entry = this.settlementScoresCache.get(sportKey);
+    if (!entry || entry.expiresAt <= Date.now()) {
+      const events = this.limitedFetch(endpoint).then((payload): OddsApiEvent[] => {
+        if (Array.isArray(payload)) return payload;
+        if (this.settlementScoresCache.get(sportKey)?.events === events) this.settlementScoresCache.delete(sportKey);
+        return [];
+      });
+      events.catch(() => {
+        if (this.settlementScoresCache.get(sportKey)?.events === events) this.settlementScoresCache.delete(sportKey);
+      });
+      entry = { events, expiresAt: Date.now() + Math.min(60_000, oddsCacheTtlMs(this.env)) };
+      setBoundedCache(this.settlementScoresCache, sportKey, entry);
+    }
+    return (await entry.events).filter((event) => cleanText(event.commence_time).startsWith(date) && cleanText(event.home_team) && cleanText(event.away_team));
   }
 
   private async fetchOddsEvents({

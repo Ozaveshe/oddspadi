@@ -17,6 +17,7 @@
     "setup:admin-token": "node scripts/ensure-local-admin-token.cjs",
     "start": "next start",
     "test": "vitest run",
+    "workspace:replay": "vite-node --config scripts/vite-node.config.ts scripts/replay-workspace.ts",
     "training:selection-preview": "vite-node --config scripts/vite-node.config.ts scripts/preview-economic-selection-policy.ts",
     "training:engine-preview": "vite-node --config scripts/vite-node.config.ts scripts/preview-economic-selection-policy.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",

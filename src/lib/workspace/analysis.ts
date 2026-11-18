@@ -160,6 +160,7 @@ export type PersonalLegOutcome =
   | "pending";
 
 export type WorkspaceSnapshot = {
+  analysisVersion?: "workspace-analysis-v1";
   snapshotId: string;
   takenAt: string;
   /** Deep copy of the analysis at freeze time. */
@@ -174,7 +175,7 @@ export type WorkspaceSnapshot = {
 export function freezeWorkspace(analysis: WorkspaceAnalysis, snapshotId: string, takenAt: string): WorkspaceSnapshot {
   // structuredClone keeps the snapshot independent of any later mutation of
   // the live workspace object.
-  return { snapshotId, takenAt, analysis: structuredClone(analysis), settlement: null };
+  return { analysisVersion: "workspace-analysis-v1", snapshotId, takenAt, analysis: structuredClone(analysis), settlement: null };
 }
 
 /**

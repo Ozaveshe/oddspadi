@@ -1,3 +1,4 @@
+import { reserveProviderRequest } from "@/lib/sports/providers/requestBudget";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { oddsCompetitionCountry } from "@/lib/sports/providers/providerBackedProvider";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -148,16 +149,19 @@ async function fetchLeagueTeams({
   league,
   season,
   apiKey,
+  env,
   fetchImpl
 }: {
   league: string;
   season: string;
   apiKey: string;
+  env: Record<string, string | undefined>;
   fetchImpl: typeof fetch;
 }): Promise<ApiFootballTeam[]> {
   const endpoint = new URL("https://v3.football.api-sports.io/teams");
   endpoint.searchParams.set("league", league);
   endpoint.searchParams.set("season", season);
+  await reserveProviderRequest(endpoint, env);
   const response = await fetchImpl(endpoint, {
     headers: { "x-apisports-key": apiKey, accept: "application/json" },
     signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
@@ -170,16 +174,19 @@ async function fetchLeagueIdentity({
   league,
   season,
   apiKey,
+  env,
   fetchImpl
 }: {
   league: string;
   season: string;
   apiKey: string;
+  env: Record<string, string | undefined>;
   fetchImpl: typeof fetch;
 }): Promise<ApiFootballLeague | null> {
   const endpoint = new URL("https://v3.football.api-sports.io/leagues");
   endpoint.searchParams.set("id", league);
   endpoint.searchParams.set("season", season);
+  await reserveProviderRequest(endpoint, env);
   const response = await fetchImpl(endpoint, {
     headers: { "x-apisports-key": apiKey, accept: "application/json" },
     signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
@@ -278,7 +285,7 @@ export async function enrichUpcomingFixtureIdentities({
     for (const group of groups) {
       providerRequests += 1;
       try {
-        const providerTeams = await fetchLeagueTeams({ ...group, apiKey, fetchImpl });
+        const providerTeams = await fetchLeagueTeams({ ...group, apiKey, env, fetchImpl });
         for (const providerTeam of providerTeams) {
           for (const stored of teamsByExternalId.get(providerTeam.id) ?? []) {
             if (stored.sport !== "football" || !isApiFootballProvider(stored.provider)) continue;
@@ -292,7 +299,7 @@ export async function enrichUpcomingFixtureIdentities({
             });
           }
         }
-        const providerLeague = await fetchLeagueIdentity({ ...group, apiKey, fetchImpl });
+        const providerLeague = await fetchLeagueIdentity({ ...group, apiKey, env, fetchImpl });
         providerRequests += 1;
         if (providerLeague) {
           for (const stored of leaguesByExternalId.get(providerLeague.id) ?? []) {

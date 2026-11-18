@@ -1,3 +1,4 @@
+import { budgetedProviderFetch } from "@/lib/sports/providers/requestBudget";
 import { firstConfiguredEnv } from "@/lib/env";
 import { fetchOpenMeteoForecast } from "@/lib/sports/providers/openMeteo";
 import {
@@ -2259,12 +2260,13 @@ async function syncTheOddsApiLiveOdds({
 export async function syncHistoricalFootballProvider({
   request,
   env = process.env,
-  fetchImpl = fetch
+  fetchImpl: upstreamFetch = fetch
 }: {
   request: ProviderSyncRequest;
   env?: EnvMap;
   fetchImpl?: FetchLike;
 }): Promise<ProviderSyncResult> {
+  const fetchImpl = budgetedProviderFetch(env, upstreamFetch);
   if (request.provider === "api-football") return syncApiFootballFixtures({ request, env, fetchImpl });
   if (request.provider === "api-basketball") return syncApiBasketballGames({ request, env, fetchImpl });
   if (request.provider === "api-tennis") return syncApiTennisEvents({ request, env, fetchImpl });

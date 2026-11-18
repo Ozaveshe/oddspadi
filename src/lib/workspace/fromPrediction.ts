@@ -1,3 +1,4 @@
+import { decisionEvidence } from "./decisionEvidence";
 import type { MatchSummary, PredictionSummary } from "@/lib/sports/prediction/listRow";
 import type { DecisionMarketAnalysis } from "@/lib/sports/types";
 import { resolveStructuredLeg, type ResolveResult } from "@/lib/workspace/resolve";
@@ -70,6 +71,7 @@ export function legInputFromPrediction(
       marketNoVigProbability: candidate.noVigImpliedProbability,
       modelProbability: candidate.modelProbability,
       modelGeneratedAt: prediction.generatedAt,
+      evidence: decisionEvidence(prediction.canonicalDecision, candidate),
       decisionState: CANDIDATE_STATES[candidate.analysisStatus] ?? null,
       // The publication id attaches on recheck, from the publication read
       // itself. Inferring it here from "published_value_pick" would claim a

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 
-const script = readFileSync("scripts/site-health.mjs", "utf8").replace(/^#!.*\n/, "");
+const script = readFileSync("scripts/site-health.mjs", "utf8").replace(/^#![^\r\n]*\r?\n/, "");
 
 async function runHealth(options: { receipt?: unknown; receiptHttp?: number; admin?: boolean; modelHttp?: number } = {}) {
   const lines: string[] = [];
@@ -37,6 +37,11 @@ async function runHealth(options: { receipt?: unknown; receiptHttp?: number; adm
 }
 
 describe("production canary evidence", () => {
+  it("skips coverage and link checks when there are no fixtures to examine", async () => {
+    const { lines } = await runHealth();
+    expect(lines.some(line => line.startsWith("SKIP  upcoming fixture identity coverage"))).toBe(true);
+    expect(lines.some(line => line.startsWith("SKIP  analysis links from today's tips"))).toBe(true);
+  });
   it("accepts the current public success receipt and timestamp", async () => {
     const { lines } = await runHealth();
     expect(lines.find(line => line.includes("scheduled fixture import receipt"))).toMatch(/^OK /);

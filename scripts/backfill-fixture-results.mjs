@@ -27,6 +27,7 @@ if (!url || !key) {
   console.error("SUPABASE_URL and SUPABASE_SECRET_KEY are required.");
   process.exit(2);
 }
+if (new URL(url).origin !== "https://wncwtzqipnoqwmqlznqn.supabase.co") throw new Error("Expected the OddsPadi project URL.");
 const db = createClient(url, key, { auth: { persistSession: false } });
 
 const commit = process.argv.includes("--commit");
@@ -116,6 +117,13 @@ function providerId(row) {
  * answer, when every call had actually been rejected for rate limiting.
  */
 async function getJson(endpoint, headers = {}) {
+  const cap = process.env.API_FOOTBALL_DAILY_REQUEST_CAP?.trim();
+  if (cap && new URL(endpoint).hostname === "v3.football.api-sports.io") {
+    const limit = Number(cap);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 2147483647) throw new Error("Football budget unavailable.");
+    const { data, error } = await db.rpc("op_reserve_provider_units", { p_provider: "api-football", p_units: 1, p_limit: limit });
+    if (error || data !== true) throw new Error("Football daily budget exhausted or unavailable.");
+  }
   const response = await fetch(endpoint, { headers, signal: AbortSignal.timeout(20_000) });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   const body = await response.json();

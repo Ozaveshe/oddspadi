@@ -62,6 +62,13 @@ describe("The Odds API completed score bridge", () => {
       dataSource: { kind: "provider", fixtureProvider: "the-odds-api-scores", fixtureProviderId: "score-event-1" }
     });
     expect(fetchImpl).toHaveBeenCalledTimes(3);
+    const [sameDay, otherDay] = await Promise.all([
+      provider.getSettlementFixtures("2026-07-10", sport, [sportKey]),
+      provider.getSettlementFixtures("2026-07-11", sport, [sportKey])
+    ]);
+    expect(sameDay).toHaveLength(1);
+    expect(otherDay).toHaveLength(0);
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).includes("/scores/"))).toHaveLength(1);
   });
 
   it("uses a ticket's exact tournament key even after active-key discovery loses it", async () => {

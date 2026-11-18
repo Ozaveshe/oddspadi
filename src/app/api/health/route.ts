@@ -4,10 +4,17 @@ import { isCronAuthorized } from "@/lib/sports/intelligence/auth";
 import { getSupabaseRuntimeStatus } from "@/lib/supabase/server";
 import { getDailySlate } from "@/lib/sports/intelligence/pipeline";
 
+import { readLatestProviderRun } from "@/lib/sports/intelligence/repository";
+
 export const dynamic = "force-dynamic";
 
 function anyConfigured(...keys: string[]): boolean {
   return keys.some((key) => isConfiguredSecretValue(process.env[key]));
+}
+
+function isFreshReceipt(timestamp: string | null | undefined): boolean {
+  const age = Date.now() - Date.parse(timestamp ?? "");
+  return age >= 0 && age <= 45 * 60_000;
 }
 
 /**
@@ -41,15 +48,15 @@ export const GET = withApiHandler(async (request: Request) => {
   if (configurationReady) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const slate = await Promise.race([
-        getDailySlate({ ensure: false }),
+      const [slate, refresh] = await Promise.race([
+        Promise.all([getDailySlate({ ensure: false }), readLatestProviderRun(["refresh-odds"])]),
         new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Readiness deadline")), 5000); })
       ]);
       const run = slate.provider.lastRun;
-      const finished = Date.parse(run?.finishedAt ?? "");
-      const fresh = Number.isFinite(finished) && Date.now() - finished >= 0 && Date.now() - finished <= 45 * 60_000;
-      publicOutput = !fresh ? "stale" :
-        slate.provider.status === "empty" && slate.fixtures.length === 0 ? "empty" :
+      // An empty engine pass can follow a failed refresh that supplied no input.
+      const verifiedEmpty = refresh?.status === "empty" && isFreshReceipt(refresh.finishedAt) && refresh.errors.length === 0;
+      publicOutput = !isFreshReceipt(run?.finishedAt) ? "stale" :
+        slate.provider.status === "empty" && slate.fixtures.length === 0 && verifiedEmpty ? "empty" :
         slate.provider.status === "completed" && slate.fixtures.length > 0 && slate.summary.predictionsGenerated > 0 ? "ready" : "degraded";
     } catch {
       publicOutput = "unavailable";

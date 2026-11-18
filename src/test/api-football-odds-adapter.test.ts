@@ -189,6 +189,28 @@ describe("API-Football odds adapter", () => {
     });
   });
 
+  it.each([
+    [429, "Rejected", true],
+    [200, "Daily request limit reached", true],
+    [403, "Access denied", false]
+  ] as const)("stops the batch on %s %s before retrying a sibling", async (status, message, quota) => {
+    const requested: number[] = [];
+    const result = await fetchApiFootballMatchWinnerOdds({
+      date: "2026-07-18", apiKey: "test", concurrency: 2, maxPages: 8,
+      fetchImpl: async (input) => {
+        const page = Number(new URL(String(input)).searchParams.get("page"));
+        requested.push(page);
+        return jsonPage({ current: page, total: 8, rows: [],
+          status: page === 2 ? status : page === 3 ? 503 : 200,
+          errors: page === 2 ? { requests: message } : {}
+        });
+      }
+    });
+    expect(requested).toEqual([1, 2, 3]);
+    expect(result.pagination.stoppedByQuota).toBe(quota);
+    expect(result.pagination.complete).toBe(false);
+  });
+
   it("stops page fan-out before the configured quota reserve", async () => {
     const requestedPages: number[] = [];
     const result = await fetchApiFootballMatchWinnerOdds({

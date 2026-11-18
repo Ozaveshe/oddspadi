@@ -88,8 +88,7 @@ official OddsPadi track record.
 
 Save (automatic locally; explicit private sync for signed-in users),
 duplicate, rename, archive/unarchive, remove or replace a leg (until
-frozen), recheck fixtures (updates lifecycle and official-pick state; never
-rewrites captured odds or model figures), share read-only, revoke the share,
+frozen), recheck fixtures (refreshes current evidence on editable legs and preserves the price the user entered), share read-only, revoke the share,
 and export as a self-describing JSON document.
 
 ## Guest and account mode
@@ -99,3 +98,14 @@ plainly what that means: workspaces live in this browser, are lost if its
 storage is cleared, and do not follow you across devices. Signing in adds
 exactly one thing — private sync to My Padi behind per-user row-level
 security. Nothing else changes.
+
+## Checking a frozen calculation
+
+Run `npm run workspace:replay -- path/to/export.json` with a local JSON
+export. The command reads the inputs captured in the frozen snapshot and
+recalculates the Workspace at its original timestamp. It prints whether the
+result matches, the selection count, and how many selections have a recorded
+model version and evidence hash. A mismatch or an unsupported snapshot version
+returns a nonzero exit code. This check uses no provider credits. It verifies
+the price and probability calculation, not the training or inference that
+produced the original probability.

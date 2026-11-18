@@ -1,3 +1,4 @@
+import { budgetedProviderFetch } from "@/lib/sports/providers/requestBudget";
 import { firstConfiguredEnv } from "@/lib/env";
 import { getSupabaseRuntimeStatus, getSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -560,7 +561,7 @@ export async function attachBasketballHistoricalOdds({
     };
   }
 
-  const { data, error, quota } = await fetchJson(fetchImpl, endpoint);
+  const { data, error, quota } = await fetchJson(budgetedProviderFetch(env, fetchImpl), endpoint);
   if (error) {
     return {
       ...baseResult,
