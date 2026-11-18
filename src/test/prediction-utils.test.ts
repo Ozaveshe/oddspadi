@@ -1,5 +1,5 @@
+import { setImmediate as yieldToWorker } from "node:timers/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
-afterEach(() => vi.useRealTimers());
 import { confidenceFromEdgeAndProbability } from "@/lib/sports/prediction/confidence";
 import { runtimeModelIdentityReceipt, runtimeModelKey } from "@/lib/sports/prediction/modelIdentity";
 import { decisionCandidatePick } from "@/lib/sports/prediction/decisionCandidatePick";
@@ -568,6 +568,12 @@ function emptyCalibrationSnapshot(): CalibrationSnapshot {
 }
 
 describe("prediction utilities", () => {
+  afterEach(async () => {
+    vi.useRealTimers();
+    // Let Vitest acknowledge results between CPU-heavy prediction scenarios.
+    await yieldToWorker();
+  });
+
   it("treats setup placeholder env values as missing secrets", () => {
     expect(isConfiguredSecretValue("paste_api_football_key_here")).toBe(false);
     expect(isConfiguredSecretValue("paste_the_odds_api_key_here")).toBe(false);
