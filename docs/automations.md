@@ -7,6 +7,8 @@ project `wncwtzqipnoqwmqlznqn`.
 
 ## Sports data budgets
 
+The scheduled football decision cycle also supplies the [prospective model comparison](football-market-comparison.md). Its report reads archived forecasts and results without using provider credits.
+
 Apply the provider daily usage migration before setting `API_FOOTBALL_DAILY_REQUEST_CAP`
 or `ODDS_API_DAILY_CREDIT_CAP` on the site. The first caps football requests per UTC
 day. The second caps estimated credits per UTC day. Leave some of the subscription
